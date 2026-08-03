@@ -1,0 +1,37 @@
+name: matchup_mobile
+description: "MatchUp mobile app — Flutter client."
+publish_to: 'none'
+version: 0.0.1+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  # Networking
+  dio: ^5.7.0
+
+  # Local storage
+  shared_preferences: ^2.3.2
+
+  # Environment variables
+  flutter_dotenv: ^5.2.1
+
+  # State management (lightweight placeholder; can be replaced in MVP)
+  flutter_riverpod: ^2.5.1
+
+  # Routing
+  go_router: ^14.6.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - .env.example
