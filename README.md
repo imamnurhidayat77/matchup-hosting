@@ -11,9 +11,6 @@ This repository contains the **source code** for the MatchUp platform — mobile
 - Armanda Darmara (`adar521`)
 - Imam Nurhidayat (`inur448`)
 
-## Supported Platforms
-
-This project is developed and primarily tested on **macOS**, but the local development workflow also supports **Ubuntu / Debian** and **Windows** (via WSL or Git Bash for the Bash-based scripts).
 
 ## Repository Structure
 
