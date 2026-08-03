@@ -2,7 +2,7 @@
 
 > Activity-based matchmaking platform for connecting people through shared interests.
 
-This repository contains the **boilerplate foundation** for the MatchUp platform — mobile app (Flutter), admin web (React + Tailwind), and backend API (Node.js + Express + TypeScript), backed by PostgreSQL. It is the team project for **COMPSCI 734 — Mobile, Web & Enterprise Computing** (Semester 2, 2026).
+This repository contains the **source code** for the MatchUp platform — mobile app (Flutter), admin web (React + Tailwind), and backend API (Node.js + Express + TypeScript), backed by PostgreSQL. It is the team project for **COMPSCI 734 — Mobile, Web & Enterprise Computing** (Semester 2, 2026).
 
 ## Team — Nimble Takahe
 
