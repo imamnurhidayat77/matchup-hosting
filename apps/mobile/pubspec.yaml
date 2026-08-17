@@ -26,6 +26,21 @@ dependencies:
   # Routing
   go_router: ^14.6.1
 
+  # Swipe cards
+  card_swiper: ^3.0.1
+
+  # Date formatting
+  intl: ^0.19.0
+
+  # SVG rendering for icons exported from Figma
+  flutter_svg: ^2.0.10+1
+
+  # Biometric authentication (optional / class-two feature)
+  local_auth: ^2.3.0
+
+  # Calendar integration (optional / class-two feature)
+  device_calendar: ^4.3.3
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -35,3 +50,13 @@ flutter:
   uses-material-design: true
   assets:
     - .env.example
+    - assets/images/
+    - assets/images/splash/
+    - assets/images/onboarding/
+    - assets/images/welcome/
+    - assets/images/auth/
+    - assets/images/discovery/
+    - assets/images/discovery/avatars/
+    - assets/images/discovery/covers/
+    - assets/images/discovery/icons/
+    - assets/images/discovery/sports/

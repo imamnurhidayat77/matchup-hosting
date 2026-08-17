@@ -6,7 +6,8 @@
 .vscode/
 *.swp
 *.swo
-*.codebase-memory
+.claude/
+.codebase-memory/
 
 # Logs
 *.log
