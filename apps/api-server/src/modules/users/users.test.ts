@@ -12,7 +12,7 @@ import { createApp } from '../../app/app.js';
 import * as usersService from './users.service.js';
 
 describe('users routes', () => {
-  it('creates a user with POST /users', async () => {
+  it('creates a user with POST /users => expected 200', async () => {
     const app = createApp();
 
     const response = await request(app)
@@ -32,7 +32,7 @@ describe('users routes', () => {
     });
   });
 
-  it('gets a user with GET /users/:authUid', async () => {
+  it('gets a user with GET /users/:authUid => expected 200', async () => {
     vi.mocked(usersService.getUserByAuthUid).mockResolvedValueOnce({
       authUid: 'test-uid-1',
       email: 'user@example.com',
@@ -55,7 +55,7 @@ describe('users routes', () => {
     });
   });
 
-  it('returns 404 from GET /users/:authUid when user is not found', async () => {
+  it('GET /users/:authUid when user is not found => expected 404 w/ NOT_FOUND', async () => {
     vi.mocked(usersService.getUserByAuthUid).mockResolvedValueOnce(null);
 
     const app = createApp();
@@ -71,8 +71,8 @@ describe('users routes', () => {
       },
     });
   });
-  
-  it('returns 400 from POST /users when input is invalid', async () => {
+
+  it('POST /users when input is invalid => expected 400 w/ INVALID_INPUT', async () => {
     const app = createApp();
 
     const response = await request(app)
@@ -86,13 +86,33 @@ describe('users routes', () => {
     expect(response.body).toEqual({
       ok: false,
       error: {
-        code: 'INVALID_INPUT_TYPE',
+        code: 'INVALID_INPUT',
         message: 'authUid and email must be strings',
       },
     });
   });
 
-    it('returns 409 from POST /users when user already exists', async () => {
+  it('POST /users when input is empty => expected 400 w/ EMPTY_INPUT', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .post('/users')
+      .send({
+        authUid: '   ',
+        email: '    ',
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      ok: false,
+      error: {
+        code: 'EMPTY_INPUT',
+        message: 'authUid and email are required',
+      },
+    });
+  });
+
+  it('returns 409 from POST /users when user already exists => expected 409 w/ CONFLICT', async () => {
     vi.mocked(usersService.createUser).mockRejectedValueOnce(
       new Error('User already exists'),
     );

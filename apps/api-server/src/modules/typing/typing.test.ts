@@ -83,7 +83,7 @@ describe('typing routes', () => {
     });
   });
 
-  it('POST /typing when activityId is blank => expected 400 w/ INVALID_INPUT', async () => {
+  it('POST /typing when activityId is blank => expected 400 w/ EMPTY_INPUT', async () => {
     const app = createApp();
 
     const response = await request(app)
@@ -98,7 +98,7 @@ describe('typing routes', () => {
     expect(response.body).toEqual({
       ok: false,
       error: {
-        code: 'INVALID_INPUT',
+        code: 'EMPTY_INPUT',
         message: 'activityId and uid are required',
       },
     });
@@ -125,7 +125,7 @@ describe('typing routes', () => {
     });
   });
 
-  it('POST /typing when uid is blank => expected 400 w/ INVALID_INPUT', async () => {
+  it('POST /typing when uid is blank => expected 400 w/ EMPTY_INPUT', async () => {
     const app = createApp();
 
     const response = await request(app)
@@ -140,7 +140,7 @@ describe('typing routes', () => {
     expect(response.body).toEqual({
       ok: false,
       error: {
-        code: 'INVALID_INPUT',
+        code: 'EMPTY_INPUT',
         message: 'activityId and uid are required',
       },
     });
@@ -148,7 +148,7 @@ describe('typing routes', () => {
 
   it('POST /typing when service throws => expected 500 w/ INTERNAL_ERROR', async () => {
     vi.mocked(typingService.setTyping).mockRejectedValueOnce(
-      new Error('Unexpected failure'),
+      new Error('Unknown error'),
     );
 
     const app = createApp();
@@ -166,7 +166,7 @@ describe('typing routes', () => {
       ok: false,
       error: {
         code: 'INTERNAL_ERROR',
-        message: 'Unexpected failure',
+        message: 'Unknown error',
       },
     });
   });
@@ -195,7 +195,7 @@ describe('typing routes', () => {
     });
   });
 
-  it('GET /typing/:activityId/:uid when activityId is blank => expected 400 w/ INVALID_INPUT', async () => {
+  it('GET /typing/:activityId/:uid when activityId is blank => expected 400 w/ EMPTY_INPUT', async () => {
 
     const app = createApp();
 
@@ -205,13 +205,13 @@ describe('typing routes', () => {
     expect(response.body).toEqual({
       ok: false,
       error: {
-        code: 'INVALID_INPUT',
-        message: 'activityId and uid are required'
+        code: 'EMPTY_INPUT',
+        message: 'activityId are required'
       },
     });
   });
 
-  it('GET /typing/:activityId/:uid when uid is blank => expected 400 w/ INVALID_INPUT', async () => {
+  it('GET /typing/:activityId/:uid when uid is blank => expected 400 w/ EMPTY_INPUT', async () => {
 
     const app = createApp();
 
@@ -221,8 +221,8 @@ describe('typing routes', () => {
     expect(response.body).toEqual({
       ok: false,
       error: {
-        code: 'INVALID_INPUT',
-        message: 'activityId and uid are required'
+        code: 'EMPTY_INPUT',
+        message: 'uid are required'
       },
     });
   });
@@ -244,7 +244,7 @@ describe('typing routes', () => {
     });
   });
 
-  it('GET /typing/:activityId/:uid when service throws +> expected 500 w/ INTERNAL_ERROR', async () => {
+  it('GET /typing/:activityId/:uid when service throws => expected 500 w/ INTERNAL_ERROR', async () => {
     vi.mocked(typingService.getTyping).mockRejectedValueOnce(
       new Error('Unknown error'),
     );

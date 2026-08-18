@@ -16,7 +16,7 @@ export async function setPresenceHandler(req: Request, res: Response) {
             return res.status(400).json({
                 ok: false,
                 error: {
-                    code: 'INVALID_UID',
+                    code: 'INVALID_INPUT',
                     message: 'uid must be a string',
                 },
             });
@@ -36,7 +36,7 @@ export async function setPresenceHandler(req: Request, res: Response) {
             return res.status(400).json({
                 ok: false,
                 error: {
-                    code: 'EMPTY_UID',
+                    code: 'EMPTY_INPUT',
                     message: 'uid is required',
                 },
             });
@@ -72,7 +72,7 @@ export async function getPresenceHandler(req: Request<GetPresenceParams>, res: R
             return res.status(400).json({
                 ok: false,
                 error: {
-                    code: 'INVALID_INPUT',
+                    code: 'EMPTY_INPUT',
                     message: 'uid is required',
                 },
             });

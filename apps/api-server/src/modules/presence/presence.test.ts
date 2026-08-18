@@ -73,7 +73,7 @@ describe('presence routes', () => {
     expect(response.body).toEqual({
       ok: false,
       error: {
-        code: 'EMPTY_UID',
+        code: 'EMPTY_INPUT',
         message: 'uid is required',
       },
     });
@@ -93,7 +93,7 @@ describe('presence routes', () => {
     expect(response.body).toEqual({
       ok: false,
       error: {
-        code: 'INVALID_UID',
+        code: 'INVALID_INPUT',
         message: 'uid must be a string',
       },
     });
@@ -158,7 +158,7 @@ describe('presence routes', () => {
     expect(response.body).toEqual({
       ok: false,
       error: {
-        code: 'INVALID_INPUT',
+        code: 'EMPTY_INPUT',
         message: 'uid is required',
       },
     })
