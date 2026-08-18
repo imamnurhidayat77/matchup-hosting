@@ -60,3 +60,6 @@ coverage/
 # Misc
 .DS_Store
 *.iml
+
+# Backend Project Folder
+dev-docs/
