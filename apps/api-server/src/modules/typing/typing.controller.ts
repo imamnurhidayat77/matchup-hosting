@@ -38,7 +38,7 @@ export async function setTypingHandler(req: Request, res: Response) {
         return res.status(400).json({
             ok: false,
             error: {
-                code: 'INVALID_INPUT',
+                code: 'EMPTY_INPUT',
                 message: 'activityId and uid are required',
             },
         });
@@ -71,12 +71,22 @@ export async function getTypingHandler(req: Request<GetTypingParams>, res: Respo
     try{
         const { activityId, uid } = req.params;
 
-        if (!activityId.trim() || !uid.trim()){
+        if (!uid.trim()){
             return res.status(400).json({
                 ok: false,
                 error: {
-                    code: 'INVALID_INPUT',
-                    message: 'activityId and uid are required'
+                    code: 'EMPTY_INPUT',
+                    message: 'uid are required'
+                },
+            });
+        }
+
+        if (!activityId.trim()){
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'EMPTY_INPUT',
+                    message: 'activityId are required'
                 },
             });
         }

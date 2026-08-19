@@ -16,7 +16,7 @@ export async function createUserHandler(req: Request, res: Response) {
       return res.status(400).json({
         ok: false,
         error: {
-          code: 'INVALID_INPUT_TYPE',
+          code: 'INVALID_INPUT',
           message: 'authUid and email must be strings',
         },
       });
@@ -26,7 +26,7 @@ export async function createUserHandler(req: Request, res: Response) {
       return res.status(400).json({
         ok: false,
         error: {
-          code: 'INVALID_INPUT',
+          code: 'EMPTY_INPUT',
           message: 'authUid and email are required',
         },
       });

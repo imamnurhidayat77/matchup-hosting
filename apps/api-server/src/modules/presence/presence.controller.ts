@@ -16,7 +16,7 @@ export async function setPresenceHandler(req: Request, res: Response) {
             return res.status(400).json({
                 ok: false,
                 error: {
-                    code: 'INVALID_UID',
+                    code: 'INVALID_INPUT',
                     message: 'uid must be a string',
                 },
             });
@@ -27,7 +27,7 @@ export async function setPresenceHandler(req: Request, res: Response) {
                 ok: false,
                 error: {
                     code: 'INVALID_STATE',
-                    message: 'State must be online or offline',
+                    message: 'state must be online or offline',
                 },
             });
         }
@@ -36,7 +36,7 @@ export async function setPresenceHandler(req: Request, res: Response) {
             return res.status(400).json({
                 ok: false,
                 error: {
-                    code: 'INVALID_UID',
+                    code: 'EMPTY_INPUT',
                     message: 'uid is required',
                 },
             });
@@ -72,7 +72,7 @@ export async function getPresenceHandler(req: Request<GetPresenceParams>, res: R
             return res.status(400).json({
                 ok: false,
                 error: {
-                    code: 'INVALID_INPUT',
+                    code: 'EMPTY_INPUT',
                     message: 'uid is required',
                 },
             });
@@ -85,7 +85,7 @@ export async function getPresenceHandler(req: Request<GetPresenceParams>, res: R
                 ok: false,
                 error: {
                     code: 'NOT_FOUND',
-                    message: 'Presence not found'
+                    message: 'presence not found'
                 },
             });
         }

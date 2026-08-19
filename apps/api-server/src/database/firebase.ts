@@ -8,6 +8,13 @@ function createFirebaseApp() {
     return getApp();
   }
 
+  if (process.env.VITEST) {
+    return initializeApp({
+      projectId: env.FIREBASE_PROJECT_ID,
+      databaseURL: env.FIREBASE_DATABASE_URL,
+    });
+  }
+
   return initializeApp({
     credential: cert({
       projectId: env.FIREBASE_PROJECT_ID,
