@@ -9,7 +9,6 @@ import { typingRouter } from '../modules/typing/typing.routes.js';
 import { chatRouter } from '../modules/chat/chat.routes.js';
 import { activitiesRouter } from '../modules/activities/activities.routes.js';
 
-
 export function createApp(){
     const app = express();
 
