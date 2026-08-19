@@ -31,25 +31,21 @@ jobs:
       - name: Build
         run: npm run build
 
-  api:
-    name: API
+  api-server:
+    name: API Server
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: apps/api
+        working-directory: apps/api-server
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: apps/api/package-lock.json
+          cache-dependency-path: apps/api-server/package-lock.json
       - name: Install dependencies
-        run: npm ci --no-audit --no-fund --legacy-peer-deps
-      - name: Generate Prisma Client
-        run: npm run db:generate
-      - name: Lint
-        run: npm run lint
+        run: npm ci --no-audit --no-fund
       - name: Test
         run: npm test
       - name: Build
