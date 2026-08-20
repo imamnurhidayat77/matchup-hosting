@@ -39,10 +39,7 @@ class AssetImageWithFallback extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final placeholder = isAvatar
-        ? _AvatarPlaceholder(
-            size: width ?? height,
-            color: placeholderColor,
-          )
+        ? _AvatarPlaceholder(size: width ?? height, color: placeholderColor)
         : _CoverPlaceholder(
             width: width,
             height: height,
@@ -60,10 +57,7 @@ class AssetImageWithFallback extends StatelessWidget {
     );
 
     if (borderRadius != null) {
-      return ClipRRect(
-        borderRadius: borderRadius!,
-        child: image,
-      );
+      return ClipRRect(borderRadius: borderRadius!, child: image);
     }
     return image;
   }
@@ -90,20 +84,13 @@ class _CoverPlaceholder extends StatelessWidget {
       height: height,
       color: color,
       alignment: Alignment.center,
-      child: Icon(
-        icon,
-        size: h * 0.3,
-        color: AppColors.textSecondary,
-      ),
+      child: Icon(icon, size: h * 0.3, color: AppColors.textSecondary),
     );
   }
 }
 
 class _AvatarPlaceholder extends StatelessWidget {
-  const _AvatarPlaceholder({
-    required this.size,
-    required this.color,
-  });
+  const _AvatarPlaceholder({required this.size, required this.color});
 
   final double? size;
   final Color color;
@@ -114,10 +101,7 @@ class _AvatarPlaceholder extends StatelessWidget {
     return Container(
       width: s,
       height: s,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-      ),
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
       alignment: Alignment.center,
       child: Icon(
         Icons.person_outline_rounded,

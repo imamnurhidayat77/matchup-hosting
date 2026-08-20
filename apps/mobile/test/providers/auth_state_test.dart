@@ -35,10 +35,7 @@ class _TestableAuthNotifier extends AuthStateNotifier {
     final hasSession = await _store.hasValidSession;
     if (hasSession) {
       final userId = await _store.readUserId();
-      state = AuthState(
-        status: AuthStatus.authenticated,
-        userId: userId,
-      );
+      state = AuthState(status: AuthStatus.authenticated, userId: userId);
     } else {
       state = AuthState.unauthenticated;
     }
@@ -103,17 +100,16 @@ void main() {
       expect(await fakeStore.readAccessToken(), 'access');
     });
 
-    test('should clear all tokens and set unauthenticated via signOut', () async {
-      await notifier.signIn(
-        accessToken: 'a',
-        refreshToken: 'r',
-        userId: 'u',
-      );
-      await notifier.signOut();
+    test(
+      'should clear all tokens and set unauthenticated via signOut',
+      () async {
+        await notifier.signIn(accessToken: 'a', refreshToken: 'r', userId: 'u');
+        await notifier.signOut();
 
-      expect(notifier.state.status, AuthStatus.unauthenticated);
-      expect(await fakeStore.readAccessToken(), isNull);
-    });
+        expect(notifier.state.status, AuthStatus.unauthenticated);
+        expect(await fakeStore.readAccessToken(), isNull);
+      },
+    );
 
     test('isAuthenticated should return false in unknown state', () {
       expect(notifier.state.isAuthenticated, isFalse);

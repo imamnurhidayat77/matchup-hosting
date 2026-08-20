@@ -46,11 +46,16 @@ class DummyChatRepository implements ChatRepository {
   @override
   Future<List<ChatMessage>> messages(String activityId) async {
     await Future.delayed(const Duration(milliseconds: 50));
-    return List.unmodifiable(_byActivity.putIfAbsent(activityId, () => _seed(activityId)));
+    return List.unmodifiable(
+      _byActivity.putIfAbsent(activityId, () => _seed(activityId)),
+    );
   }
 
   @override
-  Future<ChatMessage> send({required String activityId, required String text}) async {
+  Future<ChatMessage> send({
+    required String activityId,
+    required String text,
+  }) async {
     final msg = ChatMessage(
       id: '$activityId-${DateTime.now().millisecondsSinceEpoch}',
       senderId: 'me',
@@ -100,8 +105,8 @@ class DummyChatRepository implements ChatRepository {
 
 class RemoteChatRepository implements ChatRepository {
   RemoteChatRepository({ApiClient? client, ChatRepository? fallback})
-      : _client = client ?? ApiClient.instance,
-        _fallback = fallback ?? DummyChatRepository();
+    : _client = client ?? ApiClient.instance,
+      _fallback = fallback ?? DummyChatRepository();
 
   final ApiClient _client;
   final ChatRepository _fallback;
@@ -109,15 +114,22 @@ class RemoteChatRepository implements ChatRepository {
   @override
   Future<List<ChatMessage>> messages(String activityId) async {
     try {
-      final res = await _client.dio.get('/api/v1/activities/$activityId/messages');
-      return (res.data as List).map((e) => _parse(e as Map<String, dynamic>)).toList();
+      final res = await _client.dio.get(
+        '/api/v1/activities/$activityId/messages',
+      );
+      return (res.data as List)
+          .map((e) => _parse(e as Map<String, dynamic>))
+          .toList();
     } catch (_) {
       return _fallback.messages(activityId);
     }
   }
 
   @override
-  Future<ChatMessage> send({required String activityId, required String text}) async {
+  Future<ChatMessage> send({
+    required String activityId,
+    required String text,
+  }) async {
     try {
       final res = await _client.dio.post(
         '/api/v1/activities/$activityId/messages',
@@ -153,12 +165,13 @@ class RemoteChatRepository implements ChatRepository {
       );
 
   ChatMessage _parse(Map<String, dynamic> json) => ChatMessage(
-        id: json['id']?.toString() ?? '',
-        senderId: json['sender_id']?.toString() ?? '',
-        senderName: json['sender_name'] as String? ?? '',
-        senderAvatarAsset: json['sender_avatar'] as String?,
-        text: json['text'] as String? ?? '',
-        sentAt: DateTime.tryParse(json['sent_at'] as String? ?? '') ?? DateTime.now(),
-        isMine: json['is_mine'] as bool? ?? false,
-      );
+    id: json['id']?.toString() ?? '',
+    senderId: json['sender_id']?.toString() ?? '',
+    senderName: json['sender_name'] as String? ?? '',
+    senderAvatarAsset: json['sender_avatar'] as String?,
+    text: json['text'] as String? ?? '',
+    sentAt:
+        DateTime.tryParse(json['sent_at'] as String? ?? '') ?? DateTime.now(),
+    isMine: json['is_mine'] as bool? ?? false,
+  );
 }

@@ -12,7 +12,14 @@ class FilterScreen extends StatefulWidget {
 }
 
 class _FilterScreenState extends State<FilterScreen> {
-  static const _sports = ['Basketball', 'Tennis', 'Soccer', 'Running', 'Volleyball', 'Fitness'];
+  static const _sports = [
+    'Basketball',
+    'Tennis',
+    'Soccer',
+    'Running',
+    'Volleyball',
+    'Fitness',
+  ];
   final Set<int> _selectedSports = {0, 2};
   int _skill = 1;
   static const _times = ['Morning', 'Afternoon', 'Evening'];
@@ -26,11 +33,7 @@ class _FilterScreenState extends State<FilterScreen> {
       body: SafeArea(
         top: true,
         child: Column(
-          children: [
-            const Spacer(flex: 2),
-            _sheet(),
-            const HomeIndicator(),
-          ],
+          children: [const Spacer(flex: 2), _sheet(), const HomeIndicator()],
         ),
       ),
     );
@@ -232,8 +235,9 @@ class _FilterScreenState extends State<FilterScreen> {
                         style: TextStyle(
                           fontFamily: AppTypography.fontFamily,
                           fontSize: 13,
-                          fontWeight:
-                              selected ? FontWeight.w700 : FontWeight.w600,
+                          fontWeight: selected
+                              ? FontWeight.w700
+                              : FontWeight.w600,
                           color: selected
                               ? AppColors.textPrimary
                               : AppColors.textSecondary,

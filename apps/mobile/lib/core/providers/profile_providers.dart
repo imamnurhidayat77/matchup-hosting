@@ -10,7 +10,7 @@ final myProfileProvider = FutureProvider.autoDispose<UserModel>((ref) {
 });
 
 /// Provider for another user's profile by ID.
-final playerProfileProvider =
-    FutureProvider.autoDispose.family<UserModel?, String>((ref, id) {
-  return ref.watch(userRepositoryProvider).byId(id);
-});
+final playerProfileProvider = FutureProvider.autoDispose
+    .family<UserModel?, String>((ref, id) {
+      return ref.watch(userRepositoryProvider).byId(id);
+    });

@@ -17,8 +17,8 @@ import '../domain/chat_message.dart';
 
 final _conversationsProvider =
     FutureProvider.autoDispose<List<ChatConversation>>((ref) async {
-  return ref.watch(chatRepositoryProvider).conversations();
-});
+      return ref.watch(chatRepositoryProvider).conversations();
+    });
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
@@ -94,12 +94,14 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
                         onChanged: (v) => setState(() => _query = v),
                         cursorColor: AppColors.textPrimary,
                         cursorWidth: 1.5,
-                        style: AppTypography.bodyReading
-                            .copyWith(color: AppColors.textPrimary),
+                        style: AppTypography.bodyReading.copyWith(
+                          color: AppColors.textPrimary,
+                        ),
                         decoration: InputDecoration(
                           hintText: 'Search chats, sports or matches...',
-                          hintStyle: AppTypography.bodyReading
-                              .copyWith(color: AppColors.textTertiary),
+                          hintStyle: AppTypography.bodyReading.copyWith(
+                            color: AppColors.textTertiary,
+                          ),
                           border: InputBorder.none,
                           enabledBorder: InputBorder.none,
                           focusedBorder: InputBorder.none,
@@ -158,12 +160,14 @@ class _ConversationList extends ConsumerWidget {
         final filtered = query.isEmpty
             ? all
             : all
-                .where((c) =>
-                    c.name.toLowerCase().contains(query.toLowerCase()) ||
-                    c.lastMessage
-                        .toLowerCase()
-                        .contains(query.toLowerCase()))
-                .toList();
+                  .where(
+                    (c) =>
+                        c.name.toLowerCase().contains(query.toLowerCase()) ||
+                        c.lastMessage.toLowerCase().contains(
+                          query.toLowerCase(),
+                        ),
+                  )
+                  .toList();
 
         if (filtered.isEmpty) {
           return EmptyState(
@@ -178,10 +182,8 @@ class _ConversationList extends ConsumerWidget {
         return ListView.separated(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x6),
           itemCount: filtered.length,
-          separatorBuilder: (_, _) => const Divider(
-            height: 1,
-            color: AppColors.border,
-          ),
+          separatorBuilder: (_, _) =>
+              const Divider(height: 1, color: AppColors.border),
           itemBuilder: (_, i) => _ConversationTile(
             conversation: filtered[i],
             onTap: () => context.push('/chat/${filtered[i].name}'),
@@ -195,10 +197,7 @@ class _ConversationList extends ConsumerWidget {
 // ─── Conversation tile ────────────────────────────────────────────────────────
 
 class _ConversationTile extends StatelessWidget {
-  const _ConversationTile({
-    required this.conversation,
-    required this.onTap,
-  });
+  const _ConversationTile({required this.conversation, required this.onTap});
 
   final ChatConversation conversation;
   final VoidCallback onTap;
@@ -250,8 +249,7 @@ class _ConversationTile extends StatelessWidget {
                     conversation.name,
                     style: AppTypography.labelField.copyWith(
                       fontSize: 15,
-                      fontWeight:
-                          hasUnread ? FontWeight.w800 : FontWeight.w700,
+                      fontWeight: hasUnread ? FontWeight.w800 : FontWeight.w700,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -263,8 +261,7 @@ class _ConversationTile extends StatelessWidget {
                       color: hasUnread
                           ? AppColors.textPrimary
                           : AppColors.textSecondary,
-                      fontWeight:
-                          hasUnread ? FontWeight.w600 : FontWeight.w400,
+                      fontWeight: hasUnread ? FontWeight.w600 : FontWeight.w400,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -284,8 +281,7 @@ class _ConversationTile extends StatelessWidget {
                     color: hasUnread
                         ? AppColors.textPrimary
                         : AppColors.textTertiary,
-                    fontWeight:
-                        hasUnread ? FontWeight.w600 : FontWeight.w400,
+                    fontWeight: hasUnread ? FontWeight.w600 : FontWeight.w400,
                   ),
                 ),
                 if (hasUnread) ...[

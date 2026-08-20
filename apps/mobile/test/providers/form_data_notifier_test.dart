@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:matchup_mobile/features/activities/presentation/wizard/providers/form_data_provider.dart';
+import 'package:matchup_mobile/features/activities/presentation/create/providers/form_data_provider.dart';
 
 void main() {
   late ProviderContainer container;
@@ -98,18 +98,24 @@ void main() {
   });
 
   group('formErrorsProvider', () {
-    test('should return title error when title is empty AND field is dirty', () {
-      // Mark title as dirty first — errors only surface for touched fields
-      container.read(formDirtyFieldsProvider.notifier).markDirty('title');
-      final errors = container.read(formErrorsProvider);
-      expect(errors, contains('title'));
-    });
+    test(
+      'should return title error when title is empty AND field is dirty',
+      () {
+        // Mark title as dirty first — errors only surface for touched fields
+        container.read(formDirtyFieldsProvider.notifier).markDirty('title');
+        final errors = container.read(formErrorsProvider);
+        expect(errors, contains('title'));
+      },
+    );
 
-    test('should NOT return title error when title is empty but field is not dirty', () {
-      // Default: no dirty fields — errors should not surface yet
-      final errors = container.read(formErrorsProvider);
-      expect(errors.containsKey('title'), isFalse);
-    });
+    test(
+      'should NOT return title error when title is empty but field is not dirty',
+      () {
+        // Default: no dirty fields — errors should not surface yet
+        final errors = container.read(formErrorsProvider);
+        expect(errors.containsKey('title'), isFalse);
+      },
+    );
 
     test('should clear title error once valid fields are set (dirty)', () {
       container.read(formDirtyFieldsProvider.notifier).markDirty('title');
@@ -122,10 +128,13 @@ void main() {
   });
 
   group('allFormErrorsProvider', () {
-    test('should return title error when title is empty regardless of dirty state', () {
-      // allFormErrorsProvider is unfiltered — always reflects true validation state
-      final errors = container.read(allFormErrorsProvider);
-      expect(errors, contains('title'));
-    });
+    test(
+      'should return title error when title is empty regardless of dirty state',
+      () {
+        // allFormErrorsProvider is unfiltered — always reflects true validation state
+        final errors = container.read(allFormErrorsProvider);
+        expect(errors, contains('title'));
+      },
+    );
   });
 }

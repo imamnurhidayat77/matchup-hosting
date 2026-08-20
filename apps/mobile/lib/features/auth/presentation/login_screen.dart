@@ -48,7 +48,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       if (status != AuthStatus.authenticated) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('No saved session. Please sign in with your password.'),
+            content: Text(
+              'No saved session. Please sign in with your password.',
+            ),
           ),
         );
       }
@@ -64,9 +66,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     return OutlinedButton.icon(
       style: OutlinedButton.styleFrom(
         side: const BorderSide(color: AppColors.primaryDarker),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(999),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       ),
       icon: const Icon(Icons.fingerprint, color: AppColors.primaryDarker),
@@ -80,6 +80,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       onPressed: _onBiometricLogin,
     );
   }
+
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -103,7 +104,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       await Future.delayed(const Duration(milliseconds: 800));
       if (!mounted) return;
 
-      await ref.read(authStateProvider.notifier).signIn(
+      await ref
+          .read(authStateProvider.notifier)
+          .signIn(
             accessToken: 'demo_access_token',
             refreshToken: 'demo_refresh_token',
             userId: 'demo_user_001',
@@ -122,7 +125,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   String? _validateEmail(String? value) {
     final v = value?.trim() ?? '';
     if (v.isEmpty) return 'Email is required';
-    if (!RegExp(r'^[^@]+@[^@]+\.[^@]+$').hasMatch(v)) return 'Invalid email format';
+    if (!RegExp(r'^[^@]+@[^@]+\.[^@]+$').hasMatch(v)) {
+      return 'Invalid email format';
+    }
     return null;
   }
 
@@ -153,7 +158,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                       label: 'Close',
                       child: GestureDetector(
                         onTap: () => context.go('/welcome'),
-                        child: SvgPicture.asset('assets/images/auth/close_x.svg', width: 24, height: 24),
+                        child: SvgPicture.asset(
+                          'assets/images/auth/close_x.svg',
+                          width: 24,
+                          height: 24,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -218,7 +227,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                         validator: _validatePassword,
                         trailing: PasswordToggle(
                           obscure: _obscurePassword,
-                          onTap: () => setState(() => _obscurePassword = !_obscurePassword),
+                          onTap: () => setState(
+                            () => _obscurePassword = !_obscurePassword,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 12),

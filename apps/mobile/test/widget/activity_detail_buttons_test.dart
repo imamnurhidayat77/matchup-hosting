@@ -17,19 +17,19 @@ import 'package:matchup_mobile/features/discovery/presentation/activity_detail_s
 class _MockActivityRepository extends Mock implements ActivityRepository {}
 
 ActivityModel _fixture() => ActivityModel(
-      id: 'a-1',
-      title: 'Saturday Afternoon 5v5 Basketball',
-      sportType: 'Basketball',
-      description: 'Looking for intermediate players.',
-      location: 'Central Park Court B',
-      addressLine: 'Central Park, New York, NY',
-      distanceKm: 2.4,
-      dateTime: DateTime(2026, 8, 20, 16),
-      skillLevel: 'Intermediate',
-      capacity: 10,
-      participantCount: 6,
-      hostName: 'James Wilson',
-    );
+  id: 'a-1',
+  title: 'Saturday Afternoon 5v5 Basketball',
+  sportType: 'Basketball',
+  description: 'Looking for intermediate players.',
+  location: 'Central Park Court B',
+  addressLine: 'Central Park, New York, NY',
+  distanceKm: 2.4,
+  dateTime: DateTime(2026, 8, 20, 16),
+  skillLevel: 'Intermediate',
+  capacity: 10,
+  participantCount: 6,
+  hostName: 'James Wilson',
+);
 
 void main() {
   late _MockActivityRepository repo;
@@ -162,7 +162,11 @@ void main() {
       );
 
       final joinButton = find.bySemanticsLabel('Join activity');
-      expect(joinButton, findsOneWidget, reason: 'Join button not found in tree');
+      expect(
+        joinButton,
+        findsOneWidget,
+        reason: 'Join button not found in tree',
+      );
 
       await tester.ensureVisible(joinButton);
       await tester.tap(joinButton);
@@ -180,9 +184,8 @@ void main() {
         routes: [
           GoRoute(
             path: '/activity/:id',
-            builder: (_, state) => ActivityDetailScreen(
-              activityId: state.pathParameters['id']!,
-            ),
+            builder: (_, state) =>
+                ActivityDetailScreen(activityId: state.pathParameters['id']!),
           ),
           GoRoute(
             path: '/report/activity/:id',

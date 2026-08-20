@@ -50,7 +50,10 @@ class IconInputField extends StatelessWidget {
           autofillHints: autofillHints,
           textInputAction: textInputAction,
           onFieldSubmitted: onSubmitted,
-          style: AppTypography.bodyLarge.copyWith(fontSize: 15, color: AppColors.textPrimary),
+          style: AppTypography.bodyLarge.copyWith(
+            fontSize: 15,
+            color: AppColors.textPrimary,
+          ),
           cursorColor: AppColors.primary,
           decoration: InputDecoration(
             isDense: true,
@@ -58,7 +61,10 @@ class IconInputField extends StatelessWidget {
             hintStyle: AppTypography.bodyFormSecondary,
             filled: true,
             fillColor: AppColors.surfaceSubtle,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 12,
+            ),
             border: _border(AppColors.border),
             enabledBorder: _border(AppColors.border),
             focusedBorder: _border(AppColors.primary, width: 1.5),
@@ -67,28 +73,39 @@ class IconInputField extends StatelessWidget {
             prefixIcon: leadingIcon == null
                 ? null
                 : Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     child: SizedBox(
                       width: 20,
                       height: 20,
                       child: SvgPicture.asset(
                         leadingIcon!,
-                        colorFilter: const ColorFilter.mode(AppColors.textSecondary, BlendMode.srcIn),
+                        colorFilter: const ColorFilter.mode(
+                          AppColors.textSecondary,
+                          BlendMode.srcIn,
+                        ),
                       ),
                     ),
                   ),
-            prefixIconConstraints: const BoxConstraints(minWidth: 52, minHeight: 20),
+            prefixIconConstraints: const BoxConstraints(
+              minWidth: 52,
+              minHeight: 20,
+            ),
             suffixIcon: trailing == null
                 ? null
                 : Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    child: SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: trailing,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
                     ),
+                    child: SizedBox(width: 20, height: 20, child: trailing),
                   ),
-            suffixIconConstraints: const BoxConstraints(minWidth: 52, minHeight: 20),
+            suffixIconConstraints: const BoxConstraints(
+              minWidth: 52,
+              minHeight: 20,
+            ),
           ),
         ),
       ],
@@ -105,11 +122,7 @@ class IconInputField extends StatelessWidget {
 
 /// Trailing eye toggle for password fields.
 class PasswordToggle extends StatelessWidget {
-  const PasswordToggle({
-    super.key,
-    required this.obscure,
-    required this.onTap,
-  });
+  const PasswordToggle({super.key, required this.obscure, required this.onTap});
 
   final bool obscure;
   final VoidCallback onTap;
@@ -124,7 +137,10 @@ class PasswordToggle extends StatelessWidget {
         onTap: onTap,
         child: SvgPicture.asset(
           'assets/images/auth/eye.svg',
-          colorFilter: const ColorFilter.mode(AppColors.textSecondary, BlendMode.srcIn),
+          colorFilter: const ColorFilter.mode(
+            AppColors.textSecondary,
+            BlendMode.srcIn,
+          ),
         ),
       ),
     );

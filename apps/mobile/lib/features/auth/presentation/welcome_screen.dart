@@ -14,6 +14,7 @@ void _showComingSoon(BuildContext context) {
     variant: AppSnackbarVariant.info,
   );
 }
+
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
 

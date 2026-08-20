@@ -83,10 +83,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     }
     setState(() => _loading = true);
     try {
-      await ref.read(userRepositoryProvider).updateProfile(
-            displayName: name,
-            bio: _bioController.text.trim(),
-          );
+      await ref
+          .read(userRepositoryProvider)
+          .updateProfile(displayName: name, bio: _bioController.text.trim());
       ref.invalidate(myProfileProvider);
       if (!mounted) return;
       AppSnackbar.show(
@@ -117,8 +116,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         bottom: false,
         child: profileAsync.when(
           loading: () => const SkeletonList(count: 6),
-          error: (_, _) =>
-              const Center(child: Text('Could not load profile.')),
+          error: (_, _) => const Center(child: Text('Could not load profile.')),
           data: (user) {
             _initFields(user.displayName, user.bio);
             return Column(
@@ -194,16 +192,14 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                         const SizedBox(height: AppSpacing.x4),
 
                         // Sports
-                        Text(
-                          'MY SPORTS',
-                          style: _sectionLabel,
-                        ),
+                        Text('MY SPORTS', style: _sectionLabel),
                         const SizedBox(height: AppSpacing.x3),
                         ...List.generate(_sports.length, (i) {
                           final sport = _sports[i];
                           return Padding(
-                            padding:
-                                const EdgeInsets.only(bottom: AppSpacing.x3),
+                            padding: const EdgeInsets.only(
+                              bottom: AppSpacing.x3,
+                            ),
                             child: _SportCard(
                               entry: sport,
                               onLevelChanged: (level) => setState(
@@ -212,9 +208,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                   level: level,
                                 ),
                               ),
-                              onRemove: () => setState(
-                                () => _sports.removeAt(i),
-                              ),
+                              onRemove: () =>
+                                  setState(() => _sports.removeAt(i)),
                             ),
                           );
                         }),
@@ -229,8 +224,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                 vertical: AppSpacing.x3,
                               ),
                               decoration: BoxDecoration(
-                                borderRadius:
-                                    BorderRadius.circular(AppRadius.pill),
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.pill,
+                                ),
                                 border: Border.all(color: AppColors.primary),
                               ),
                               child: Row(
@@ -266,10 +262,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   }
 
   TextStyle get _sectionLabel => AppTypography.metaSub.copyWith(
-        fontWeight: FontWeight.w700,
-        color: AppColors.textSecondary,
-        letterSpacing: 0.5,
-      );
+    fontWeight: FontWeight.w700,
+    color: AppColors.textSecondary,
+    letterSpacing: 0.5,
+  );
 }
 
 // ─── Header ──────────────────────────────────────────────────────────────────
@@ -333,14 +329,14 @@ class _Header extends StatelessWidget {
                         height: 18,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          valueColor:
-                              AlwaysStoppedAnimation(AppColors.primary),
+                          valueColor: AlwaysStoppedAnimation(AppColors.primary),
                         ),
                       )
                     : Text(
                         'Save',
-                        style: AppTypography.labelField
-                            .copyWith(color: AppColors.primary),
+                        style: AppTypography.labelField.copyWith(
+                          color: AppColors.primary,
+                        ),
                       ),
               ),
             ),
@@ -450,8 +446,9 @@ class _BoxedField extends StatelessWidget {
             keyboardType: keyboardType,
             cursorColor: AppColors.textPrimary,
             cursorWidth: 1.5,
-            style: AppTypography.bodyReading
-                .copyWith(color: AppColors.textPrimary),
+            style: AppTypography.bodyReading.copyWith(
+              color: AppColors.textPrimary,
+            ),
             decoration: InputDecoration(
               prefixIcon: leadingIcon != null
                   ? Padding(
@@ -513,6 +510,7 @@ class _BoxedField extends StatelessWidget {
 class _SportEntry {
   const _SportEntry({required this.name, required this.level});
   final String name;
+
   /// 0=Beginner, 1=Intermediate, 2=Advanced
   final int level;
 }
@@ -530,11 +528,11 @@ class _SportCard extends StatelessWidget {
   static const _levels = ['Beginner', 'Intermediate', 'Advanced'];
 
   IconData get _leadingIcon => switch (entry.name.toLowerCase()) {
-        // Running gets an activity icon instead of the remove-X to hint it's
-        // a cardio activity — matches the design comp.
-        'running' => Icons.monitor_heart_outlined,
-        _ => Icons.cancel_outlined,
-      };
+    // Running gets an activity icon instead of the remove-X to hint it's
+    // a cardio activity — matches the design comp.
+    'running' => Icons.monitor_heart_outlined,
+    _ => Icons.cancel_outlined,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -562,8 +560,9 @@ class _SportCard extends StatelessWidget {
               const SizedBox(width: AppSpacing.x2),
               Text(
                 entry.name,
-                style: AppTypography.labelField
-                    .copyWith(color: AppColors.primaryDarker),
+                style: AppTypography.labelField.copyWith(
+                  color: AppColors.primaryDarker,
+                ),
               ),
               const Spacer(),
               Container(
@@ -599,8 +598,9 @@ class _SportCard extends StatelessWidget {
                         color: selected
                             ? AppColors.textOnPrimary
                             : AppColors.textSecondary,
-                        fontWeight:
-                            selected ? FontWeight.w700 : FontWeight.w600,
+                        fontWeight: selected
+                            ? FontWeight.w700
+                            : FontWeight.w600,
                       ),
                     ),
                   ),

@@ -25,8 +25,10 @@ class OtpVerificationScreen extends StatefulWidget {
 class _OtpVerificationScreenState extends State<OtpVerificationScreen>
     with TickerProviderStateMixin, SecureScreenMixin {
   static const _codeLength = 6;
-  final _controllers =
-      List.generate(_codeLength, (_) => TextEditingController());
+  final _controllers = List.generate(
+    _codeLength,
+    (_) => TextEditingController(),
+  );
   final _focusNodes = List.generate(_codeLength, (_) => FocusNode());
 
   Timer? _timer;
@@ -42,10 +44,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
   late final Animation<double> _shakeAnimation = Tween<double>(
     begin: 0,
     end: 1,
-  ).animate(CurvedAnimation(
-    parent: _shakeController,
-    curve: Curves.elasticIn,
-  ));
+  ).animate(CurvedAnimation(parent: _shakeController, curve: Curves.elasticIn));
 
   @override
   void initState() {
@@ -57,8 +56,12 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
   void dispose() {
     _timer?.cancel();
     _shakeController.dispose();
-    for (final c in _controllers) { c.dispose(); }
-    for (final f in _focusNodes) { f.dispose(); }
+    for (final c in _controllers) {
+      c.dispose();
+    }
+    for (final f in _focusNodes) {
+      f.dispose();
+    }
     super.dispose();
   }
 
@@ -107,7 +110,9 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
       if (!mounted) return;
       setState(() => _hasError = false);
       // Clear all boxes
-      for (final c in _controllers) { c.clear(); }
+      for (final c in _controllers) {
+        c.clear();
+      }
       _focusNodes.first.requestFocus();
     });
     AppSnackbar.show(
@@ -170,9 +175,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
             ),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.x6,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x6),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
@@ -215,10 +218,11 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
                     AnimatedBuilder(
                       animation: _shakeAnimation,
                       builder: (_, child) {
-                        final offset =
-                            (_shakeController.isAnimating)
-                                ? (8 * (0.5 - (_shakeAnimation.value - 0.5).abs()) * 2)
-                                : 0.0;
+                        final offset = (_shakeController.isAnimating)
+                            ? (8 *
+                                  (0.5 - (_shakeAnimation.value - 0.5).abs()) *
+                                  2)
+                            : 0.0;
                         return Transform.translate(
                           offset: Offset(offset, 0),
                           child: child,
@@ -425,10 +429,7 @@ class _RecoveryHeader extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppSpacing.x3),
-          Text(
-            title,
-            style: AppTypography.titleLarge.copyWith(fontSize: 18),
-          ),
+          Text(title, style: AppTypography.titleLarge.copyWith(fontSize: 18)),
         ],
       ),
     );

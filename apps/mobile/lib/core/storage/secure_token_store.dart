@@ -11,10 +11,10 @@ const _kUserId = 'auth_user_id';
 /// NEVER store tokens in [SharedPreferences] or Hive without encryption.
 class SecureTokenStore {
   SecureTokenStore._()
-      : _storage = const FlutterSecureStorage(
-          aOptions: AndroidOptions(encryptedSharedPreferences: true),
-          iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
-        );
+    : _storage = const FlutterSecureStorage(
+        aOptions: AndroidOptions(encryptedSharedPreferences: true),
+        iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
+      );
 
   static final SecureTokenStore instance = SecureTokenStore._();
 
@@ -25,24 +25,21 @@ class SecureTokenStore {
   Future<void> saveAccessToken(String token) =>
       _storage.write(key: _kAccessToken, value: token);
 
-  Future<String?> readAccessToken() =>
-      _storage.read(key: _kAccessToken);
+  Future<String?> readAccessToken() => _storage.read(key: _kAccessToken);
 
   // ── Refresh token ───────────────────────────────────────────────────────
 
   Future<void> saveRefreshToken(String token) =>
       _storage.write(key: _kRefreshToken, value: token);
 
-  Future<String?> readRefreshToken() =>
-      _storage.read(key: _kRefreshToken);
+  Future<String?> readRefreshToken() => _storage.read(key: _kRefreshToken);
 
   // ── User ID ─────────────────────────────────────────────────────────────
 
   Future<void> saveUserId(String id) =>
       _storage.write(key: _kUserId, value: id);
 
-  Future<String?> readUserId() =>
-      _storage.read(key: _kUserId);
+  Future<String?> readUserId() => _storage.read(key: _kUserId);
 
   // ── Session helpers ─────────────────────────────────────────────────────
 

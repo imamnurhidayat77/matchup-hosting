@@ -44,8 +44,8 @@ class DummyCalendarRepository implements CalendarRepository {
 
 class RemoteCalendarRepository implements CalendarRepository {
   RemoteCalendarRepository({ApiClient? client, CalendarRepository? fallback})
-      : _client = client ?? ApiClient.instance,
-        _fallback = fallback ?? DummyCalendarRepository();
+    : _client = client ?? ApiClient.instance,
+      _fallback = fallback ?? DummyCalendarRepository();
 
   final ApiClient _client;
   final CalendarRepository _fallback;
@@ -78,7 +78,8 @@ class RemoteCalendarRepository implements CalendarRepository {
       id: json['id']?.toString() ?? '',
       activityId: json['activity_id']?.toString() ?? '',
       title: json['title'] as String? ?? '',
-      start: DateTime.tryParse(json['start'] as String? ?? '') ?? DateTime.now(),
+      start:
+          DateTime.tryParse(json['start'] as String? ?? '') ?? DateTime.now(),
       end: DateTime.tryParse(json['end'] as String? ?? '') ?? DateTime.now(),
       location: json['location'] as String? ?? '',
       addedToDeviceCalendar: json['synced'] as bool? ?? false,
@@ -86,10 +87,10 @@ class RemoteCalendarRepository implements CalendarRepository {
   }
 
   Map<String, dynamic> _toJson(CalendarEvent e) => {
-        'activity_id': e.activityId,
-        'title': e.title,
-        'start': e.start.toIso8601String(),
-        'end': e.end.toIso8601String(),
-        'location': e.location,
-      };
+    'activity_id': e.activityId,
+    'title': e.title,
+    'start': e.start.toIso8601String(),
+    'end': e.end.toIso8601String(),
+    'location': e.location,
+  };
 }

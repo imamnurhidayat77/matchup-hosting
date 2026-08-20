@@ -80,9 +80,9 @@ class _RegisterScreenState extends State<RegisterScreen>
   Future<void> _onRegister() async {
     if (!_formKey.currentState!.validate()) return;
     if (_passwordController.text != _confirmController.text) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Passwords do not match')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Passwords do not match')));
       return;
     }
     setState(() => _isLoading = true);
@@ -96,7 +96,9 @@ class _RegisterScreenState extends State<RegisterScreen>
   String? _validateEmail(String? value) {
     final v = value?.trim() ?? '';
     if (v.isEmpty) return 'Email is required';
-    if (!RegExp(r'^[^@]+@[^@]+\.[^@]+$').hasMatch(v)) return 'Invalid email format';
+    if (!RegExp(r'^[^@]+@[^@]+\.[^@]+$').hasMatch(v)) {
+      return 'Invalid email format';
+    }
     return null;
   }
 
@@ -133,7 +135,11 @@ class _RegisterScreenState extends State<RegisterScreen>
                     label: 'Close',
                     child: GestureDetector(
                       onTap: () => context.go('/welcome'),
-                      child: SvgPicture.asset('assets/images/auth/close_x.svg', width: 24, height: 24),
+                      child: SvgPicture.asset(
+                        'assets/images/auth/close_x.svg',
+                        width: 24,
+                        height: 24,
+                      ),
                     ),
                   ),
                 ),
@@ -202,8 +208,9 @@ class _RegisterScreenState extends State<RegisterScreen>
                         keyboardType: TextInputType.name,
                         autofillHints: const [AutofillHints.name],
                         textInputAction: TextInputAction.next,
-                        validator: (v) =>
-                            (v == null || v.trim().isEmpty) ? 'Name is required' : null,
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? 'Name is required'
+                            : null,
                       ),
                       const SizedBox(height: 12),
                       IconInputField(
@@ -228,7 +235,9 @@ class _RegisterScreenState extends State<RegisterScreen>
                         validator: _validatePassword,
                         trailing: PasswordToggle(
                           obscure: _obscurePassword,
-                          onTap: () => setState(() => _obscurePassword = !_obscurePassword),
+                          onTap: () => setState(
+                            () => _obscurePassword = !_obscurePassword,
+                          ),
                         ),
                       ),
                       // ── Password strength bar ─────────────────────────
@@ -243,7 +252,9 @@ class _RegisterScreenState extends State<RegisterScreen>
                                   value: _strength / 100,
                                   minHeight: 4,
                                   backgroundColor: AppColors.border,
-                                  valueColor: AlwaysStoppedAnimation(_strengthColor),
+                                  valueColor: AlwaysStoppedAnimation(
+                                    _strengthColor,
+                                  ),
                                 ),
                               ),
                             ),
@@ -259,7 +270,10 @@ class _RegisterScreenState extends State<RegisterScreen>
                           ],
                         ),
                         const SizedBox(height: 6),
-                        _PwRow(met: _hasMinLength, label: 'At least 8 characters'),
+                        _PwRow(
+                          met: _hasMinLength,
+                          label: 'At least 8 characters',
+                        ),
                         _PwRow(met: _hasUppercase, label: 'Uppercase letter'),
                         _PwRow(met: _hasNumber, label: 'Contains a number'),
                       ],
@@ -276,7 +290,9 @@ class _RegisterScreenState extends State<RegisterScreen>
                         validator: _validateConfirm,
                         trailing: PasswordToggle(
                           obscure: _obscureConfirm,
-                          onTap: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                          onTap: () => setState(
+                            () => _obscureConfirm = !_obscureConfirm,
+                          ),
                         ),
                       ),
                     ],
@@ -356,7 +372,9 @@ class _PwRow extends StatelessWidget {
             label,
             style: AppTypography.bodySmall.copyWith(
               fontSize: 12,
-              color: met ? AppColors.statusSuccessText : AppColors.textSecondary,
+              color: met
+                  ? AppColors.statusSuccessText
+                  : AppColors.textSecondary,
             ),
           ),
         ],

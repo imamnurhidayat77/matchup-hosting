@@ -297,9 +297,17 @@ class JoinedActivityDetailScreen extends StatelessWidget {
   Widget _badgesRow() {
     return Row(
       children: [
-        LabelBadge(label: 'Basketball', background: AppColors.primarySoft, foreground: AppColors.primaryDarker),
+        LabelBadge(
+          label: 'Basketball',
+          background: AppColors.primarySoft,
+          foreground: AppColors.primaryDarker,
+        ),
         const SizedBox(width: 8),
-        LabelBadge(label: 'CONFIRMED', background: AppColors.statusSuccessBg, foreground: AppColors.avatarSecondary),
+        LabelBadge(
+          label: 'CONFIRMED',
+          background: AppColors.statusSuccessBg,
+          foreground: AppColors.avatarSecondary,
+        ),
       ],
     );
   }
@@ -504,7 +512,8 @@ class JoinedActivityDetailScreen extends StatelessWidget {
                 avatar: 'msg_alex.png',
                 sender: 'Alex Mercer',
                 time: '10:14 AM',
-                text: 'Bringing the basketball pump just in case. See you guys at 4!',
+                text:
+                    'Bringing the basketball pump just in case. See you guys at 4!',
               ),
               const SizedBox(height: 12),
               _chatMsg(
@@ -634,9 +643,9 @@ class JoinedActivityDetailScreen extends StatelessWidget {
         if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ok
-                ? 'Added to calendar'
-                : 'Could not add to calendar'),
+            content: Text(
+              ok ? 'Added to calendar' : 'Could not add to calendar',
+            ),
           ),
         );
       },
@@ -652,7 +661,11 @@ class JoinedActivityDetailScreen extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.calendar_today, size: 16, color: AppColors.primary),
+            const Icon(
+              Icons.calendar_today,
+              size: 16,
+              color: AppColors.primary,
+            ),
             const SizedBox(width: 8),
             Text(
               'Add to Calendar',

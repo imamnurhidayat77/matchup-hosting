@@ -2,12 +2,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// State of image upload process
 enum ImageUploadState {
-  initial,      // No image selected
-  selecting,    // User is choosing image source
-  cropping,     // User is adjusting crop
-  uploading,    // Image is being uploaded/compressed
-  completed,    // Image uploaded successfully
-  failed,       // Upload failed
+  initial, // No image selected
+  selecting, // User is choosing image source
+  cropping, // User is adjusting crop
+  uploading, // Image is being uploaded/compressed
+  completed, // Image uploaded successfully
+  failed, // Upload failed
 }
 
 /// Information about image upload
@@ -45,9 +45,10 @@ class ImageUploadInfo {
 }
 
 /// Provider for image upload state
-final imageUploadProvider = StateNotifierProvider<ImageUploadNotifier, ImageUploadInfo>((ref) {
-  return ImageUploadNotifier();
-});
+final imageUploadProvider =
+    StateNotifierProvider<ImageUploadNotifier, ImageUploadInfo>((ref) {
+      return ImageUploadNotifier();
+    });
 
 class ImageUploadNotifier extends StateNotifier<ImageUploadInfo> {
   ImageUploadNotifier() : super(const ImageUploadInfo());
@@ -104,8 +105,8 @@ class ImageProcessor {
   /// Validate image format
   bool isValidFormat(String mimeType) {
     return mimeType == 'image/jpeg' ||
-           mimeType == 'image/png' ||
-           mimeType == 'image/webp';
+        mimeType == 'image/png' ||
+        mimeType == 'image/webp';
   }
 
   /// Validate image file size (max 5MB)

@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:matchup_mobile/features/activities/presentation/wizard/services/image_processor.dart';
+import 'package:matchup_mobile/features/activities/presentation/create/services/image_processor.dart';
 
 void main() {
   late ImageProcessor processor;

@@ -73,8 +73,7 @@ class AppSegmentedControl extends StatelessWidget {
                   labels[i],
                   style: AppTypography.bodyMedium.copyWith(
                     fontSize: 13,
-                    fontWeight:
-                        selected ? FontWeight.w700 : FontWeight.w500,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                     color: selected
                         ? AppColors.primaryDarker
                         : AppColors.textSecondary,

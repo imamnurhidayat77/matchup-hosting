@@ -21,16 +21,37 @@ class PastActivityReviewScreen extends StatefulWidget {
   const PastActivityReviewScreen({super.key});
 
   @override
-  State<PastActivityReviewScreen> createState() => _PastActivityReviewScreenState();
+  State<PastActivityReviewScreen> createState() =>
+      _PastActivityReviewScreenState();
 }
 
 class _PastActivityReviewScreenState extends State<PastActivityReviewScreen> {
   int _stars = 4;
   final List<_Participant> _participants = [
-    _Participant(name: 'Sarah Connor', avatar: 'sarah_c.png', rating: 5, given: true),
-    _Participant(name: 'Mike Chen', avatar: 'mike_c.png', rating: 4, given: true),
-    _Participant(name: 'Lisa Park', avatar: 'lisa_p.png', rating: 5, given: false),
-    _Participant(name: 'James Wilson', avatar: 'james_w.png', rating: 4, given: true),
+    _Participant(
+      name: 'Sarah Connor',
+      avatar: 'sarah_c.png',
+      rating: 5,
+      given: true,
+    ),
+    _Participant(
+      name: 'Mike Chen',
+      avatar: 'mike_c.png',
+      rating: 4,
+      given: true,
+    ),
+    _Participant(
+      name: 'Lisa Park',
+      avatar: 'lisa_p.png',
+      rating: 5,
+      given: false,
+    ),
+    _Participant(
+      name: 'James Wilson',
+      avatar: 'james_w.png',
+      rating: 4,
+      given: true,
+    ),
   ];
 
   @override
@@ -87,7 +108,11 @@ class _PastActivityReviewScreenState extends State<PastActivityReviewScreen> {
                   borderRadius: BorderRadius.circular(100),
                 ),
                 alignment: Alignment.center,
-                child: const Icon(Icons.arrow_back, size: 20, color: AppColors.textPrimary),
+                child: const Icon(
+                  Icons.arrow_back,
+                  size: 20,
+                  color: AppColors.textPrimary,
+                ),
               ),
             ),
           ),
@@ -144,8 +169,16 @@ class _PastActivityReviewScreenState extends State<PastActivityReviewScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _badge('VOLLEYBALL', AppColors.primarySoft, AppColors.primaryDarker),
-                    _badge('COMPLETED', AppColors.border, AppColors.textSecondary),
+                    _badge(
+                      'VOLLEYBALL',
+                      AppColors.primarySoft,
+                      AppColors.primaryDarker,
+                    ),
+                    _badge(
+                      'COMPLETED',
+                      AppColors.border,
+                      AppColors.textSecondary,
+                    ),
                   ],
                 ),
                 const SizedBox(height: 6),
@@ -162,7 +195,11 @@ class _PastActivityReviewScreenState extends State<PastActivityReviewScreen> {
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    const Icon(Icons.access_time, size: 14, color: AppColors.textSecondary),
+                    const Icon(
+                      Icons.access_time,
+                      size: 14,
+                      color: AppColors.textSecondary,
+                    ),
                     const SizedBox(width: 6),
                     Text(
                       'Sun, Jul 26 • 8:00 AM',
@@ -371,7 +408,9 @@ class _PastActivityReviewScreenState extends State<PastActivityReviewScreen> {
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: p.given ? AppColors.primarySoft : AppColors.surfaceSubtle,
+                color: p.given
+                    ? AppColors.primarySoft
+                    : AppColors.surfaceSubtle,
                 borderRadius: BorderRadius.circular(100),
                 border: Border.all(
                   color: p.given ? AppColors.primary : AppColors.border,

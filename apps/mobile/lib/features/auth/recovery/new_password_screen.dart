@@ -50,10 +50,8 @@ class _NewPasswordScreenState extends State<NewPasswordScreen>
   bool get _allRulesMet => _hasMinLength && _hasUppercase && _hasNumber;
 
   bool get _confirmFilled => _confirmController.text.isNotEmpty;
-  bool get _passwordsMatch =>
-      _newController.text == _confirmController.text;
-  bool get _confirmError =>
-      _confirmFilled && !_passwordsMatch;
+  bool get _passwordsMatch => _newController.text == _confirmController.text;
+  bool get _confirmError => _confirmFilled && !_passwordsMatch;
 
   /// 0–100 strength score
   int get _strength {
@@ -169,15 +167,14 @@ class _NewPasswordScreenState extends State<NewPasswordScreen>
             ),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.x6,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x6),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     const SizedBox(height: AppSpacing.x4),
                     _RecoveryIllustration(
-                      iconPath: 'assets/images/discovery/icons/shield-check.svg',
+                      iconPath:
+                          'assets/images/discovery/icons/shield-check.svg',
                     ),
                     const SizedBox(height: AppSpacing.x5),
                     Text(
@@ -426,10 +423,14 @@ class _RequirementRow extends StatelessWidget {
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 200),
             child: Icon(
-              met ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+              met
+                  ? Icons.check_circle_rounded
+                  : Icons.radio_button_unchecked_rounded,
               key: ValueKey(met),
               size: 16,
-              color: met ? AppColors.statusSuccessText : AppColors.textSecondary,
+              color: met
+                  ? AppColors.statusSuccessText
+                  : AppColors.textSecondary,
             ),
           ),
           const SizedBox(width: AppSpacing.x2),
@@ -438,7 +439,9 @@ class _RequirementRow extends StatelessWidget {
             style: AppTypography.bodyMedium.copyWith(
               fontSize: 13,
               fontWeight: FontWeight.w500,
-              color: met ? AppColors.statusSuccessText : AppColors.textSecondary,
+              color: met
+                  ? AppColors.statusSuccessText
+                  : AppColors.textSecondary,
             ),
           ),
         ],
@@ -491,10 +494,7 @@ class _RecoveryHeader extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppSpacing.x3),
-          Text(
-            title,
-            style: AppTypography.titleLarge.copyWith(fontSize: 18),
-          ),
+          Text(title, style: AppTypography.titleLarge.copyWith(fontSize: 18)),
         ],
       ),
     );

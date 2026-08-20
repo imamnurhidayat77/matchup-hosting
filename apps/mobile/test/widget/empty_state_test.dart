@@ -39,15 +39,13 @@ void main() {
       expect(tapped, isTrue);
     });
 
-    testWidgets('should not render action button when actionLabel is null',
-        (tester) async {
+    testWidgets('should not render action button when actionLabel is null', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         const MaterialApp(
           home: Scaffold(
-            body: EmptyState(
-              icon: Icons.inbox,
-              title: 'Empty',
-            ),
+            body: EmptyState(icon: Icons.inbox, title: 'Empty'),
           ),
         ),
       );

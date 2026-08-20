@@ -13,8 +13,10 @@ class HeaderCircleButton extends StatelessWidget {
     this.fallbackIcon,
     this.onTap,
     this.background,
-  }) : assert(assetPath != null || fallbackIcon != null,
-            'Provide assetPath or fallbackIcon');
+  }) : assert(
+         assetPath != null || fallbackIcon != null,
+         'Provide assetPath or fallbackIcon',
+       );
 
   final String? assetPath;
   final IconData? fallbackIcon;

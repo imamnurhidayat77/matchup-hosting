@@ -97,9 +97,11 @@ class DummyNotificationRepository implements NotificationRepository {
 }
 
 class RemoteNotificationRepository implements NotificationRepository {
-  RemoteNotificationRepository({ApiClient? client, NotificationRepository? fallback})
-      : _client = client ?? ApiClient.instance,
-        _fallback = fallback ?? DummyNotificationRepository();
+  RemoteNotificationRepository({
+    ApiClient? client,
+    NotificationRepository? fallback,
+  }) : _client = client ?? ApiClient.instance,
+       _fallback = fallback ?? DummyNotificationRepository();
 
   final ApiClient _client;
   final NotificationRepository _fallback;
@@ -148,7 +150,9 @@ class RemoteNotificationRepository implements NotificationRepository {
       id: json['id']?.toString() ?? '',
       title: json['title'] as String? ?? '',
       body: json['body'] as String?,
-      createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ?? DateTime.now(),
+      createdAt:
+          DateTime.tryParse(json['created_at'] as String? ?? '') ??
+          DateTime.now(),
       type: _typeFromString(json['type'] as String? ?? 'system'),
       unread: json['unread'] as bool? ?? false,
     );
@@ -156,11 +160,16 @@ class RemoteNotificationRepository implements NotificationRepository {
 
   NotificationType _typeFromString(String s) {
     switch (s) {
-      case 'chat': return NotificationType.chat;
-      case 'activity': return NotificationType.activity;
-      case 'request': return NotificationType.request;
-      case 'moderation': return NotificationType.moderation;
-      default: return NotificationType.system;
+      case 'chat':
+        return NotificationType.chat;
+      case 'activity':
+        return NotificationType.activity;
+      case 'request':
+        return NotificationType.request;
+      case 'moderation':
+        return NotificationType.moderation;
+      default:
+        return NotificationType.system;
     }
   }
 }

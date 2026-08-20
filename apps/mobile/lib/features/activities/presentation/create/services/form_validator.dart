@@ -1,4 +1,3 @@
-
 import '../providers/form_data_provider.dart';
 
 /// Validates form data and returns map of field names to error messages
@@ -16,7 +15,8 @@ Map<String, String> formValidator(ActivityFormData data) {
   }
 
   // Date validation
-  if (data.selectedDate != null && data.selectedDate!.isBefore(DateTime.now())) {
+  if (data.selectedDate != null &&
+      data.selectedDate!.isBefore(DateTime.now())) {
     errors['selectedDate'] = 'Date must be in the future';
   }
 
@@ -54,7 +54,8 @@ Map<String, String> validateStep(int step, ActivityFormData data) {
       if (data.location.trim().isEmpty) {
         stepErrors['location'] = allErrors['location']!;
       }
-      if (data.selectedDate != null && data.selectedDate!.isBefore(DateTime.now())) {
+      if (data.selectedDate != null &&
+          data.selectedDate!.isBefore(DateTime.now())) {
         stepErrors['selectedDate'] = allErrors['selectedDate']!;
       }
       break;

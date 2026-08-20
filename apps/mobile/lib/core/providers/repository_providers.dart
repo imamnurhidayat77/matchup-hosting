@@ -50,7 +50,9 @@ final calendarRepositoryProvider = Provider<CalendarRepository>((ref) {
 
 /// Async provider of the discovery feed. Screens read this and render based
 /// on AsyncValue (loading/error/data).
-final activityFeedProvider = FutureProvider.autoDispose<List<dynamic>>((ref) async {
+final activityFeedProvider = FutureProvider.autoDispose<List<dynamic>>((
+  ref,
+) async {
   final repo = ref.watch(activityRepositoryProvider);
   return repo.feed();
 });

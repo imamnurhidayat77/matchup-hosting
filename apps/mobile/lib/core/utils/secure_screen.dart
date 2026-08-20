@@ -35,10 +35,7 @@ mixin SecureScreenMixin<T extends StatefulWidget> on State<T> {
 
   static Future<void> _setSecure(bool secure) async {
     try {
-      await _channel.invokeMethod<void>(
-        'setSecure',
-        {'secure': secure},
-      );
+      await _channel.invokeMethod<void>('setSecure', {'secure': secure});
     } on MissingPluginException {
       // Platform channel not registered (e.g. in unit tests) — ignore.
     } catch (_) {

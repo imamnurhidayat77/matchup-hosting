@@ -125,10 +125,12 @@ class DummyActivityRepository implements ActivityRepository {
     // launch instead of showing a lonely single card in a sea of whitespace.
     final ids = _joinedByUser[userId] ?? const ['1', '3'];
     return ids
-        .map((id) => _all.where((a) => a.id == id).cast<ActivityModel?>().firstWhere(
-              (a) => a != null,
-              orElse: () => null,
-            ))
+        .map(
+          (id) => _all
+              .where((a) => a.id == id)
+              .cast<ActivityModel?>()
+              .firstWhere((a) => a != null, orElse: () => null),
+        )
         .whereType<ActivityModel>()
         .toList();
   }
@@ -138,10 +140,12 @@ class DummyActivityRepository implements ActivityRepository {
     await _delay();
     final ids = _hostedByUser[userId] ?? const ['1'];
     return ids
-        .map((id) => _all.where((a) => a.id == id).cast<ActivityModel?>().firstWhere(
-              (a) => a != null,
-              orElse: () => null,
-            ))
+        .map(
+          (id) => _all
+              .where((a) => a.id == id)
+              .cast<ActivityModel?>()
+              .firstWhere((a) => a != null, orElse: () => null),
+        )
         .whereType<ActivityModel>()
         .toList();
   }

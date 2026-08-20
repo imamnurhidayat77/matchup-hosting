@@ -29,9 +29,7 @@ class ProfileScreen extends ConsumerWidget {
             padding: EdgeInsets.zero,
             children: [
               const SizedBox(height: 12),
-              _Header(
-                onNotificationTap: () => context.push('/notifications'),
-              ),
+              _Header(onNotificationTap: () => context.push('/notifications')),
               const SizedBox(height: 16),
               _AvatarHero(
                 displayName: user.displayName,
@@ -41,7 +39,7 @@ class ProfileScreen extends ConsumerWidget {
               const SizedBox(height: 16),
               _StatsBoard(
                 joined: 24, // TODO: from activity repository
-                hosted: 8,  // TODO: from activity repository
+                hosted: 8, // TODO: from activity repository
                 rating: user.rating ?? 0.0,
               ),
               const SizedBox(height: 16),
@@ -110,7 +108,11 @@ class _AvatarHero extends StatelessWidget {
                   clipBehavior: Clip.antiAlias,
                   child: avatarAsset != null
                       ? Image.asset(avatarAsset!, fit: BoxFit.cover)
-                      : const Icon(Icons.person, size: 60, color: AppColors.primary),
+                      : const Icon(
+                          Icons.person,
+                          size: 60,
+                          color: AppColors.primary,
+                        ),
                 ),
               ),
               Positioned(
@@ -451,32 +453,37 @@ class _ThemeRow extends ConsumerWidget {
           PopupMenuButton<ThemeMode>(
             tooltip: 'Theme',
             initialValue: mode,
-            onSelected: (m) =>
-                ref.read(themeModeProvider.notifier).set(m),
+            onSelected: (m) => ref.read(themeModeProvider.notifier).set(m),
             itemBuilder: (_) => const [
               PopupMenuItem(
                 value: ThemeMode.light,
-                child: Row(children: [
-                  Icon(Icons.light_mode, size: 18),
-                  SizedBox(width: 8),
-                  Text('Light'),
-                ]),
+                child: Row(
+                  children: [
+                    Icon(Icons.light_mode, size: 18),
+                    SizedBox(width: 8),
+                    Text('Light'),
+                  ],
+                ),
               ),
               PopupMenuItem(
                 value: ThemeMode.dark,
-                child: Row(children: [
-                  Icon(Icons.dark_mode, size: 18),
-                  SizedBox(width: 8),
-                  Text('Dark'),
-                ]),
+                child: Row(
+                  children: [
+                    Icon(Icons.dark_mode, size: 18),
+                    SizedBox(width: 8),
+                    Text('Dark'),
+                  ],
+                ),
               ),
               PopupMenuItem(
                 value: ThemeMode.system,
-                child: Row(children: [
-                  Icon(Icons.brightness_auto, size: 18),
-                  SizedBox(width: 8),
-                  Text('System'),
-                ]),
+                child: Row(
+                  children: [
+                    Icon(Icons.brightness_auto, size: 18),
+                    SizedBox(width: 8),
+                    Text('System'),
+                  ],
+                ),
               ),
             ],
             child: Row(
@@ -620,7 +627,9 @@ class _LogoutRow extends ConsumerWidget {
             child: const Text('Cancel'),
           ),
           TextButton(
-            style: TextButton.styleFrom(foregroundColor: AppColors.dangerAccent),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.dangerAccent,
+            ),
             onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text('Log Out'),
           ),

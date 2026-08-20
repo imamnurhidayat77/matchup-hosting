@@ -25,16 +25,76 @@ class ActivityParticipantsScreen extends StatelessWidget {
   const ActivityParticipantsScreen({super.key, required this.activityId});
 
   static const _participants = [
-    _Participant(name: 'James Wilson', avatar: 'host_james.png', skill: 'Advanced', joined: 'Joined 5 days ago', isOrganizer: true),
-    _Participant(name: 'Alex Mercer', avatar: 'avatar_alex.png', skill: 'Intermediate', joined: 'Joined 2 days ago', isOrganizer: false),
-    _Participant(name: 'Sarah Chen', avatar: 'msg_sarah.png', skill: 'Intermediate', joined: 'Joined 2 days ago', isOrganizer: false),
-    _Participant(name: 'Marcus Brodie', avatar: 'avatar_1.png', skill: 'Advanced', joined: 'Joined 1 day ago', isOrganizer: false),
-    _Participant(name: 'Daniel Kim', avatar: 'avatar_2.png', skill: 'Beginner', joined: 'Joined 18 hours ago', isOrganizer: false),
-    _Participant(name: 'Elena Rostova', avatar: 'avatar_3.png', skill: 'Intermediate', joined: 'Joined 5 hours ago', isOrganizer: false),
-    _Participant(name: 'Tyler Vance', avatar: 'avatar_4.png', skill: 'Intermediate', joined: 'Joined 2 hours ago', isOrganizer: false),
-    _Participant(name: 'Sofia Martinez', avatar: 'sarah_c2.png', skill: 'Advanced', joined: 'Joined 3 days ago', isOrganizer: false),
-    _Participant(name: 'Ryan Thompson', avatar: 'avatar_5.png', skill: 'Intermediate', joined: 'Joined 4 days ago', isOrganizer: false),
-    _Participant(name: 'Mia Johnson', avatar: 'avatar_6.png', skill: 'Beginner', joined: 'Joined 5 days ago', isOrganizer: false),
+    _Participant(
+      name: 'James Wilson',
+      avatar: 'host_james.png',
+      skill: 'Advanced',
+      joined: 'Joined 5 days ago',
+      isOrganizer: true,
+    ),
+    _Participant(
+      name: 'Alex Mercer',
+      avatar: 'avatar_alex.png',
+      skill: 'Intermediate',
+      joined: 'Joined 2 days ago',
+      isOrganizer: false,
+    ),
+    _Participant(
+      name: 'Sarah Chen',
+      avatar: 'msg_sarah.png',
+      skill: 'Intermediate',
+      joined: 'Joined 2 days ago',
+      isOrganizer: false,
+    ),
+    _Participant(
+      name: 'Marcus Brodie',
+      avatar: 'avatar_1.png',
+      skill: 'Advanced',
+      joined: 'Joined 1 day ago',
+      isOrganizer: false,
+    ),
+    _Participant(
+      name: 'Daniel Kim',
+      avatar: 'avatar_2.png',
+      skill: 'Beginner',
+      joined: 'Joined 18 hours ago',
+      isOrganizer: false,
+    ),
+    _Participant(
+      name: 'Elena Rostova',
+      avatar: 'avatar_3.png',
+      skill: 'Intermediate',
+      joined: 'Joined 5 hours ago',
+      isOrganizer: false,
+    ),
+    _Participant(
+      name: 'Tyler Vance',
+      avatar: 'avatar_4.png',
+      skill: 'Intermediate',
+      joined: 'Joined 2 hours ago',
+      isOrganizer: false,
+    ),
+    _Participant(
+      name: 'Sofia Martinez',
+      avatar: 'sarah_c2.png',
+      skill: 'Advanced',
+      joined: 'Joined 3 days ago',
+      isOrganizer: false,
+    ),
+    _Participant(
+      name: 'Ryan Thompson',
+      avatar: 'avatar_5.png',
+      skill: 'Intermediate',
+      joined: 'Joined 4 days ago',
+      isOrganizer: false,
+    ),
+    _Participant(
+      name: 'Mia Johnson',
+      avatar: 'avatar_6.png',
+      skill: 'Beginner',
+      joined: 'Joined 5 days ago',
+      isOrganizer: false,
+    ),
   ];
 
   @override
@@ -86,7 +146,11 @@ class ActivityParticipantsScreen extends StatelessWidget {
                       borderRadius: BorderRadius.circular(100),
                     ),
                     alignment: Alignment.center,
-                    child: const Icon(Icons.arrow_back, size: 20, color: AppColors.textPrimary),
+                    child: const Icon(
+                      Icons.arrow_back,
+                      size: 20,
+                      color: AppColors.textPrimary,
+                    ),
                   ),
                 ),
               ),
@@ -205,7 +269,10 @@ class _ParticipantCard extends StatelessWidget {
                       if (item.isOrganizer) ...[
                         const SizedBox(width: 6),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: AppColors.warningBg,
                             borderRadius: BorderRadius.circular(100),
@@ -213,7 +280,11 @@ class _ParticipantCard extends StatelessWidget {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.workspace_premium, size: 10, color: AppColors.warning),
+                              const Icon(
+                                Icons.workspace_premium,
+                                size: 10,
+                                color: AppColors.warning,
+                              ),
                               const SizedBox(width: 4),
                               Text(
                                 'Organizer',

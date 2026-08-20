@@ -114,7 +114,10 @@ class MatchUpApp extends ConsumerWidget {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.surfaceSubtle,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 20,
+          vertical: 14,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(100),
           borderSide: const BorderSide(color: AppColors.border),
@@ -135,7 +138,9 @@ class MatchUpApp extends ConsumerWidget {
           borderRadius: BorderRadius.circular(100),
           borderSide: const BorderSide(color: AppColors.error, width: 1.5),
         ),
-        hintStyle: AppTypography.bodyReading.copyWith(color: AppColors.textTertiary),
+        hintStyle: AppTypography.bodyReading.copyWith(
+          color: AppColors.textTertiary,
+        ),
         floatingLabelBehavior: FloatingLabelBehavior.never,
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -143,7 +148,9 @@ class MatchUpApp extends ConsumerWidget {
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           textStyle: AppTypography.button,
         ),
       ),
@@ -152,7 +159,9 @@ class MatchUpApp extends ConsumerWidget {
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           textStyle: AppTypography.button,
         ),
       ),
@@ -160,7 +169,9 @@ class MatchUpApp extends ConsumerWidget {
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.textPrimary,
           padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           side: const BorderSide(color: AppColors.border),
           textStyle: AppTypography.button,
         ),
@@ -174,7 +185,9 @@ class MatchUpApp extends ConsumerWidget {
       cardTheme: const CardThemeData(
         color: AppColors.card,
         elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(16))),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+        ),
       ),
       chipTheme: ChipThemeData(
         backgroundColor: AppColors.background,
@@ -251,7 +264,10 @@ class MatchUpApp extends ConsumerWidget {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: const Color(0xFF1F2937),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 20,
+          vertical: 14,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(100),
           borderSide: const BorderSide(color: Color(0xFF334155)),
@@ -279,7 +295,9 @@ class MatchUpApp extends ConsumerWidget {
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           textStyle: AppTypography.button,
         ),
       ),
@@ -288,7 +306,9 @@ class MatchUpApp extends ConsumerWidget {
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           textStyle: AppTypography.button,
         ),
       ),
@@ -296,7 +316,9 @@ class MatchUpApp extends ConsumerWidget {
         style: OutlinedButton.styleFrom(
           foregroundColor: const Color(0xFFF1F5F9),
           padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           side: const BorderSide(color: Color(0xFF334155)),
           textStyle: AppTypography.button,
         ),
@@ -310,12 +332,16 @@ class MatchUpApp extends ConsumerWidget {
       cardTheme: const CardThemeData(
         color: Color(0xFF1F2937),
         elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(16))),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+        ),
       ),
       chipTheme: ChipThemeData(
         backgroundColor: const Color(0xFF1F2937),
         selectedColor: const Color(0xFF1E3A8A),
-        labelStyle: AppTypography.bodyMedium.copyWith(color: const Color(0xFFF1F5F9)),
+        labelStyle: AppTypography.bodyMedium.copyWith(
+          color: const Color(0xFFF1F5F9),
+        ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         side: const BorderSide(color: Color(0xFF334155)),
       ),

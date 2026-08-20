@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/home_indicator.dart';
 import '../../../core/widgets/notification_icon_button.dart';
+
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
 
@@ -40,8 +41,18 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   String _monthLabel() {
     const names = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December',
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
     ];
     return '${names[_viewMonth.month - 1]} ${_viewMonth.year}';
   }
@@ -49,8 +60,18 @@ class _CalendarScreenState extends State<CalendarScreen> {
   String _todayLabel() {
     final now = DateTime.now();
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return 'Today, ${months[now.month - 1]} ${now.day}';
   }
@@ -72,13 +93,15 @@ class _CalendarScreenState extends State<CalendarScreen> {
     }
     for (var d = 1; d <= daysInMonth; d++) {
       final isToday = isCurrentMonth && d == today.day;
-      cells.add(_DayCell(
-        day: d,
-        isToday: isToday,
-        hasActivity: _activityDays.contains(d),
-        isSelected: _selectedDay == d,
-        onTap: () => _selectDay(d, false),
-      ));
+      cells.add(
+        _DayCell(
+          day: d,
+          isToday: isToday,
+          hasActivity: _activityDays.contains(d),
+          isSelected: _selectedDay == d,
+          onTap: () => _selectDay(d, false),
+        ),
+      );
     }
     var nextDay = 1;
     while (cells.length < rows * 7) {
@@ -112,7 +135,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
                 children: [
-                  _ScheduleHeader(label: dateLabel, count: hasActivitiesOnDay ? 3 : 0),
+                  _ScheduleHeader(
+                    label: dateLabel,
+                    count: hasActivitiesOnDay ? 3 : 0,
+                  ),
                   const SizedBox(height: 12),
                   if (hasActivitiesOnDay || showingAllDay) ...[
                     _ActivityCard(
@@ -328,8 +354,8 @@ class _DayCell extends StatelessWidget {
     final textColor = faded
         ? AppColors.textSecondary.withValues(alpha: 0.35)
         : (isToday || isSelected)
-            ? Colors.white
-            : AppColors.textPrimary;
+        ? Colors.white
+        : AppColors.textPrimary;
 
     return GestureDetector(
       onTap: faded ? null : onTap,
@@ -354,8 +380,9 @@ class _DayCell extends StatelessWidget {
               style: TextStyle(
                 fontFamily: AppTypography.fontFamily,
                 fontSize: 14,
-                fontWeight:
-                    (isToday || isSelected) ? FontWeight.w700 : FontWeight.w500,
+                fontWeight: (isToday || isSelected)
+                    ? FontWeight.w700
+                    : FontWeight.w500,
                 color: isSelected && !isToday
                     ? AppColors.primaryDarker
                     : textColor,

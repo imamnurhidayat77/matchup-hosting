@@ -340,8 +340,7 @@ class _Hero extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     _HeroBtn(
-                      assetPath:
-                          'assets/images/discovery/icons/arrow_left.svg',
+                      assetPath: 'assets/images/discovery/icons/arrow_left.svg',
                       onTap: () => Navigator.of(context).maybePop(),
                       label: 'Back',
                     ),

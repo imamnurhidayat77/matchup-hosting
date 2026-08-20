@@ -214,7 +214,10 @@ class _CheckInScreenState extends State<CheckInScreen> {
             icon,
             width: 16,
             height: 16,
-            colorFilter: const ColorFilter.mode(AppColors.primaryDarker, BlendMode.srcIn),
+            colorFilter: const ColorFilter.mode(
+              AppColors.primaryDarker,
+              BlendMode.srcIn,
+            ),
           ),
         ),
         const SizedBox(width: 12),
@@ -254,7 +257,8 @@ class _CheckInScreenState extends State<CheckInScreen> {
           fg: AppColors.warning,
           icon: Icons.access_time_rounded,
           label: 'Not checked in yet',
-          description: 'Arrive at the location and tap "Check In" to confirm '
+          description:
+              'Arrive at the location and tap "Check In" to confirm '
               'your attendance.',
         );
       case _CheckInStatus.locating:
@@ -279,7 +283,8 @@ class _CheckInScreenState extends State<CheckInScreen> {
           fg: AppColors.warning,
           icon: Icons.location_off_rounded,
           label: 'Location permission needed',
-          description: 'Enable location access so we can verify your attendance.',
+          description:
+              'Enable location access so we can verify your attendance.',
         );
     }
   }
@@ -344,7 +349,11 @@ class _CheckInScreenState extends State<CheckInScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.privacy_tip_outlined, color: AppColors.primaryDarker, size: 20),
+          Icon(
+            Icons.privacy_tip_outlined,
+            color: AppColors.primaryDarker,
+            size: 20,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -363,8 +372,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
   }
 
   Widget _primaryAction(BuildContext context) {
-    final bool isCheckingIn =
-        _status == _CheckInStatus.locating;
+    final bool isCheckingIn = _status == _CheckInStatus.locating;
     final bool isDone = _status == _CheckInStatus.checkedIn;
 
     final label = isDone
@@ -417,7 +425,8 @@ class _CheckInScreenState extends State<CheckInScreen> {
   }
 
   Widget _secondaryAction(BuildContext context) {
-    final showRetry = _status == _CheckInStatus.locationDenied ||
+    final showRetry =
+        _status == _CheckInStatus.locationDenied ||
         _status == _CheckInStatus.notCheckedIn;
 
     if (!showRetry) {

@@ -21,11 +21,16 @@ class GoogleSignInButton extends StatelessWidget {
       child: OutlinedButton.icon(
         onPressed: onPressed,
         icon: const Icon(Icons.g_mobiledata, size: 28, color: AppColors.error),
-        label: Text(label, style: AppTypography.button.copyWith(color: AppColors.textPrimary)),
+        label: Text(
+          label,
+          style: AppTypography.button.copyWith(color: AppColors.textPrimary),
+        ),
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.textPrimary,
           side: const BorderSide(color: AppColors.border),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
         ),
       ),
     );

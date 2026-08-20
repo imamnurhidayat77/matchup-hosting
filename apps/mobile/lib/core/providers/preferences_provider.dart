@@ -7,8 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// Empty map = no filter (show all).
 final sportPreferencesProvider =
     StateNotifierProvider<SportPreferencesNotifier, Map<String, String>>(
-  (ref) => SportPreferencesNotifier(),
-);
+      (ref) => SportPreferencesNotifier(),
+    );
 
 class SportPreferencesNotifier extends StateNotifier<Map<String, String>> {
   SportPreferencesNotifier() : super(const {});

@@ -12,29 +12,31 @@ void main() {
     await dotenv.load(fileName: '.env.example');
   });
   group('activityRepositoryProvider toggle', () {
-    test('should provide DummyActivityRepository when useRemoteApi is false', () {
-      final container = ProviderContainer(
-        overrides: [
-          useRemoteApiProvider.overrideWithValue(false),
-        ],
-      );
-      addTearDown(container.dispose);
+    test(
+      'should provide DummyActivityRepository when useRemoteApi is false',
+      () {
+        final container = ProviderContainer(
+          overrides: [useRemoteApiProvider.overrideWithValue(false)],
+        );
+        addTearDown(container.dispose);
 
-      final repo = container.read(activityRepositoryProvider);
-      expect(repo, isA<DummyActivityRepository>());
-    });
+        final repo = container.read(activityRepositoryProvider);
+        expect(repo, isA<DummyActivityRepository>());
+      },
+    );
 
-    test('should provide RemoteActivityRepository when useRemoteApi is true', () {
-      final container = ProviderContainer(
-        overrides: [
-          useRemoteApiProvider.overrideWithValue(true),
-        ],
-      );
-      addTearDown(container.dispose);
+    test(
+      'should provide RemoteActivityRepository when useRemoteApi is true',
+      () {
+        final container = ProviderContainer(
+          overrides: [useRemoteApiProvider.overrideWithValue(true)],
+        );
+        addTearDown(container.dispose);
 
-      final repo = container.read(activityRepositoryProvider);
-      expect(repo, isA<RemoteActivityRepository>());
-    });
+        final repo = container.read(activityRepositoryProvider);
+        expect(repo, isA<RemoteActivityRepository>());
+      },
+    );
   });
 
   group('DummyActivityRepository', () {
@@ -67,13 +69,16 @@ void main() {
       expect(joined.any((a) => a.id == activity.id), isTrue);
     });
 
-    test('should return empty hosted list for a user who has not created any activity', () async {
-      // The dummy repo seeds hosted activities for the default user 'me'.
-      // A completely unrelated userId should return empty hosted list.
-      final hosted = await repo.hostedByUser('unknown-user-xyz');
-      // Dummy repo returns [] for users with no hosted activity in seed data
-      // — if seed data doesn't include this user, list is empty.
-      expect(hosted, isA<List>());
-    });
+    test(
+      'should return empty hosted list for a user who has not created any activity',
+      () async {
+        // The dummy repo seeds hosted activities for the default user 'me'.
+        // A completely unrelated userId should return empty hosted list.
+        final hosted = await repo.hostedByUser('unknown-user-xyz');
+        // Dummy repo returns [] for users with no hosted activity in seed data
+        // — if seed data doesn't include this user, list is empty.
+        expect(hosted, isA<List>());
+      },
+    );
   });
 }

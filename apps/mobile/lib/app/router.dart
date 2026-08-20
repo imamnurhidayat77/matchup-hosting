@@ -16,7 +16,6 @@ import '../features/discovery/presentation/discovery_screen.dart';
 import '../features/discovery/presentation/activity_detail_screen.dart';
 import '../features/discovery/presentation/filter_screen.dart';
 import '../features/activities/presentation/create_activity_screen.dart';
-import '../features/activities/presentation/wizard/create_activity_wizard.dart';
 import '../features/activities/presentation/my_activities_screen.dart';
 import '../features/activities/presentation/joined_activities_screen.dart';
 import '../features/activities/presentation/joined_activity_detail_screen.dart';
@@ -93,26 +92,11 @@ GoRouter buildRouter(Ref ref) {
       return null; // No redirect needed.
     },
     routes: [
-      GoRoute(
-        path: '/splash',
-        builder: (_, _) => const SplashScreen(),
-      ),
-      GoRoute(
-        path: '/onboarding',
-        builder: (_, _) => const OnboardingScreen(),
-      ),
-      GoRoute(
-        path: '/welcome',
-        builder: (_, _) => const WelcomeScreen(),
-      ),
-      GoRoute(
-        path: '/login',
-        builder: (_, _) => const LoginScreen(),
-      ),
-      GoRoute(
-        path: '/register',
-        builder: (_, _) => const RegisterScreen(),
-      ),
+      GoRoute(path: '/splash', builder: (_, _) => const SplashScreen()),
+      GoRoute(path: '/onboarding', builder: (_, _) => const OnboardingScreen()),
+      GoRoute(path: '/welcome', builder: (_, _) => const WelcomeScreen()),
+      GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
+      GoRoute(path: '/register', builder: (_, _) => const RegisterScreen()),
       GoRoute(
         path: '/forgot-password',
         builder: (_, _) => const ForgotPasswordScreen(),
@@ -157,22 +141,9 @@ GoRouter buildRouter(Ref ref) {
             path: '/create',
             builder: (_, _) => const CreateActivityScreen(),
           ),
-          GoRoute(
-            path: '/create-activity',
-            builder: (_, state) {
-              final step = state.pathParameters['step'];
-              final initialStep = step != null ? int.parse(step) : 1;
-              return CreateActivityWizard(initialStep: initialStep);
-            },
-          ),
-          GoRoute(
-            path: '/messages',
-            builder: (_, _) => const MessagesScreen(),
-          ),
-          GoRoute(
-            path: '/profile',
-            builder: (_, _) => const ProfileScreen(),
-          ),
+
+          GoRoute(path: '/messages', builder: (_, _) => const MessagesScreen()),
+          GoRoute(path: '/profile', builder: (_, _) => const ProfileScreen()),
           GoRoute(
             path: '/notifications',
             builder: (_, _) => const NotificationsScreen(),
@@ -195,10 +166,7 @@ GoRouter buildRouter(Ref ref) {
               return ManageActivityScreen(activityId: id);
             },
           ),
-          GoRoute(
-            path: '/match/:id',
-            builder: (_, _) => const MatchScreen(),
-          ),
+          GoRoute(path: '/match/:id', builder: (_, _) => const MatchScreen()),
           GoRoute(
             path: '/joined-activities',
             builder: (_, _) => const JoinedActivitiesScreen(),
@@ -226,10 +194,7 @@ GoRouter buildRouter(Ref ref) {
             path: '/preferences',
             builder: (_, _) => const PreferencesScreen(),
           ),
-          GoRoute(
-            path: '/filter',
-            builder: (_, _) => const FilterScreen(),
-          ),
+          GoRoute(path: '/filter', builder: (_, _) => const FilterScreen()),
           GoRoute(
             path: '/report/:type/:name',
             builder: (_, state) {
@@ -252,10 +217,7 @@ GoRouter buildRouter(Ref ref) {
               return CheckInScreen(activityId: id);
             },
           ),
-          GoRoute(
-            path: '/calendar',
-            builder: (_, _) => const CalendarScreen(),
-          ),
+          GoRoute(path: '/calendar', builder: (_, _) => const CalendarScreen()),
           GoRoute(
             path: '/edit-profile',
             builder: (_, _) => const EditProfileScreen(),

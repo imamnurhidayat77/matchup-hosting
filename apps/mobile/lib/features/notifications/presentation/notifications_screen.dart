@@ -16,31 +16,26 @@ import '../domain/app_notification.dart';
 
 extension _NotifTypeUi on NotificationType {
   Color get color => switch (this) {
-        NotificationType.chat => AppColors.primary,
-        NotificationType.activity => AppColors.accent,
-        NotificationType.system => AppColors.success,
-        NotificationType.request => AppColors.warning,
-        NotificationType.moderation => AppColors.error,
-      };
+    NotificationType.chat => AppColors.primary,
+    NotificationType.activity => AppColors.accent,
+    NotificationType.system => AppColors.success,
+    NotificationType.request => AppColors.warning,
+    NotificationType.moderation => AppColors.error,
+  };
 
   String get iconAsset => switch (this) {
-        NotificationType.chat =>
-          'assets/images/discovery/icons/message_square.svg',
-        NotificationType.activity =>
-          'assets/images/discovery/icons/calendar.svg',
-        NotificationType.system =>
-          'assets/images/discovery/icons/check_circle.svg',
-        NotificationType.request =>
-          'assets/images/discovery/icons/users.svg',
-        NotificationType.moderation =>
-          'assets/images/discovery/icons/alert_circle.svg',
-      };
+    NotificationType.chat => 'assets/images/discovery/icons/message_square.svg',
+    NotificationType.activity => 'assets/images/discovery/icons/calendar.svg',
+    NotificationType.system => 'assets/images/discovery/icons/check_circle.svg',
+    NotificationType.request => 'assets/images/discovery/icons/users.svg',
+    NotificationType.moderation =>
+      'assets/images/discovery/icons/alert_circle.svg',
+  };
 }
 
 // ─── Providers ────────────────────────────────────────────────────────────────
 
-final _notifProvider =
-    FutureProvider.autoDispose<List<AppNotification>>((ref) {
+final _notifProvider = FutureProvider.autoDispose<List<AppNotification>>((ref) {
   return ref.watch(notificationRepositoryProvider).all();
 });
 
@@ -81,7 +76,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
             // ── Header ──────────────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(
-                AppSpacing.x5, AppSpacing.x3, AppSpacing.x5, AppSpacing.x2,
+                AppSpacing.x5,
+                AppSpacing.x3,
+                AppSpacing.x5,
+                AppSpacing.x2,
               ),
               child: Row(
                 children: [
@@ -182,7 +180,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                   final grouped = _group(filtered);
                   return ListView.builder(
                     padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.x5, 0, AppSpacing.x5, AppSpacing.x8,
+                      AppSpacing.x5,
+                      0,
+                      AppSpacing.x5,
+                      AppSpacing.x8,
                     ),
                     itemCount: grouped.length,
                     itemBuilder: (_, i) {
@@ -232,20 +233,16 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     final yesterday = today.subtract(const Duration(days: 1));
     final weekAgo = today.subtract(const Duration(days: 7));
 
-    final todayItems = items
-        .where((n) => n.createdAt.isAfter(today))
-        .toList();
+    final todayItems = items.where((n) => n.createdAt.isAfter(today)).toList();
     final yesterdayItems = items
         .where(
-          (n) =>
-              n.createdAt.isAfter(yesterday) && !n.createdAt.isAfter(today),
+          (n) => n.createdAt.isAfter(yesterday) && !n.createdAt.isAfter(today),
         )
         .toList();
     final weekItems = items
         .where(
           (n) =>
-              n.createdAt.isAfter(weekAgo) &&
-              !n.createdAt.isAfter(yesterday),
+              n.createdAt.isAfter(weekAgo) && !n.createdAt.isAfter(yesterday),
         )
         .toList();
     final olderItems = items
@@ -373,8 +370,9 @@ class _NotifCard extends StatelessWidget {
                   Text(
                     item.title,
                     style: AppTypography.bodyMedium.copyWith(
-                      fontWeight:
-                          item.unread ? FontWeight.w700 : FontWeight.w600,
+                      fontWeight: item.unread
+                          ? FontWeight.w700
+                          : FontWeight.w600,
                       color: AppColors.textPrimary,
                       fontSize: 14,
                     ),

@@ -70,9 +70,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
             ),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.x6,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x6),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
@@ -103,14 +101,19 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                     // ── Email field ────────────────────────────────────
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: Text('Email Address', style: AppTypography.inputLabel),
+                      child: Text(
+                        'Email Address',
+                        style: AppTypography.inputLabel,
+                      ),
                     ),
                     const SizedBox(height: AppSpacing.x2),
                     _EmailInput(
                       controller: _emailController,
                       hasError: _emailError != null,
                       onChanged: (_) {
-                        if (_emailError != null) setState(() => _emailError = null);
+                        if (_emailError != null) {
+                          setState(() => _emailError = null);
+                        }
                       },
                     ),
                     if (_emailError != null) ...[
@@ -257,10 +260,7 @@ class _RecoveryHeader extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppSpacing.x3),
-          Text(
-            title,
-            style: AppTypography.titleLarge.copyWith(fontSize: 18),
-          ),
+          Text(title, style: AppTypography.titleLarge.copyWith(fontSize: 18)),
         ],
       ),
     );

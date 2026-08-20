@@ -104,8 +104,8 @@ void main() {
 
       test('should return false when any rule fails', () {
         expect(_allRulesMet('password1'), isFalse); // no uppercase
-        expect(_allRulesMet('Password'), isFalse);  // no number
-        expect(_allRulesMet('Pass1'), isFalse);     // too short
+        expect(_allRulesMet('Password'), isFalse); // no number
+        expect(_allRulesMet('Pass1'), isFalse); // too short
       });
     });
   });

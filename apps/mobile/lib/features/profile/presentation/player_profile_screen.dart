@@ -35,8 +35,9 @@ class PlayerProfileScreen extends ConsumerWidget {
             return Center(
               child: Text(
                 'Player not found.',
-                style: AppTypography.bodyReading
-                    .copyWith(color: AppColors.textSecondary),
+                style: AppTypography.bodyReading.copyWith(
+                  color: AppColors.textSecondary,
+                ),
               ),
             );
           }
@@ -80,7 +81,10 @@ class _ProfileContent extends StatelessWidget {
                           gradient: LinearGradient(
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
-                            colors: [AppColors.primaryDarker, AppColors.primary],
+                            colors: [
+                              AppColors.primaryDarker,
+                              AppColors.primary,
+                            ],
                           ),
                         ),
                       ),
@@ -181,16 +185,12 @@ class _ProfileContent extends StatelessWidget {
                                 ),
                               ),
                             ],
-                            if ((user.rating ?? 0) > 0 &&
-                                user.location != null)
+                            if ((user.rating ?? 0) > 0 && user.location != null)
                               Padding(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 6,
                                 ),
-                                child: Text(
-                                  '·',
-                                  style: AppTypography.metaSub,
-                                ),
+                                child: Text('·', style: AppTypography.metaSub),
                               ),
                             if (user.location != null)
                               Flexible(
@@ -211,7 +211,9 @@ class _ProfileContent extends StatelessWidget {
 
                 // ── Stats row ────────────────────────────────────────────
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.x6,
+                  ),
                   child: _StatsRow(
                     activities: user.activitiesCount,
                     rating: user.rating ?? 0,
@@ -223,14 +225,16 @@ class _ProfileContent extends StatelessWidget {
                 // ── Bio ──────────────────────────────────────────────────
                 if (user.bio != null && user.bio!.isNotEmpty) ...[
                   Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: AppSpacing.x6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.x6,
+                    ),
                     child: _Card(
                       title: 'About',
                       child: Text(
                         user.bio!,
-                        style: AppTypography.bodyReading
-                            .copyWith(color: AppColors.textSecondary),
+                        style: AppTypography.bodyReading.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                     ),
                   ),
@@ -240,16 +244,18 @@ class _ProfileContent extends StatelessWidget {
                 // ── Sports ───────────────────────────────────────────────
                 if (user.sports.isNotEmpty) ...[
                   Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: AppSpacing.x6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.x6,
+                    ),
                     child: _Card(
                       title: 'Sports',
                       child: Wrap(
                         spacing: AppSpacing.x2,
                         runSpacing: AppSpacing.x2,
                         children: user.sports
-                            .map((s) =>
-                                _SportChip(sport: s.sport, level: s.level))
+                            .map(
+                              (s) => _SportChip(sport: s.sport, level: s.level),
+                            )
                             .toList(),
                       ),
                     ),
@@ -259,8 +265,9 @@ class _ProfileContent extends StatelessWidget {
 
                 // ── Action buttons ───────────────────────────────────────
                 Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: AppSpacing.x6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.x6,
+                  ),
                   child: Row(
                     children: [
                       Expanded(
@@ -279,8 +286,8 @@ class _ProfileContent extends StatelessWidget {
                           icon: Icons.flag_outlined,
                           filled: false,
                           isDanger: true,
-                          onTap: () => context
-                              .push('/report/user/${user.displayName}'),
+                          onTap: () =>
+                              context.push('/report/user/${user.displayName}'),
                         ),
                       ),
                     ],
@@ -528,10 +535,7 @@ class _ActionButton extends StatelessWidget {
           children: [
             Icon(icon, size: 18, color: fg),
             const SizedBox(width: AppSpacing.x2),
-            Text(
-              label,
-              style: AppTypography.labelField.copyWith(color: fg),
-            ),
+            Text(label, style: AppTypography.labelField.copyWith(color: fg)),
           ],
         ),
       ),

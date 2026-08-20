@@ -44,7 +44,9 @@ class PrimaryPillButton extends StatelessWidget {
                 children: [
                   Text(
                     label,
-                    style: AppTypography.buttonPrimary.copyWith(color: foreground),
+                    style: AppTypography.buttonPrimary.copyWith(
+                      color: foreground,
+                    ),
                   ),
                   if (icon != null) ...[
                     const SizedBox(width: 10),
@@ -53,7 +55,10 @@ class PrimaryPillButton extends StatelessWidget {
                       height: 18,
                       child: SvgPicture.asset(
                         icon!,
-                        colorFilter: ColorFilter.mode(foreground, BlendMode.srcIn),
+                        colorFilter: ColorFilter.mode(
+                          foreground,
+                          BlendMode.srcIn,
+                        ),
                       ),
                     ),
                   ],
@@ -157,7 +162,9 @@ class PrimaryPill extends StatelessWidget {
       child: SizedBox(
         width: expand ? double.infinity : null,
         child: Material(
-          color: onPressed == null ? background.withValues(alpha: 0.6) : background,
+          color: onPressed == null
+              ? background.withValues(alpha: 0.6)
+              : background,
           shape: const StadiumBorder(),
           child: InkWell(
             customBorder: const StadiumBorder(),
@@ -170,7 +177,9 @@ class PrimaryPill extends StatelessWidget {
                 children: [
                   Text(
                     label,
-                    style: AppTypography.buttonPrimary.copyWith(color: foreground),
+                    style: AppTypography.buttonPrimary.copyWith(
+                      color: foreground,
+                    ),
                   ),
                   if (icon != null) ...[
                     const SizedBox(width: 10),
@@ -179,7 +188,10 @@ class PrimaryPill extends StatelessWidget {
                       height: 18,
                       child: SvgPicture.asset(
                         icon!,
-                        colorFilter: ColorFilter.mode(foreground, BlendMode.srcIn),
+                        colorFilter: ColorFilter.mode(
+                          foreground,
+                          BlendMode.srcIn,
+                        ),
                       ),
                     ),
                   ],

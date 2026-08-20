@@ -17,10 +17,7 @@ enum AuthStatus {
 }
 
 class AuthState {
-  const AuthState({
-    this.status = AuthStatus.unknown,
-    this.userId,
-  });
+  const AuthState({this.status = AuthStatus.unknown, this.userId});
 
   final AuthStatus status;
 
@@ -30,10 +27,8 @@ class AuthState {
   bool get isAuthenticated => status == AuthStatus.authenticated;
   bool get isUnknown => status == AuthStatus.unknown;
 
-  AuthState copyWith({AuthStatus? status, String? userId}) => AuthState(
-        status: status ?? this.status,
-        userId: userId ?? this.userId,
-      );
+  AuthState copyWith({AuthStatus? status, String? userId}) =>
+      AuthState(status: status ?? this.status, userId: userId ?? this.userId);
 
   static const unauthenticated = AuthState(status: AuthStatus.unauthenticated);
   static const unknown = AuthState(status: AuthStatus.unknown);
@@ -51,10 +46,7 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
     final hasSession = await _store.hasValidSession;
     if (hasSession) {
       final userId = await _store.readUserId();
-      state = AuthState(
-        status: AuthStatus.authenticated,
-        userId: userId,
-      );
+      state = AuthState(status: AuthStatus.authenticated, userId: userId);
     } else {
       state = AuthState.unauthenticated;
     }
@@ -71,10 +63,7 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
       _store.saveRefreshToken(refreshToken),
       _store.saveUserId(userId),
     ]);
-    state = AuthState(
-      status: AuthStatus.authenticated,
-      userId: userId,
-    );
+    state = AuthState(status: AuthStatus.authenticated, userId: userId);
   }
 
   /// Called on logout. Clears ALL tokens and navigates to unauthenticated.
@@ -86,8 +75,7 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
 
 // ─── Providers ───────────────────────────────────────────────────────────────
 
-final authStateProvider =
-    StateNotifierProvider<AuthStateNotifier, AuthState>(
+final authStateProvider = StateNotifierProvider<AuthStateNotifier, AuthState>(
   (ref) => AuthStateNotifier(),
 );
 

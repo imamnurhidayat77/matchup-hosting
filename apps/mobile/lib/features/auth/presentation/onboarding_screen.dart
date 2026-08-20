@@ -115,7 +115,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 32),
                     child: PrimaryPill(
-                      label: _currentPage < _pages.length - 1 ? 'Next' : 'Get Started',
+                      label: _currentPage < _pages.length - 1
+                          ? 'Next'
+                          : 'Get Started',
                       onPressed: _next,
                       icon: 'assets/images/auth/arrow_right.svg',
                     ),
@@ -124,12 +126,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 32),
                     child: Center(
-                      child: _SignInPrompt(
-                        onTap: () => context.go('/login'),
-                      ),
+                      child: _SignInPrompt(onTap: () => context.go('/login')),
                     ),
                   ),
-                  const HomeIndicator(color: AppColors.textOnPrimary, padding: EdgeInsets.only(top: 8, bottom: 8)),
+                  const HomeIndicator(
+                    color: AppColors.textOnPrimary,
+                    padding: EdgeInsets.only(top: 8, bottom: 8),
+                  ),
                 ],
               ),
             ),
@@ -154,9 +157,7 @@ class _OnboardingPageView extends StatelessWidget {
           child: Image.asset(page.illustration, fit: BoxFit.cover),
         ),
         // Dark scrim 65% per Figma
-        const Positioned.fill(
-          child: ColoredBox(color: Color(0xA60F172A)),
-        ),
+        const Positioned.fill(child: ColoredBox(color: Color(0xA60F172A))),
         // Diagonal gradient overlay (top-left dark → bottom-right transparent)
         const Positioned.fill(
           child: DecoratedBox(
@@ -191,10 +192,7 @@ class _Content extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          heading,
-          style: AppTypography.headingOnboarding,
-        ),
+        Text(heading, style: AppTypography.headingOnboarding),
         const SizedBox(height: 16),
         Text(description, style: AppTypography.bodyOnboarding),
       ],
@@ -245,13 +243,17 @@ class _SignInPrompt extends StatelessWidget {
       children: [
         Text(
           'Already have an account?',
-          style: AppTypography.bodyOnboarding.copyWith(fontWeight: FontWeight.w400),
+          style: AppTypography.bodyOnboarding.copyWith(
+            fontWeight: FontWeight.w400,
+          ),
         ),
         GestureDetector(
           onTap: onTap,
           child: Text(
             'Sign In',
-            style: AppTypography.bodyOnboarding.copyWith(fontWeight: FontWeight.w700),
+            style: AppTypography.bodyOnboarding.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
       ],

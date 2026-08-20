@@ -27,7 +27,10 @@ class ApiClient {
         baseUrl: '${Env.apiBaseUrl}$_apiBase',
         connectTimeout: const Duration(seconds: 12),
         receiveTimeout: const Duration(seconds: 12),
-        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
         // Never follow redirects to a cleartext http:// origin.
         followRedirects: false,
       ),
@@ -113,13 +116,15 @@ class _AuthInterceptor extends Interceptor {
 class _ErrorInterceptor extends Interceptor {
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
-    handler.next(DioException(
-      requestOptions: err.requestOptions,
-      response: err.response,
-      type: err.type,
-      error: ApiException.fromDio(err),
-      message: ApiException.fromDio(err).userMessage,
-    ));
+    handler.next(
+      DioException(
+        requestOptions: err.requestOptions,
+        response: err.response,
+        type: err.type,
+        error: ApiException.fromDio(err),
+        message: ApiException.fromDio(err).userMessage,
+      ),
+    );
   }
 }
 
@@ -137,7 +142,9 @@ class _LoggingInterceptor extends Interceptor {
 
   @override
   void onResponse(Response response, ResponseInterceptorHandler handler) {
-    debugPrint('[API] <-- ${response.statusCode} ${response.requestOptions.path}');
+    debugPrint(
+      '[API] <-- ${response.statusCode} ${response.requestOptions.path}',
+    );
     handler.next(response);
   }
 
@@ -179,33 +186,31 @@ class ApiException implements Exception {
     return switch (err.type) {
       DioExceptionType.connectionTimeout ||
       DioExceptionType.sendTimeout ||
-      DioExceptionType.receiveTimeout =>
-        const ApiException(
-          statusCode: null,
-          userMessage: 'Connection timed out. Check your internet connection.',
-        ),
-      DioExceptionType.connectionError =>
-        const ApiException(
-          statusCode: null,
-          userMessage: 'Cannot reach the server. Check your internet connection.',
-        ),
+      DioExceptionType.receiveTimeout => const ApiException(
+        statusCode: null,
+        userMessage: 'Connection timed out. Check your internet connection.',
+      ),
+      DioExceptionType.connectionError => const ApiException(
+        statusCode: null,
+        userMessage: 'Cannot reach the server. Check your internet connection.',
+      ),
       _ => ApiException(
-          statusCode: status,
-          userMessage: serverMsg ?? _defaultMessage(status),
-          code: serverCode,
-        ),
+        statusCode: status,
+        userMessage: serverMsg ?? _defaultMessage(status),
+        code: serverCode,
+      ),
     };
   }
 
   static String _defaultMessage(int? status) => switch (status) {
-        400 => 'Invalid request. Please check your input.',
-        401 => 'Session expired. Please sign in again.',
-        403 => 'You don\'t have permission to do this.',
-        404 => 'The requested resource was not found.',
-        429 => 'Too many requests. Please wait a moment.',
-        500 || 502 || 503 => 'Server error. Please try again later.',
-        _ => 'Something went wrong. Please try again.',
-      };
+    400 => 'Invalid request. Please check your input.',
+    401 => 'Session expired. Please sign in again.',
+    403 => 'You don\'t have permission to do this.',
+    404 => 'The requested resource was not found.',
+    429 => 'Too many requests. Please wait a moment.',
+    500 || 502 || 503 => 'Server error. Please try again later.',
+    _ => 'Something went wrong. Please try again.',
+  };
 
   @override
   String toString() => 'ApiException($statusCode: $userMessage)';

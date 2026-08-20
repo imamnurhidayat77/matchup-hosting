@@ -42,15 +42,15 @@ class AppButton extends StatelessWidget {
     bool loading = false,
     bool expand = true,
   }) : this(
-          key: key,
-          label: label,
-          onPressed: onPressed,
-          variant: AppButtonVariant.secondary,
-          size: size,
-          leading: leading,
-          loading: loading,
-          expand: expand,
-        );
+         key: key,
+         label: label,
+         onPressed: onPressed,
+         variant: AppButtonVariant.secondary,
+         size: size,
+         leading: leading,
+         loading: loading,
+         expand: expand,
+       );
 
   const AppButton.ghost({
     Key? key,
@@ -59,13 +59,13 @@ class AppButton extends StatelessWidget {
     AppButtonSize size = AppButtonSize.md,
     bool expand = true,
   }) : this(
-          key: key,
-          label: label,
-          onPressed: onPressed,
-          variant: AppButtonVariant.ghost,
-          size: size,
-          expand: expand,
-        );
+         key: key,
+         label: label,
+         onPressed: onPressed,
+         variant: AppButtonVariant.ghost,
+         size: size,
+         expand: expand,
+       );
 
   const AppButton.danger({
     Key? key,
@@ -74,13 +74,13 @@ class AppButton extends StatelessWidget {
     AppButtonSize size = AppButtonSize.md,
     bool expand = true,
   }) : this(
-          key: key,
-          label: label,
-          onPressed: onPressed,
-          variant: AppButtonVariant.danger,
-          size: size,
-          expand: expand,
-        );
+         key: key,
+         label: label,
+         onPressed: onPressed,
+         variant: AppButtonVariant.danger,
+         size: size,
+         expand: expand,
+       );
 
   final String label;
   final VoidCallback? onPressed;
@@ -96,44 +96,50 @@ class AppButton extends StatelessWidget {
   // ── Style resolution ─────────────────────────────────────────────────────
 
   Color get _bg => switch (variant) {
-        AppButtonVariant.primary => AppColors.primary,
-        AppButtonVariant.secondary => AppColors.surface,
-        AppButtonVariant.ghost => Colors.transparent,
-        AppButtonVariant.danger => AppColors.errorLight,
-      };
+    AppButtonVariant.primary => AppColors.primary,
+    AppButtonVariant.secondary => AppColors.surface,
+    AppButtonVariant.ghost => Colors.transparent,
+    AppButtonVariant.danger => AppColors.errorLight,
+  };
 
   Color get _fg => switch (variant) {
-        AppButtonVariant.primary => Colors.white,
-        AppButtonVariant.secondary => AppColors.textPrimary,
-        AppButtonVariant.ghost => AppColors.primary,
-        AppButtonVariant.danger => AppColors.danger,
-      };
+    AppButtonVariant.primary => Colors.white,
+    AppButtonVariant.secondary => AppColors.textPrimary,
+    AppButtonVariant.ghost => AppColors.primary,
+    AppButtonVariant.danger => AppColors.danger,
+  };
 
   BorderSide get _border => switch (variant) {
-        AppButtonVariant.secondary => const BorderSide(color: AppColors.border),
-        AppButtonVariant.danger => const BorderSide(color: AppColors.errorLight),
-        _ => BorderSide.none,
-      };
+    AppButtonVariant.secondary => const BorderSide(color: AppColors.border),
+    AppButtonVariant.danger => const BorderSide(color: AppColors.errorLight),
+    _ => BorderSide.none,
+  };
 
   List<BoxShadow> get _shadow => switch (variant) {
-        AppButtonVariant.primary when !_disabled => AppShadows.glowPrimary,
-        _ => const [],
-      };
+    AppButtonVariant.primary when !_disabled => AppShadows.glowPrimary,
+    _ => const [],
+  };
 
   EdgeInsets get _padding => switch (size) {
-        AppButtonSize.sm =>
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        AppButtonSize.md =>
-          const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-        AppButtonSize.lg =>
-          const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      };
+    AppButtonSize.sm => const EdgeInsets.symmetric(
+      horizontal: 16,
+      vertical: 10,
+    ),
+    AppButtonSize.md => const EdgeInsets.symmetric(
+      horizontal: 24,
+      vertical: 14,
+    ),
+    AppButtonSize.lg => const EdgeInsets.symmetric(
+      horizontal: 24,
+      vertical: 16,
+    ),
+  };
 
   double get _fontSize => switch (size) {
-        AppButtonSize.sm => 13,
-        AppButtonSize.md => 15,
-        AppButtonSize.lg => 16,
-      };
+    AppButtonSize.sm => 13,
+    AppButtonSize.md => 15,
+    AppButtonSize.lg => 16,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -182,7 +188,10 @@ class AppButton extends StatelessWidget {
                       fontSize: _fontSize,
                     ),
                   ),
-                  if (trailing != null) ...[const SizedBox(width: 8), trailing!],
+                  if (trailing != null) ...[
+                    const SizedBox(width: 8),
+                    trailing!,
+                  ],
                 ],
               ],
             ),

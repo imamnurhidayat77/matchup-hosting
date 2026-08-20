@@ -111,7 +111,8 @@ class AppScreenHeader extends StatelessWidget {
           Expanded(
             child: Text(
               title,
-              style: style ??
+              style:
+                  style ??
                   AppTypography.headlineSmall.copyWith(
                     fontSize: 22,
                     fontWeight: FontWeight.w800,
@@ -121,10 +122,7 @@ class AppScreenHeader extends StatelessWidget {
             ),
           ),
           if (actions != null)
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: actions!,
-            ),
+            Row(mainAxisSize: MainAxisSize.min, children: actions!),
         ],
       ),
     );

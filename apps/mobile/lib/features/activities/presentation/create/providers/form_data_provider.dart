@@ -86,9 +86,10 @@ class ActivityFormData {
 }
 
 /// Provider for form data
-final formDataProvider = StateNotifierProvider<FormDataNotifier, ActivityFormData>((ref) {
-  return FormDataNotifier();
-});
+final formDataProvider =
+    StateNotifierProvider<FormDataNotifier, ActivityFormData>((ref) {
+      return FormDataNotifier();
+    });
 
 class FormDataNotifier extends StateNotifier<ActivityFormData> {
   FormDataNotifier() : super(const ActivityFormData());
@@ -150,8 +151,8 @@ class FormDataNotifier extends StateNotifier<ActivityFormData> {
 /// Errors are only shown in the UI for fields present in this set.
 final formDirtyFieldsProvider =
     StateNotifierProvider<FormDirtyNotifier, Set<String>>(
-  (ref) => FormDirtyNotifier(),
-);
+      (ref) => FormDirtyNotifier(),
+    );
 
 class FormDirtyNotifier extends StateNotifier<Set<String>> {
   FormDirtyNotifier() : super(const {});
@@ -213,7 +214,8 @@ Map<String, String> _validate(ActivityFormData data) {
     errors['location'] = 'Please enter a location';
   }
 
-  if (data.selectedDate != null && data.selectedDate!.isBefore(DateTime.now())) {
+  if (data.selectedDate != null &&
+      data.selectedDate!.isBefore(DateTime.now())) {
     errors['selectedDate'] = 'Date must be in the future';
   }
 

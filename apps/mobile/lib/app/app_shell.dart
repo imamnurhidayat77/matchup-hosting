@@ -28,8 +28,6 @@ class AppShell extends StatelessWidget {
       label: 'Create',
       icon: Icons.add_box_outlined,
       activeIcon: Icons.add_box,
-      // Single-scroll create screen. The multi-step wizard at
-      // '/create-activity' is the older flow and is no longer the entry point.
       route: '/create',
     ),
     _NavTab(
@@ -49,8 +47,7 @@ class AppShell extends StatelessWidget {
   int _indexFor(String location) {
     if (location.startsWith('/discovery')) return 0;
     if (location.startsWith('/activities')) return 1;
-    if (location.startsWith('/create-activity') ||
-        location.startsWith('/create')) { return 2; }
+    if (location.startsWith('/create')) return 2;
     if (location.startsWith('/messages') || location.startsWith('/chat')) {
       return 3;
     }

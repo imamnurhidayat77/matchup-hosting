@@ -22,8 +22,9 @@ void main() {
       expect(pressed, isTrue);
     });
 
-    testWidgets('should not call onPressed when disabled (onPressed null)',
-        (tester) async {
+    testWidgets('should not call onPressed when disabled (onPressed null)', (
+      tester,
+    ) async {
       var pressed = false;
       await tester.pumpWidget(
         _wrap(AppButton(label: 'Disabled', onPressed: null)),
@@ -32,20 +33,19 @@ void main() {
       expect(pressed, isFalse);
     });
 
-    testWidgets('should show loading indicator when loading is true',
-        (tester) async {
+    testWidgets('should show loading indicator when loading is true', (
+      tester,
+    ) async {
       await tester.pumpWidget(
-        _wrap(AppButton(
-          label: 'Save',
-          onPressed: () {},
-          loading: true,
-        )),
+        _wrap(AppButton(label: 'Save', onPressed: () {}, loading: true)),
       );
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
       expect(find.text('Save'), findsNothing);
     });
 
-    testWidgets('should use secondary variant without crashing', (tester) async {
+    testWidgets('should use secondary variant without crashing', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         _wrap(AppButton.secondary(label: 'Cancel', onPressed: () {})),
       );

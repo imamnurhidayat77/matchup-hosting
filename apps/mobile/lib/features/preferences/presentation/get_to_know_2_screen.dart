@@ -22,16 +22,16 @@ class _GetToKnow2ScreenState extends ConsumerState<GetToKnow2Screen> {
   final Map<String, String> _sports = {};
 
   static const _sportOptions = [
-    ('Basketball',  Icons.sports_basketball_rounded),
-    ('Tennis',      Icons.sports_tennis_rounded),
-    ('Soccer',      Icons.sports_soccer_rounded),
-    ('Running',     Icons.directions_run_rounded),
-    ('Volleyball',  Icons.sports_volleyball_rounded),
-    ('Cycling',     Icons.directions_bike_rounded),
-    ('Fitness',     Icons.fitness_center_rounded),
-    ('Golf',        Icons.sports_golf_rounded),
-    ('Swimming',    Icons.pool_rounded),
-    ('Badminton',   Icons.sports_handball_rounded),
+    ('Basketball', Icons.sports_basketball_rounded),
+    ('Tennis', Icons.sports_tennis_rounded),
+    ('Soccer', Icons.sports_soccer_rounded),
+    ('Running', Icons.directions_run_rounded),
+    ('Volleyball', Icons.sports_volleyball_rounded),
+    ('Cycling', Icons.directions_bike_rounded),
+    ('Fitness', Icons.fitness_center_rounded),
+    ('Golf', Icons.sports_golf_rounded),
+    ('Swimming', Icons.pool_rounded),
+    ('Badminton', Icons.sports_handball_rounded),
   ];
 
   static const _levels = ['Beginner', 'Intermediate', 'Advanced'];
@@ -102,11 +102,11 @@ class _GetToKnow2ScreenState extends ConsumerState<GetToKnow2Screen> {
                       physics: const NeverScrollableScrollPhysics(),
                       gridDelegate:
                           const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 3,
-                        crossAxisSpacing: AppSpacing.x3,
-                        mainAxisSpacing: AppSpacing.x3,
-                        childAspectRatio: 0.9,
-                      ),
+                            crossAxisCount: 3,
+                            crossAxisSpacing: AppSpacing.x3,
+                            mainAxisSpacing: AppSpacing.x3,
+                            childAspectRatio: 0.9,
+                          ),
                       itemCount: _sportOptions.length,
                       itemBuilder: (_, i) {
                         final (name, icon) = _sportOptions[i];
@@ -153,8 +153,7 @@ class _GetToKnow2ScreenState extends ConsumerState<GetToKnow2Screen> {
                         activeTrackColor: AppColors.primary,
                         inactiveTrackColor: AppColors.border,
                         thumbColor: AppColors.primary,
-                        overlayColor:
-                            AppColors.primary.withValues(alpha: 0.12),
+                        overlayColor: AppColors.primary.withValues(alpha: 0.12),
                         thumbShape: const RoundSliderThumbShape(
                           enabledThumbRadius: 9,
                         ),
@@ -194,7 +193,8 @@ class _GetToKnow2ScreenState extends ConsumerState<GetToKnow2Screen> {
     final picked = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (_) => _LevelSheet(sport: sport, current: current, levels: _levels),
+      builder: (_) =>
+          _LevelSheet(sport: sport, current: current, levels: _levels),
     );
     if (picked != null) _setLevel(sport, picked);
   }
@@ -264,9 +264,7 @@ class _SportChip extends StatelessWidget {
               style: AppTypography.bodySmall.copyWith(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
-                color: selected
-                    ? AppColors.primaryDarker
-                    : AppColors.textLabel,
+                color: selected ? AppColors.primaryDarker : AppColors.textLabel,
               ),
             ),
             const SizedBox(height: 3),
@@ -295,8 +293,11 @@ class _SportChip extends StatelessWidget {
                 ),
               )
             else
-              const Icon(Icons.add_rounded,
-                  size: 14, color: AppColors.textTertiary),
+              const Icon(
+                Icons.add_rounded,
+                size: 14,
+                color: AppColors.textTertiary,
+              ),
           ],
         ),
       ),
@@ -384,8 +385,11 @@ class _LevelSheet extends StatelessWidget {
                         ),
                       ),
                       if (l == current)
-                        const Icon(Icons.check_rounded,
-                            size: 18, color: AppColors.primary),
+                        const Icon(
+                          Icons.check_rounded,
+                          size: 18,
+                          color: AppColors.primary,
+                        ),
                     ],
                   ),
                 ),

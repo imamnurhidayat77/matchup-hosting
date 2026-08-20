@@ -54,9 +54,7 @@ class DummyUserRepository implements UserRepository {
       location: 'Auckland, NZ',
       activitiesCount: 18,
       hostedCount: 5,
-      sports: [
-        (sport: 'Tennis', level: 'Advanced'),
-      ],
+      sports: [(sport: 'Tennis', level: 'Advanced')],
     ),
     UserModel(
       id: 'lisa',
@@ -104,8 +102,8 @@ class DummyUserRepository implements UserRepository {
 
 class RemoteUserRepository implements UserRepository {
   RemoteUserRepository({ApiClient? client, UserRepository? fallback})
-      : _client = client ?? ApiClient.instance,
-        _fallback = fallback ?? DummyUserRepository();
+    : _client = client ?? ApiClient.instance,
+      _fallback = fallback ?? DummyUserRepository();
 
   final ApiClient _client;
   final UserRepository _fallback;
@@ -128,10 +126,7 @@ class RemoteUserRepository implements UserRepository {
     try {
       final res = await _client.dio.patch(
         '/api/v1/users/me',
-        data: {
-          'display_name': ?displayName,
-          'bio': ?bio,
-        },
+        data: {'display_name': ?displayName, 'bio': ?bio},
       );
       return _parse(res.data as Map<String, dynamic>) ?? await _fallback.me();
     } catch (_) {
@@ -151,11 +146,14 @@ class RemoteUserRepository implements UserRepository {
       location: json['location'] as String?,
       activitiesCount: json['activities_count'] as int? ?? 0,
       hostedCount: json['hosted_count'] as int? ?? 0,
-      sports: (json['sports'] as List<dynamic>?)
-              ?.map((e) => (
-                    sport: e['sport'] as String? ?? '',
-                    level: e['level'] as String? ?? '',
-                  ))
+      sports:
+          (json['sports'] as List<dynamic>?)
+              ?.map(
+                (e) => (
+                  sport: e['sport'] as String? ?? '',
+                  level: e['level'] as String? ?? '',
+                ),
+              )
               .toList() ??
           const [],
     );

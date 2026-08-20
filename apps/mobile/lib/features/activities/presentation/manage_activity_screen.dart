@@ -6,6 +6,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/header_circle_button.dart';
 import '../../../core/widgets/home_indicator.dart';
 import '../../../core/widgets/label_badge.dart';
+
 class ManageActivityScreen extends StatelessWidget {
   final String activityId;
 
@@ -127,14 +128,20 @@ class ManageActivityScreen extends StatelessWidget {
                 label: 'ACTIVE',
                 background: AppColors.statusSuccessBg,
                 foreground: AppColors.avatarSecondary,
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
               ),
               const SizedBox(width: 8),
               LabelBadge(
                 label: 'BASKETBALL',
                 background: AppColors.primarySoft,
                 foreground: AppColors.primaryDarker,
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
               ),
             ],
           ),
@@ -457,7 +464,9 @@ class ManageActivityScreen extends StatelessWidget {
                   decoration: BoxDecoration(
                     border: i == rows.length - 1
                         ? null
-                        : const Border(bottom: BorderSide(color: AppColors.border)),
+                        : const Border(
+                            bottom: BorderSide(color: AppColors.border),
+                          ),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,

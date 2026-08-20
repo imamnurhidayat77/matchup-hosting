@@ -60,9 +60,8 @@ class _MatchScreenState extends State<MatchScreen>
               child: IgnorePointer(
                 child: AnimatedBuilder(
                   animation: _confettiCtrl,
-                  builder: (_, _) => _ConfettiLayer(
-                    progress: _confettiCtrl.value,
-                  ),
+                  builder: (_, _) =>
+                      _ConfettiLayer(progress: _confettiCtrl.value),
                 ),
               ),
             ),
@@ -191,9 +190,17 @@ class _MatchScreenState extends State<MatchScreen>
                         const SizedBox(height: 12),
                         Row(
                           children: [
-                            _metaChip('zap.svg', 'Intermediate', AppColors.primaryDarker),
+                            _metaChip(
+                              'zap.svg',
+                              'Intermediate',
+                              AppColors.primaryDarker,
+                            ),
                             const SizedBox(width: 8),
-                            _metaChip('clock.svg', 'Today, 6:30 PM', AppColors.textSecondary),
+                            _metaChip(
+                              'clock.svg',
+                              'Today, 6:30 PM',
+                              AppColors.textSecondary,
+                            ),
                           ],
                         ),
                         const SizedBox(height: 12),
@@ -227,7 +234,9 @@ class _MatchScreenState extends State<MatchScreen>
                                           Container(color: AppColors.border),
                                           FractionallySizedBox(
                                             widthFactor: 0.67,
-                                            child: Container(color: AppColors.primary),
+                                            child: Container(
+                                              color: AppColors.primary,
+                                            ),
                                           ),
                                         ],
                                       ),
@@ -238,7 +247,10 @@ class _MatchScreenState extends State<MatchScreen>
                             ),
                             const SizedBox(width: 8),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
                               decoration: BoxDecoration(
                                 color: AppColors.statusSuccessBg,
                                 borderRadius: BorderRadius.circular(20),
@@ -286,7 +298,10 @@ class _MatchScreenState extends State<MatchScreen>
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.primary,
                     borderRadius: BorderRadius.circular(10),
@@ -301,11 +316,15 @@ class _MatchScreenState extends State<MatchScreen>
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color.fromRGBO(0, 0, 0, 0.6),
                     borderRadius: BorderRadius.circular(20),
-                  ),                  child: Row(
+                  ),
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       SizedBox(
@@ -411,7 +430,8 @@ class _MatchScreenState extends State<MatchScreen>
               height: 30,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFF097044),                border: Border.all(color: AppColors.border, width: 2),
+                color: const Color(0xFF097044),
+                border: Border.all(color: AppColors.border, width: 2),
               ),
               child: const Center(
                 child: Text(
@@ -486,15 +506,15 @@ class _MatchScreenState extends State<MatchScreen>
 
 class _ConfettiParticle {
   _ConfettiParticle(math.Random rng, double width, double height)
-      : x = rng.nextDouble() * width,
-        y = -20 - rng.nextDouble() * height * 0.3,
-        size = 6 + rng.nextDouble() * 8,
-        speedY = 180 + rng.nextDouble() * 260,
-        speedX = (rng.nextDouble() - 0.5) * 80,
-        rotation = rng.nextDouble() * math.pi * 2,
-        rotationSpeed = (rng.nextDouble() - 0.5) * 6,
-        color = _kConfettiColors[rng.nextInt(_kConfettiColors.length)],
-        isCircle = rng.nextBool();
+    : x = rng.nextDouble() * width,
+      y = -20 - rng.nextDouble() * height * 0.3,
+      size = 6 + rng.nextDouble() * 8,
+      speedY = 180 + rng.nextDouble() * 260,
+      speedX = (rng.nextDouble() - 0.5) * 80,
+      rotation = rng.nextDouble() * math.pi * 2,
+      rotationSpeed = (rng.nextDouble() - 0.5) * 6,
+      color = _kConfettiColors[rng.nextInt(_kConfettiColors.length)],
+      isCircle = rng.nextBool();
 
   final double x;
   final double y;
@@ -539,8 +559,10 @@ class _ConfettiLayer extends StatelessWidget {
         final px = p.x + p.speedX * elapsed;
         final rot = p.rotation + p.rotationSpeed * elapsed;
         // Fade out in the last 30% of progress
-        final opacity = (1 - ((progress - 0.7) / 0.3).clamp(0.0, 1.0))
-            .clamp(0.0, 1.0);
+        final opacity = (1 - ((progress - 0.7) / 0.3).clamp(0.0, 1.0)).clamp(
+          0.0,
+          1.0,
+        );
 
         return Positioned(
           left: px,

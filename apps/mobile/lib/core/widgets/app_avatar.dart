@@ -8,19 +8,19 @@ enum AppAvatarSize { xs, sm, md, lg, xl }
 
 extension _AvatarSizeX on AppAvatarSize {
   double get diameter => switch (this) {
-        AppAvatarSize.xs => 24,
-        AppAvatarSize.sm => 32,
-        AppAvatarSize.md => 44,
-        AppAvatarSize.lg => 56,
-        AppAvatarSize.xl => 80,
-      };
+    AppAvatarSize.xs => 24,
+    AppAvatarSize.sm => 32,
+    AppAvatarSize.md => 44,
+    AppAvatarSize.lg => 56,
+    AppAvatarSize.xl => 80,
+  };
   double get fontSize => switch (this) {
-        AppAvatarSize.xs => 10,
-        AppAvatarSize.sm => 12,
-        AppAvatarSize.md => 16,
-        AppAvatarSize.lg => 20,
-        AppAvatarSize.xl => 28,
-      };
+    AppAvatarSize.xs => 10,
+    AppAvatarSize.sm => 12,
+    AppAvatarSize.md => 16,
+    AppAvatarSize.lg => 20,
+    AppAvatarSize.xl => 28,
+  };
 }
 
 /// Circular avatar that renders a network/asset image, falling back to
@@ -51,13 +51,13 @@ class AppAvatar extends StatelessWidget {
     double borderWidth = 0,
     VoidCallback? onTap,
   }) : this(
-          key: key,
-          assetPath: path,
-          size: size,
-          borderColor: borderColor,
-          borderWidth: borderWidth,
-          onTap: onTap,
-        );
+         key: key,
+         assetPath: path,
+         size: size,
+         borderColor: borderColor,
+         borderWidth: borderWidth,
+         onTap: onTap,
+       );
 
   final String? imageUrl;
   final String? assetPath;
@@ -94,10 +94,7 @@ class AppAvatar extends StatelessWidget {
         height: d + borderWidth * 2,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          border: Border.all(
-            color: borderColor!,
-            width: borderWidth,
-          ),
+          border: Border.all(color: borderColor!, width: borderWidth),
         ),
         child: ClipOval(child: avatar),
       );
@@ -147,20 +144,17 @@ class AppAvatar extends StatelessWidget {
   }
 
   Widget _fallback(double d) => Text(
-        _initials,
-        style: TextStyle(
-          fontFamily: AppTypography.fontFamily,
-          fontSize: size.fontSize,
-          fontWeight: FontWeight.w700,
-          color: AppColors.primaryDarker,
-        ),
-      );
+    _initials,
+    style: TextStyle(
+      fontFamily: AppTypography.fontFamily,
+      fontSize: size.fontSize,
+      fontWeight: FontWeight.w700,
+      color: AppColors.primaryDarker,
+    ),
+  );
 
-  Widget _shimmer(double d) => Container(
-        width: d,
-        height: d,
-        color: AppColors.surfaceSubtle,
-      );
+  Widget _shimmer(double d) =>
+      Container(width: d, height: d, color: AppColors.surfaceSubtle);
 }
 
 /// Overlapping avatar stack — shows the first [maxVisible] avatars

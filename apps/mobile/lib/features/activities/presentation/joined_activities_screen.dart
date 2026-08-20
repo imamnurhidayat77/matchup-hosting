@@ -28,6 +28,7 @@ class _JoinedActivity {
 }
 
 enum _ActivityTab { upcoming, past, hosting }
+
 class JoinedActivitiesScreen extends StatefulWidget {
   const JoinedActivitiesScreen({super.key});
 
@@ -99,8 +100,9 @@ class _JoinedActivitiesScreenState extends State<JoinedActivitiesScreen> {
                 child: Column(
                   children: [
                     const SizedBox(height: 20),
-                    for (final a in _activities
-                        .where((a) => a.status.index == _selectedTab))
+                    for (final a in _activities.where(
+                      (a) => a.status.index == _selectedTab,
+                    ))
                       Padding(
                         padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
                         child: _ActivityCard(item: a),
@@ -124,10 +126,7 @@ class _JoinedActivitiesScreenState extends State<JoinedActivitiesScreen> {
           Row(
             children: [
               Expanded(
-                child: Text(
-                  'My Activities',
-                  style: AppTypography.titleScreen,
-                ),
+                child: Text('My Activities', style: AppTypography.titleScreen),
               ),
               NotificationIconButton(
                 onTap: () => context.push('/notifications'),
@@ -170,7 +169,9 @@ class _JoinedActivitiesScreenState extends State<JoinedActivitiesScreen> {
                 fontFamily: AppTypography.fontFamily,
                 fontSize: 15,
                 fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                color: selected ? AppColors.primaryDarker : AppColors.textSecondary,
+                color: selected
+                    ? AppColors.primaryDarker
+                    : AppColors.textSecondary,
               ),
             ),
           ),
@@ -191,8 +192,7 @@ class _ActivityCard extends StatelessWidget {
       // upcoming → joined detail with "You're in!" banner.
       onTap: () => switch (item.status) {
         _ActivityTab.hosting => context.push('/manage-activity/${item.id}'),
-        _ActivityTab.past =>
-          context.push('/past-activity/${item.id}/review'),
+        _ActivityTab.past => context.push('/past-activity/${item.id}/review'),
         _ActivityTab.upcoming => context.push('/joined-activity/${item.id}'),
       },
       behavior: HitTestBehavior.opaque,
@@ -231,7 +231,10 @@ class _ActivityCard extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: AppColors.primaryLight,
                           borderRadius: BorderRadius.circular(999),
@@ -246,13 +249,18 @@ class _ActivityCard extends StatelessWidget {
                         ),
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: switch (item.status) {
                             _ActivityTab.hosting => AppColors.primaryLight,
                             _ActivityTab.past => AppColors.statusSuccessBg,
                             _ActivityTab.upcoming =>
-                              item.confirmed ? AppColors.statusSuccessBg : AppColors.warningBg,
+                              item.confirmed
+                                  ? AppColors.statusSuccessBg
+                                  : AppColors.warningBg,
                           },
                           borderRadius: BorderRadius.circular(6),
                         ),
@@ -268,7 +276,9 @@ class _ActivityCard extends StatelessWidget {
                               _ActivityTab.hosting => AppColors.primaryDarker,
                               _ActivityTab.past => AppColors.statusSuccessText,
                               _ActivityTab.upcoming =>
-                                item.confirmed ? AppColors.statusSuccessText : AppColors.warning,
+                                item.confirmed
+                                    ? AppColors.statusSuccessText
+                                    : AppColors.warning,
                             },
                             fontSize: 11,
                             fontWeight: FontWeight.w700,

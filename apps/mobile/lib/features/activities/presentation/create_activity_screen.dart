@@ -12,10 +12,10 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/date_picker_sheet.dart';
-import 'wizard/components/image_picker_modal.dart';
-import 'wizard/providers/image_upload_provider.dart';
-import 'wizard/services/form_validator.dart';
-import 'wizard/providers/form_data_provider.dart';
+import 'create/components/image_picker_modal.dart';
+import 'create/providers/image_upload_provider.dart';
+import 'create/services/form_validator.dart';
+import 'create/providers/form_data_provider.dart';
 
 /// Single-scroll create activity screen.
 class CreateActivityScreen extends ConsumerStatefulWidget {
@@ -37,10 +37,23 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
   int _feeType = 0; // 0 = Free, 1 = Paid
   bool _submitting = false;
 
-  static const _skillOptions = ['All Level', 'Beginner', 'Intermediate', 'Advanced'];
+  static const _skillOptions = [
+    'All Level',
+    'Beginner',
+    'Intermediate',
+    'Advanced',
+  ];
   static const _sportOptions = [
-    'Basketball', 'Tennis', 'Running', 'Volleyball',
-    'Football', 'Soccer', 'Cycling', 'Hiking', 'Golf', 'Swimming',
+    'Basketball',
+    'Tennis',
+    'Running',
+    'Volleyball',
+    'Football',
+    'Soccer',
+    'Cycling',
+    'Hiking',
+    'Golf',
+    'Swimming',
   ];
 
   @override
@@ -64,8 +77,18 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
 
   String _formatDate(DateTime dt) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     final hour12 = dt.hour == 0 ? 12 : (dt.hour > 12 ? dt.hour - 12 : dt.hour);
@@ -103,18 +126,18 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
       }
       final bytes = await file.readAsBytes();
       if (bytes.lengthInBytes > 5 * 1024 * 1024) {
-        ref.read(imageUploadProvider.notifier).setFailed(
-              'Image must be under 5 MB.',
-            );
+        ref
+            .read(imageUploadProvider.notifier)
+            .setFailed('Image must be under 5 MB.');
         return;
       }
       final b64 = base64.encode(bytes);
       ref.read(imageUploadProvider.notifier).setCompleted(b64);
       ref.read(formDataProvider.notifier).setCoverImage(b64);
     } catch (_) {
-      ref.read(imageUploadProvider.notifier).setFailed(
-            'Could not load image. Please try again.',
-          );
+      ref
+          .read(imageUploadProvider.notifier)
+          .setFailed('Could not load image. Please try again.');
     }
   }
 
@@ -125,10 +148,8 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => DatePickerSheet(
-        initialDate: _selectedDate,
-        minDate: DateTime.now(),
-      ),
+      builder: (_) =>
+          DatePickerSheet(initialDate: _selectedDate, minDate: DateTime.now()),
     );
     if (picked != null) {
       setState(() => _selectedDate = picked);
@@ -156,7 +177,10 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
               ),
             ),
             padding: const EdgeInsets.fromLTRB(
-              AppSpacing.x6, AppSpacing.x3, AppSpacing.x6, AppSpacing.x6,
+              AppSpacing.x6,
+              AppSpacing.x3,
+              AppSpacing.x6,
+              AppSpacing.x6,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -186,9 +210,7 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
                       final selected = opt == current;
                       return GestureDetector(
                         onTap: () {
-                          ref
-                              .read(formDataProvider.notifier)
-                              .setSportType(opt);
+                          ref.read(formDataProvider.notifier).setSportType(opt);
                           setState(() {});
                           Navigator.of(context).pop();
                         },
@@ -212,8 +234,11 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
                                 ),
                               ),
                               if (selected)
-                                const Icon(Icons.check_rounded,
-                                    color: AppColors.primary, size: 18),
+                                const Icon(
+                                  Icons.check_rounded,
+                                  color: AppColors.primary,
+                                  size: 18,
+                                ),
                             ],
                           ),
                         ),
@@ -242,9 +267,7 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
       ..setMaxParticipants(_maxParticipants)
       ..setSkillLevel(_skillLevel)
       ..setFeeType(_feeType)
-      ..setPrice(
-        _feeType == 1 ? _priceController.text.trim() : null,
-      );
+      ..setPrice(_feeType == 1 ? _priceController.text.trim() : null);
 
     final errors = formValidator(ref.read(formDataProvider));
     if (errors.isNotEmpty) {
@@ -260,7 +283,9 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
 
     setState(() => _submitting = true);
     try {
-      await ref.read(activityRepositoryProvider).create(
+      await ref
+          .read(activityRepositoryProvider)
+          .create(
             title: formData.title.trim(),
             sportType: formData.sportType,
             location: '',
@@ -308,7 +333,10 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
             // ── Header ───────────────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(
-                AppSpacing.x4, AppSpacing.x3, AppSpacing.x4, AppSpacing.x2,
+                AppSpacing.x4,
+                AppSpacing.x3,
+                AppSpacing.x4,
+                AppSpacing.x2,
               ),
               child: Row(
                 children: [
@@ -350,7 +378,10 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.x5, AppSpacing.x2, AppSpacing.x5, AppSpacing.x10,
+                  AppSpacing.x5,
+                  AppSpacing.x2,
+                  AppSpacing.x5,
+                  AppSpacing.x10,
                 ),
                 children: [
                   // ── Cover Photo ────────────────────────────────────────
@@ -388,10 +419,7 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
                       child: Row(
                         children: [
                           Expanded(
-                            child: Text(
-                              formData.sportType,
-                              style: _inputStyle,
-                            ),
+                            child: Text(formData.sportType, style: _inputStyle),
                           ),
                           // Figma 43:463 — 16pt chevron.
                           const Icon(
@@ -455,8 +483,7 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
                             enabled: _maxParticipants > 2,
                             emphasised: false,
                             semanticLabel: 'Remove one participant',
-                            onTap: () =>
-                                setState(() => _maxParticipants--),
+                            onTap: () => setState(() => _maxParticipants--),
                           ),
                           Text(
                             '$_maxParticipants',
@@ -470,8 +497,7 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
                             enabled: _maxParticipants < 50,
                             emphasised: true,
                             semanticLabel: 'Add one participant',
-                            onTap: () =>
-                                setState(() => _maxParticipants++),
+                            onTap: () => setState(() => _maxParticipants++),
                           ),
                         ],
                       ),
@@ -516,7 +542,8 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
                               controller: _priceController,
                               keyboardType:
                                   const TextInputType.numberWithOptions(
-                                      decimal: true),
+                                    decimal: true,
+                                  ),
                               textInputAction: TextInputAction.done,
                               cursorColor: AppColors.primary,
                               style: _inputStyle,
@@ -534,7 +561,10 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
             // ── Create Activity button ─────────────────────────────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(
-                AppSpacing.x5, AppSpacing.x2, AppSpacing.x5, AppSpacing.x5,
+                AppSpacing.x5,
+                AppSpacing.x2,
+                AppSpacing.x5,
+                AppSpacing.x5,
               ),
               child: GestureDetector(
                 onTap: _submitting ? null : _submit,
@@ -544,9 +574,7 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
                   // Figma 43:331 — 52 tall.
                   height: 52,
                   decoration: BoxDecoration(
-                    color: _submitting
-                        ? AppColors.border
-                        : AppColors.primary,
+                    color: _submitting ? AppColors.border : AppColors.primary,
                     borderRadius: BorderRadius.circular(AppRadius.pill),
                     boxShadow: _submitting ? null : AppShadows.glowPrimary,
                   ),
@@ -556,8 +584,9 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
                           width: 22,
                           height: 22,
                           child: CircularProgressIndicator(
-                            valueColor:
-                                AlwaysStoppedAnimation(AppColors.textOnPrimary),
+                            valueColor: AlwaysStoppedAnimation(
+                              AppColors.textOnPrimary,
+                            ),
                             strokeWidth: 2.5,
                           ),
                         )
@@ -594,7 +623,8 @@ class _CoverPhoto extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final done = uploadInfo.state == ImageUploadState.completed &&
+    final done =
+        uploadInfo.state == ImageUploadState.completed &&
         uploadInfo.imageUrl != null;
     final loading = uploadInfo.state == ImageUploadState.uploading;
 
@@ -608,8 +638,7 @@ class _CoverPhoto extends StatelessWidget {
             color: AppColors.surfaceInverse,
             image: done
                 ? DecorationImage(
-                    image: MemoryImage(
-                        base64.decode(uploadInfo.imageUrl!)),
+                    image: MemoryImage(base64.decode(uploadInfo.imageUrl!)),
                     fit: BoxFit.cover,
                   )
                 : null,
@@ -628,8 +657,9 @@ class _CoverPhoto extends StatelessWidget {
                         width: 48,
                         height: 48,
                         decoration: BoxDecoration(
-                          color: AppColors.textOnPrimary
-                              .withValues(alpha: 0.12),
+                          color: AppColors.textOnPrimary.withValues(
+                            alpha: 0.12,
+                          ),
                           borderRadius: BorderRadius.circular(AppRadius.md),
                         ),
                         alignment: Alignment.center,
@@ -642,8 +672,9 @@ class _CoverPhoto extends StatelessWidget {
                       const SizedBox(height: AppSpacing.x3),
                       Text(
                         'Add Cover Photo',
-                        style: AppTypography.labelField
-                            .copyWith(color: AppColors.textOnPrimary),
+                        style: AppTypography.labelField.copyWith(
+                          color: AppColors.textOnPrimary,
+                        ),
                       ),
                     ],
                   ),
@@ -671,8 +702,9 @@ class _CoverPhoto extends StatelessWidget {
                         padding: const EdgeInsets.all(AppSpacing.x4),
                         child: Text(
                           uploadInfo.errorMessage ?? 'Failed',
-                          style: AppTypography.labelField
-                              .copyWith(color: AppColors.textOnPrimary),
+                          style: AppTypography.labelField.copyWith(
+                            color: AppColors.textOnPrimary,
+                          ),
                           textAlign: TextAlign.center,
                         ),
                       ),
@@ -686,10 +718,7 @@ class _CoverPhoto extends StatelessWidget {
                     right: AppSpacing.x2,
                     child: Row(
                       children: [
-                        _PhotoBtn(
-                          icon: Icons.edit_rounded,
-                          onTap: onReplace,
-                        ),
+                        _PhotoBtn(icon: Icons.edit_rounded, onTap: onReplace),
                         const SizedBox(width: AppSpacing.x2),
                         _PhotoBtn(
                           icon: Icons.delete_outline_rounded,
@@ -784,15 +813,16 @@ TextStyle get _inputStyle =>
     AppTypography.bodyFormSecondary.copyWith(color: AppColors.textPrimary);
 
 InputDecoration _dec(String hint) => InputDecoration(
-      hintText: hint,
-      hintStyle: AppTypography.bodyFormSecondary
-          .copyWith(color: AppColors.textTertiary),
-      border: InputBorder.none,
-      enabledBorder: InputBorder.none,
-      focusedBorder: InputBorder.none,
-      isDense: true,
-      contentPadding: EdgeInsets.zero,
-    );
+  hintText: hint,
+  hintStyle: AppTypography.bodyFormSecondary.copyWith(
+    color: AppColors.textTertiary,
+  ),
+  border: InputBorder.none,
+  enabledBorder: InputBorder.none,
+  focusedBorder: InputBorder.none,
+  isDense: true,
+  contentPadding: EdgeInsets.zero,
+);
 
 /// Stepper button. Figma gives the two sides different treatments (43:315 /
 /// 43:318): decrement is a neutral outlined circle, increment is a filled
@@ -917,8 +947,9 @@ class _Segmented extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: i == selectedIndex
-                          ? AppTypography.chipLabel
-                              .copyWith(color: AppColors.textOnPrimary)
+                          ? AppTypography.chipLabel.copyWith(
+                              color: AppColors.textOnPrimary,
+                            )
                           : AppTypography.chipLabel.copyWith(
                               fontWeight: FontWeight.w600,
                               color: AppColors.textSecondary,

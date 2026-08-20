@@ -7,11 +7,7 @@ void main() {
     testWidgets('should render child content', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(
-            body: AppCard(
-              child: Text('Hello'),
-            ),
-          ),
+          home: Scaffold(body: AppCard(child: Text('Hello'))),
         ),
       );
       expect(find.text('Hello'), findsOneWidget);
@@ -36,11 +32,7 @@ void main() {
     testWidgets('should not crash when onTap is null', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(
-            body: AppCard(
-              child: Text('No tap'),
-            ),
-          ),
+          home: Scaffold(body: AppCard(child: Text('No tap'))),
         ),
       );
       await tester.tap(find.text('No tap'));

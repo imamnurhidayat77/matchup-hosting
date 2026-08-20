@@ -14,10 +14,10 @@ import '../domain/chat_message.dart';
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
-final _messagesProvider =
-    FutureProvider.autoDispose.family<List<ChatMessage>, String>((ref, id) {
-  return ref.watch(chatRepositoryProvider).messages(id);
-});
+final _messagesProvider = FutureProvider.autoDispose
+    .family<List<ChatMessage>, String>((ref, id) {
+      return ref.watch(chatRepositoryProvider).messages(id);
+    });
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
@@ -50,10 +50,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     HapticFeedback.lightImpact();
     _msgController.clear();
     try {
-      await ref.read(chatRepositoryProvider).send(
-            activityId: _id,
-            text: text,
-          );
+      await ref.read(chatRepositoryProvider).send(activityId: _id, text: text);
       ref.invalidate(_messagesProvider(_id));
       _scrollToBottom();
     } catch (_) {}
@@ -82,8 +79,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             _Header(title: widget.activityTitle),
             const _MatchBanner(),
             Expanded(
-              child:
-                  _MessageList(id: _id, scrollController: _scrollController),
+              child: _MessageList(id: _id, scrollController: _scrollController),
             ),
             _InputBar(
               controller: _msgController,
@@ -268,8 +264,9 @@ class _MessageList extends ConsumerWidget {
           return Center(
             child: Text(
               'No messages yet. Say hello!',
-              style: AppTypography.bodyReading
-                  .copyWith(color: AppColors.textTertiary),
+              style: AppTypography.bodyReading.copyWith(
+                color: AppColors.textTertiary,
+              ),
             ),
           );
         }
@@ -309,13 +306,15 @@ class _Bubble extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.x4),
       child: Column(
-        crossAxisAlignment:
-            isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        crossAxisAlignment: isMine
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
         children: [
           // Bubble
           Row(
-            mainAxisAlignment:
-                isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
+            mainAxisAlignment: isMine
+                ? MainAxisAlignment.end
+                : MainAxisAlignment.start,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               if (!isMine) ...[
@@ -458,8 +457,7 @@ class _InputBarState extends State<_InputBar> {
                 borderRadius: BorderRadius.circular(AppRadius.pill),
                 border: Border.all(color: AppColors.border),
               ),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: TextField(
                 controller: widget.controller,
                 focusNode: widget.focusNode,
@@ -467,12 +465,14 @@ class _InputBarState extends State<_InputBar> {
                 textCapitalization: TextCapitalization.sentences,
                 cursorColor: AppColors.textPrimary,
                 cursorWidth: 1.5,
-                style: AppTypography.bodyReading
-                    .copyWith(color: AppColors.textPrimary),
+                style: AppTypography.bodyReading.copyWith(
+                  color: AppColors.textPrimary,
+                ),
                 decoration: InputDecoration(
                   hintText: 'Type message...',
-                  hintStyle: AppTypography.bodyReading
-                      .copyWith(color: AppColors.textTertiary),
+                  hintStyle: AppTypography.bodyReading.copyWith(
+                    color: AppColors.textTertiary,
+                  ),
                   border: InputBorder.none,
                   enabledBorder: InputBorder.none,
                   focusedBorder: InputBorder.none,

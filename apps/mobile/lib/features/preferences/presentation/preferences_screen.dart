@@ -14,37 +14,34 @@ enum PricePreference { free, paid, both }
 
 extension PricePreferenceX on PricePreference {
   String get label => switch (this) {
-        PricePreference.free => 'Free',
-        PricePreference.paid => 'Paid',
-        PricePreference.both => 'Both',
-      };
+    PricePreference.free => 'Free',
+    PricePreference.paid => 'Paid',
+    PricePreference.both => 'Both',
+  };
 
   IconData get icon => switch (this) {
-        PricePreference.free => Icons.local_offer_outlined,
-        PricePreference.paid => Icons.payments_outlined,
-        PricePreference.both => Icons.all_inclusive,
-      };
+    PricePreference.free => Icons.local_offer_outlined,
+    PricePreference.paid => Icons.payments_outlined,
+    PricePreference.both => Icons.all_inclusive,
+  };
 }
 
 extension SkillLevelX on SkillLevel {
   String get label => switch (this) {
-        SkillLevel.beginner => 'Beginner',
-        SkillLevel.intermediate => 'Intermediate',
-        SkillLevel.advanced => 'Advanced',
-      };
+    SkillLevel.beginner => 'Beginner',
+    SkillLevel.intermediate => 'Intermediate',
+    SkillLevel.advanced => 'Advanced',
+  };
 
   String get short => switch (this) {
-        SkillLevel.beginner => 'Bgnr',
-        SkillLevel.intermediate => 'Intm',
-        SkillLevel.advanced => 'Adv',
-      };
+    SkillLevel.beginner => 'Bgnr',
+    SkillLevel.intermediate => 'Intm',
+    SkillLevel.advanced => 'Adv',
+  };
 }
 
 class _SportOption {
-  const _SportOption({
-    required this.name,
-    required this.icon,
-  });
+  const _SportOption({required this.name, required this.icon});
 
   final String name;
   final IconData icon;
@@ -101,9 +98,9 @@ class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
 
   // ── Persist to providers whenever user applies ────────────────────────────
   void _applyToProviders() {
-    ref.read(sportPreferencesProvider.notifier).setAll(
-          _selected.map((k, v) => MapEntry(k, v.label)),
-        );
+    ref
+        .read(sportPreferencesProvider.notifier)
+        .setAll(_selected.map((k, v) => MapEntry(k, v.label)));
     ref.read(distanceFilterProvider.notifier).state = _distanceKm;
     ref.read(priceFilterProvider.notifier).state = _price.label;
   }
@@ -111,9 +108,7 @@ class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
   int get _selectedCount => _selected.length;
 
   Map<SkillLevel, int> get _distribution {
-    final m = <SkillLevel, int>{
-      for (final s in SkillLevel.values) s: 0,
-    };
+    final m = <SkillLevel, int>{for (final s in SkillLevel.values) s: 0};
     for (final l in _selected.values) {
       m[l] = (m[l] ?? 0) + 1;
     }
@@ -137,9 +132,7 @@ class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
   String get _filterSummary {
     final parts = <String>[];
     if (_selectedCount > 0) {
-      parts.add(
-        '$_selectedCount ${_selectedCount == 1 ? 'sport' : 'sports'}',
-      );
+      parts.add('$_selectedCount ${_selectedCount == 1 ? 'sport' : 'sports'}');
     }
     parts.add('Within ${_distanceKm.toStringAsFixed(0)} km');
     parts.add(_price.label);
@@ -166,10 +159,10 @@ class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
   }
 
   void _reset() => setState(() {
-        _selected.clear();
-        _distanceKm = 5;
-        _price = PricePreference.both;
-      });
+    _selected.clear();
+    _distanceKm = 5;
+    _price = PricePreference.both;
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -363,11 +356,7 @@ class _HeroSummary extends StatelessWidget {
                   color: AppColors.primary,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(
-                  Icons.bolt,
-                  size: 20,
-                  color: Colors.white,
-                ),
+                child: const Icon(Icons.bolt, size: 20, color: Colors.white),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -483,10 +472,10 @@ class _SkillDistributionBars extends StatelessWidget {
 
 extension on SkillLevel {
   Color get color => switch (this) {
-        SkillLevel.beginner => const Color(0xFF22C55E),
-        SkillLevel.intermediate => AppColors.primary,
-        SkillLevel.advanced => const Color(0xFFF59E0B),
-      };
+    SkillLevel.beginner => const Color(0xFF22C55E),
+    SkillLevel.intermediate => AppColors.primary,
+    SkillLevel.advanced => const Color(0xFFF59E0B),
+  };
 }
 
 class _SportGrid extends StatelessWidget {
@@ -574,9 +563,7 @@ class _SportCard extends StatelessWidget {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: selected
-                      ? AppColors.primary
-                      : AppColors.surfaceSubtle,
+                  color: selected ? AppColors.primary : AppColors.surfaceSubtle,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
@@ -594,7 +581,9 @@ class _SportCard extends StatelessWidget {
                 style: AppTypography.bodyMedium.copyWith(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  color: selected ? AppColors.primaryDarker : AppColors.textLabel,
+                  color: selected
+                      ? AppColors.primaryDarker
+                      : AppColors.textLabel,
                 ),
               ),
               const SizedBox(height: 4),
@@ -1087,4 +1076,3 @@ class _PriceChip extends StatelessWidget {
     );
   }
 }
-

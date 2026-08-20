@@ -22,7 +22,9 @@ class ImagePickerModal extends StatelessWidget {
       child: Container(
         decoration: const BoxDecoration(
           color: AppColors.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppRadius.xl),
+          ),
         ),
         padding: const EdgeInsets.fromLTRB(
           AppSpacing.x6,
@@ -150,7 +152,11 @@ class _SourceOption extends StatelessWidget {
                 ),
               ),
             ),
-            const Icon(Icons.arrow_forward_ios, color: AppColors.textSecondary, size: 16),
+            const Icon(
+              Icons.arrow_forward_ios,
+              color: AppColors.textSecondary,
+              size: 16,
+            ),
           ],
         ),
       ),

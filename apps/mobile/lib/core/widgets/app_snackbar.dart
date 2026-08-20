@@ -56,25 +56,25 @@ class _AppSnackbarContent extends StatelessWidget {
   final VoidCallback? onAction;
 
   Color get _bg => switch (variant) {
-        AppSnackbarVariant.success => AppColors.statusSuccessBg,
-        AppSnackbarVariant.error => AppColors.errorLight,
-        AppSnackbarVariant.warning => AppColors.warningBg,
-        AppSnackbarVariant.info => AppColors.primarySoft,
-      };
+    AppSnackbarVariant.success => AppColors.statusSuccessBg,
+    AppSnackbarVariant.error => AppColors.errorLight,
+    AppSnackbarVariant.warning => AppColors.warningBg,
+    AppSnackbarVariant.info => AppColors.primarySoft,
+  };
 
   Color get _fg => switch (variant) {
-        AppSnackbarVariant.success => AppColors.statusSuccessText,
-        AppSnackbarVariant.error => AppColors.danger,
-        AppSnackbarVariant.warning => AppColors.warning,
-        AppSnackbarVariant.info => AppColors.primaryDarker,
-      };
+    AppSnackbarVariant.success => AppColors.statusSuccessText,
+    AppSnackbarVariant.error => AppColors.danger,
+    AppSnackbarVariant.warning => AppColors.warning,
+    AppSnackbarVariant.info => AppColors.primaryDarker,
+  };
 
   IconData get _icon => switch (variant) {
-        AppSnackbarVariant.success => Icons.check_circle_outline_rounded,
-        AppSnackbarVariant.error => Icons.error_outline_rounded,
-        AppSnackbarVariant.warning => Icons.warning_amber_rounded,
-        AppSnackbarVariant.info => Icons.info_outline_rounded,
-      };
+    AppSnackbarVariant.success => Icons.check_circle_outline_rounded,
+    AppSnackbarVariant.error => Icons.error_outline_rounded,
+    AppSnackbarVariant.warning => Icons.warning_amber_rounded,
+    AppSnackbarVariant.info => Icons.info_outline_rounded,
+  };
 
   @override
   Widget build(BuildContext context) {

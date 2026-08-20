@@ -26,8 +26,18 @@ class _DatePickerSheetState extends State<DatePickerSheet> {
   late DateTime _selected;
 
   static const _months = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
   ];
   static const _weekDays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
@@ -40,8 +50,12 @@ class _DatePickerSheetState extends State<DatePickerSheet> {
   }
 
   bool _inRange(DateTime d) {
-    if (widget.minDate != null && d.isBefore(_dateOnly(widget.minDate!))) return false;
-    if (widget.maxDate != null && d.isAfter(_dateOnly(widget.maxDate!))) return false;
+    if (widget.minDate != null && d.isBefore(_dateOnly(widget.minDate!))) {
+      return false;
+    }
+    if (widget.maxDate != null && d.isAfter(_dateOnly(widget.maxDate!))) {
+      return false;
+    }
     return true;
   }
 
@@ -130,9 +144,14 @@ class _DatePickerSheetState extends State<DatePickerSheet> {
                     if (dayNum < 1 || dayNum > daysInMonth) {
                       return const Expanded(child: SizedBox(height: 40));
                     }
-                    final date = DateTime(_focused.year, _focused.month, dayNum);
+                    final date = DateTime(
+                      _focused.year,
+                      _focused.month,
+                      dayNum,
+                    );
                     final isSel = _dateOnly(date) == _dateOnly(_selected);
-                    final isToday = _dateOnly(date) == _dateOnly(DateTime.now());
+                    final isToday =
+                        _dateOnly(date) == _dateOnly(DateTime.now());
                     final inRange = _inRange(date);
                     return Expanded(
                       child: _DayCell(
@@ -256,17 +275,16 @@ class _DayCell extends StatelessWidget {
       child: Container(
         height: 40,
         margin: const EdgeInsets.symmetric(horizontal: 2),
-        decoration: BoxDecoration(
-          color: bg,
-          shape: BoxShape.circle,
-        ),
+        decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
         alignment: Alignment.center,
         child: Text(
           '$day',
           style: TextStyle(
             fontFamily: AppTypography.fontFamily,
             fontSize: 14,
-            fontWeight: isSelected || isToday ? FontWeight.w700 : FontWeight.w500,
+            fontWeight: isSelected || isToday
+                ? FontWeight.w700
+                : FontWeight.w500,
             color: color,
           ),
         ),

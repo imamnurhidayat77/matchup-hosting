@@ -38,13 +38,15 @@ void main() {
       final mock = _MockActivityRepository();
       final activities = [_fixture(id: '1'), _fixture(id: '2')];
 
-      when(() => mock.feed(limit: any(named: 'limit'), offset: any(named: 'offset')))
-          .thenAnswer((_) async => activities);
+      when(
+        () => mock.feed(
+          limit: any(named: 'limit'),
+          offset: any(named: 'offset'),
+        ),
+      ).thenAnswer((_) async => activities);
 
       final container = ProviderContainer(
-        overrides: [
-          activityRepositoryProvider.overrideWithValue(mock),
-        ],
+        overrides: [activityRepositoryProvider.overrideWithValue(mock)],
       );
       addTearDown(container.dispose);
 
@@ -62,13 +64,15 @@ void main() {
     test('should surface error when repository throws', () async {
       final mock = _MockActivityRepository();
 
-      when(() => mock.feed(limit: any(named: 'limit'), offset: any(named: 'offset')))
-          .thenThrow(Exception('Network failure'));
+      when(
+        () => mock.feed(
+          limit: any(named: 'limit'),
+          offset: any(named: 'offset'),
+        ),
+      ).thenThrow(Exception('Network failure'));
 
       final container = ProviderContainer(
-        overrides: [
-          activityRepositoryProvider.overrideWithValue(mock),
-        ],
+        overrides: [activityRepositoryProvider.overrideWithValue(mock)],
       );
       addTearDown(container.dispose);
 
@@ -81,31 +85,33 @@ void main() {
       expect(result.hasError, isTrue);
     });
 
-    test('should return empty list when repository returns no activities',
-        () async {
-      final mock = _MockActivityRepository();
+    test(
+      'should return empty list when repository returns no activities',
+      () async {
+        final mock = _MockActivityRepository();
 
-      when(() => mock.feed(limit: any(named: 'limit'), offset: any(named: 'offset')))
-          .thenAnswer((_) async => <ActivityModel>[]);
+        when(
+          () => mock.feed(
+            limit: any(named: 'limit'),
+            offset: any(named: 'offset'),
+          ),
+        ).thenAnswer((_) async => <ActivityModel>[]);
 
-      final container = ProviderContainer(
-        overrides: [
-          activityRepositoryProvider.overrideWithValue(mock),
-        ],
-      );
-      addTearDown(container.dispose);
+        final container = ProviderContainer(
+          overrides: [activityRepositoryProvider.overrideWithValue(mock)],
+        );
+        addTearDown(container.dispose);
 
-      final result = await container.read(activityFeedProvider.future);
-      expect(result, isEmpty);
-    });
+        final result = await container.read(activityFeedProvider.future);
+        expect(result, isEmpty);
+      },
+    );
   });
 
   group('DummyActivityRepository integration (no mocks)', () {
     test('should complete full create → join → joinedByUser flow', () async {
       final container = ProviderContainer(
-        overrides: [
-          useRemoteApiProvider.overrideWithValue(false),
-        ],
+        overrides: [useRemoteApiProvider.overrideWithValue(false)],
       );
       addTearDown(container.dispose);
 

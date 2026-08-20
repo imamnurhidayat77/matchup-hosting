@@ -22,11 +22,11 @@ class _GetToKnow1ScreenState extends ConsumerState<GetToKnow1Screen> {
   int _selected = 0;
 
   static const _options = [
-    ('Stay active with new sports',        Icons.directions_run_rounded),
-    ('Build consistent workout habits',    Icons.fitness_center_rounded),
+    ('Stay active with new sports', Icons.directions_run_rounded),
+    ('Build consistent workout habits', Icons.fitness_center_rounded),
     ('Find a motivating sports community', Icons.group_rounded),
-    ('Meet new sports partners',           Icons.handshake_rounded),
-    ('Other reasons',                      Icons.more_horiz_rounded),
+    ('Meet new sports partners', Icons.handshake_rounded),
+    ('Other reasons', Icons.more_horiz_rounded),
   ];
 
   @override
@@ -101,7 +101,11 @@ class _GetToKnow1ScreenState extends ConsumerState<GetToKnow1Screen> {
 /// Minimal step progress bar shown across all onboarding steps.
 /// Public so it can be reused by get_to_know_2_screen.dart.
 class OnboardingProgressHeader extends StatelessWidget {
-  const OnboardingProgressHeader({super.key, required this.step, required this.total});
+  const OnboardingProgressHeader({
+    super.key,
+    required this.step,
+    required this.total,
+  });
 
   final int step;
   final int total;
@@ -166,8 +170,7 @@ class OnboardingProgressHeader extends StatelessWidget {
               value: step / total,
               minHeight: 4,
               backgroundColor: AppColors.border,
-              valueColor:
-                  const AlwaysStoppedAnimation(AppColors.primary),
+              valueColor: const AlwaysStoppedAnimation(AppColors.primary),
             ),
           ),
         ],
@@ -219,9 +222,7 @@ class _OptionTile extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: selected
-                      ? AppColors.primary
-                      : AppColors.surfaceSubtle,
+                  color: selected ? AppColors.primary : AppColors.surfaceSubtle,
                   borderRadius: BorderRadius.circular(AppRadius.md),
                 ),
                 child: Icon(
@@ -236,8 +237,7 @@ class _OptionTile extends StatelessWidget {
                   label,
                   style: AppTypography.bodyMedium.copyWith(
                     color: AppColors.textPrimary,
-                    fontWeight:
-                        selected ? FontWeight.w700 : FontWeight.w500,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                     fontSize: 15,
                   ),
                 ),
@@ -250,15 +250,16 @@ class _OptionTile extends StatelessWidget {
                   shape: BoxShape.circle,
                   color: selected ? AppColors.primary : Colors.transparent,
                   border: Border.all(
-                    color: selected
-                        ? AppColors.primary
-                        : AppColors.borderInput,
+                    color: selected ? AppColors.primary : AppColors.borderInput,
                     width: 2,
                   ),
                 ),
                 child: selected
-                    ? const Icon(Icons.check_rounded,
-                        size: 13, color: Colors.white)
+                    ? const Icon(
+                        Icons.check_rounded,
+                        size: 13,
+                        color: Colors.white,
+                      )
                     : null,
               ),
             ],

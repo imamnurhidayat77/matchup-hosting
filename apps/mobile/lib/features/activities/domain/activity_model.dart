@@ -72,7 +72,9 @@ class ActivityModel {
       location: json['location'] as String? ?? '',
       addressLine: json['addressLine'] as String?,
       distanceKm: (json['distanceKm'] as num?)?.toDouble() ?? 0.0,
-      dateTime: DateTime.parse(json['dateTime'] as String? ?? DateTime.now().toIso8601String()),
+      dateTime: DateTime.parse(
+        json['dateTime'] as String? ?? DateTime.now().toIso8601String(),
+      ),
       skillLevel: json['skillLevel'] as String? ?? '',
       capacity: json['capacity'] as int? ?? 10,
       participantCount: json['participantCount'] as int? ?? 0,
@@ -83,11 +85,4 @@ class ActivityModel {
   }
 }
 
-enum ActivityStatus {
-  available,
-  almostFull,
-  full,
-  joined,
-  hosted,
-  past,
-}
+enum ActivityStatus { available, almostFull, full, joined, hosted, past }

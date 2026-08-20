@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:matchup_mobile/features/activities/presentation/wizard/providers/form_data_provider.dart';
-import 'package:matchup_mobile/features/activities/presentation/wizard/services/form_validator.dart';
+import 'package:matchup_mobile/features/activities/presentation/create/providers/form_data_provider.dart';
+import 'package:matchup_mobile/features/activities/presentation/create/services/form_validator.dart';
 
 /// Helper — builds a fully valid ActivityFormData.
 ActivityFormData _valid({
@@ -10,15 +10,14 @@ ActivityFormData _valid({
   int maxParticipants = 10,
   int feeType = 0,
   String? price,
-}) =>
-    ActivityFormData(
-      title: title,
-      location: location,
-      selectedDate: selectedDate ?? DateTime.now().add(const Duration(days: 1)),
-      maxParticipants: maxParticipants,
-      feeType: feeType,
-      price: price,
-    );
+}) => ActivityFormData(
+  title: title,
+  location: location,
+  selectedDate: selectedDate ?? DateTime.now().add(const Duration(days: 1)),
+  maxParticipants: maxParticipants,
+  feeType: feeType,
+  price: price,
+);
 
 void main() {
   group('formValidator', () {
@@ -46,11 +45,9 @@ void main() {
 
     test('should not report date error when selectedDate is null', () {
       // null means "not set yet" — validator ignores it
-      final errors = formValidator(ActivityFormData(
-        title: 'Title',
-        location: 'Loc',
-        selectedDate: null,
-      ));
+      final errors = formValidator(
+        ActivityFormData(title: 'Title', location: 'Loc', selectedDate: null),
+      );
       expect(errors.containsKey('selectedDate'), isFalse);
     });
 
@@ -74,10 +71,13 @@ void main() {
       expect(errors.containsKey('price'), isFalse);
     });
 
-    test('should not report price error when feeType is Paid and price is set', () {
-      final errors = formValidator(_valid(feeType: 1, price: '5.00'));
-      expect(errors.containsKey('price'), isFalse);
-    });
+    test(
+      'should not report price error when feeType is Paid and price is set',
+      () {
+        final errors = formValidator(_valid(feeType: 1, price: '5.00'));
+        expect(errors.containsKey('price'), isFalse);
+      },
+    );
   });
 
   group('validateStep', () {

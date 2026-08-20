@@ -9,8 +9,8 @@ import 'dummy_activity_repository.dart';
 /// delegates to [DummyActivityRepository] so the app keeps working.
 class RemoteActivityRepository implements ActivityRepository {
   RemoteActivityRepository({ApiClient? client, ActivityRepository? fallback})
-      : _client = client ?? ApiClient.instance,
-        _fallback = fallback ?? DummyActivityRepository();
+    : _client = client ?? ApiClient.instance,
+      _fallback = fallback ?? DummyActivityRepository();
 
   final ApiClient _client;
   final ActivityRepository _fallback;
@@ -43,7 +43,9 @@ class RemoteActivityRepository implements ActivityRepository {
   @override
   Future<List<ActivityModel>> joinedByUser(String userId) async {
     try {
-      final res = await _client.dio.get('/api/v1/users/$userId/joined-activities');
+      final res = await _client.dio.get(
+        '/api/v1/users/$userId/joined-activities',
+      );
       return _parseList(res.data as List);
     } catch (_) {
       return _fallback.joinedByUser(userId);
@@ -53,7 +55,9 @@ class RemoteActivityRepository implements ActivityRepository {
   @override
   Future<List<ActivityModel>> hostedByUser(String userId) async {
     try {
-      final res = await _client.dio.get('/api/v1/users/$userId/hosted-activities');
+      final res = await _client.dio.get(
+        '/api/v1/users/$userId/hosted-activities',
+      );
       return _parseList(res.data as List);
     } catch (_) {
       return _fallback.hostedByUser(userId);
@@ -143,7 +147,9 @@ class RemoteActivityRepository implements ActivityRepository {
   @override
   Future<List<ActivityModel>> pastByUser(String userId) async {
     try {
-      final res = await _client.dio.get('/api/v1/users/$userId/past-activities');
+      final res = await _client.dio.get(
+        '/api/v1/users/$userId/past-activities',
+      );
       return _parseList(res.data as List);
     } catch (_) {
       return _fallback.pastByUser(userId);
@@ -159,7 +165,9 @@ class RemoteActivityRepository implements ActivityRepository {
       description: json['description'] as String? ?? '',
       location: json['location'] as String? ?? '',
       distanceKm: (json['distance_km'] as num?)?.toDouble() ?? 0,
-      dateTime: DateTime.tryParse(json['date_time'] as String? ?? '') ?? DateTime.now(),
+      dateTime:
+          DateTime.tryParse(json['date_time'] as String? ?? '') ??
+          DateTime.now(),
       skillLevel: json['skill_level'] as String? ?? 'All',
       capacity: (json['capacity'] as num?)?.toInt() ?? 1,
       participantCount: (json['participant_count'] as num?)?.toInt() ?? 0,
@@ -169,6 +177,8 @@ class RemoteActivityRepository implements ActivityRepository {
     );
   }
 
-  List<ActivityModel> _parseList(List<dynamic> data) =>
-      data.map((e) => _parse(e as Map<String, dynamic>)).whereType<ActivityModel>().toList();
+  List<ActivityModel> _parseList(List<dynamic> data) => data
+      .map((e) => _parse(e as Map<String, dynamic>))
+      .whereType<ActivityModel>()
+      .toList();
 }
