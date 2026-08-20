@@ -7,8 +7,8 @@ type GetActivityParams = {
 
 export async function createActivityHandler(req: Request, res: Response) {
     try {
+        const hostId = req.auth?.uid;
         const {
-            hostId,
             title,
             sportType,
             description,
@@ -21,7 +21,6 @@ export async function createActivityHandler(req: Request, res: Response) {
             capacity,
             coverImageUrl,
         } = req.body as {
-            hostId?: unknown;
             title?: unknown;
             sportType?: unknown;
             description?: unknown;
@@ -35,8 +34,17 @@ export async function createActivityHandler(req: Request, res: Response) {
             coverImageUrl?: unknown;
         };
 
-        if (typeof hostId !== 'string' ||
-            typeof title !== 'string' ||
+        if (!hostId) {
+            return res.status(401).json({
+                ok: false,
+                error: {
+                    code: 'UNAUTHORIZED',
+                    message: 'Authenticated user is required',
+                },
+            });
+        }
+
+        if (typeof title !== 'string' ||
             typeof sportType !== 'string' ||
             typeof description !== 'string' ||
             typeof locationName !== 'string' ||
@@ -47,7 +55,7 @@ export async function createActivityHandler(req: Request, res: Response) {
                 ok: false,
                 error: {
                     code: 'INVALID_INPUT',
-                    message: 'hostId, title, sportType, description, locationName, geohash, and startTime must be strings',
+                    message: 'title, sportType, description, locationName, geohash, and startTime must be strings',
                 },
             });
         }
@@ -91,7 +99,6 @@ export async function createActivityHandler(req: Request, res: Response) {
         }
 
         if (
-            !hostId.trim() ||
             !title.trim() ||
             !sportType.trim() ||
             !description.trim() ||
@@ -103,8 +110,7 @@ export async function createActivityHandler(req: Request, res: Response) {
                 ok: false,
                 error: {
                     code: 'EMPTY_INPUT',
-                    message:
-                        'hostId, title, sportType, description, locationName, geohash, and startTime are required',
+                    message: 'title, sportType, description, locationName, geohash, and startTime are required',
                 },
             });
         }

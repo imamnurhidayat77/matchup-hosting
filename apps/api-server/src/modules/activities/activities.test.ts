@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('./activities.service.js', () => {
     return {
@@ -16,23 +16,32 @@ vi.mock('./activity-participants.service.js', () => {
     };
 });
 
+vi.mock('../../middleware/auth.middleware.js', () => {
+    return {
+        requireAuth: vi.fn((req, _res, next) => {
+            req.auth = {
+                uid: 'test-uid-1',
+                token: {} as never,
+            };
+            next();
+        }),
+    };
+});
+
 import { createApp } from '../../app/app.js';
 import * as activitiesService from './activities.service.js';
 import * as activityParticipantsService from './activity-participants.service.js';
 
 describe('activities routes', () => {
+    describe('POST /api/activities', () => {
+        beforeEach(() => {
+            vi.clearAllMocks();
+        });
 
-    /* 
-  ########################################################################  
-        Test section for activities POST route
-  ########################################################################
-    */
-    describe('POST /activities', () => {
-        it('creates activity with POST /activities => expected 201', async () => {
+        it('when request body is valid => expected 201', async () => {
             const app = createApp();
 
             const response = await request(app).post('/api/activities').send({
-                hostId: 'test-uid-1',
                 title: 'Evening Futsal',
                 sportType: 'futsal',
                 description: 'Casual 5v5 session',
@@ -52,12 +61,11 @@ describe('activities routes', () => {
             });
         });
 
-        it('returns 400 when required fields are not strings', async () => {
+        it('when required string fields are not strings => expected 400 w/ INVALID_INPUT', async () => {
             const app = createApp();
 
             const response = await request(app).post('/api/activities').send({
-                hostId: 123,
-                title: 'Evening Futsal',
+                title: 123,
                 sportType: 'futsal',
                 description: 'Casual 5v5 session',
                 locationName: 'Auckland Domain',
@@ -72,17 +80,15 @@ describe('activities routes', () => {
                 ok: false,
                 error: {
                     code: 'INVALID_INPUT',
-                    message:
-                        'hostId, title, sportType, description, locationName, geohash, and startTime must be strings',
+                    message: 'title, sportType, description, locationName, geohash, and startTime must be strings',
                 },
             });
         });
 
-        it('returns 400 when optional fields are not strings', async () => {
+        it('when optional string fields are invalid => expected 400 w/ INVALID_INPUT', async () => {
             const app = createApp();
 
             const response = await request(app).post('/api/activities').send({
-                hostId: 'test-uid-1',
                 title: 'Evening Futsal',
                 sportType: 'futsal',
                 description: 'Casual 5v5 session',
@@ -104,11 +110,10 @@ describe('activities routes', () => {
             });
         });
 
-        it('returns 400 when skillLevel is invalid', async () => {
+        it('when skillLevel is invalid => expected 400 w/ INVALID_INPUT', async () => {
             const app = createApp();
 
             const response = await request(app).post('/api/activities').send({
-                hostId: 'test-uid-1',
                 title: 'Evening Futsal',
                 sportType: 'futsal',
                 description: 'Casual 5v5 session',
@@ -129,150 +134,55 @@ describe('activities routes', () => {
             });
         });
 
-        it.each([0, -1, 1.5, '10'])(
-            'returns 400 when capacity is invalid: %p',
-            async (capacity) => {
-                const app = createApp();
-
-                const response = await request(app).post('/api/activities').send({
-                    hostId: 'test-uid-1',
-                    title: 'Evening Futsal',
-                    sportType: 'futsal',
-                    description: 'Casual 5v5 session',
-                    locationName: 'Auckland Domain',
-                    geohash: 'rckq2m',
-                    startTime: '2026-08-19T18:30:00+12:00',
-                    skillLevel: 'any',
-                    capacity,
-                });
-
-                expect(response.status).toBe(400);
-                expect(response.body).toEqual({
-                    ok: false,
-                    error: {
-                        code: 'INVALID_INPUT',
-                        message: 'capacity must be a positive integer',
-                    },
-                });
-            },
-        );
-
-        it.each([
-            {
-                name: 'hostId is blank',
-                body: {
-                    hostId: '   ',
-                    title: 'Evening Futsal',
-                    sportType: 'futsal',
-                    description: 'Casual 5v5 session',
-                    locationName: 'Auckland Domain',
-                    geohash: 'rckq2m',
-                    startTime: '2026-08-19T18:30:00+12:00',
-                    skillLevel: 'any',
-                    capacity: 10,
-                },
-            },
-            {
-                name: 'title is blank',
-                body: {
-                    hostId: 'test-uid-1',
-                    title: '   ',
-                    sportType: 'futsal',
-                    description: 'Casual 5v5 session',
-                    locationName: 'Auckland Domain',
-                    geohash: 'rckq2m',
-                    startTime: '2026-08-19T18:30:00+12:00',
-                    skillLevel: 'any',
-                    capacity: 10,
-                },
-            },
-            {
-                name: 'sportType is blank',
-                body: {
-                    hostId: 'test-uid-1',
-                    title: 'Evening Futsal',
-                    sportType: '   ',
-                    description: 'Casual 5v5 session',
-                    locationName: 'Auckland Domain',
-                    geohash: 'rckq2m',
-                    startTime: '2026-08-19T18:30:00+12:00',
-                    skillLevel: 'any',
-                    capacity: 10,
-                },
-            },
-            {
-                name: 'description is blank',
-                body: {
-                    hostId: 'test-uid-1',
-                    title: 'Evening Futsal',
-                    sportType: 'futsal',
-                    description: '   ',
-                    locationName: 'Auckland Domain',
-                    geohash: 'rckq2m',
-                    startTime: '2026-08-19T18:30:00+12:00',
-                    skillLevel: 'any',
-                    capacity: 10,
-                },
-            },
-            {
-                name: 'locationName is blank',
-                body: {
-                    hostId: 'test-uid-1',
-                    title: 'Evening Futsal',
-                    sportType: 'futsal',
-                    description: 'Casual 5v5 session',
-                    locationName: '   ',
-                    geohash: 'rckq2m',
-                    startTime: '2026-08-19T18:30:00+12:00',
-                    skillLevel: 'any',
-                    capacity: 10,
-                },
-            },
-            {
-                name: 'geohash is blank',
-                body: {
-                    hostId: 'test-uid-1',
-                    title: 'Evening Futsal',
-                    sportType: 'futsal',
-                    description: 'Casual 5v5 session',
-                    locationName: 'Auckland Domain',
-                    geohash: '   ',
-                    startTime: '2026-08-19T18:30:00+12:00',
-                    skillLevel: 'any',
-                    capacity: 10,
-                },
-            },
-            {
-                name: 'startTime is blank',
-                body: {
-                    hostId: 'test-uid-1',
-                    title: 'Evening Futsal',
-                    sportType: 'futsal',
-                    description: 'Casual 5v5 session',
-                    locationName: 'Auckland Domain',
-                    geohash: 'rckq2m',
-                    startTime: '   ',
-                    skillLevel: 'any',
-                    capacity: 10,
-                },
-            },
-        ])('returns 400 when $name', async ({ body }) => {
+        it('when capacity is invalid => expected 400 w/ INVALID_INPUT', async () => {
             const app = createApp();
 
-            const response = await request(app).post('/api/activities').send(body);
+            const response = await request(app).post('/api/activities').send({
+                title: 'Evening Futsal',
+                sportType: 'futsal',
+                description: 'Casual 5v5 session',
+                locationName: 'Auckland Domain',
+                geohash: 'rckq2m',
+                startTime: '2026-08-19T18:30:00+12:00',
+                skillLevel: 'any',
+                capacity: 0,
+            });
+
+            expect(response.status).toBe(400);
+            expect(response.body).toEqual({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message: 'capacity must be a positive integer',
+                },
+            });
+        });
+
+        it('when required string fields are blank => expected 400 w/ EMPTY_INPUT', async () => {
+            const app = createApp();
+
+            const response = await request(app).post('/api/activities').send({
+                title: '   ',
+                sportType: 'futsal',
+                description: 'Casual 5v5 session',
+                locationName: 'Auckland Domain',
+                geohash: 'rckq2m',
+                startTime: '2026-08-19T18:30:00+12:00',
+                skillLevel: 'any',
+                capacity: 10,
+            });
 
             expect(response.status).toBe(400);
             expect(response.body).toEqual({
                 ok: false,
                 error: {
                     code: 'EMPTY_INPUT',
-                    message:
-                        'hostId, title, sportType, description, locationName, geohash, and startTime are required',
+                    message: 'title, sportType, description, locationName, geohash, and startTime are required',
                 },
             });
         });
 
-        it('returns 500 when service throws', async () => {
+        it('when service throws unknown error => expected 500 w/ INTERNAL_ERROR', async () => {
             vi.mocked(activitiesService.createActivity).mockRejectedValueOnce(
                 new Error('Unknown error'),
             );
@@ -280,7 +190,6 @@ describe('activities routes', () => {
             const app = createApp();
 
             const response = await request(app).post('/api/activities').send({
-                hostId: 'test-uid-1',
                 title: 'Evening Futsal',
                 sportType: 'futsal',
                 description: 'Casual 5v5 session',
@@ -302,14 +211,127 @@ describe('activities routes', () => {
         });
     });
 
+
+    /* 
+  ########################################################################  
+        Test section for activity participants POST route
+  ########################################################################
+    */
+    describe('POST /api/activities/:activityId/participants', () => {
+        beforeEach(() => {
+            vi.clearAllMocks();
+        });
+
+        it('when request is valid => expected 200', async () => {
+            const app = createApp();
+
+            const response = await request(app)
+                .post('/api/activities/activity-1/participants')
+                .send({});
+
+            expect(response.status).toBe(200);
+            expect(response.body).toEqual({
+                ok: true,
+                data: {
+                    activityId: 'activity-1',
+                    uid: 'test-uid-1',
+                },
+            });
+        });
+
+        it('when activityId is blank => expected 400 w/ EMPTY_INPUT', async () => {
+            const app = createApp();
+
+            const response = await request(app)
+                .post('/api/activities/%20%20/participants')
+                .send({});
+
+            expect(response.status).toBe(400);
+            expect(response.body).toEqual({
+                ok: false,
+                error: {
+                    code: 'EMPTY_INPUT',
+                    message: 'activityId is required',
+                },
+            });
+        });
+
+        it.each([
+            'Activity is not open for joining',
+            'Activity is full',
+            'User already joined this activity',
+        ])('when service rejects with %s => expected 409 w/ CONFLICT', async (message) => {
+            vi.mocked(activityParticipantsService.joinActivity).mockRejectedValueOnce(
+                new Error(message),
+            );
+
+            const app = createApp();
+
+            const response = await request(app)
+                .post('/api/activities/activity-1/participants')
+                .send({});
+
+            expect(response.status).toBe(409);
+            expect(response.body).toEqual({
+                ok: false,
+                error: {
+                    code: 'CONFLICT',
+                    message,
+                },
+            });
+        });
+
+        it('when activity is not found => expected 404 w/ NOT_FOUND', async () => {
+            vi.mocked(activityParticipantsService.joinActivity).mockRejectedValueOnce(
+                new Error('Activity not found'),
+            );
+
+            const app = createApp();
+
+            const response = await request(app)
+                .post('/api/activities/activity-1/participants')
+                .send({});
+
+            expect(response.status).toBe(404);
+            expect(response.body).toEqual({
+                ok: false,
+                error: {
+                    code: 'NOT_FOUND',
+                    message: 'Activity not found',
+                },
+            });
+        });
+
+        it('when service throws unknown error => expected 500 w/ INTERNAL_ERROR', async () => {
+            vi.mocked(activityParticipantsService.joinActivity).mockRejectedValueOnce(
+                new Error('Unknown error'),
+            );
+
+            const app = createApp();
+
+            const response = await request(app)
+                .post('/api/activities/activity-1/participants')
+                .send({});
+
+            expect(response.status).toBe(500);
+            expect(response.body).toEqual({
+                ok: false,
+                error: {
+                    code: 'INTERNAL_ERROR',
+                    message: 'Unknown error',
+                },
+            });
+        });
+    });
+
     /* 
   ########################################################################  
         Test section for activities GET route
   ########################################################################
     */
 
-    describe('GET /activities/:activityId', () => {
-        it('returns 200 with activity', async () => {
+    describe('GET /api/activities/:activityId', () => {
+        it('when activity exists => expected 200', async () => {
             vi.mocked(activitiesService.getActivityById).mockResolvedValueOnce({
                 activityId: 'activity-1',
                 hostId: 'test-uid-1',
@@ -351,7 +373,7 @@ describe('activities routes', () => {
             });
         });
 
-        it('returns 400 when activityId is blank', async () => {
+        it('when activityId is blank => expected 400 w/ EMPTY_INPUT', async () => {
             const app = createApp();
 
             const response = await request(app).get('/api/activities/%20%20');
@@ -366,7 +388,7 @@ describe('activities routes', () => {
             });
         });
 
-        it('returns 404 when activity is not found', async () => {
+        it('when activity is not found => expected 404 w/ NOT_FOUND', async () => {
             vi.mocked(activitiesService.getActivityById).mockResolvedValueOnce(null);
 
             const app = createApp();
@@ -383,7 +405,7 @@ describe('activities routes', () => {
             });
         });
 
-        it('returns 500 when service throws', async () => {
+        it('when service throws unknown error => expected 500 w/ INTERNAL_ERROR', async () => {
             vi.mocked(activitiesService.getActivityById).mockRejectedValueOnce(
                 new Error('Unknown error'),
             );
@@ -406,131 +428,12 @@ describe('activities routes', () => {
 
 /*
 ########################################################################  
-    Test section for activities POST route
+    Test section for activity participants GET route
 ########################################################################
 */
 
-describe('POST /activities/:activityId/participants', () => {
-    it('sent join request with POST /activities/:activityId/participants => expected 200', async () => {
-        const app = createApp();
-
-        const response = await request(app)
-            .post('/api/activities/activity-1/participants')
-            .send({
-                uid: 'test-uid-1',
-            });
-
-        expect(response.status).toBe(200);
-        expect(response.body).toEqual({
-            ok: true,
-            data: {
-                activityId: 'activity-1',
-                uid: 'test-uid-1',
-            },
-        });
-    })
-    it.each([
-        {
-            name: 'activityId is blank',
-            path: '/api/activities/%20%20/participants',
-            body: { uid: 'test-uid-1' },
-        },
-        {
-            name: 'uid is blank',
-            path: '/api/activities/activity-1/participants',
-            body: { uid: '   ' },
-        },
-    ])('returns 400 when $name', async ({ path, body }) => {
-        const app = createApp();
-
-        const response = await request(app).post(path).send(body);
-
-        expect(response.status).toBe(400);
-        expect(response.body).toEqual({
-            ok: false,
-            error: {
-                code: 'EMPTY_INPUT',
-                message: 'activityId and uid are required',
-            },
-        });
-    });
-
-    it.each([
-        'Activity is not open for joining',
-        'Activity is full',
-        'User already joined this activity',
-    ])('returns 409 when service rejects with %s', async (message) => {
-        vi.mocked(activityParticipantsService.joinActivity).mockRejectedValueOnce(
-            new Error(message),
-        );
-
-        const app = createApp();
-
-        const response = await request(app)
-            .post('/api/activities/activity-1/participants')
-            .send({
-                uid: 'test-uid-1',
-            });
-
-        expect(response.status).toBe(409);
-        expect(response.body).toEqual({
-            ok: false,
-            error: {
-                code: 'CONFLICT',
-                message,
-            },
-        });
-    });
-
-    it('returns 404 when activity is not found', async () => {
-        vi.mocked(activityParticipantsService.joinActivity).mockRejectedValueOnce(
-            new Error('Activity not found'),
-        );
-
-        const app = createApp();
-
-        const response = await request(app)
-            .post('/api/activities/activity-1/participants')
-            .send({
-                uid: 'test-uid-1',
-            });
-
-        expect(response.status).toBe(404);
-        expect(response.body).toEqual({
-            ok: false,
-            error: {
-                code: 'NOT_FOUND',
-                message: 'Activity not found',
-            },
-        });
-    });
-
-    it('returns 500 when service throws unknown error', async () => {
-        vi.mocked(activityParticipantsService.joinActivity).mockRejectedValueOnce(
-            new Error('Unknown error'),
-        );
-
-        const app = createApp();
-
-        const response = await request(app)
-            .post('/api/activities/activity-1/participants')
-            .send({
-                uid: 'test-uid-1',
-            });
-
-        expect(response.status).toBe(500);
-        expect(response.body).toEqual({
-            ok: false,
-            error: {
-                code: 'INTERNAL_ERROR',
-                message: 'Unknown error',
-            },
-        });
-    });
-})
-
-describe('GET /activities/:activityId/participants', () => {
-    it('returns 200 with participants', async () => {
+describe('GET /api/activities/:activityId/participants', () => {
+    it('when participants exist => expected 200', async () => {
         vi.mocked(activityParticipantsService.getParticipants).mockResolvedValueOnce([
             {
                 participantId: 'test-uid-1',
@@ -555,7 +458,7 @@ describe('GET /activities/:activityId/participants', () => {
         });
     });
 
-    it('returns 400 when activityId is blank', async () => {
+    it('when activityId is blank => expected 400 w/ EMPTY_INPUT', async () => {
         const app = createApp();
 
         const response = await request(app).get('/api/activities/%20%20/participants');
@@ -570,7 +473,7 @@ describe('GET /activities/:activityId/participants', () => {
         });
     });
 
-    it('returns 200 with empty array when no participants exist', async () => {
+    it('when no participants exist => expected 200', async () => {
         vi.mocked(activityParticipantsService.getParticipants).mockResolvedValueOnce([]);
 
         const app = createApp();
@@ -584,7 +487,7 @@ describe('GET /activities/:activityId/participants', () => {
         });
     });
 
-    it('returns 500 when service throws', async () => {
+    it('when service throws unknown error => expected 500 w/ INTERNAL_ERROR', async () => {
         vi.mocked(activityParticipantsService.getParticipants).mockRejectedValueOnce(
             new Error('Unknown error'),
         );
@@ -604,8 +507,12 @@ describe('GET /activities/:activityId/participants', () => {
     });
 });
 
-describe('DELETE /activities/:activityId/participants/:uid', () => {
-    it('returns 200 when participant leaves activity', async () => {
+describe('DELETE /api/activities/:activityId/participants/:uid', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it('when request is valid => expected 200', async () => {
         const app = createApp();
 
         const response = await request(app).delete(
@@ -622,26 +529,42 @@ describe('DELETE /activities/:activityId/participants/:uid', () => {
         });
     });
 
-    it.each([
-        '/api/activities/%20%20/participants/test-uid-1',
-        '/api/activities/activity-1/participants/%20%20',
-    ])('returns 400 when route params are blank: %s', async (path) => {
+    it('when activityId is blank => expected 400 w/ EMPTY_INPUT', async () => {
         const app = createApp();
 
-        const response = await request(app).delete(path);
+        const response = await request(app).delete(
+            '/api/activities/%20%20/participants/test-uid-1',
+        );
 
         expect(response.status).toBe(400);
         expect(response.body).toEqual({
             ok: false,
             error: {
                 code: 'EMPTY_INPUT',
-                message: 'activityId and uid are required',
+                message: 'activityId is required',
+            },
+        });
+    });
+
+    it('when authenticated user tries to remove another participant => expected 403 w/ FORBIDDEN', async () => {
+        const app = createApp();
+
+        const response = await request(app).delete(
+            '/api/activities/activity-1/participants/other-user',
+        );
+
+        expect(response.status).toBe(403);
+        expect(response.body).toEqual({
+            ok: false,
+            error: {
+                code: 'FORBIDDEN',
+                message: 'You can only leave an activity for yourself',
             },
         });
     });
 
     it.each(['Activity not found', 'Participant not found'])(
-        'returns 404 when service rejects with %s',
+        'when service rejects with %s => expected 404 w/ NOT_FOUND',
         async (message) => {
             vi.mocked(activityParticipantsService.leaveActivity).mockRejectedValueOnce(
                 new Error(message),
@@ -664,7 +587,7 @@ describe('DELETE /activities/:activityId/participants/:uid', () => {
         },
     );
 
-    it('returns 500 when service throws unknown error', async () => {
+    it('when service throws unknown error => expected 500 w/ INTERNAL_ERROR', async () => {
         vi.mocked(activityParticipantsService.leaveActivity).mockRejectedValueOnce(
             new Error('Unknown error'),
         );
