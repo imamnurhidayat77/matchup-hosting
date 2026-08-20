@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../domain/activity_model.dart';
 
@@ -65,7 +66,7 @@ class ActivityCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: AppRadius.xlR,
         boxShadow: const [
           BoxShadow(
             color: AppColors.shadowCard,
@@ -104,10 +105,7 @@ class ActivityCard extends StatelessWidget {
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         stops: const [0.55, 1.0],
-                        colors: [
-                          Colors.transparent,
-                          Colors.black.withValues(alpha: 0.35),
-                        ],
+                        colors: [Colors.transparent, AppColors.scrim],
                       ),
                     ),
                   ),
@@ -122,15 +120,12 @@ class ActivityCard extends StatelessWidget {
                     ),
                     decoration: BoxDecoration(
                       color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: AppRadius.mdR,
                     ),
                     child: Text(
                       sportType,
-                      style: AppTypography.caption.copyWith(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.5,
+                      style: AppTypography.badgeSport.copyWith(
+                        color: AppColors.textOnPrimary,
                       ),
                     ),
                   ),
@@ -142,7 +137,7 @@ class ActivityCard extends StatelessWidget {
                     padding: const EdgeInsets.fromLTRB(10, 6, 12, 6),
                     decoration: BoxDecoration(
                       color: AppColors.scrim,
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: AppRadius.lgR,
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -152,17 +147,15 @@ class ActivityCard extends StatelessWidget {
                           width: 12,
                           height: 12,
                           colorFilter: const ColorFilter.mode(
-                            Colors.white,
+                            AppColors.textOnPrimary,
                             BlendMode.srcIn,
                           ),
                         ),
                         const SizedBox(width: 5),
                         Text(
                           '${distanceKm.toStringAsFixed(1)} km away',
-                          style: AppTypography.caption.copyWith(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
+                          style: AppTypography.chipLabel.copyWith(
+                            color: AppColors.textOnPrimary,
                           ),
                         ),
                       ],
@@ -179,17 +172,11 @@ class ActivityCard extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
-                    fontFamily: AppTypography.fontFamily,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    height: 1.2,
-                    color: AppColors.textPrimary,
-                  ),
+                  style: AppTypography.titleScreen,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: AppSpacing.x4),
                 Row(
                   children: [
                     _Chip(
@@ -208,26 +195,23 @@ class ActivityCard extends StatelessWidget {
                   ],
                 ),
                 if (description != null && description!.isNotEmpty) ...[
-                  const SizedBox(height: 14),
+                  const SizedBox(height: AppSpacing.x4),
                   Text(
                     description!,
-                    style: AppTypography.bodySmall.copyWith(
+                    style: AppTypography.bodyReading.copyWith(
                       color: AppColors.textSecondary,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w400,
-                      height: 1.6,
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],
-                const SizedBox(height: 14),
+                const SizedBox(height: AppSpacing.x4),
                 Container(height: 1, color: AppColors.border),
-                const SizedBox(height: 14),
+                const SizedBox(height: AppSpacing.x4),
                 Row(
                   children: [
                     _AvatarStack(),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: AppSpacing.x2),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -235,17 +219,13 @@ class ActivityCard extends StatelessWidget {
                         children: [
                           Text(
                             '$participantCount / $capacity spots',
-                            style: const TextStyle(
-                              fontFamily: AppTypography.fontFamily,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              height: 1.0,
+                            style: AppTypography.countAccent.copyWith(
                               color: AppColors.textPrimary,
                             ),
                           ),
-                          const SizedBox(height: 6),
+                          const SizedBox(height: AppSpacing.x1 + 2),
                           ClipRRect(
-                            borderRadius: BorderRadius.circular(3),
+                            borderRadius: AppRadius.xsR,
                             child: LinearProgressIndicator(
                               value: progress,
                               minHeight: 5,
@@ -258,23 +238,19 @@ class ActivityCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: AppSpacing.x2),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
+                        horizontal: AppSpacing.x3,
+                        vertical: AppSpacing.x2 - 2,
                       ),
                       decoration: BoxDecoration(
                         color: AppColors.statusSuccessBg,
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: AppRadius.lgR,
                       ),
                       child: Text(
                         _statusText,
-                        style: const TextStyle(
-                          fontFamily: AppTypography.fontFamily,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                          height: 1.0,
+                        style: AppTypography.badgeSport.copyWith(
                           color: AppColors.statusSuccessText,
                         ),
                       ),
@@ -334,10 +310,7 @@ class _Chip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 6, 12, 6),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(20),
-      ),
+      decoration: BoxDecoration(color: background, borderRadius: AppRadius.lgR),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -350,13 +323,7 @@ class _Chip extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             label,
-            style: TextStyle(
-              fontFamily: AppTypography.fontFamily,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              height: 1.0,
-              color: textColor,
-            ),
+            style: AppTypography.chipLabel.copyWith(color: textColor),
           ),
         ],
       ),
@@ -391,12 +358,8 @@ class _AvatarStack extends StatelessWidget {
                     ? null
                     : Text(
                         initials[i - 1],
-                        style: const TextStyle(
-                          fontFamily: AppTypography.fontFamily,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                          height: 1.0,
+                        style: AppTypography.badgeSport.copyWith(
+                          color: AppColors.textOnPrimary,
                         ),
                       ),
               ),

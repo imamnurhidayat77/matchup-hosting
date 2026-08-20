@@ -1,15 +1,23 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
+import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import 'app_button.dart';
 
 /// Full-page error state with retry CTA.
 /// Drop into `AsyncValue.when(error: (e, _) => ErrorRetry(onRetry: ref.refresh))`.
+///
+/// Visually the same family as [EmptyState] — soft tinted icon circle,
+/// title, body copy, single action — but tinted [AppColors.danger] instead
+/// of [AppColors.primary] so an error reads as distinct from an empty list.
+/// The heading and copy avoid an exclamation mark and the word "Oops" on
+/// purpose: a calm, direct statement reads as more trustworthy than a
+/// startled one (PRD Appendix C.2).
 class ErrorRetry extends StatelessWidget {
   const ErrorRetry({
     super.key,
-    this.message = 'Something went wrong. Please try again.',
+    this.message = "Couldn't load this. Please try again.",
     required this.onRetry,
   });
 
@@ -20,7 +28,7 @@ class ErrorRetry extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 40),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x8),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -37,20 +45,21 @@ class ErrorRetry extends StatelessWidget {
                 color: AppColors.danger,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.x5),
             Text(
-              'Oops!',
-              style: AppTypography.titleMedium.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
+              "Something didn't load",
+              textAlign: TextAlign.center,
+              style: AppTypography.titleSheet,
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: AppSpacing.x2),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: AppTypography.bodyMedium,
+              style: AppTypography.bodyReading.copyWith(
+                color: AppColors.textSecondary,
+              ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: AppSpacing.x6),
             AppButton(
               label: 'Try again',
               onPressed: onRetry,

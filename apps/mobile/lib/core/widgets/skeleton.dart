@@ -3,10 +3,17 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 
-/// A single soft-pulsing skeleton block. Wrap any [Container] shape —
-/// the shimmer is a subtle opacity pulse (minimal, no gradient sweep).
+/// A single shimmering skeleton block. Sweeps a soft highlight band
+/// left-to-right across a muted base, the standard "content is loading"
+/// treatment — distinct from a flat pulsing block, which reads as "this is
+/// broken" more than "this is loading" (PRD Section 1.6 / Appendix D.3).
 class SkeletonBox extends StatefulWidget {
-  const SkeletonBox({super.key, this.width, this.height = 16, this.radius = 8});
+  const SkeletonBox({
+    super.key,
+    this.width,
+    this.height = 16,
+    this.radius = 8,
+  });
 
   final double? width;
   final double height;
@@ -20,8 +27,8 @@ class _SkeletonBoxState extends State<SkeletonBox>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 1200),
-  )..repeat(reverse: true);
+    duration: AppDurations.shimmer,
+  )..repeat();
 
   @override
   void dispose() {
@@ -31,20 +38,37 @@ class _SkeletonBoxState extends State<SkeletonBox>
 
   @override
   Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: Tween<double>(
-        begin: 0.45,
-        end: 1.0,
-      ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut)),
-      child: Container(
-        width: widget.width,
-        height: widget.height,
-        decoration: BoxDecoration(
-          color: AppColors.surfaceSubtle,
-          borderRadius: BorderRadius.circular(widget.radius),
-          border: Border.all(color: AppColors.border),
-        ),
-      ),
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        // Sweep runs from -1.5..1.5 so the highlight band fully enters and
+        // exits the box rather than snapping between two solid states.
+        final t = _controller.value;
+        final start = -1.5 + 3.0 * t;
+        return ShaderMask(
+          blendMode: BlendMode.srcATop,
+          shaderCallback: (rect) {
+            return LinearGradient(
+              begin: Alignment(start - 0.5, 0),
+              end: Alignment(start + 0.5, 0),
+              colors: const [
+                AppColors.surfaceSubtle,
+                AppColors.surfaceMuted,
+                AppColors.surfaceSubtle,
+              ],
+            ).createShader(rect);
+          },
+          child: Container(
+            width: widget.width,
+            height: widget.height,
+            decoration: BoxDecoration(
+              color: AppColors.surfaceSubtle,
+              borderRadius: BorderRadius.circular(widget.radius),
+              border: Border.all(color: AppColors.border),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -101,7 +125,9 @@ class ActivityCardSkeleton extends StatelessWidget {
   }
 }
 
-/// Skeleton for list rows (notifications, participants, activities list).
+/// Skeleton for a compact list row — avatar/thumbnail + two lines of text.
+/// Matches the shape of a notification row, a participant row, or a
+/// conversation row (Messages).
 class ListRowSkeleton extends StatelessWidget {
   const ListRowSkeleton({super.key});
 
@@ -129,8 +155,91 @@ class ListRowSkeleton extends StatelessWidget {
   }
 }
 
+/// Skeleton for the My Activities compact card shape — thumbnail, chip row,
+/// title, meta row. Mirrors `_ActivityListCard` so the loading state doesn't
+/// jump when real data arrives.
+class ActivityListCardSkeleton extends StatelessWidget {
+  const ActivityListCardSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.x4),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SkeletonBox(width: 70, height: 70, radius: 14),
+          SizedBox(width: AppSpacing.x4),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    SkeletonBox(width: 70, height: 20, radius: 100),
+                    Spacer(),
+                    SkeletonBox(width: 60, height: 20, radius: 100),
+                  ],
+                ),
+                SizedBox(height: AppSpacing.x2),
+                SkeletonBox(width: 180, height: 15),
+                SizedBox(height: AppSpacing.x2),
+                SkeletonBox(width: 140, height: 12),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Skeleton for a profile header — avatar + name + stats row. Mirrors
+/// Profile / Player Profile.
+class ProfileHeaderSkeleton extends StatelessWidget {
+  const ProfileHeaderSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.x6,
+        vertical: AppSpacing.x5,
+      ),
+      child: Column(
+        children: [
+          const SkeletonBox(width: 96, height: 96, radius: 48),
+          const SizedBox(height: AppSpacing.x3),
+          const SkeletonBox(width: 140, height: 18),
+          const SizedBox(height: AppSpacing.x2),
+          const SkeletonBox(width: 100, height: 12),
+          const SizedBox(height: AppSpacing.x5),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: List.generate(
+              3,
+              (_) => const Column(
+                children: [
+                  SkeletonBox(width: 36, height: 20),
+                  SizedBox(height: 6),
+                  SkeletonBox(width: 50, height: 10),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Renders [count] [ListRowSkeleton] items as a loading placeholder for
-/// any screen that shows a scrollable list.
+/// any screen that shows a scrollable list of simple rows.
 class SkeletonList extends StatelessWidget {
   const SkeletonList({super.key, this.count = 5});
 

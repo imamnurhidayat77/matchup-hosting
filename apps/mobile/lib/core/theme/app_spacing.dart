@@ -103,6 +103,32 @@ class AppShadows {
       offset: Offset(0, -4),
     ),
   ];
+
+  /// Slightly lifted variant of [card] — for a card mid-press or under the
+  /// pointer. Same two-layer shape, just stronger, so the lift reads as
+  /// continuous motion rather than a shadow that pops to a different style.
+  static const List<BoxShadow> cardHover = [
+    BoxShadow(
+      color: Color(0x140F172A), // 8% slate — contact
+      blurRadius: 4,
+      offset: Offset(0, 2),
+    ),
+    BoxShadow(
+      color: Color(0x260F172A), // 15% slate — ambient
+      blurRadius: 20,
+      offset: Offset(0, 8),
+    ),
+  ];
+
+  /// Modal / bottom-sheet shadow — upward-biased since sheets sit above the
+  /// content they cover rather than resting on a surface below them.
+  static const List<BoxShadow> sheet = [
+    BoxShadow(
+      color: Color(0x1F0F172A), // 12% slate
+      blurRadius: 32,
+      offset: Offset(0, -8),
+    ),
+  ];
 }
 
 /// Motion duration tokens — use these instead of raw Duration literals.

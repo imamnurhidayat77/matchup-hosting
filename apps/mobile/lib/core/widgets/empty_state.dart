@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
+import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
+import 'app_button.dart';
 
-/// Standardized empty state: large outline icon, title, optional subtitle,
-/// optional action button. Keeps every screen's "nothing here" moment
-/// consistent and calm.
+/// Standardized empty state: an icon in a soft tinted circle, a title, an
+/// optional subtitle, and an optional primary action. Keeps every screen's
+/// "nothing here" moment calm and consistent instead of a bare icon and two
+/// lines of text (PRD Section 0.7).
 class EmptyState extends StatelessWidget {
   const EmptyState({
     super.key,
@@ -26,7 +29,7 @@ class EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 40),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x8),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -34,35 +37,34 @@ class EmptyState extends StatelessWidget {
               width: 72,
               height: 72,
               decoration: const BoxDecoration(
-                color: AppColors.surfaceSubtle,
+                color: AppColors.primarySoft,
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, size: 32, color: AppColors.textTertiary),
+              child: Icon(icon, size: 32, color: AppColors.primaryDarker),
             ),
-            const SizedBox(height: 16),
-            Text(title, style: AppTypography.titleMedium),
+            const SizedBox(height: AppSpacing.x5),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: AppTypography.titleSheet,
+            ),
             if (subtitle != null) ...[
-              const SizedBox(height: 4),
+              const SizedBox(height: AppSpacing.x2),
               Text(
                 subtitle!,
                 textAlign: TextAlign.center,
-                style: AppTypography.bodyMedium.copyWith(
+                style: AppTypography.bodyReading.copyWith(
                   color: AppColors.textSecondary,
                 ),
               ),
             ],
             if (actionLabel != null && onAction != null) ...[
-              const SizedBox(height: 20),
-              TextButton(
+              const SizedBox(height: AppSpacing.x6),
+              AppButton(
+                label: actionLabel!,
                 onPressed: onAction,
-                style: TextButton.styleFrom(
-                  foregroundColor: AppColors.primary,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 12,
-                  ),
-                ),
-                child: Text(actionLabel!, style: AppTypography.button),
+                size: AppButtonSize.sm,
+                expand: false,
               ),
             ],
           ],

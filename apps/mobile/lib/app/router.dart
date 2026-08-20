@@ -1,6 +1,8 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
+import '../core/theme/app_spacing.dart';
 
 import '../core/providers/auth_state_provider.dart';
 import '../features/auth/presentation/login_screen.dart';
@@ -58,6 +60,39 @@ class _AuthListenable extends ChangeNotifier {
     _ref.listen<AuthState>(authStateProvider, (_, _) => notifyListeners());
   }
   final Ref _ref;
+}
+
+// ─── Shared page transition ──────────────────────────────────────────────────
+// Every pushed route (everything outside the ShellRoute below, and any
+// GoRoute reached via context.push from inside it) gets the same slide+fade
+// instead of the platform default. Tab switches inside ShellRoute stay
+// instant — AppShell swaps `child` directly, it never goes through a
+// GoRoute page transition (PRD Section 0.6 / Appendix D.1).
+//
+// Usage: replace `builder: (_, state) => Screen()` with
+// `pageBuilder: (_, state) => appPage(state, const Screen())` on any route
+// that should feel like a "push" rather than an instant swap.
+CustomTransitionPage<void> appPage(GoRouterState state, Widget child) {
+  return CustomTransitionPage<void>(
+    key: state.pageKey,
+    child: child,
+    transitionDuration: AppDurations.base,
+    reverseTransitionDuration: AppDurations.base,
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      );
+      return SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0.06, 0),
+          end: Offset.zero,
+        ).animate(curved),
+        child: FadeTransition(opacity: curved, child: child),
+      );
+    },
+  );
 }
 
 // ─── Builder ─────────────────────────────────────────────────────────────────
@@ -119,11 +154,16 @@ GoRouter buildRouter(Ref ref) {
       // has no bottom navigation on this screen — its footer holds only the home
       // indicator. Note that joined-activity-detail (74:5) DOES keep the tab
       // bar, so only this route is hoisted out.
+      //
+      // Must be reached via context.push, never context.go — its back/dislike
+      // buttons call Navigator.maybePop(), which needs a route to pop back to.
+      // See test/widget/activity_detail_buttons_test.dart for the regression
+      // this documents (PRD Appendix B.3).
       GoRoute(
         path: '/activity/:id',
-        builder: (_, state) {
+        pageBuilder: (_, state) {
           final id = state.pathParameters['id'] ?? '1';
-          return ActivityDetailScreen(activityId: id);
+          return appPage(state, ActivityDetailScreen(activityId: id));
         },
       ),
       ShellRoute(

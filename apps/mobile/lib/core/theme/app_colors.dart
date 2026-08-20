@@ -31,6 +31,11 @@ class AppColors {
   static const Color textPrimary = Color(0xFF0F172A); // Figma text-primary
   static const Color textLabel = Color(0xFF334155); // Figma text-label
   static const Color textSecondary = Color(0xFF64748B); // Figma text-secondary
+
+  /// Contrast on white is only 2.54:1 — fails WCAG AA for text (needs 4.5:1).
+  /// Decorative use only: unselected nav icons, dots, empty-state glyphs.
+  /// Never set this as the colour of a [AppTypography] text style — use
+  /// [textSecondary] instead. See PRD Appendix E.3.
   static const Color textTertiary = Color(0xFF9CA3AF);
   static const Color textOnPrimary = Colors.white;
 

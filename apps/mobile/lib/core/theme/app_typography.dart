@@ -168,12 +168,16 @@ class AppTypography {
     color: AppColors.textSecondary,
   );
 
+  /// 12px Regular. Colour fixed at [AppColors.textSecondary] (4.76:1 on
+  /// white) rather than [AppColors.textTertiary] (2.54:1 — fails WCAG AA for
+  /// text). See PRD Appendix E.3: `textTertiary` is fine for icons and
+  /// decorative strokes, never for the default colour of a text style.
   static TextStyle get bodySmall => const TextStyle(
     fontFamily: fontFamily,
     fontSize: 12,
     fontWeight: FontWeight.normal,
     height: uiLineHeight,
-    color: AppColors.textTertiary,
+    color: AppColors.textSecondary,
   );
 
   /// 14px Regular, leading **1.5** — multi-line reading copy such as
@@ -287,12 +291,14 @@ class AppTypography {
     color: AppColors.textSecondary,
   );
 
+  /// 12px Medium. Colour fixed at [AppColors.textSecondary] for the same
+  /// contrast reason as [bodySmall] — see Appendix E.3.
   static TextStyle get caption => const TextStyle(
     fontFamily: fontFamily,
     fontSize: 12,
     fontWeight: FontWeight.w500,
     height: uiLineHeight,
-    color: AppColors.textTertiary,
+    color: AppColors.textSecondary,
   );
 
   // ─── Buttons ─────────────────────────────────────────────────────────────
