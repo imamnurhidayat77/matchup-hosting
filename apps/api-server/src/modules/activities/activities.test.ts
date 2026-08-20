@@ -31,7 +31,7 @@ describe('activities routes', () => {
         it('creates activity with POST /activities => expected 201', async () => {
             const app = createApp();
 
-            const response = await request(app).post('/activities').send({
+            const response = await request(app).post('/api/activities').send({
                 hostId: 'test-uid-1',
                 title: 'Evening Futsal',
                 sportType: 'futsal',
@@ -55,7 +55,7 @@ describe('activities routes', () => {
         it('returns 400 when required fields are not strings', async () => {
             const app = createApp();
 
-            const response = await request(app).post('/activities').send({
+            const response = await request(app).post('/api/activities').send({
                 hostId: 123,
                 title: 'Evening Futsal',
                 sportType: 'futsal',
@@ -81,7 +81,7 @@ describe('activities routes', () => {
         it('returns 400 when optional fields are not strings', async () => {
             const app = createApp();
 
-            const response = await request(app).post('/activities').send({
+            const response = await request(app).post('/api/activities').send({
                 hostId: 'test-uid-1',
                 title: 'Evening Futsal',
                 sportType: 'futsal',
@@ -107,7 +107,7 @@ describe('activities routes', () => {
         it('returns 400 when skillLevel is invalid', async () => {
             const app = createApp();
 
-            const response = await request(app).post('/activities').send({
+            const response = await request(app).post('/api/activities').send({
                 hostId: 'test-uid-1',
                 title: 'Evening Futsal',
                 sportType: 'futsal',
@@ -134,7 +134,7 @@ describe('activities routes', () => {
             async (capacity) => {
                 const app = createApp();
 
-                const response = await request(app).post('/activities').send({
+                const response = await request(app).post('/api/activities').send({
                     hostId: 'test-uid-1',
                     title: 'Evening Futsal',
                     sportType: 'futsal',
@@ -259,7 +259,7 @@ describe('activities routes', () => {
         ])('returns 400 when $name', async ({ body }) => {
             const app = createApp();
 
-            const response = await request(app).post('/activities').send(body);
+            const response = await request(app).post('/api/activities').send(body);
 
             expect(response.status).toBe(400);
             expect(response.body).toEqual({
@@ -279,7 +279,7 @@ describe('activities routes', () => {
 
             const app = createApp();
 
-            const response = await request(app).post('/activities').send({
+            const response = await request(app).post('/api/activities').send({
                 hostId: 'test-uid-1',
                 title: 'Evening Futsal',
                 sportType: 'futsal',
@@ -329,7 +329,7 @@ describe('activities routes', () => {
 
             const app = createApp();
 
-            const response = await request(app).get('/activities/activity-1');
+            const response = await request(app).get('/api/activities/activity-1');
 
             expect(response.status).toBe(200);
             expect(response.body).toMatchObject({
@@ -354,7 +354,7 @@ describe('activities routes', () => {
         it('returns 400 when activityId is blank', async () => {
             const app = createApp();
 
-            const response = await request(app).get('/activities/%20%20');
+            const response = await request(app).get('/api/activities/%20%20');
 
             expect(response.status).toBe(400);
             expect(response.body).toEqual({
@@ -371,7 +371,7 @@ describe('activities routes', () => {
 
             const app = createApp();
 
-            const response = await request(app).get('/activities/missing-activity');
+            const response = await request(app).get('/api/activities/missing-activity');
 
             expect(response.status).toBe(404);
             expect(response.body).toEqual({
@@ -390,7 +390,7 @@ describe('activities routes', () => {
 
             const app = createApp();
 
-            const response = await request(app).get('/activities/activity-1');
+            const response = await request(app).get('/api/activities/activity-1');
 
             expect(response.status).toBe(500);
             expect(response.body).toEqual({
@@ -415,7 +415,7 @@ describe('POST /activities/:activityId/participants', () => {
         const app = createApp();
 
         const response = await request(app)
-            .post('/activities/activity-1/participants')
+            .post('/api/activities/activity-1/participants')
             .send({
                 uid: 'test-uid-1',
             });
@@ -432,12 +432,12 @@ describe('POST /activities/:activityId/participants', () => {
     it.each([
         {
             name: 'activityId is blank',
-            path: '/activities/%20%20/participants',
+            path: '/api/activities/%20%20/participants',
             body: { uid: 'test-uid-1' },
         },
         {
             name: 'uid is blank',
-            path: '/activities/activity-1/participants',
+            path: '/api/activities/activity-1/participants',
             body: { uid: '   ' },
         },
     ])('returns 400 when $name', async ({ path, body }) => {
@@ -467,7 +467,7 @@ describe('POST /activities/:activityId/participants', () => {
         const app = createApp();
 
         const response = await request(app)
-            .post('/activities/activity-1/participants')
+            .post('/api/activities/activity-1/participants')
             .send({
                 uid: 'test-uid-1',
             });
@@ -490,7 +490,7 @@ describe('POST /activities/:activityId/participants', () => {
         const app = createApp();
 
         const response = await request(app)
-            .post('/activities/activity-1/participants')
+            .post('/api/activities/activity-1/participants')
             .send({
                 uid: 'test-uid-1',
             });
@@ -513,7 +513,7 @@ describe('POST /activities/:activityId/participants', () => {
         const app = createApp();
 
         const response = await request(app)
-            .post('/activities/activity-1/participants')
+            .post('/api/activities/activity-1/participants')
             .send({
                 uid: 'test-uid-1',
             });
@@ -541,7 +541,7 @@ describe('GET /activities/:activityId/participants', () => {
 
         const app = createApp();
 
-        const response = await request(app).get('/activities/activity-1/participants');
+        const response = await request(app).get('/api/activities/activity-1/participants');
 
         expect(response.status).toBe(200);
         expect(response.body).toMatchObject({
@@ -558,7 +558,7 @@ describe('GET /activities/:activityId/participants', () => {
     it('returns 400 when activityId is blank', async () => {
         const app = createApp();
 
-        const response = await request(app).get('/activities/%20%20/participants');
+        const response = await request(app).get('/api/activities/%20%20/participants');
 
         expect(response.status).toBe(400);
         expect(response.body).toEqual({
@@ -575,7 +575,7 @@ describe('GET /activities/:activityId/participants', () => {
 
         const app = createApp();
 
-        const response = await request(app).get('/activities/activity-1/participants');
+        const response = await request(app).get('/api/activities/activity-1/participants');
 
         expect(response.status).toBe(200);
         expect(response.body).toEqual({
@@ -591,7 +591,7 @@ describe('GET /activities/:activityId/participants', () => {
 
         const app = createApp();
 
-        const response = await request(app).get('/activities/activity-1/participants');
+        const response = await request(app).get('/api/activities/activity-1/participants');
 
         expect(response.status).toBe(500);
         expect(response.body).toEqual({
@@ -609,7 +609,7 @@ describe('DELETE /activities/:activityId/participants/:uid', () => {
         const app = createApp();
 
         const response = await request(app).delete(
-            '/activities/activity-1/participants/test-uid-1',
+            '/api/activities/activity-1/participants/test-uid-1',
         );
 
         expect(response.status).toBe(200);
@@ -623,8 +623,8 @@ describe('DELETE /activities/:activityId/participants/:uid', () => {
     });
 
     it.each([
-        '/activities/%20%20/participants/test-uid-1',
-        '/activities/activity-1/participants/%20%20',
+        '/api/activities/%20%20/participants/test-uid-1',
+        '/api/activities/activity-1/participants/%20%20',
     ])('returns 400 when route params are blank: %s', async (path) => {
         const app = createApp();
 
@@ -650,7 +650,7 @@ describe('DELETE /activities/:activityId/participants/:uid', () => {
             const app = createApp();
 
             const response = await request(app).delete(
-                '/activities/activity-1/participants/test-uid-1',
+                '/api/activities/activity-1/participants/test-uid-1',
             );
 
             expect(response.status).toBe(404);
@@ -672,7 +672,7 @@ describe('DELETE /activities/:activityId/participants/:uid', () => {
         const app = createApp();
 
         const response = await request(app).delete(
-            '/activities/activity-1/participants/test-uid-1',
+            '/api/activities/activity-1/participants/test-uid-1',
         );
 
         expect(response.status).toBe(500);

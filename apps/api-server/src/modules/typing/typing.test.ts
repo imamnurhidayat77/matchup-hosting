@@ -23,7 +23,7 @@ describe('typing routes', () => {
     const app = createApp();
 
     const response = await request(app)
-      .post('/typing')
+      .post('/api/typing')
       .send({
         activityId: 'activity-1',
         uid: 'test-uid-1',
@@ -45,7 +45,7 @@ describe('typing routes', () => {
     const app = createApp();
 
     const response = await request(app)
-      .post('/typing')
+      .post('/api/typing')
       .send({
         activityId: 'activity-1',
         uid: 'test-uid-1',
@@ -66,7 +66,7 @@ describe('typing routes', () => {
     const app = createApp();
 
     const response = await request(app)
-      .post('/typing')
+      .post('/api/typing')
       .send({
         activityId: 123,
         uid: 'test-uid-1',
@@ -87,7 +87,7 @@ describe('typing routes', () => {
     const app = createApp();
 
     const response = await request(app)
-      .post('/typing')
+      .post('/api/typing')
       .send({
         activityId: '   ',
         uid: 'test-uid-1',
@@ -108,7 +108,7 @@ describe('typing routes', () => {
     const app = createApp();
 
     const response = await request(app)
-      .post('/typing')
+      .post('/api/typing')
       .send({
         activityId: 'activity-1',
         uid: 123456,
@@ -129,7 +129,7 @@ describe('typing routes', () => {
     const app = createApp();
 
     const response = await request(app)
-      .post('/typing')
+      .post('/api/typing')
       .send({
         activityId: 'activity-1',
         uid: '   ',
@@ -154,7 +154,7 @@ describe('typing routes', () => {
     const app = createApp();
 
     const response = await request(app)
-      .post('/typing')
+      .post('/api/typing')
       .send({
         activityId: 'activity-1',
         uid: 'test-uid-1',
@@ -184,7 +184,7 @@ describe('typing routes', () => {
 
     const app = createApp();
 
-    const response = await request(app).get('/typing/activity-1/test-uid-1');
+    const response = await request(app).get('/api/typing/activity-1/test-uid-1');
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({
@@ -199,7 +199,7 @@ describe('typing routes', () => {
 
     const app = createApp();
 
-    const response = await request(app).get('/typing/%20%20/test-uid-1');
+    const response = await request(app).get('/api/typing/%20%20/test-uid-1');
 
     expect(response.status).toBe(400);
     expect(response.body).toEqual({
@@ -215,7 +215,7 @@ describe('typing routes', () => {
 
     const app = createApp();
 
-    const response = await request(app).get('/typing/activity-1/%20%20');
+    const response = await request(app).get('/api/typing/activity-1/%20%20');
 
     expect(response.status).toBe(400);
     expect(response.body).toEqual({
@@ -232,7 +232,7 @@ describe('typing routes', () => {
 
     const app = createApp();
 
-    const response = await request(app).get('/typing/activity-1/missing-user');
+    const response = await request(app).get('/api/typing/activity-1/missing-user');
 
     expect(response.status).toBe(404);
     expect(response.body).toEqual({
@@ -251,7 +251,7 @@ describe('typing routes', () => {
 
     const app = createApp();
 
-    const response = await request(app).get('/typing/activity-1/test-uid-1');
+    const response = await request(app).get('/api/typing/activity-1/test-uid-1');
 
     expect(response.status).toBe(500);
     expect(response.body).toEqual({

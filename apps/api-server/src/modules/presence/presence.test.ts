@@ -23,7 +23,7 @@ describe('presence routes', () => {
     const app = createApp();
 
     const response = await request(app)
-      .post('/presence')
+      .post('/api/presence')
       .send({
         uid: 'test-uid-1',
         state: 'online',
@@ -43,7 +43,7 @@ describe('presence routes', () => {
     const app = createApp();
 
     const response = await request(app)
-      .post('/presence')
+      .post('/api/presence')
       .send({
         uid: 'test-uid-1',
         state: 'busy',
@@ -63,7 +63,7 @@ describe('presence routes', () => {
     const app = createApp();
 
     const response = await request(app)
-      .post('/presence')
+      .post('/api/presence')
       .send({
         uid: '   ',
         state: 'online',
@@ -83,7 +83,7 @@ describe('presence routes', () => {
     const app = createApp();
 
     const response = await request(app)
-      .post('/presence')
+      .post('/api/presence')
       .send({
         uid: 123,
         state: 'online',
@@ -107,7 +107,7 @@ describe('presence routes', () => {
     const app = createApp();
 
     const response = await request(app)
-      .post('/presence')
+      .post('/api/presence')
       .send({
         uid: 'test-uid-1',
         state: 'online',
@@ -137,7 +137,7 @@ describe('presence routes', () => {
 
     const app = createApp();
 
-    const response = await request(app).get('/presence/test-uid-1');
+    const response = await request(app).get('/api/presence/test-uid-1');
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({
@@ -152,7 +152,7 @@ describe('presence routes', () => {
   it('return 400 from GET /presence/:id when uid is blank', async () => {
 
     const app = createApp();
-    const response = await request(app).get('/presence/%20%20')
+    const response = await request(app).get('/api/presence/%20%20')
 
     expect(response.status).toBe(400);
     expect(response.body).toEqual({
@@ -169,7 +169,7 @@ describe('presence routes', () => {
 
     const app = createApp();
 
-    const response = await request(app).get('/presence/missing-user');
+    const response = await request(app).get('/api/presence/missing-user');
 
     expect(response.status).toBe(404);
     expect(response.body).toEqual({
@@ -185,7 +185,7 @@ describe('presence routes', () => {
     vi.mocked(presenceService.getPresence).mockRejectedValueOnce(new Error('Unknown error'));
 
     const app = createApp();
-    const response = await request(app).get('/presence/test-uid-1');
+    const response = await request(app).get('/api/presence/test-uid-1');
 
     expect(response.status).toBe(500);
     expect(response.body).toEqual({

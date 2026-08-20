@@ -17,7 +17,7 @@ describe('swipes routes', () => {
     it('saves swipe decision with POST /swipes => expected 200', async () => {
       const app = createApp();
 
-      const response = await request(app).post('/swipes').send({
+      const response = await request(app).post('/api/swipes').send({
         uid: 'test-uid-1',
         activityId: 'activity-1',
         decision: 'join',
@@ -37,7 +37,7 @@ describe('swipes routes', () => {
     it('when uid or activityId are not strings => expected 400 w/ INVALID_INPUT', async () => {
       const app = createApp();
 
-      const response = await request(app).post('/swipes').send({
+      const response = await request(app).post('/api/swipes').send({
         uid: 123,
         activityId: 'activity-1',
         decision: 'join',
@@ -56,7 +56,7 @@ describe('swipes routes', () => {
     it('when decision is invalid => expected 400 w/ INVALID_INPUT', async () => {
       const app = createApp();
 
-      const response = await request(app).post('/swipes').send({
+      const response = await request(app).post('/api/swipes').send({
         uid: 'test-uid-1',
         activityId: 'activity-1',
         decision: 'maybe',
@@ -92,7 +92,7 @@ describe('swipes routes', () => {
     ])('when $name => expected 400 w/ EMPTY_INPUT', async ({ body }) => {
       const app = createApp();
 
-      const response = await request(app).post('/swipes').send(body);
+      const response = await request(app).post('/api/swipes').send(body);
 
       expect(response.status).toBe(400);
       expect(response.body).toEqual({
@@ -111,7 +111,7 @@ describe('swipes routes', () => {
 
       const app = createApp();
 
-      const response = await request(app).post('/swipes').send({
+      const response = await request(app).post('/api/swipes').send({
         uid: 'test-uid-1',
         activityId: 'missing-activity',
         decision: 'join',
@@ -134,7 +134,7 @@ describe('swipes routes', () => {
 
       const app = createApp();
 
-      const response = await request(app).post('/swipes').send({
+      const response = await request(app).post('/api/swipes').send({
         uid: 'test-uid-1',
         activityId: 'activity-1',
         decision: 'join',
@@ -164,7 +164,7 @@ describe('swipes routes', () => {
 
       const app = createApp();
 
-      const response = await request(app).get('/swipes/test-uid-1/activity-1');
+      const response = await request(app).get('/api/swipes/test-uid-1/activity-1');
 
       expect(response.status).toBe(200);
       expect(response.body).toMatchObject({
@@ -179,8 +179,8 @@ describe('swipes routes', () => {
     });
 
     it.each([
-      '/swipes/%20%20/activity-1',
-      '/swipes/test-uid-1/%20%20',
+      '/api/swipes/%20%20/activity-1',
+      '/api/swipes/test-uid-1/%20%20',
     ])('when route params are blank: %s ==> expected 400 w/ EMPTY_INPUT', async (path) => {
       const app = createApp();
 
@@ -201,7 +201,7 @@ describe('swipes routes', () => {
 
       const app = createApp();
 
-      const response = await request(app).get('/swipes/test-uid-1/activity-1');
+      const response = await request(app).get('/api/swipes/test-uid-1/activity-1');
 
       expect(response.status).toBe(404);
       expect(response.body).toEqual({
@@ -220,7 +220,7 @@ describe('swipes routes', () => {
 
       const app = createApp();
 
-      const response = await request(app).get('/swipes/test-uid-1/activity-1');
+      const response = await request(app).get('/api/swipes/test-uid-1/activity-1');
 
       expect(response.status).toBe(500);
       expect(response.body).toEqual({
@@ -248,7 +248,7 @@ describe('swipes routes', () => {
 
       const app = createApp();
 
-      const response = await request(app).get('/swipes/test-uid-1');
+      const response = await request(app).get('/api/swipes/test-uid-1');
 
       expect(response.status).toBe(200);
       expect(response.body).toMatchObject({
@@ -267,7 +267,7 @@ describe('swipes routes', () => {
     it('when uid is blank => expected 400 w/ EMPTY_INPUT', async () => {
       const app = createApp();
 
-      const response = await request(app).get('/swipes/%20%20');
+      const response = await request(app).get('/api/swipes/%20%20');
 
       expect(response.status).toBe(400);
       expect(response.body).toEqual({
@@ -284,7 +284,7 @@ describe('swipes routes', () => {
 
       const app = createApp();
 
-      const response = await request(app).get('/swipes/test-uid-1');
+      const response = await request(app).get('/api/swipes/test-uid-1');
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual({
@@ -300,7 +300,7 @@ describe('swipes routes', () => {
 
       const app = createApp();
 
-      const response = await request(app).get('/swipes/test-uid-1');
+      const response = await request(app).get('/api/swipes/test-uid-1');
 
       expect(response.status).toBe(500);
       expect(response.body).toEqual({

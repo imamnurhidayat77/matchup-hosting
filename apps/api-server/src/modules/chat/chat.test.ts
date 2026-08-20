@@ -21,7 +21,7 @@ describe('chat routes', () => {
         it('send message with POST /chat/messages => expected 201', async () => {
             const app = createApp();
 
-            const response = await request(app).post('/chat/messages').send({
+            const response = await request(app).post('/api/chat/messages').send({
                 activityId: 'activity-1',
                 senderId: 'test-uid-1',
                 text: 'Hello from chat',
@@ -40,7 +40,7 @@ describe('chat routes', () => {
         it('send request when activityId, senderId, or text are not strings => expected 400 w/ INVALID_INPUT', async () => {
             const app = createApp();
 
-            const response = await request(app).post('/chat/messages').send({
+            const response = await request(app).post('/api/chat/messages').send({
                 activityId: 123,
                 senderId: 'test-uid-1',
                 text: 'Hello from chat',
@@ -60,7 +60,7 @@ describe('chat routes', () => {
         it('send request when type is invalid => expected 400 w/ INVALID_INPUT', async () => {
             const app = createApp();
 
-            const response = await request(app).post('/chat/messages').send({
+            const response = await request(app).post('/api/chat/messages').send({
                 activityId: 'activity-1',
                 senderId: 'test-uid-1',
                 text: 'Hello from chat',
@@ -93,7 +93,7 @@ describe('chat routes', () => {
         ])('returns 400 when $name', async ({ body }) => {
             const app = createApp();
 
-            const response = await request(app).post('/chat/messages').send(body);
+            const response = await request(app).post('/api/chat/messages').send(body);
 
             expect(response.status).toBe(400);
             expect(response.body).toEqual({
@@ -110,7 +110,7 @@ describe('chat routes', () => {
 
             const app = createApp();
 
-            const response = await request(app).post('/chat/messages').send({
+            const response = await request(app).post('/api/chat/messages').send({
                 activityId: 'activity-1',
                 senderId: 'test-uid-1',
                 text: 'Hello from chat',
@@ -142,7 +142,7 @@ describe('chat routes', () => {
 
             const app = createApp();
 
-            const response = await request(app).get('/chat/activity-1/messages');
+            const response = await request(app).get('/api/chat/activity-1/messages');
 
             expect(response.status).toBe(200);
             expect(response.body).toEqual({
@@ -162,7 +162,7 @@ describe('chat routes', () => {
         it('returns 400 when activityId is blank', async () => {
             const app = createApp();
 
-            const response = await request(app).get('/chat/%20%20/messages');
+            const response = await request(app).get('/api/chat/%20%20/messages');
 
             expect(response.status).toBe(400);
             expect(response.body).toEqual({
@@ -179,7 +179,7 @@ describe('chat routes', () => {
 
             const app = createApp();
 
-            const response = await request(app).get('/chat/activity-empty/messages');
+            const response = await request(app).get('/api/chat/activity-empty/messages');
 
             expect(response.status).toBe(200);
             expect(response.body).toEqual({
@@ -193,7 +193,7 @@ describe('chat routes', () => {
 
             const app = createApp();
 
-            const response = await request(app).get('/chat/activity-1/messages');
+            const response = await request(app).get('/api/chat/activity-1/messages');
 
             expect(response.status).toBe(500);
             expect(response.body).toEqual({

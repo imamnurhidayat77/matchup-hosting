@@ -23,7 +23,7 @@ describe('users routes', () => {
     const app = createApp();
 
     const response = await request(app)
-      .post('/users')
+      .post('/api/users')
       .send({
         authUid: 'test-uid-1',
         email: 'user@example.com',
@@ -43,7 +43,7 @@ describe('users routes', () => {
     const app = createApp();
 
     const response = await request(app)
-      .post('/users')
+      .post('/api/users')
       .send({
         authUid: '',
         email: 123,
@@ -63,7 +63,7 @@ describe('users routes', () => {
     const app = createApp();
 
     const response = await request(app)
-      .post('/users')
+      .post('/api/users')
       .send({
         authUid: '   ',
         email: '    ',
@@ -87,7 +87,7 @@ describe('users routes', () => {
     const app = createApp();
 
     const response = await request(app)
-      .post('/users')
+      .post('/api/users')
       .send({
         authUid: 'test-uid-1',
         email: 'user@example.com',
@@ -111,7 +111,7 @@ describe('users routes', () => {
     const app = createApp();
 
     const response = await request(app)
-      .post('/users')
+      .post('/api/users')
       .send({
         authUid: 'test-uid-1',
         email: 'user@example.com',
@@ -135,7 +135,7 @@ describe('users routes', () => {
     const app = createApp();
 
     const response = await request(app)
-      .post('/users')
+      .post('/api/users')
       .send({
         authUid: 'test-uid-1',
         email: 'user@example.com',
@@ -168,7 +168,7 @@ describe('users routes', () => {
 
     const app = createApp();
 
-    const response = await request(app).get('/users/test-uid-1');
+    const response = await request(app).get('/api/users/test-uid-1');
 
     expect(response.status).toBe(200);
     expect(response.body).toMatchObject({
@@ -185,7 +185,7 @@ describe('users routes', () => {
 
     const app = createApp();
 
-    const response = await request(app).get('/users/missing-user');
+    const response = await request(app).get('/api/users/missing-user');
 
     expect(response.status).toBe(404);
     expect(response.body).toEqual({
