@@ -1,32 +1,54 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
-import '../../../core/widgets/status_bar_mock.dart';
+import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/home_indicator.dart';
 
-const _primaryDarker = Color(0xFF145AC8);
-const _primaryLight = Color(0xFFE6F0FF);
-const _bgSurface = Color(0xFFF8FAFC);
-const _greenLightBg = Color(0xFFD1FAE5);
-const _greenText = Color(0xFF04694A);
-
-class MatchScreen extends StatelessWidget {
+class MatchScreen extends StatefulWidget {
   const MatchScreen({super.key});
+
+  @override
+  State<MatchScreen> createState() => _MatchScreenState();
+}
+
+class _MatchScreenState extends State<MatchScreen>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _confettiCtrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1800),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    // Start confetti + haptic burst on mount
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      HapticFeedback.heavyImpact();
+      _confettiCtrl.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _confettiCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.surface,
       body: SafeArea(
-        top: false,
+        top: true,
         child: Stack(
           children: [
             Column(
               children: [
-                const StatusBarMock(foreground: AppColors.textPrimary),
                 _topHeader(),
                 Expanded(child: _card(context)),
                 _actions(context),
@@ -34,8 +56,15 @@ class MatchScreen extends StatelessWidget {
               ],
             ),
             Positioned.fill(
-              top: 100,
-              child: IgnorePointer(child: _particles()),
+              top: 80,
+              child: IgnorePointer(
+                child: AnimatedBuilder(
+                  animation: _confettiCtrl,
+                  builder: (_, _) => _ConfettiLayer(
+                    progress: _confettiCtrl.value,
+                  ),
+                ),
+              ),
             ),
           ],
         ),
@@ -51,13 +80,13 @@ class MatchScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             decoration: BoxDecoration(
-              color: _primaryLight,
+              color: AppColors.primaryLight,
               borderRadius: BorderRadius.circular(99),
             ),
             child: Text(
               'SUCCESS MATCH',
               style: AppTypography.bodySmall.copyWith(
-                color: _primaryDarker,
+                color: AppColors.primaryDarker,
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
               ),
@@ -68,7 +97,7 @@ class MatchScreen extends StatelessWidget {
             "It's a Match!",
             style: AppTypography.headlineLarge.copyWith(
               fontSize: 32,
-              color: _primaryDarker,
+              color: AppColors.primaryDarker,
             ),
           ),
           const SizedBox(height: 8),
@@ -85,35 +114,10 @@ class MatchScreen extends StatelessWidget {
     );
   }
 
-  Widget _particles() {
-    final rng = math.Random(42);
-    final colors = [_primaryDarker, _primaryLight, const Color(0xFF2563EB)];
-    return Stack(
-      children: List.generate(12, (i) {
-        final dx = rng.nextDouble() * 350;
-        final dy = rng.nextDouble() * 280;
-        final size = 6.0 + rng.nextDouble() * 8;
-        final color = colors[i % colors.length];
-        return Positioned(
-          left: dx,
-          top: dy,
-          child: Container(
-            width: size,
-            height: size,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: color.withValues(alpha: 0.6),
-            ),
-          ),
-        );
-      }),
-    );
-  }
-
   Widget _card(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      child: Center(
         child: Stack(
           alignment: Alignment.topCenter,
           children: [
@@ -126,8 +130,8 @@ class MatchScreen extends StatelessWidget {
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
                     colors: [
-                      _primaryLight.withValues(alpha: 0.7),
-                      _primaryLight.withValues(alpha: 0),
+                      AppColors.primaryLight.withValues(alpha: 0.7),
+                      AppColors.primaryLight.withValues(alpha: 0),
                     ],
                   ),
                 ),
@@ -138,16 +142,11 @@ class MatchScreen extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AppColors.surface,
                 borderRadius: BorderRadius.circular(28),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color.fromRGBO(45, 127, 249, 0.12),
-                    blurRadius: 32,
-                    offset: Offset(0, 16),
-                  ),
-                ],
+                boxShadow: AppShadows.floating,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   _coverImage(),
                   Padding(
@@ -175,12 +174,16 @@ class MatchScreen extends StatelessWidget {
                               ),
                             ),
                             const SizedBox(width: 6),
-                            Text(
-                              'Brooklyn Public Courts',
-                              style: AppTypography.bodyMedium.copyWith(
-                                color: AppColors.textSecondary,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
+                            Expanded(
+                              child: Text(
+                                'Brooklyn Public Courts',
+                                style: AppTypography.bodyMedium.copyWith(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
                               ),
                             ),
                           ],
@@ -188,7 +191,7 @@ class MatchScreen extends StatelessWidget {
                         const SizedBox(height: 12),
                         Row(
                           children: [
-                            _metaChip('zap.svg', 'Intermediate', _primaryDarker),
+                            _metaChip('zap.svg', 'Intermediate', AppColors.primaryDarker),
                             const SizedBox(width: 8),
                             _metaChip('clock.svg', 'Today, 6:30 PM', AppColors.textSecondary),
                           ],
@@ -211,6 +214,8 @@ class MatchScreen extends StatelessWidget {
                                       fontSize: 12,
                                       fontWeight: FontWeight.w700,
                                     ),
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
                                   ),
                                   const SizedBox(height: 2),
                                   ClipRRect(
@@ -231,16 +236,17 @@ class MatchScreen extends StatelessWidget {
                                 ],
                               ),
                             ),
+                            const SizedBox(width: 8),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                               decoration: BoxDecoration(
-                                color: _greenLightBg,
+                                color: AppColors.statusSuccessBg,
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Text(
                                 'Matched',
                                 style: AppTypography.bodySmall.copyWith(
-                                  color: _greenText,
+                                  color: AppColors.statusSuccessText,
                                   fontSize: 11,
                                   fontWeight: FontWeight.w700,
                                 ),
@@ -299,8 +305,7 @@ class MatchScreen extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: const Color.fromRGBO(0, 0, 0, 0.6),
                     borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
+                  ),                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       SizedBox(
@@ -336,7 +341,7 @@ class MatchScreen extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: _bgSurface,
+        color: AppColors.surfaceSubtle,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
@@ -406,8 +411,7 @@ class MatchScreen extends StatelessWidget {
               height: 30,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFF097044),
-                border: Border.all(color: AppColors.border, width: 2),
+                color: const Color(0xFF097044),                border: Border.all(color: AppColors.border, width: 2),
               ),
               child: const Center(
                 child: Text(
@@ -448,34 +452,13 @@ class MatchScreen extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       child: Column(
         children: [
-          GestureDetector(
-            onTap: () => context.go('/joined-activity/1'),
-            behavior: HitTestBehavior.opaque,
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              decoration: BoxDecoration(
-                color: AppColors.primary,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color.fromRGBO(45, 127, 249, 0.25),
-                    blurRadius: 10,
-                    offset: Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: Center(
-                child: Text(
-                  'View Activity Details',
-                  style: AppTypography.bodyMedium.copyWith(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
+          AppButton(
+            label: 'View Activity Details',
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              context.go('/joined-activity/1');
+            },
+            size: AppButtonSize.lg,
           ),
           const SizedBox(height: 12),
           GestureDetector(
@@ -495,6 +478,92 @@ class MatchScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ─── Animated confetti layer ──────────────────────────────────────────────────
+
+class _ConfettiParticle {
+  _ConfettiParticle(math.Random rng, double width, double height)
+      : x = rng.nextDouble() * width,
+        y = -20 - rng.nextDouble() * height * 0.3,
+        size = 6 + rng.nextDouble() * 8,
+        speedY = 180 + rng.nextDouble() * 260,
+        speedX = (rng.nextDouble() - 0.5) * 80,
+        rotation = rng.nextDouble() * math.pi * 2,
+        rotationSpeed = (rng.nextDouble() - 0.5) * 6,
+        color = _kConfettiColors[rng.nextInt(_kConfettiColors.length)],
+        isCircle = rng.nextBool();
+
+  final double x;
+  final double y;
+  final double size;
+  final double speedY;
+  final double speedX;
+  final double rotation;
+  final double rotationSpeed;
+  final Color color;
+  final bool isCircle;
+}
+
+const _kConfettiColors = [
+  AppColors.primary,
+  AppColors.primaryLight,
+  AppColors.primaryDarker,
+  AppColors.warning,
+  AppColors.statusSuccessBg,
+  Color(0xFFFFD700), // gold
+];
+
+class _ConfettiLayer extends StatelessWidget {
+  const _ConfettiLayer({required this.progress});
+
+  /// 0.0 → 1.0 from the parent AnimationController.
+  final double progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final rng = math.Random(99); // fixed seed for determinism
+    final particles = List.generate(
+      30,
+      (_) => _ConfettiParticle(rng, size.width, size.height),
+    );
+
+    return Stack(
+      children: particles.map((p) {
+        // Each particle falls at its own speed; some lead, some lag.
+        final elapsed = progress * 1.8; // seconds equivalent
+        final py = p.y + p.speedY * elapsed;
+        final px = p.x + p.speedX * elapsed;
+        final rot = p.rotation + p.rotationSpeed * elapsed;
+        // Fade out in the last 30% of progress
+        final opacity = (1 - ((progress - 0.7) / 0.3).clamp(0.0, 1.0))
+            .clamp(0.0, 1.0);
+
+        return Positioned(
+          left: px,
+          top: py,
+          child: Opacity(
+            opacity: opacity,
+            child: Transform.rotate(
+              angle: rot,
+              child: Container(
+                width: p.size,
+                height: p.size,
+                decoration: BoxDecoration(
+                  shape: p.isCircle ? BoxShape.circle : BoxShape.rectangle,
+                  color: p.color,
+                  borderRadius: p.isCircle
+                      ? null
+                      : BorderRadius.circular(p.size * 0.2),
+                ),
+              ),
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }

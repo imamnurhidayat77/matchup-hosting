@@ -3,32 +3,63 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/services/calendar_service.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/asset_image.dart';
-import '../../../core/widgets/status_bar_mock.dart';
+import '../../../core/widgets/avatar_stack_row.dart';
+import '../../../core/widgets/detail_row_item.dart';
+import '../../../core/widgets/header_circle_button.dart';
 import '../../../core/widgets/home_indicator.dart';
-
-const _primaryDarker = Color(0xFF145AC8);
-const _primaryLight = Color(0xFFE6F0FF);
-const _bgSurface = Color(0xFFF8FAFC);
-const _greenDark = Color(0xFF097044);
-const _greenLightBg = Color(0xFFD1FAE5);
-const _errorText = Color(0xFFCC3333);
+import '../../../core/widgets/label_badge.dart';
 
 class JoinedActivityDetailScreen extends StatelessWidget {
   final String activityId;
-
   const JoinedActivityDetailScreen({super.key, required this.activityId});
+
+  Future<void> _confirmLeave(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
+        title: const Text('Leave Activity?'),
+        content: const Text(
+          'Are you sure you want to leave this activity? You can re-join later if spots are available.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: AppColors.danger),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Leave'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    if (!context.mounted) return;
+    AppSnackbar.show(
+      context,
+      message: 'You have left the activity.',
+      variant: AppSnackbarVariant.info,
+    );
+    // ignore: use_build_context_synchronously
+    context.go('/activities');
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.surface,
       body: SafeArea(
-        top: false,
+        top: true,
         child: Column(
           children: [
-            const StatusBarMock(foreground: AppColors.textPrimary),
             _header(context),
             Expanded(
               child: SingleChildScrollView(
@@ -37,6 +68,10 @@ class JoinedActivityDetailScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _hero(context),
+                    const SizedBox(height: 20),
+                    // Joined status banner — instantly signals "you are in"
+                    // and shifts the page's job from persuading to coordinating.
+                    _joinedBanner(),
                     const SizedBox(height: 20),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -78,17 +113,21 @@ class JoinedActivityDetailScreen extends StatelessWidget {
                           _checkInButton(context),
                           const SizedBox(height: 8),
                           Center(
-                            child: GestureDetector(
-                              onTap: () {},
-                              behavior: HitTestBehavior.opaque,
-                              child: Padding(
-                                padding: const EdgeInsets.all(8),
-                                child: Text(
-                                  'Leave Activity',
-                                  style: AppTypography.bodyMedium.copyWith(
-                                    color: _errorText,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
+                            child: Semantics(
+                              button: true,
+                              label: 'Leave Activity',
+                              child: GestureDetector(
+                                onTap: () => _confirmLeave(context),
+                                behavior: HitTestBehavior.opaque,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(8),
+                                  child: Text(
+                                    'Leave Activity',
+                                    style: AppTypography.bodyMedium.copyWith(
+                                      color: AppColors.danger,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -116,10 +155,15 @@ class JoinedActivityDetailScreen extends StatelessWidget {
       ),
       child: Row(
         children: [
-          _circleBtn(
-            'assets/images/discovery/icons/arrow_left.svg',
-            Icons.arrow_back,
-            onTap: () => Navigator.of(context).maybePop(),
+          Semantics(
+            button: true,
+            label: 'Back',
+            child: HeaderCircleButton(
+              assetPath: 'assets/images/discovery/icons/arrow_left.svg',
+              fallbackIcon: Icons.arrow_back,
+              onTap: () => Navigator.of(context).maybePop(),
+              background: AppColors.surfaceSubtle,
+            ),
           ),
           Expanded(
             child: Center(
@@ -133,32 +177,64 @@ class JoinedActivityDetailScreen extends StatelessWidget {
               ),
             ),
           ),
-          _circleBtn('assets/images/discovery/icons/more_horizontal.svg', Icons.more_horiz),
+          Semantics(
+            button: true,
+            label: 'More options',
+            child: HeaderCircleButton(
+              assetPath: 'assets/images/discovery/icons/more_horizontal.svg',
+              fallbackIcon: Icons.more_horiz,
+              background: AppColors.surfaceSubtle,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _circleBtn(String asset, IconData fallback, {VoidCallback? onTap}) {
-    return Semantics(
-      button: true,
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: _bgSurface,
-            borderRadius: BorderRadius.circular(100),
-          ),
-          alignment: Alignment.center,
-          child: SizedBox(
-            width: 20,
-            height: 20,
-            child: SvgPicture.asset(asset, width: 20, height: 20),
-          ),
+  /// Confirmation banner shown only on the joined variant.
+  Widget _joinedBanner() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.statusSuccessBg,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(
+          color: AppColors.avatarSecondary.withValues(alpha: 0.3),
         ),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.check_circle_rounded,
+            size: 22,
+            color: AppColors.avatarSecondary,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'You\'re in!',
+                  style: AppTypography.bodyMedium.copyWith(
+                    color: AppColors.avatarSecondary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Joined · See you on Saturday, Oct 24 at 4:00 PM',
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.avatarSecondary,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -177,14 +253,14 @@ class JoinedActivityDetailScreen extends StatelessWidget {
             fit: BoxFit.cover,
             semanticLabel: 'Activity cover',
           ),
-          Container(color: const Color.fromRGBO(0, 0, 0, 0.15)),
+          Container(color: AppColors.shadow),
           Positioned(
             top: 16,
             right: 16,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: _greenDark,
+                color: AppColors.avatarSecondary,
                 borderRadius: BorderRadius.circular(100),
               ),
               child: Row(
@@ -221,28 +297,10 @@ class JoinedActivityDetailScreen extends StatelessWidget {
   Widget _badgesRow() {
     return Row(
       children: [
-        _badge('Basketball', _primaryLight, _primaryDarker),
+        LabelBadge(label: 'Basketball', background: AppColors.primarySoft, foreground: AppColors.primaryDarker),
         const SizedBox(width: 8),
-        _badge('CONFIRMED', _greenLightBg, _greenDark),
+        LabelBadge(label: 'CONFIRMED', background: AppColors.statusSuccessBg, foreground: AppColors.avatarSecondary),
       ],
-    );
-  }
-
-  Widget _badge(String text, Color bg, Color fg) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(100),
-      ),
-      child: Text(
-        text,
-        style: AppTypography.bodySmall.copyWith(
-          color: fg,
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
     );
   }
 
@@ -251,49 +309,7 @@ class JoinedActivityDetailScreen extends StatelessWidget {
     required String title,
     required String sub,
   }) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: _primaryLight,
-            borderRadius: BorderRadius.circular(100),
-          ),
-          child: SizedBox(
-            width: 18,
-            height: 18,
-            child: SvgPicture.asset(
-              'assets/images/discovery/icons/$icon',
-              width: 18,
-              height: 18,
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: AppTypography.bodyMedium.copyWith(
-                  color: AppColors.textPrimary,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              Text(
-                sub,
-                style: AppTypography.bodySmall.copyWith(
-                  color: AppColors.textSecondary,
-                  fontSize: 12,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
+    return DetailRowItem(icon: icon, title: title, sub: sub);
   }
 
   Widget _metaChips() {
@@ -301,7 +317,7 @@ class JoinedActivityDetailScreen extends StatelessWidget {
       children: [
         _metaChip('zap.svg', 'Intermediate', AppColors.textPrimary),
         const SizedBox(width: 8),
-        _metaChip('dollar_sign.svg', 'Free', _greenDark),
+        _metaChip('dollar_sign.svg', 'Free', AppColors.avatarSecondary),
       ],
     );
   }
@@ -310,7 +326,7 @@ class JoinedActivityDetailScreen extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: _bgSurface,
+        color: AppColors.surfaceSubtle,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppColors.border),
       ),
@@ -363,7 +379,7 @@ class JoinedActivityDetailScreen extends StatelessWidget {
               Text(
                 '6 joined / 10 total',
                 style: AppTypography.bodyMedium.copyWith(
-                  color: _primaryDarker,
+                  color: AppColors.primaryDarker,
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                 ),
@@ -371,66 +387,17 @@ class JoinedActivityDetailScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          SizedBox(
-            height: 32,
-            child: Row(
-              children: [
-                _avatar('avatar_1.png'),
-                _avatar('avatar_2.png', overlap: 10),
-                _avatar('avatar_3.png', overlap: 10),
-                _avatar('avatar_4.png', overlap: 10),
-                _avatar('avatar_5.png', overlap: 10),
-                _moreAvatar('+1', overlap: 10),
-              ],
-            ),
+          AvatarStackRow(
+            avatars: const [
+              'avatar_1.png',
+              'avatar_2.png',
+              'avatar_3.png',
+              'avatar_4.png',
+              'avatar_5.png',
+            ],
+            moreLabel: '+1',
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _avatar(String asset, {double overlap = 0}) {
-    return Padding(
-      padding: EdgeInsets.only(right: overlap),
-      child: Container(
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: AppColors.surface, width: 2),
-        ),
-        child: ClipOval(
-          child: AssetImageWithFallback(
-            assetPath: 'assets/images/discovery/avatars/$asset',
-            width: 32,
-            height: 32,
-            fit: BoxFit.cover,
-            isAvatar: true,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _moreAvatar(String label, {double overlap = 0}) {
-    return Padding(
-      padding: EdgeInsets.only(right: overlap),
-      child: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: AppColors.border,
-          border: Border.all(color: AppColors.surface, width: 2),
-        ),
-        child: Center(
-          child: Text(
-            label,
-            style: AppTypography.bodySmall.copyWith(
-              color: AppColors.textSecondary,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -442,7 +409,7 @@ class JoinedActivityDetailScreen extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: _bgSurface,
+          color: AppColors.surfaceSubtle,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: AppColors.border),
         ),
@@ -527,7 +494,7 @@ class JoinedActivityDetailScreen extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: _bgSurface,
+            color: AppColors.surfaceSubtle,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: AppColors.border),
           ),
@@ -643,7 +610,7 @@ class JoinedActivityDetailScreen extends StatelessWidget {
             Text(
               'Open Group Chat',
               style: AppTypography.bodyMedium.copyWith(
-                color: _primaryDarker,
+                color: AppColors.primaryDarker,
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
               ),
@@ -678,7 +645,7 @@ class JoinedActivityDetailScreen extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
-          color: _primaryLight,
+          color: AppColors.primarySoft,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: AppColors.primary),
         ),
@@ -713,7 +680,7 @@ class JoinedActivityDetailScreen extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           boxShadow: const [
             BoxShadow(
-              color: Color.fromRGBO(45, 127, 249, 0.2),
+              color: AppColors.glowPrimary,
               blurRadius: 6,
               offset: Offset(0, 4),
             ),

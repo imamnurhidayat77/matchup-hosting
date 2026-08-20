@@ -2,13 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
-import '../../../core/widgets/status_bar_mock.dart';
 import '../../../core/widgets/home_indicator.dart';
-
-const _primaryDarker = Color(0xFF145AC8);
-const _primaryLight = Color(0xFFE6F0FF);
-const _bgSurface = Color(0xFFF8FAFC);
-const _borderLight = Color(0xFFF1F5F9);
 
 class _Participant {
   const _Participant({
@@ -44,10 +38,9 @@ class _PastActivityReviewScreenState extends State<PastActivityReviewScreen> {
     return Scaffold(
       backgroundColor: AppColors.surface,
       body: SafeArea(
-        top: false,
+        top: true,
         child: Column(
           children: [
-            const StatusBarMock(foreground: AppColors.textPrimary),
             _header(),
             Expanded(
               child: SingleChildScrollView(
@@ -90,7 +83,7 @@ class _PastActivityReviewScreenState extends State<PastActivityReviewScreen> {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: _bgSurface,
+                  color: AppColors.surfaceSubtle,
                   borderRadius: BorderRadius.circular(100),
                 ),
                 alignment: Alignment.center,
@@ -125,7 +118,7 @@ class _PastActivityReviewScreenState extends State<PastActivityReviewScreen> {
         border: Border.all(color: AppColors.border),
         boxShadow: const [
           BoxShadow(
-            color: Color.fromRGBO(15, 23, 42, 0.03),
+            color: AppColors.shadowCard,
             blurRadius: 8,
             offset: Offset(0, 4),
           ),
@@ -151,8 +144,8 @@ class _PastActivityReviewScreenState extends State<PastActivityReviewScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _badge('VOLLEYBALL', _primaryLight, _primaryDarker),
-                    _badge('COMPLETED', _borderLight, AppColors.textSecondary),
+                    _badge('VOLLEYBALL', AppColors.primarySoft, AppColors.primaryDarker),
+                    _badge('COMPLETED', AppColors.border, AppColors.textSecondary),
                   ],
                 ),
                 const SizedBox(height: 6),
@@ -277,7 +270,7 @@ class _PastActivityReviewScreenState extends State<PastActivityReviewScreen> {
           width: double.infinity,
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: _bgSurface,
+            color: AppColors.surfaceSubtle,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: AppColors.border),
           ),
@@ -378,7 +371,7 @@ class _PastActivityReviewScreenState extends State<PastActivityReviewScreen> {
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: p.given ? _primaryLight : _bgSurface,
+                color: p.given ? AppColors.primarySoft : AppColors.surfaceSubtle,
                 borderRadius: BorderRadius.circular(100),
                 border: Border.all(
                   color: p.given ? AppColors.primary : AppColors.border,

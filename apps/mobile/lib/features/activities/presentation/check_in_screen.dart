@@ -6,15 +6,6 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/asset_image.dart';
 import '../../../core/widgets/home_indicator.dart';
-import '../../../core/widgets/status_bar_mock.dart';
-
-const _primaryDarker = Color(0xFF145AC8);
-const _primaryLight = Color(0xFFE6F0FF);
-const _bgSurface = Color(0xFFF8FAFC);
-const _greenDark = Color(0xFF097044);
-const _greenLightBg = Color(0xFFD1FAE5);
-const _warningBg = Color(0xFFFEF3C7);
-const _warningText = Color(0xFFB45309);
 
 /// Check-In Screen (spec 5.12)
 ///
@@ -46,10 +37,9 @@ class _CheckInScreenState extends State<CheckInScreen> {
     return Scaffold(
       backgroundColor: AppColors.surface,
       body: SafeArea(
-        top: false,
+        top: true,
         child: Column(
           children: [
-            const StatusBarMock(foreground: AppColors.textPrimary),
             _header(context),
             Expanded(
               child: SingleChildScrollView(
@@ -126,7 +116,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
         width: 36,
         height: 36,
         decoration: BoxDecoration(
-          color: _bgSurface,
+          color: AppColors.surfaceSubtle,
           shape: BoxShape.circle,
           border: Border.all(color: AppColors.border),
         ),
@@ -185,7 +175,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _bgSurface,
+        color: AppColors.surfaceSubtle,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.border),
       ),
@@ -216,7 +206,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
           width: 32,
           height: 32,
           decoration: BoxDecoration(
-            color: _primaryLight,
+            color: AppColors.primaryLight,
             shape: BoxShape.circle,
           ),
           alignment: Alignment.center,
@@ -224,7 +214,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
             icon,
             width: 16,
             height: 16,
-            colorFilter: const ColorFilter.mode(_primaryDarker, BlendMode.srcIn),
+            colorFilter: const ColorFilter.mode(AppColors.primaryDarker, BlendMode.srcIn),
           ),
         ),
         const SizedBox(width: 12),
@@ -260,8 +250,8 @@ class _CheckInScreenState extends State<CheckInScreen> {
     switch (_status) {
       case _CheckInStatus.notCheckedIn:
         return _statusBadge(
-          bg: _warningBg,
-          fg: _warningText,
+          bg: AppColors.warningBg,
+          fg: AppColors.warning,
           icon: Icons.access_time_rounded,
           label: 'Not checked in yet',
           description: 'Arrive at the location and tap "Check In" to confirm '
@@ -269,24 +259,24 @@ class _CheckInScreenState extends State<CheckInScreen> {
         );
       case _CheckInStatus.locating:
         return _statusBadge(
-          bg: _primaryLight,
-          fg: _primaryDarker,
+          bg: AppColors.primaryLight,
+          fg: AppColors.primaryDarker,
           icon: Icons.my_location_rounded,
           label: 'Detecting your location…',
           description: 'We are verifying that you are at the activity venue.',
         );
       case _CheckInStatus.checkedIn:
         return _statusBadge(
-          bg: _greenLightBg,
-          fg: _greenDark,
+          bg: AppColors.statusSuccessBg,
+          fg: AppColors.avatarSecondary,
           icon: Icons.check_circle_rounded,
           label: 'Checked in',
           description: 'Your attendance has been confirmed. Enjoy the game!',
         );
       case _CheckInStatus.locationDenied:
         return _statusBadge(
-          bg: _warningBg,
-          fg: _warningText,
+          bg: AppColors.warningBg,
+          fg: AppColors.warning,
           icon: Icons.location_off_rounded,
           label: 'Location permission needed',
           description: 'Enable location access so we can verify your attendance.',
@@ -347,14 +337,14 @@ class _CheckInScreenState extends State<CheckInScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _bgSurface,
+        color: AppColors.surfaceSubtle,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.border),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.privacy_tip_outlined, color: _primaryDarker, size: 20),
+          Icon(Icons.privacy_tip_outlined, color: AppColors.primaryDarker, size: 20),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -380,7 +370,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
     final label = isDone
         ? 'Checked In'
         : (isCheckingIn ? 'Locating…' : 'Check In');
-    final bg = isDone ? _greenDark : _primaryDarker;
+    final bg = isDone ? AppColors.avatarSecondary : AppColors.primaryDarker;
 
     return GestureDetector(
       onTap: isCheckingIn || isDone ? null : _onCheckIn,
@@ -445,7 +435,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                 ? 'Retry location detection'
                 : 'Refresh my location',
             style: AppTypography.bodySmall.copyWith(
-              color: _primaryDarker,
+              color: AppColors.primaryDarker,
               fontSize: 13,
               fontWeight: FontWeight.w700,
             ),

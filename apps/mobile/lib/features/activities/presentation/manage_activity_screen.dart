@@ -3,30 +3,51 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
-import '../../../core/widgets/status_bar_mock.dart';
+import '../../../core/widgets/header_circle_button.dart';
 import '../../../core/widgets/home_indicator.dart';
-
-const _primaryDarker = Color(0xFF145AC8);
-const _primaryLight = Color(0xFFE6F0FF);
-const _bgSurface = Color(0xFFF8FAFC);
-const _greenDark = Color(0xFF097044);
-const _greenLightBg = Color(0xFFD1FAE5);
-const _errorText = Color(0xFFCC3333);
-
+import '../../../core/widgets/label_badge.dart';
 class ManageActivityScreen extends StatelessWidget {
   final String activityId;
 
   const ManageActivityScreen({super.key, required this.activityId});
+
+  Future<void> _confirmCancel(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Cancel Activity?'),
+        content: const Text(
+          'This will permanently cancel the activity and notify all participants. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Keep it'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: AppColors.danger),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Cancel Activity'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    if (!context.mounted) return;
+    // TODO: call activityRepository.cancel(activityId)
+    // ignore: use_build_context_synchronously
+    Navigator.of(context).maybePop();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.surface,
       body: SafeArea(
-        top: false,
+        top: true,
         child: Column(
           children: [
-            const StatusBarMock(foreground: AppColors.textPrimary),
             _header(context),
             Expanded(
               child: SingleChildScrollView(
@@ -65,19 +86,10 @@ class ManageActivityScreen extends StatelessWidget {
           Semantics(
             button: true,
             label: 'Back',
-            child: GestureDetector(
+            child: HeaderCircleButton(
+              fallbackIcon: Icons.arrow_back,
               onTap: () => Navigator.of(context).maybePop(),
-              behavior: HitTestBehavior.opaque,
-              child: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: _bgSurface,
-                  borderRadius: BorderRadius.circular(100),
-                ),
-                alignment: Alignment.center,
-                child: const Icon(Icons.arrow_back, size: 20, color: AppColors.textPrimary),
-              ),
+              background: AppColors.surfaceSubtle,
             ),
           ),
           Expanded(
@@ -111,9 +123,19 @@ class ManageActivityScreen extends StatelessWidget {
         children: [
           Row(
             children: [
-              _badge('ACTIVE', _greenLightBg, _greenDark, extraBold: true),
+              LabelBadge(
+                label: 'ACTIVE',
+                background: AppColors.statusSuccessBg,
+                foreground: AppColors.avatarSecondary,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              ),
               const SizedBox(width: 8),
-              _badge('BASKETBALL', _primaryLight, _primaryDarker, extraBold: true),
+              LabelBadge(
+                label: 'BASKETBALL',
+                background: AppColors.primarySoft,
+                foreground: AppColors.primaryDarker,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              ),
             ],
           ),
           const SizedBox(height: 14),
@@ -203,7 +225,7 @@ class ManageActivityScreen extends StatelessWidget {
               height: 8,
               child: Stack(
                 children: [
-                  Container(color: _bgSurface),
+                  Container(color: AppColors.surfaceSubtle),
                   FractionallySizedBox(
                     widthFactor: 0.6,
                     child: Container(color: AppColors.primary),
@@ -213,26 +235,6 @@ class ManageActivityScreen extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _badge(String text, Color bg, Color fg, {bool extraBold = false}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(100),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontFamily: AppTypography.fontFamily,
-          fontSize: 10,
-          fontWeight: extraBold ? FontWeight.w800 : FontWeight.w700,
-          color: fg,
-          height: 1.0,
-        ),
       ),
     );
   }
@@ -268,7 +270,7 @@ class ManageActivityScreen extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: _bgSurface,
+                          color: AppColors.surfaceSubtle,
                           borderRadius: BorderRadius.circular(100),
                           border: Border.all(color: AppColors.border),
                         ),
@@ -322,7 +324,7 @@ class ManageActivityScreen extends StatelessWidget {
               child: Text(
                 'View All',
                 style: AppTypography.bodySmall.copyWith(
-                  color: _primaryDarker,
+                  color: AppColors.primaryDarker,
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
                 ),
@@ -412,21 +414,9 @@ class ManageActivityScreen extends StatelessWidget {
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: isCheckedIn ? _greenLightBg : _bgSurface,
-              borderRadius: BorderRadius.circular(100),
-              border: isCheckedIn ? null : Border.all(color: AppColors.border),
-            ),
-            child: Text(
-              status,
-              style: AppTypography.bodySmall.copyWith(
-                color: isCheckedIn ? _greenDark : AppColors.textSecondary,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+          StatusBadge(
+            label: status,
+            tone: isCheckedIn ? StatusTone.checkedIn : StatusTone.pending,
           ),
         ],
       ),
@@ -500,7 +490,7 @@ class ManageActivityScreen extends StatelessWidget {
 
   Widget _cancelButton(BuildContext context) {
     return GestureDetector(
-      onTap: () => Navigator.of(context).maybePop(),
+      onTap: () => _confirmCancel(context),
       behavior: HitTestBehavior.opaque,
       child: Container(
         width: double.infinity,
@@ -508,7 +498,7 @@ class ManageActivityScreen extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: _errorText, width: 1.5),
+          border: Border.all(color: AppColors.danger, width: 1.5),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -526,7 +516,7 @@ class ManageActivityScreen extends StatelessWidget {
             Text(
               'Cancel Activity',
               style: AppTypography.bodyMedium.copyWith(
-                color: _errorText,
+                color: AppColors.danger,
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
               ),

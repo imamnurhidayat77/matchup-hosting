@@ -3,10 +3,17 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/home_indicator.dart';
 import '../../../core/widgets/pill_buttons.dart';
-import '../../../core/widgets/status_bar_mock.dart';
 
+void _showComingSoon(BuildContext context) {
+  AppSnackbar.show(
+    context,
+    message: 'Social sign-in coming soon.',
+    variant: AppSnackbarVariant.info,
+  );
+}
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
 
@@ -18,7 +25,6 @@ class WelcomeScreen extends StatelessWidget {
         bottom: false,
         child: Column(
           children: [
-            const StatusBarMock(foreground: AppColors.textPrimary),
             const SizedBox(height: 12),
             // 2x2 image grid collage (110px height per image, 12px gap, 16px radius)
             Padding(
@@ -77,13 +83,13 @@ class WelcomeScreen extends StatelessWidget {
                   SocialPillButton(
                     label: 'Sign up with Apple',
                     icon: 'assets/images/welcome/apple.svg',
-                    onPressed: () {},
+                    onPressed: () => _showComingSoon(context),
                   ),
                   const SizedBox(height: 12),
                   SocialPillButton(
                     label: 'Sign up with Google',
                     icon: 'assets/images/welcome/google.svg',
-                    onPressed: () {},
+                    onPressed: () => _showComingSoon(context),
                   ),
                   const SizedBox(height: 8),
                   Padding(

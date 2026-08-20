@@ -5,8 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/home_indicator.dart';
-import '../../../core/widgets/status_bar_mock.dart';
-
+import '../../../core/widgets/notification_icon_button.dart';
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
 
@@ -16,6 +15,7 @@ class CalendarScreen extends StatefulWidget {
 
 class _CalendarScreenState extends State<CalendarScreen> {
   late DateTime _viewMonth;
+  late int? _selectedDay;
   static const _activityDays = <int>{4, 7, 8, 12, 15, 20, 22, 31};
 
   @override
@@ -23,12 +23,19 @@ class _CalendarScreenState extends State<CalendarScreen> {
     super.initState();
     final now = DateTime.now();
     _viewMonth = DateTime(now.year, now.month);
+    _selectedDay = now.day; // default to today
   }
 
   void _shiftMonth(int delta) {
     setState(() {
       _viewMonth = DateTime(_viewMonth.year, _viewMonth.month + delta);
+      _selectedDay = null; // clear selection when switching month
     });
+  }
+
+  void _selectDay(int day, bool faded) {
+    if (faded) return;
+    setState(() => _selectedDay = _selectedDay == day ? null : day);
   }
 
   String _monthLabel() {
@@ -37,6 +44,15 @@ class _CalendarScreenState extends State<CalendarScreen> {
       'July', 'August', 'September', 'October', 'November', 'December',
     ];
     return '${names[_viewMonth.month - 1]} ${_viewMonth.year}';
+  }
+
+  String _todayLabel() {
+    final now = DateTime.now();
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return 'Today, ${months[now.month - 1]} ${now.day}';
   }
 
   @override
@@ -60,6 +76,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
         day: d,
         isToday: isToday,
         hasActivity: _activityDays.contains(d),
+        isSelected: _selectedDay == d,
+        onTap: () => _selectDay(d, false),
       ));
     }
     var nextDay = 1;
@@ -67,13 +85,21 @@ class _CalendarScreenState extends State<CalendarScreen> {
       cells.add(_DayCell(day: nextDay++, faded: true));
     }
 
+    // Filter agenda by selected day
+    final showingAllDay = _selectedDay == null;
+    final hasActivitiesOnDay =
+        _selectedDay != null && _activityDays.contains(_selectedDay);
+
+    final dateLabel = _selectedDay != null
+        ? '${_monthLabel()}, $_selectedDay'
+        : _todayLabel();
+
     return Scaffold(
       backgroundColor: AppColors.surface,
       body: SafeArea(
         bottom: false,
         child: Column(
           children: [
-            const StatusBarMock(foreground: AppColors.textPrimary),
             _TopNav(onNotificationTap: () => context.push('/notifications')),
             _MonthNav(
               label: _monthLabel(),
@@ -86,35 +112,49 @@ class _CalendarScreenState extends State<CalendarScreen> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
                 children: [
-                  const _ScheduleHeader(count: 3),
+                  _ScheduleHeader(label: dateLabel, count: hasActivitiesOnDay ? 3 : 0),
                   const SizedBox(height: 12),
-                  _ActivityCard(
-                    iconAsset: 'assets/images/discovery/icons/calendar_2.svg',
-                    iconBg: AppColors.primaryLight,
-                    iconColor: AppColors.primary,
-                    title: '5v5 Basketball Run',
-                    time: '10:00 AM',
-                    location: 'Central Park Court',
-                    joined: '8/10',
-                  ),
-                  _ActivityCard(
-                    iconAsset: 'assets/images/discovery/icons/heart.svg',
-                    iconBg: const Color(0xFFF0FDF4),
-                    iconColor: const Color(0xFF16A34A),
-                    title: 'Morning Yoga Session',
-                    time: '7:30 AM',
-                    location: 'Riverside Studio',
-                    joined: '5/12',
-                  ),
-                  _ActivityCard(
-                    iconAsset: 'assets/images/discovery/icons/zap.svg',
-                    iconBg: AppColors.warningLight,
-                    iconColor: AppColors.warning,
-                    title: 'Trail Running',
-                    time: '5:00 PM',
-                    location: 'Mountain Creek Trail',
-                    joined: '4/8',
-                  ),
+                  if (hasActivitiesOnDay || showingAllDay) ...[
+                    _ActivityCard(
+                      iconAsset: 'assets/images/discovery/icons/calendar_2.svg',
+                      iconBg: AppColors.primaryLight,
+                      iconColor: AppColors.primary,
+                      title: '5v5 Basketball Run',
+                      time: '10:00 AM',
+                      location: 'Central Park Court',
+                      joined: '8/10',
+                    ),
+                    _ActivityCard(
+                      iconAsset: 'assets/images/discovery/icons/heart.svg',
+                      iconBg: AppColors.successBg,
+                      iconColor: AppColors.success,
+                      title: 'Morning Yoga Session',
+                      time: '7:30 AM',
+                      location: 'Riverside Studio',
+                      joined: '5/12',
+                    ),
+                    _ActivityCard(
+                      iconAsset: 'assets/images/discovery/icons/zap.svg',
+                      iconBg: AppColors.warningBg,
+                      iconColor: AppColors.warning,
+                      title: 'Trail Running',
+                      time: '5:00 PM',
+                      location: 'Mountain Creek Trail',
+                      joined: '4/8',
+                    ),
+                  ] else
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 32),
+                      child: Center(
+                        child: Text(
+                          'No activities on this day.',
+                          style: TextStyle(
+                            color: AppColors.textTertiary,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -133,43 +173,15 @@ class _TopNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            'Calendar',
-            style: AppTypography.titleLarge.copyWith(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
+          Text('Calendar', style: AppTypography.titleScreen),
           Semantics(
             button: true,
             label: 'Notifications',
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: onNotificationTap,
-              child: SizedBox(
-                width: 44,
-                height: 44,
-                child: Center(
-                  child: SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: SvgPicture.asset(
-                      'assets/images/discovery/icons/notification.svg',
-                      width: 24,
-                      height: 24,
-                      colorFilter: const ColorFilter.mode(
-                        AppColors.textPrimary,
-                        BlendMode.srcIn,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
+            child: NotificationIconButton(onTap: onNotificationTap),
           ),
         ],
       ),
@@ -299,62 +311,78 @@ class _DayCell extends StatelessWidget {
     this.faded = false,
     this.isToday = false,
     this.hasActivity = false,
+    this.isSelected = false,
+    this.onTap,
   });
 
   final int day;
   final bool faded;
   final bool isToday;
   final bool hasActivity;
+  final bool isSelected;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    final color = faded
+    final showHighlight = isSelected && !isToday;
+    final textColor = faded
         ? AppColors.textSecondary.withValues(alpha: 0.35)
-        : (isToday ? AppColors.textOnPrimary : AppColors.textPrimary);
-    return SizedBox(
-      width: 40,
-      height: 40,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          if (isToday)
-            Container(
-              width: 32,
-              height: 32,
-              decoration: const BoxDecoration(
-                color: AppColors.primary,
-                shape: BoxShape.circle,
-              ),
-            ),
-          Text(
-            '$day',
-            style: TextStyle(
-              fontFamily: AppTypography.fontFamily,
-              fontSize: 14,
-              fontWeight: isToday ? FontWeight.w700 : FontWeight.w500,
-              color: color,
-            ),
-          ),
-          if (hasActivity && !isToday)
-            Positioned(
-              bottom: 4,
-              child: Container(
-                width: 4,
-                height: 4,
-                decoration: const BoxDecoration(
-                  color: AppColors.primary,
+        : (isToday || isSelected)
+            ? Colors.white
+            : AppColors.textPrimary;
+
+    return GestureDetector(
+      onTap: faded ? null : onTap,
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: 40,
+        height: 40,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            if (isToday || showHighlight)
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: isToday ? AppColors.primary : AppColors.primarySoft,
                   shape: BoxShape.circle,
                 ),
               ),
+            Text(
+              '$day',
+              style: TextStyle(
+                fontFamily: AppTypography.fontFamily,
+                fontSize: 14,
+                fontWeight:
+                    (isToday || isSelected) ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected && !isToday
+                    ? AppColors.primaryDarker
+                    : textColor,
+              ),
             ),
-        ],
+            if (hasActivity && !isToday && !isSelected)
+              Positioned(
+                bottom: 4,
+                child: Container(
+                  width: 4,
+                  height: 4,
+                  decoration: const BoxDecoration(
+                    color: AppColors.primary,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
 }
 
 class _ScheduleHeader extends StatelessWidget {
-  const _ScheduleHeader({required this.count});
+  const _ScheduleHeader({required this.label, required this.count});
+  final String label;
   final int count;
 
   @override
@@ -363,21 +391,22 @@ class _ScheduleHeader extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(
-          'Today, August 4',
+          label,
           style: AppTypography.titleMedium.copyWith(
             fontSize: 15,
             fontWeight: FontWeight.w800,
           ),
         ),
-        Text(
-          '$count Activities',
-          style: const TextStyle(
-            fontFamily: AppTypography.fontFamily,
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: AppColors.primaryDarker,
+        if (count > 0)
+          Text(
+            '$count ${count == 1 ? 'Activity' : 'Activities'}',
+            style: const TextStyle(
+              fontFamily: AppTypography.fontFamily,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppColors.primaryDarker,
+            ),
           ),
-        ),
       ],
     );
   }

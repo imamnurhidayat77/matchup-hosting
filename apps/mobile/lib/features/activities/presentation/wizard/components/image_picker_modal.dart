@@ -1,0 +1,159 @@
+import 'package:flutter/material.dart';
+
+import '../../../../../core/theme/app_colors.dart';
+import '../../../../../core/theme/app_spacing.dart';
+import '../../../../../core/theme/app_typography.dart';
+
+/// Result returned by [ImagePickerModal] via `Navigator.pop`.
+enum ImageSourceChoice { gallery, camera }
+
+/// Image picker modal with Gallery and Camera options.
+///
+/// Returns the chosen [ImageSourceChoice] through `Navigator.pop`, or `null`
+/// when the user cancels. The modal owns its own dismissal so callers only
+/// need to await the result — this avoids the double-pop bug that closed the
+/// wizard route by accident.
+class ImagePickerModal extends StatelessWidget {
+  const ImagePickerModal({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Container(
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+        ),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.x6,
+          AppSpacing.x3,
+          AppSpacing.x6,
+          AppSpacing.x6,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Drag handle
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: AppSpacing.x4),
+              decoration: BoxDecoration(
+                color: AppColors.border,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+
+            // Header
+            Text(
+              'Select Image Source',
+              style: AppTypography.titleLarge.copyWith(
+                fontWeight: FontWeight.w800,
+                fontSize: 18,
+              ),
+            ),
+
+            const SizedBox(height: AppSpacing.x6),
+
+            // Gallery option
+            _SourceOption(
+              icon: Icons.photo_library_outlined,
+              label: 'Gallery',
+              color: AppColors.primary,
+              onTap: () => Navigator.of(context).pop(ImageSourceChoice.gallery),
+            ),
+
+            const SizedBox(height: AppSpacing.x3),
+
+            // Camera option
+            _SourceOption(
+              icon: Icons.camera_alt_outlined,
+              label: 'Camera',
+              color: AppColors.primary,
+              onTap: () => Navigator.of(context).pop(ImageSourceChoice.camera),
+            ),
+
+            const SizedBox(height: AppSpacing.x6),
+
+            // Cancel button
+            SizedBox(
+              width: double.infinity,
+              child: GestureDetector(
+                onTap: () => Navigator.of(context).pop(),
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.x4),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Center(
+                    child: Text(
+                      'Cancel',
+                      style: AppTypography.bodyMedium.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Single image source option
+class _SourceOption extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _SourceOption({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          vertical: AppSpacing.x4,
+          horizontal: AppSpacing.x5,
+        ),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 32),
+            const SizedBox(width: AppSpacing.x4),
+            Expanded(
+              child: Text(
+                label,
+                style: AppTypography.bodyMedium.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
+                ),
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios, color: AppColors.textSecondary, size: 16),
+          ],
+        ),
+      ),
+    );
+  }
+}

@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/theme/app_colors.dart';
+import '../core/theme/app_spacing.dart';
+import '../core/theme/app_typography.dart';
 import '../core/widgets/home_indicator.dart';
 
 class AppShell extends StatelessWidget {
@@ -13,27 +14,34 @@ class AppShell extends StatelessWidget {
   static const _tabs = <_NavTab>[
     _NavTab(
       label: 'Discover',
-      iconAsset: 'assets/images/discovery/icons/compass.svg',
+      icon: Icons.explore_outlined,
+      activeIcon: Icons.explore,
       route: '/discovery',
     ),
     _NavTab(
       label: 'Activities',
-      iconAsset: 'assets/images/discovery/icons/calendar.svg',
+      icon: Icons.calendar_today_outlined,
+      activeIcon: Icons.calendar_today,
       route: '/activities',
     ),
     _NavTab(
       label: 'Create',
-      iconAsset: 'assets/images/discovery/icons/plus_square.svg',
+      icon: Icons.add_box_outlined,
+      activeIcon: Icons.add_box,
+      // Single-scroll create screen. The multi-step wizard at
+      // '/create-activity' is the older flow and is no longer the entry point.
       route: '/create',
     ),
     _NavTab(
       label: 'Chat',
-      iconAsset: 'assets/images/discovery/icons/message_square.svg',
+      icon: Icons.chat_bubble_outline,
+      activeIcon: Icons.chat_bubble,
       route: '/messages',
     ),
     _NavTab(
       label: 'Profile',
-      iconAsset: 'assets/images/discovery/icons/user.svg',
+      icon: Icons.person_outline,
+      activeIcon: Icons.person,
       route: '/profile',
     ),
   ];
@@ -41,8 +49,11 @@ class AppShell extends StatelessWidget {
   int _indexFor(String location) {
     if (location.startsWith('/discovery')) return 0;
     if (location.startsWith('/activities')) return 1;
-    if (location.startsWith('/create')) return 2;
-    if (location.startsWith('/messages') || location.startsWith('/chat')) return 3;
+    if (location.startsWith('/create-activity') ||
+        location.startsWith('/create')) { return 2; }
+    if (location.startsWith('/messages') || location.startsWith('/chat')) {
+      return 3;
+    }
     if (location.startsWith('/profile')) return 4;
     return 0;
   }
@@ -57,7 +68,10 @@ class AppShell extends StatelessWidget {
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _TabBar(currentIndex: index, onTap: (i) => context.go(_tabs[i].route)),
+          _TabBar(
+            currentIndex: index,
+            onTap: (i) => context.go(_tabs[i].route),
+          ),
           const HomeIndicator(),
         ],
       ),
@@ -78,7 +92,7 @@ class _TabBar extends StatelessWidget {
         color: AppColors.surface,
         border: Border(top: BorderSide(color: AppColors.border, width: 1)),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: List.generate(AppShell._tabs.length, (i) {
@@ -108,7 +122,9 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isSelected ? AppColors.primaryDarker : AppColors.textSecondary;
+    final color = isSelected
+        ? AppColors.primaryDarker
+        : AppColors.textSecondary;
     return Semantics(
       button: true,
       selected: isSelected,
@@ -117,29 +133,45 @@ class _NavItem extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
         child: SizedBox(
-          width: 72,
+          width: 64,
+          height: 56,
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              SizedBox(
-                width: 22,
-                height: 22,
-                child: SvgPicture.asset(
-                  tab.iconAsset,
-                  width: 22,
-                  height: 22,
-                  colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+              // Pill indicator behind the active icon — smooth on change.
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOut,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? AppColors.primarySoft
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                ),
+                child: Icon(
+                  isSelected ? tab.activeIcon : tab.icon,
+                  size: 22,
+                  color: color,
                 ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                tab.label,
-                style: TextStyle(
-                  fontFamily: 'Plus Jakarta Sans',
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
+              const SizedBox(height: 2),
+              AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 200),
+                style: AppTypography.caption.copyWith(
+                  fontSize: 10,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
                   height: 1.0,
                   color: color,
+                ),
+                child: Text(
+                  tab.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -153,11 +185,13 @@ class _NavItem extends StatelessWidget {
 class _NavTab {
   const _NavTab({
     required this.label,
-    required this.iconAsset,
+    required this.icon,
+    required this.activeIcon,
     required this.route,
   });
 
   final String label;
-  final String iconAsset;
+  final IconData icon;
+  final IconData activeIcon;
   final String route;
 }

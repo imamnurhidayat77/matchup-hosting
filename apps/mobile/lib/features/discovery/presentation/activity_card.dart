@@ -58,7 +58,9 @@ class ActivityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final progress = capacity == 0 ? 0.0 : (participantCount / capacity).clamp(0.0, 1.0);
+    final progress = capacity == 0
+        ? 0.0
+        : (participantCount / capacity).clamp(0.0, 1.0);
 
     return Container(
       decoration: BoxDecoration(
@@ -66,7 +68,7 @@ class ActivityCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(28),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x1A2D7FF9),
+            color: AppColors.shadowCard,
             blurRadius: 32,
             offset: Offset(0, 12),
           ),
@@ -93,11 +95,31 @@ class ActivityCard extends StatelessWidget {
                       ),
                     ),
                   ),
+                // Gradient scrim — darkens bottom edge so sport/distance badges
+                // remain legible on any photo.
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        stops: const [0.55, 1.0],
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withValues(alpha: 0.35),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
                 Positioned(
                   top: 14,
                   left: 14,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.primary,
                       borderRadius: BorderRadius.circular(10),
@@ -119,7 +141,7 @@ class ActivityCard extends StatelessWidget {
                   child: Container(
                     padding: const EdgeInsets.fromLTRB(10, 6, 12, 6),
                     decoration: BoxDecoration(
-                      color: const Color(0x99000000),
+                      color: AppColors.scrim,
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Row(
@@ -129,7 +151,10 @@ class ActivityCard extends StatelessWidget {
                           'assets/images/discovery/icons/map_pin.svg',
                           width: 12,
                           height: 12,
-                          colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+                          colorFilter: const ColorFilter.mode(
+                            Colors.white,
+                            BlendMode.srcIn,
+                          ),
                         ),
                         const SizedBox(width: 5),
                         Text(
@@ -225,7 +250,9 @@ class ActivityCard extends StatelessWidget {
                               value: progress,
                               minHeight: 5,
                               backgroundColor: AppColors.border,
-                              valueColor: const AlwaysStoppedAnimation(AppColors.primary),
+                              valueColor: const AlwaysStoppedAnimation(
+                                AppColors.primary,
+                              ),
                             ),
                           ),
                         ],
@@ -233,9 +260,12 @@ class ActivityCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFD1FAE5),
+                        color: AppColors.statusSuccessBg,
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
@@ -245,7 +275,7 @@ class ActivityCard extends StatelessWidget {
                           fontSize: 12,
                           fontWeight: FontWeight.w800,
                           height: 1.0,
-                          color: Color(0xFF04694A),
+                          color: AppColors.statusSuccessText,
                         ),
                       ),
                     ),
@@ -263,10 +293,26 @@ class ActivityCard extends StatelessWidget {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final eventDate = DateTime(dt.year, dt.month, dt.day);
-    final time = '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    final time =
+        '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
     if (eventDate == today) return 'Today, $time';
-    if (eventDate == today.add(const Duration(days: 1))) return 'Tomorrow, $time';
-    final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    if (eventDate == today.add(const Duration(days: 1))) {
+      return 'Tomorrow, $time';
+    }
+    final months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
     return '${months[dt.month - 1]} ${dt.day}, $time';
   }
 }
@@ -295,7 +341,12 @@ class _Chip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          SvgPicture.asset(iconAsset, width: 13, height: 13, colorFilter: ColorFilter.mode(textColor, BlendMode.srcIn)),
+          SvgPicture.asset(
+            iconAsset,
+            width: 13,
+            height: 13,
+            colorFilter: ColorFilter.mode(textColor, BlendMode.srcIn),
+          ),
           const SizedBox(width: 6),
           Text(
             label,
@@ -317,7 +368,7 @@ class _AvatarStack extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final initials = const ['M', 'J'];
-    final colors = const [AppColors.primary, Color(0xFF097044)];
+    final colors = const [AppColors.primary, AppColors.avatarSecondary];
     return SizedBox(
       width: 82,
       height: 30,
@@ -332,7 +383,7 @@ class _AvatarStack extends StatelessWidget {
                 height: 30,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: i == 0 ? const Color(0xFFE2E8F0) : colors[i - 1],
+                  color: i == 0 ? AppColors.avatarNeutral : colors[i - 1],
                   border: Border.all(color: AppColors.border, width: 2),
                 ),
                 alignment: Alignment.center,

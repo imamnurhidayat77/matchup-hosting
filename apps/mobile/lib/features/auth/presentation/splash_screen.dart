@@ -1,21 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/providers/auth_state_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/home_indicator.dart';
-import '../../../core/widgets/status_bar_mock.dart';
 
-class SplashScreen extends StatefulWidget {
+class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen>
+class _SplashScreenState extends ConsumerState<SplashScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
 
@@ -34,9 +35,24 @@ class _SplashScreenState extends State<SplashScreen>
       duration: const Duration(milliseconds: 2200),
     )..forward();
 
-    Future.delayed(const Duration(milliseconds: 2500), () {
-      if (mounted) context.go('/onboarding');
-    });
+    // Check session after minimum splash duration so animation completes.
+    Future.delayed(const Duration(milliseconds: 2000), _checkSessionAndRoute);
+  }
+
+  Future<void> _checkSessionAndRoute() async {
+    if (!mounted) return;
+    // checkSession() updates authStateProvider which triggers the GoRouter
+    // redirect — the router then navigates automatically. We just need to
+    // ensure the check is complete before any redirect fires.
+    await ref.read(authStateProvider.notifier).checkSession();
+
+    if (!mounted) return;
+    final status = ref.read(authStatusProvider);
+    if (status == AuthStatus.authenticated) {
+      context.go('/discovery');
+    } else {
+      context.go('/onboarding');
+    }
   }
 
   @override
@@ -84,7 +100,6 @@ class _SplashScreenState extends State<SplashScreen>
             SafeArea(
               child: Column(
                 children: [
-                  const StatusBarMock(foreground: AppColors.textOnPrimary),
                   Expanded(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,

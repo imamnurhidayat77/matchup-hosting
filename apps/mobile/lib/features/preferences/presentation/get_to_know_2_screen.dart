@@ -1,99 +1,179 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
+import '../../../core/providers/preferences_provider.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
-import '../../../core/widgets/status_bar_mock.dart';
 import '../../../core/widgets/home_indicator.dart';
 import '../../../core/widgets/pill_buttons.dart';
+import 'get_to_know_1_screen.dart' show OnboardingProgressHeader;
 
-const _primaryDarker = Color(0xFF145AC8);
-
-class GetToKnow2Screen extends StatefulWidget {
+class GetToKnow2Screen extends ConsumerStatefulWidget {
   const GetToKnow2Screen({super.key});
 
   @override
-  State<GetToKnow2Screen> createState() => _GetToKnow2ScreenState();
+  ConsumerState<GetToKnow2Screen> createState() => _GetToKnow2ScreenState();
 }
 
-class _GetToKnow2ScreenState extends State<GetToKnow2Screen> {
-  int _weight = 73;
-  int _day = 29;
-  int _month = 3;
-  int _year = 1996;
+class _GetToKnow2ScreenState extends ConsumerState<GetToKnow2Screen> {
+  // ── Sport selection (name → skill level label) ───────────────────────────
+  final Map<String, String> _sports = {};
 
-  static const _months = [
-    'Jan', 'Feb', 'March', 'April', 'May', 'June',
-    'July', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  static const _sportOptions = [
+    ('Basketball',  Icons.sports_basketball_rounded),
+    ('Tennis',      Icons.sports_tennis_rounded),
+    ('Soccer',      Icons.sports_soccer_rounded),
+    ('Running',     Icons.directions_run_rounded),
+    ('Volleyball',  Icons.sports_volleyball_rounded),
+    ('Cycling',     Icons.directions_bike_rounded),
+    ('Fitness',     Icons.fitness_center_rounded),
+    ('Golf',        Icons.sports_golf_rounded),
+    ('Swimming',    Icons.pool_rounded),
+    ('Badminton',   Icons.sports_handball_rounded),
   ];
+
+  static const _levels = ['Beginner', 'Intermediate', 'Advanced'];
+
+  // ── Distance preference ───────────────────────────────────────────────────
+  double _distanceKm = 5;
+
+  void _onNext() {
+    // Persist to shared providers so preferences_screen & discovery read them
+    ref.read(sportPreferencesProvider.notifier).setAll(_sports);
+    ref.read(distanceFilterProvider.notifier).state = _distanceKm;
+    context.push('/preferences');
+  }
+
+  void _toggleSport(String name) {
+    setState(() {
+      if (_sports.containsKey(name)) {
+        _sports.remove(name);
+      } else {
+        _sports[name] = 'Intermediate'; // default level
+      }
+    });
+  }
+
+  void _setLevel(String name, String level) {
+    setState(() => _sports[name] = level);
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.surface,
       body: SafeArea(
-        top: false,
+        top: true,
         child: Column(
           children: [
-            const StatusBarMock(foreground: AppColors.textPrimary),
-            _header(),
+            OnboardingProgressHeader(step: 2, total: 3),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 32, 24, 16),
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.x6,
+                  AppSpacing.x4,
+                  AppSpacing.x6,
+                  AppSpacing.x4,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Give us some final details',
+                      'Which sports do you play?',
                       style: AppTypography.headlineSmall.copyWith(
                         fontSize: 22,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: AppSpacing.x1),
                     Text(
-                      'This will help us calculate matching distance, calorie metrics and sports team brackets.',
+                      'Pick any — then set your skill level.',
                       style: AppTypography.bodyMedium.copyWith(
                         color: AppColors.textSecondary,
-                        fontSize: 14,
                       ),
                     ),
-                    const SizedBox(height: 24),
-                    _LabeledField(
-                      label: 'Height',
-                      child: _ReadOnlyInput(
-                        icon: Icons.straighten,
-                        value: '183 cm',
+                    const SizedBox(height: AppSpacing.x5),
+
+                    // ── Sport grid ─────────────────────────────────────
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 3,
+                        crossAxisSpacing: AppSpacing.x3,
+                        mainAxisSpacing: AppSpacing.x3,
+                        childAspectRatio: 0.9,
+                      ),
+                      itemCount: _sportOptions.length,
+                      itemBuilder: (_, i) {
+                        final (name, icon) = _sportOptions[i];
+                        final level = _sports[name];
+                        final selected = level != null;
+                        return _SportChip(
+                          icon: icon,
+                          name: name,
+                          level: level,
+                          selected: selected,
+                          onTap: () => _toggleSport(name),
+                          onLevelTap: selected
+                              ? () => _showLevelSheet(context, name, level)
+                              : null,
+                        );
+                      },
+                    ),
+                    const SizedBox(height: AppSpacing.x6),
+
+                    // ── Distance ───────────────────────────────────────
+                    Row(
+                      children: [
+                        Text(
+                          'Discovery distance',
+                          style: AppTypography.titleMedium.copyWith(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          '${_distanceKm.round()} km',
+                          style: AppTypography.bodyMedium.copyWith(
+                            color: AppColors.primaryDarker,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.x2),
+                    SliderTheme(
+                      data: SliderTheme.of(context).copyWith(
+                        trackHeight: 4,
+                        activeTrackColor: AppColors.primary,
+                        inactiveTrackColor: AppColors.border,
+                        thumbColor: AppColors.primary,
+                        overlayColor:
+                            AppColors.primary.withValues(alpha: 0.12),
+                        thumbShape: const RoundSliderThumbShape(
+                          enabledThumbRadius: 9,
+                        ),
+                      ),
+                      child: Slider(
+                        value: _distanceKm,
+                        min: 1,
+                        max: 50,
+                        divisions: 49,
+                        onChanged: (v) => setState(() => _distanceKm = v),
                       ),
                     ),
-                    const SizedBox(height: 24),
-                    _WeightCard(
-                      weight: _weight,
-                      onMinus: () => setState(() => _weight--),
-                      onPlus: () => setState(() => _weight++),
-                    ),
-                    const SizedBox(height: 24),
-                    _LabeledField(
-                      label: 'Date of Birth',
-                      child: _ReadOnlyInput(
-                        icon: Icons.calendar_today_outlined,
-                        value: '$_day ${_months[_month - 1]} $_year',
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    _DateWheelPicker(
-                      day: _day,
-                      month: _month,
-                      year: _year,
-                      onChanged: (d, m, y) => setState(() {
-                        _day = d;
-                        _month = m;
-                        _year = y;
-                      }),
-                    ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: AppSpacing.x6),
+
                     PrimaryPillButton(
-                      label: 'Next',
-                      onPressed: () => context.push('/preferences'),
+                      label: _sports.isEmpty
+                          ? 'Skip for now'
+                          : 'Next  (${_sports.length} selected)',
+                      onPressed: _onNext,
                     ),
                   ],
                 ),
@@ -106,266 +186,212 @@ class _GetToKnow2ScreenState extends State<GetToKnow2Screen> {
     );
   }
 
-  Widget _header() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
-      child: Row(
-        children: [
-          Semantics(
-            button: true,
-            label: 'Back',
-            child: GestureDetector(
-              onTap: () => Navigator.of(context).maybePop(),
-              behavior: HitTestBehavior.opaque,
-              child: const SizedBox(
-                width: 24,
-                height: 24,
-                child: Icon(Icons.arrow_back, size: 24, color: AppColors.textPrimary),
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              "LET'S GET TO KNOW YOU",
-              textAlign: TextAlign.center,
-              style: AppTypography.inputLabelSmall.copyWith(
-                color: _primaryDarker,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          const SizedBox(width: 24),
-        ],
-      ),
+  Future<void> _showLevelSheet(
+    BuildContext context,
+    String sport,
+    String current,
+  ) async {
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _LevelSheet(sport: sport, current: current, levels: _levels),
     );
+    if (picked != null) _setLevel(sport, picked);
   }
 }
 
-class _LabeledField extends StatelessWidget {
-  const _LabeledField({required this.label, required this.child});
-  final String label;
-  final Widget child;
+// ─── Sport chip ───────────────────────────────────────────────────────────────
 
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: AppTypography.inputLabel),
-        const SizedBox(height: 8),
-        child,
-      ],
-    );
-  }
-}
-
-class _ReadOnlyInput extends StatelessWidget {
-  const _ReadOnlyInput({required this.icon, required this.value});
-  final IconData icon;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: AppColors.textPrimary),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              value,
-              style: AppTypography.bodyMedium.copyWith(
-                color: AppColors.textPrimary,
-                fontSize: 15,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _WeightCard extends StatelessWidget {
-  const _WeightCard({
-    required this.weight,
-    required this.onMinus,
-    required this.onPlus,
+class _SportChip extends StatelessWidget {
+  const _SportChip({
+    required this.icon,
+    required this.name,
+    required this.level,
+    required this.selected,
+    required this.onTap,
+    this.onLevelTap,
   });
-  final int weight;
-  final VoidCallback onMinus;
-  final VoidCallback onPlus;
+
+  final IconData icon;
+  final String name;
+  final String? level;
+  final bool selected;
+  final VoidCallback onTap;
+  final VoidCallback? onLevelTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Select Weight',
-                style: AppTypography.inputLabel,
-              ),
-              Text(
-                'kg',
-                style: AppTypography.inputLabel.copyWith(
-                  color: _primaryDarker,
-                ),
-              ),
-            ],
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.x2,
+          vertical: AppSpacing.x3,
+        ),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primarySoft : AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(
+            color: selected ? AppColors.primary : AppColors.border,
+            width: selected ? 1.5 : 1,
           ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Semantics(
-                button: true,
-                label: 'Decrease weight',
-                child: GestureDetector(
-                  onTap: onMinus,
-                  behavior: HitTestBehavior.opaque,
-                  child: Container(
-                    width: 32,
-                    height: 32,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AppColors.surface,
-                    ),
-                    child: const Icon(Icons.remove_circle_outline,
-                        size: 32, color: AppColors.textPrimary),
-                  ),
-                ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: selected ? AppColors.primary : AppColors.surfaceSubtle,
+                borderRadius: BorderRadius.circular(AppRadius.md),
               ),
-              Expanded(
+              child: Icon(
+                icon,
+                size: 22,
+                color: selected ? Colors.white : AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              name,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.bodySmall.copyWith(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: selected
+                    ? AppColors.primaryDarker
+                    : AppColors.textLabel,
+              ),
+            ),
+            const SizedBox(height: 3),
+            if (selected && level != null)
+              GestureDetector(
+                onTap: onLevelTap,
+                behavior: HitTestBehavior.opaque,
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    for (final w in [weight - 2, weight - 1, weight, weight + 1, weight + 2])
+                    Text(
+                      level!.substring(0, 3), // abbreviate
+                      style: AppTypography.caption.copyWith(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                    const Icon(
+                      Icons.expand_more_rounded,
+                      size: 12,
+                      color: AppColors.primary,
+                    ),
+                  ],
+                ),
+              )
+            else
+              const Icon(Icons.add_rounded,
+                  size: 14, color: AppColors.textTertiary),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Level picker sheet ───────────────────────────────────────────────────────
+
+class _LevelSheet extends StatelessWidget {
+  const _LevelSheet({
+    required this.sport,
+    required this.current,
+    required this.levels,
+  });
+
+  final String sport;
+  final String current;
+  final List<String> levels;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.x6,
+          AppSpacing.x3,
+          AppSpacing.x6,
+          AppSpacing.x5,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.border,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.x4),
+            Text(
+              '$sport — Skill level',
+              style: AppTypography.titleMedium.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.x4),
+            ...levels.map(
+              (l) => GestureDetector(
+                onTap: () => Navigator.of(context).pop(l),
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.x4,
+                    vertical: AppSpacing.x4,
+                  ),
+                  margin: const EdgeInsets.only(bottom: AppSpacing.x2),
+                  decoration: BoxDecoration(
+                    color: l == current
+                        ? AppColors.primarySoft
+                        : AppColors.surfaceSubtle,
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    border: Border.all(
+                      color: l == current
+                          ? AppColors.primary
+                          : AppColors.border,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
                       Expanded(
-                        child: Center(
-                          child: Text(
-                            '$w',
-                            style: TextStyle(
-                              fontWeight: w == weight
-                                  ? FontWeight.w800
-                                  : FontWeight.w500,
-                              fontSize: w == weight ? 28 : 18,
-                              color: w == weight
-                                  ? _primaryDarker
-                                  : AppColors.textSecondary,
-                            ),
+                        child: Text(
+                          l,
+                          style: AppTypography.bodyMedium.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
                           ),
                         ),
                       ),
-                  ],
-                ),
-              ),
-              Semantics(
-                button: true,
-                label: 'Increase weight',
-                child: GestureDetector(
-                  onTap: onPlus,
-                  behavior: HitTestBehavior.opaque,
-                  child: Container(
-                    width: 32,
-                    height: 32,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AppColors.surface,
-                    ),
-                    child: const Icon(Icons.add_circle_outline,
-                        size: 32, color: AppColors.textPrimary),
+                      if (l == current)
+                        const Icon(Icons.check_rounded,
+                            size: 18, color: AppColors.primary),
+                    ],
                   ),
                 ),
               ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DateWheelPicker extends StatelessWidget {
-  const _DateWheelPicker({
-    required this.day,
-    required this.month,
-    required this.year,
-    required this.onChanged,
-  });
-  final int day;
-  final int month;
-  final int year;
-  final void Function(int d, int m, int y) onChanged;
-
-  static const _monthsFull = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        children: [
-          Expanded(child: _col(1, 31, day, (v) => onChanged(v, month, year))),
-          Expanded(
-            child: _col(1, 12, month, (v) => onChanged(day, v, year),
-                labels: _monthsFull),
-          ),
-          Expanded(child: _col(1980, 2010, year, (v) => onChanged(day, month, v))),
-        ],
-      ),
-    );
-  }
-
-  Widget _col(int min, int max, int value, ValueChanged<int> onChange,
-      {List<String>? labels}) {
-    return SizedBox(
-      height: 130,
-      child: ListWheelScrollView.useDelegate(
-        itemExtent: 26,
-        physics: const FixedExtentScrollPhysics(),
-        perspective: 0.003,
-        onSelectedItemChanged: (i) => onChange(min + i),
-        childDelegate: ListWheelChildBuilderDelegate(
-          builder: (context, i) {
-            if (i < 0 || i > max - min) return null;
-            final isSelected = (min + i) == value;
-            return Center(
-              child: Text(
-                labels != null ? labels[i] : '${min + i}',
-                style: TextStyle(
-                  fontWeight:
-                      isSelected ? FontWeight.w700 : FontWeight.w400,
-                  fontSize: isSelected ? 18 : 14,
-                  color: isSelected ? _primaryDarker : AppColors.textSecondary,
-                ),
-              ),
-            );
-          },
-          childCount: max - min + 1,
+            ),
+          ],
         ),
       ),
     );

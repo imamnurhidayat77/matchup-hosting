@@ -3,15 +3,8 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
-import '../../../core/widgets/status_bar_mock.dart';
 import '../../../core/widgets/home_indicator.dart';
-
-const _primaryDarker = Color(0xFF145AC8);
-const _primaryLight = Color(0xFFE6F0FF);
-const _greenDark = Color(0xFF097044);
-const _greenLightBg = Color(0xFFD1FAE5);
-const _warningBg = Color(0xFFFEF3C7);
-const _warningText = Color(0xFFF59E0B);
+import '../../../core/widgets/notification_icon_button.dart';
 
 class _JoinedActivity {
   const _JoinedActivity({
@@ -22,6 +15,7 @@ class _JoinedActivity {
     required this.participants,
     required this.image,
     required this.confirmed,
+    this.status = _ActivityTab.upcoming,
   });
   final String id;
   final String sport;
@@ -30,8 +24,10 @@ class _JoinedActivity {
   final String participants;
   final String image;
   final bool confirmed;
+  final _ActivityTab status;
 }
 
+enum _ActivityTab { upcoming, past, hosting }
 class JoinedActivitiesScreen extends StatefulWidget {
   const JoinedActivitiesScreen({super.key});
 
@@ -42,6 +38,11 @@ class JoinedActivitiesScreen extends StatefulWidget {
 class _JoinedActivitiesScreenState extends State<JoinedActivitiesScreen> {
   int _selectedTab = 0;
 
+  // Tab 0 = Upcoming (joined, not started), 1 = Past, 2 = Hosting.
+  // Each tab routes to its own detail variant:
+  //   Upcoming → /joined-activity/:id ("You're in!" banner)
+  //   Past     → /past-activity/:id/review
+  //   Hosting  → /manage-activity/:id (manage participants)
   static const _activities = [
     _JoinedActivity(
       id: '1',
@@ -61,6 +62,26 @@ class _JoinedActivitiesScreenState extends State<JoinedActivitiesScreen> {
       image: 'tennis_5.png',
       confirmed: false,
     ),
+    _JoinedActivity(
+      id: '3',
+      sport: 'BASKETBALL',
+      title: 'Prospect Park 3v3 Shootout',
+      time: 'Sat, Aug 15 • 2:00 PM',
+      participants: '8/8',
+      image: 'basketball_2.png',
+      confirmed: true,
+      status: _ActivityTab.past,
+    ),
+    _JoinedActivity(
+      id: '4',
+      sport: 'BASKETBALL',
+      title: 'Friendly 5v5 Run at Prospect',
+      time: 'Sat, Aug 23 • 4:00 PM',
+      participants: '6/10',
+      image: 'basketball_3.png',
+      confirmed: true,
+      status: _ActivityTab.hosting,
+    ),
   ];
 
   @override
@@ -68,10 +89,9 @@ class _JoinedActivitiesScreenState extends State<JoinedActivitiesScreen> {
     return Scaffold(
       backgroundColor: AppColors.surface,
       body: SafeArea(
-        top: false,
+        top: true,
         child: Column(
           children: [
-            const StatusBarMock(foreground: AppColors.textPrimary),
             _header(),
             Expanded(
               child: SingleChildScrollView(
@@ -79,7 +99,8 @@ class _JoinedActivitiesScreenState extends State<JoinedActivitiesScreen> {
                 child: Column(
                   children: [
                     const SizedBox(height: 20),
-                    for (final a in _activities)
+                    for (final a in _activities
+                        .where((a) => a.status.index == _selectedTab))
                       Padding(
                         padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
                         child: _ActivityCard(item: a),
@@ -97,7 +118,7 @@ class _JoinedActivitiesScreenState extends State<JoinedActivitiesScreen> {
 
   Widget _header() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
       child: Column(
         children: [
           Row(
@@ -105,29 +126,11 @@ class _JoinedActivitiesScreenState extends State<JoinedActivitiesScreen> {
               Expanded(
                 child: Text(
                   'My Activities',
-                  style: AppTypography.headlineSmall.copyWith(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                  ),
+                  style: AppTypography.titleScreen,
                 ),
               ),
-              Semantics(
-                button: true,
-                label: 'Notifications',
-                child: GestureDetector(
-                  onTap: () => context.push('/notifications'),
-                  behavior: HitTestBehavior.opaque,
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    alignment: Alignment.center,
-                    child: SvgPicture.asset(
-                      'assets/images/discovery/icons/bell.svg',
-                      width: 24,
-                      height: 24,
-                    ),
-                  ),
-                ),
+              NotificationIconButton(
+                onTap: () => context.push('/notifications'),
               ),
             ],
           ),
@@ -167,7 +170,7 @@ class _JoinedActivitiesScreenState extends State<JoinedActivitiesScreen> {
                 fontFamily: AppTypography.fontFamily,
                 fontSize: 15,
                 fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                color: selected ? _primaryDarker : AppColors.textSecondary,
+                color: selected ? AppColors.primaryDarker : AppColors.textSecondary,
               ),
             ),
           ),
@@ -184,7 +187,14 @@ class _ActivityCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => context.push('/joined-activity/${item.id}'),
+      // Route by tab variant: hosting → manage screen, past → review,
+      // upcoming → joined detail with "You're in!" banner.
+      onTap: () => switch (item.status) {
+        _ActivityTab.hosting => context.push('/manage-activity/${item.id}'),
+        _ActivityTab.past =>
+          context.push('/past-activity/${item.id}/review'),
+        _ActivityTab.upcoming => context.push('/joined-activity/${item.id}'),
+      },
       behavior: HitTestBehavior.opaque,
       child: Container(
         padding: const EdgeInsets.all(16),
@@ -223,13 +233,13 @@ class _ActivityCard extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: _primaryLight,
+                          color: AppColors.primaryLight,
                           borderRadius: BorderRadius.circular(999),
                         ),
                         child: Text(
                           item.sport,
                           style: AppTypography.bodySmall.copyWith(
-                            color: _primaryDarker,
+                            color: AppColors.primaryDarker,
                             fontSize: 11,
                             fontWeight: FontWeight.w800,
                           ),
@@ -238,13 +248,28 @@ class _ActivityCard extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: item.confirmed ? _greenLightBg : _warningBg,
+                          color: switch (item.status) {
+                            _ActivityTab.hosting => AppColors.primaryLight,
+                            _ActivityTab.past => AppColors.statusSuccessBg,
+                            _ActivityTab.upcoming =>
+                              item.confirmed ? AppColors.statusSuccessBg : AppColors.warningBg,
+                          },
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
-                          item.confirmed ? 'CONFIRMED' : 'PENDING',
+                          switch (item.status) {
+                            _ActivityTab.hosting => 'HOSTING',
+                            _ActivityTab.past => 'COMPLETED',
+                            _ActivityTab.upcoming =>
+                              item.confirmed ? 'CONFIRMED' : 'PENDING',
+                          },
                           style: AppTypography.bodySmall.copyWith(
-                            color: item.confirmed ? _greenDark : _warningText,
+                            color: switch (item.status) {
+                              _ActivityTab.hosting => AppColors.primaryDarker,
+                              _ActivityTab.past => AppColors.statusSuccessText,
+                              _ActivityTab.upcoming =>
+                                item.confirmed ? AppColors.statusSuccessText : AppColors.warning,
+                            },
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
                           ),

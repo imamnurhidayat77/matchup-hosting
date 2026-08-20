@@ -57,7 +57,7 @@ class IconInputField extends StatelessWidget {
             hintText: hint,
             hintStyle: AppTypography.bodyFormSecondary,
             filled: true,
-            fillColor: AppColors.surface,
+            fillColor: AppColors.surfaceSubtle,
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             border: _border(AppColors.border),
             enabledBorder: _border(AppColors.border),
@@ -97,7 +97,7 @@ class IconInputField extends StatelessWidget {
 
   OutlineInputBorder _border(Color color, {double width = 1}) {
     return OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(100),
       borderSide: BorderSide(color: color, width: width),
     );
   }

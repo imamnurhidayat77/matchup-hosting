@@ -1,288 +1,472 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
-import '../../discovery/domain/activity_model.dart';
+import '../../../core/widgets/empty_state.dart';
+import '../../../core/widgets/error_retry.dart';
+import '../../../core/widgets/notification_icon_button.dart';
+import '../../../core/widgets/skeleton.dart';
+import '../../activities/domain/activity_model.dart';
 
-class MyActivitiesScreen extends StatefulWidget {
+// ─── Providers ───────────────────────────────────────────────────────────────
+
+const _mockUserId = 'me'; // TODO: from authStateProvider
+
+final _joinedProvider = FutureProvider.autoDispose<List<ActivityModel>>(
+  (ref) => ref.watch(activityRepositoryProvider).joinedByUser(_mockUserId),
+);
+
+final _hostedProvider = FutureProvider.autoDispose<List<ActivityModel>>(
+  (ref) => ref.watch(activityRepositoryProvider).hostedByUser(_mockUserId),
+);
+
+final _pastProvider = FutureProvider.autoDispose<List<ActivityModel>>(
+  (ref) => ref.watch(activityRepositoryProvider).pastByUser(_mockUserId),
+);
+
+final _unreadNotifCountProvider = FutureProvider.autoDispose<int>((ref) async {
+  final all = await ref.watch(notificationRepositoryProvider).all();
+  return all.where((n) => n.unread).length;
+});
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/// "Today, 4:00 PM" / "Tomorrow, 10:00 AM" / "Sat, Aug 23 · 4:00 PM".
+String _relativeDateTime(DateTime dt) {
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final target = DateTime(dt.year, dt.month, dt.day);
+  final diff = target.difference(today).inDays;
+  final time = DateFormat('h:mm a').format(dt);
+  if (diff == 0) return 'Today, $time';
+  if (diff == 1) return 'Tomorrow, $time';
+  return '${DateFormat('E, MMM d').format(dt)} · $time';
+}
+
+// ─── Screen ──────────────────────────────────────────────────────────────────
+
+class MyActivitiesScreen extends ConsumerStatefulWidget {
   const MyActivitiesScreen({super.key});
 
   @override
-  State<MyActivitiesScreen> createState() => _MyActivitiesScreenState();
+  ConsumerState<MyActivitiesScreen> createState() => _MyActivitiesScreenState();
 }
 
-class _MyActivitiesScreenState extends State<MyActivitiesScreen>
-    with SingleTickerProviderStateMixin {
-  late final _tabController = TabController(length: 3, vsync: this);
+class _MyActivitiesScreenState extends ConsumerState<MyActivitiesScreen> {
+  int _tab = 0;
 
-  final _upcoming = [
-    _ActivityItem(
-      title: 'Sunset Basketball 5v5',
-      sportType: 'Basketball',
-      location: 'Victoria Park Courts',
-      dateTime: DateTime.now().add(const Duration(days: 1, hours: 2)),
-      status: ActivityStatus.joined,
-      capacity: 10,
-      participantCount: 6,
-    ),
-    _ActivityItem(
-      title: 'Morning Yoga Session',
-      sportType: 'Yoga',
-      location: 'Mission Bay Beach',
-      dateTime: DateTime.now().add(const Duration(days: 3)),
-      status: ActivityStatus.joined,
-      capacity: 20,
-      participantCount: 12,
-    ),
-  ];
-
-  final _hosting = [
-    _ActivityItem(
-      title: 'Weekend Soccer Match',
-      sportType: 'Soccer',
-      location: 'Auckland Domain',
-      dateTime: DateTime.now().add(const Duration(days: 2, hours: 4)),
-      status: ActivityStatus.hosted,
-      capacity: 10,
-      participantCount: 8,
-    ),
-  ];
-
-  final _past = [
-    _ActivityItem(
-      title: 'Trail Running Group',
-      sportType: 'Running',
-      location: 'Mount Eden Summit',
-      dateTime: DateTime.now().subtract(const Duration(days: 5)),
-      status: ActivityStatus.past,
-      capacity: 15,
-      participantCount: 10,
-    ),
-  ];
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
+  static const _tabLabels = ['Upcoming', 'Past', 'Hosting'];
 
   @override
   Widget build(BuildContext context) {
+    final unreadCount = ref.watch(_unreadNotifCountProvider).valueOrNull ?? 0;
+
     return Scaffold(
+      // Off-white canvas so the white cards actually stand out — the
+      // previous white-on-white left cards looking like flat boxes glued
+      // together with borders.
       backgroundColor: AppColors.background,
       body: SafeArea(
+        bottom: false,
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-              child: Text('My Activities', style: AppTypography.headlineSmall),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: TabBar(
-                  controller: _tabController,
-                  labelColor: AppColors.primary,
-                  unselectedLabelColor: AppColors.textSecondary,
-                  indicator: BoxDecoration(
-                    color: AppColors.primaryLight,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  indicatorSize: TabBarIndicatorSize.tab,
-                  dividerHeight: 0,
-                  labelStyle: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600),
-                  tabs: const [
-                    Tab(text: 'Upcoming'),
-                    Tab(text: 'Hosting'),
-                    Tab(text: 'Past'),
-                  ],
-                ),
+            // Header sits on surface so the title/bell aren't floating on the
+            // off-white; the transition from surface to background happens
+            // right below the tab underline, giving the tab bar a subtle
+            // "chrome vs content" split.
+            Container(
+              color: AppColors.surface,
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.x6,
+                AppSpacing.x2,
+                AppSpacing.x6,
+                0,
               ),
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
+              child: Row(
                 children: [
-                  _buildList(_upcoming),
-                  _buildList(_hosting),
-                  _buildList(_past),
+                  Expanded(
+                    child: Text(
+                      'My Activities',
+                      style: AppTypography.titleScreen,
+                    ),
+                  ),
+                  NotificationIconButton(
+                    hasUnread: unreadCount > 0,
+                    onTap: () => context.push('/notifications'),
+                  ),
                 ],
               ),
             ),
+            Container(
+              color: AppColors.surface,
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.x6,
+                AppSpacing.x2,
+                AppSpacing.x6,
+                0,
+              ),
+              child: Row(
+                children: List.generate(
+                  _tabLabels.length,
+                  (i) => _UnderlineTab(
+                    label: _tabLabels[i],
+                    selected: _tab == i,
+                    onTap: () => setState(() => _tab = i),
+                  ),
+                ),
+              ),
+            ),
+            // Hairline separator with a soft shadow spilling into the list —
+            // makes the header/tab chrome feel like it sits above the content.
+            Container(
+              height: 1,
+              decoration: const BoxDecoration(
+                color: AppColors.surface,
+                boxShadow: [
+                  BoxShadow(
+                    color: Color(0x0A0F172A),
+                    blurRadius: 8,
+                    offset: Offset(0, 4),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(child: _buildTab(_tab)),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildList(List<_ActivityItem> activities) {
-    if (activities.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.event_busy, size: 64, color: AppColors.textTertiary),
-            const SizedBox(height: 16),
-            Text('No activities yet', style: AppTypography.titleMedium),
-            const SizedBox(height: 8),
-            Text(
-              'Join or create an activity to see it here',
-              style: AppTypography.bodyMedium,
-            ),
-          ],
-        ),
-      );
-    }
+  Widget _buildTab(int tab) => switch (tab) {
+    0 => _ActivityList(
+      provider: _joinedProvider,
+      cardBuilder: (a) => _ActivityListCard(
+        activity: a,
+        onTap: () => context.push('/joined-activity/${a.id}'),
+      ),
+      emptyTitle: 'No upcoming activities',
+      emptySubtitle: 'Discover activities near you and join one!',
+      emptyIcon: Icons.calendar_today_outlined,
+      emptyActionLabel: 'Discover',
+      onEmptyAction: () => context.go('/discovery'),
+    ),
+    1 => _ActivityList(
+      provider: _pastProvider,
+      cardBuilder: (a) => _ActivityListCard(
+        activity: a,
+        statusLabel: 'COMPLETED',
+        statusBg: AppColors.border,
+        statusFg: AppColors.textSecondary,
+        onTap: () => context.push('/past-activity/${a.id}/review'),
+      ),
+      emptyTitle: 'No past activities',
+      emptySubtitle: 'Your completed activities will appear here.',
+      emptyIcon: Icons.history_rounded,
+    ),
+    _ => _ActivityList(
+      provider: _hostedProvider,
+      cardBuilder: (a) => _ActivityListCard(
+        activity: a,
+        statusLabel: 'HOSTING',
+        statusBg: AppColors.primarySoft,
+        statusFg: AppColors.primaryDarker,
+        onTap: () => context.push('/manage-activity/${a.id}'),
+      ),
+      emptyTitle: "You haven't hosted yet",
+      emptySubtitle: 'Create an activity and invite others to join.',
+      emptyIcon: Icons.emoji_events_outlined,
+      emptyActionLabel: 'Create activity',
+      onEmptyAction: () => context.push('/create'),
+    ),
+  };
+}
 
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      itemCount: activities.length,
-      itemBuilder: (context, index) {
-        final activity = activities[index];
-        return _ActivityCard(
-          activity: activity,
-          onTap: () => context.push('/activity/$index'),
+// ─── Underline tab ────────────────────────────────────────────────────────────
+
+class _UnderlineTab extends StatelessWidget {
+  const _UnderlineTab({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          padding: const EdgeInsets.only(bottom: AppSpacing.x3),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: selected ? AppColors.primary : Colors.transparent,
+                width: 2,
+              ),
+            ),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: AppTypography.labelField.copyWith(
+                color: selected
+                    ? AppColors.primaryDarker
+                    : AppColors.textSecondary,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Generic list ─────────────────────────────────────────────────────────────
+
+typedef _CardBuilder = Widget Function(ActivityModel);
+
+class _ActivityList extends ConsumerWidget {
+  const _ActivityList({
+    required this.provider,
+    required this.cardBuilder,
+    required this.emptyTitle,
+    required this.emptySubtitle,
+    required this.emptyIcon,
+    this.emptyActionLabel,
+    this.onEmptyAction,
+  });
+
+  final ProviderListenable<AsyncValue<List<ActivityModel>>> provider;
+  final _CardBuilder cardBuilder;
+  final String emptyTitle;
+  final String emptySubtitle;
+  final IconData emptyIcon;
+  final String? emptyActionLabel;
+  final VoidCallback? onEmptyAction;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(provider);
+    return async.when(
+      loading: () => const SkeletonList(count: 4),
+      error: (_, _) => ErrorRetry(
+        message: 'Could not load activities.',
+        onRetry: () => ref.invalidate(provider as ProviderOrFamily),
+      ),
+      data: (activities) {
+        if (activities.isEmpty) {
+          return EmptyState(
+            icon: emptyIcon,
+            title: emptyTitle,
+            subtitle: emptySubtitle,
+            actionLabel: emptyActionLabel,
+            onAction: onEmptyAction,
+          );
+        }
+        return RefreshIndicator(
+          onRefresh: () async => ref.invalidate(provider as ProviderOrFamily),
+          color: AppColors.primary,
+          child: ListView.separated(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.x6,
+              AppSpacing.x5,
+              AppSpacing.x6,
+              AppSpacing.x6,
+            ),
+            itemCount: activities.length,
+            separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.x3),
+            itemBuilder: (_, i) => cardBuilder(activities[i]),
+          ),
         );
       },
     );
   }
 }
 
-class _ActivityItem {
-  final String title;
-  final String sportType;
-  final String location;
-  final DateTime dateTime;
-  final ActivityStatus status;
-  final int capacity;
-  final int participantCount;
+// ─── Compact list card ────────────────────────────────────────────────────────
+//
+// One card shape reused across all three tabs (Upcoming/Past/Hosting) —
+// thumbnail + sport chip + status pill + title + time/participants meta.
+// Only the status pill's label/color and the tap destination change per tab.
 
-  _ActivityItem({
-    required this.title,
-    required this.sportType,
-    required this.location,
-    required this.dateTime,
-    required this.status,
-    required this.capacity,
-    required this.participantCount,
+class _ActivityListCard extends StatelessWidget {
+  const _ActivityListCard({
+    required this.activity,
+    required this.onTap,
+    this.statusLabel,
+    this.statusBg,
+    this.statusFg,
   });
-}
 
-class _ActivityCard extends StatelessWidget {
-  final _ActivityItem activity;
+  final ActivityModel activity;
+  // Status pill is optional: there's no real "confirmed/pending" state in the
+  // data model, so the upcoming tab omits it rather than guess. Past/Hosting
+  // still show one because those labels just reflect which tab the item is
+  // in, not an invented approval state.
+  final String? statusLabel;
+  final Color? statusBg;
+  final Color? statusFg;
   final VoidCallback onTap;
-
-  const _ActivityCard({required this.activity, required this.onTap});
-
-  Color get _statusColor {
-    switch (activity.status) {
-      case ActivityStatus.joined:
-        return AppColors.primary;
-      case ActivityStatus.hosted:
-        return AppColors.accent;
-      case ActivityStatus.past:
-        return AppColors.textTertiary;
-      default:
-        return AppColors.success;
-    }
-  }
-
-  String get _statusText {
-    switch (activity.status) {
-      case ActivityStatus.joined:
-        return 'Joined';
-      case ActivityStatus.hosted:
-        return 'Hosting';
-      case ActivityStatus.past:
-        return 'Completed';
-      default:
-        return 'Upcoming';
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _statusColor.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      _statusText,
-                      style: AppTypography.caption.copyWith(color: _statusColor),
-                    ),
+    // Layered: outer DecoratedBox holds the shadow (Material's clipBehavior
+    // would clip the shadow away if we put it inside), Material provides the
+    // rounded ink ripple, inner Container draws the hairline border.
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        boxShadow: AppShadows.card,
+      ),
+      child: Material(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          splashColor: AppColors.primary.withValues(alpha: 0.06),
+          highlightColor: AppColors.primary.withValues(alpha: 0.03),
+          child: Container(
+            padding: const EdgeInsets.all(AppSpacing.x4),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(AppRadius.card),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  child: activity.coverImageUrl != null
+                      ? Image.asset(
+                          activity.coverImageUrl!,
+                          width: 70,
+                          height: 70,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => const _ThumbFallback(),
+                        )
+                      : const _ThumbFallback(),
+                ),
+                const SizedBox(width: AppSpacing.x4),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          _Pill(
+                            label: activity.sportType.toUpperCase(),
+                            bg: AppColors.primarySoft,
+                            fg: AppColors.primaryDarker,
+                          ),
+                          if (statusLabel != null) ...[
+                            const Spacer(),
+                            _Pill(
+                              label: statusLabel!,
+                              bg: statusBg!,
+                              fg: statusFg!,
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.x2),
+                      Text(
+                        activity.title,
+                        style: AppTypography.labelField.copyWith(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: AppSpacing.x2),
+                      Row(
+                        children: [
+                          SvgPicture.asset(
+                            'assets/images/discovery/icons/clock.svg',
+                            width: 13,
+                            height: 13,
+                            colorFilter: const ColorFilter.mode(
+                              AppColors.textSecondary,
+                              BlendMode.srcIn,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            _relativeDateTime(activity.dateTime),
+                            style: AppTypography.metaSub,
+                          ),
+                          const SizedBox(width: AppSpacing.x3),
+                          SvgPicture.asset(
+                            'assets/images/discovery/icons/users.svg',
+                            width: 13,
+                            height: 13,
+                            colorFilter: const ColorFilter.mode(
+                              AppColors.textSecondary,
+                              BlendMode.srcIn,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${activity.participantCount}/${activity.capacity}',
+                            style: AppTypography.metaSub,
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                  const Spacer(),
-                  Text(
-                    DateFormat('MMM d, h:mm a').format(activity.dateTime),
-                    style: AppTypography.bodySmall,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(activity.title, style: AppTypography.titleLarge),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  const Icon(Icons.sports, size: 16, color: AppColors.textTertiary),
-                  const SizedBox(width: 4),
-                  Text(activity.sportType, style: AppTypography.bodyMedium),
-                  const SizedBox(width: 16),
-                  const Icon(Icons.location_on, size: 16, color: AppColors.textTertiary),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      activity.location,
-                      style: AppTypography.bodyMedium,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  const Icon(Icons.people_outline, size: 16, color: AppColors.textTertiary),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${activity.participantCount}/${activity.capacity} participants',
-                    style: AppTypography.bodyMedium,
-                  ),
-                  const Spacer(),
-                  if (activity.status == ActivityStatus.hosted)
-                    TextButton(
-                      onPressed: () {},
-                      child: const Text('Manage'),
-                    ),
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ThumbFallback extends StatelessWidget {
+  const _ThumbFallback();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 70,
+      height: 70,
+      color: AppColors.surfaceSubtle,
+      alignment: Alignment.center,
+      child: const Icon(Icons.sports, size: 28, color: AppColors.textTertiary),
+    );
+  }
+}
+
+class _Pill extends StatelessWidget {
+  const _Pill({required this.label, required this.bg, required this.fg});
+  final String label;
+  final Color bg;
+  final Color fg;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+      ),
+      child: Text(label, style: AppTypography.badgeSport.copyWith(color: fg)),
     );
   }
 }

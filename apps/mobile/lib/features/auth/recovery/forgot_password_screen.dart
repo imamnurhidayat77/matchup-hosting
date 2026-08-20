@@ -3,13 +3,11 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/utils/secure_screen.dart';
 import '../../../core/widgets/home_indicator.dart';
-import '../../../core/widgets/status_bar_mock.dart';
-
-const _primary = Color(0xFF2572E5);
-const _primaryLight = Color(0xFFE6F0FF);
-const _primaryDark = Color(0xFF145AC8);
+import '../../../core/widgets/pill_buttons.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -18,9 +16,11 @@ class ForgotPasswordScreen extends StatefulWidget {
   State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
 }
 
-class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
+class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
+    with SecureScreenMixin {
   final _emailController = TextEditingController();
   bool _isSubmitting = false;
+  String? _emailError;
 
   @override
   void dispose() {
@@ -28,14 +28,32 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     super.dispose();
   }
 
+  String? _validateEmail(String email) {
+    if (email.isEmpty) return 'Please enter your email address.';
+    final re = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
+    if (!re.hasMatch(email)) return 'Please enter a valid email address.';
+    return null;
+  }
+
   Future<void> _submit() async {
     final email = _emailController.text.trim();
-    if (email.isEmpty) return;
-    setState(() => _isSubmitting = true);
-    await Future<void>.delayed(const Duration(milliseconds: 800));
+    final error = _validateEmail(email);
+    if (error != null) {
+      setState(() => _emailError = error);
+      return;
+    }
+    setState(() {
+      _emailError = null;
+      _isSubmitting = true;
+    });
+
+    // TODO: replace with real API call: POST /api/v1/auth/forgot-password
+    await Future<void>.delayed(const Duration(milliseconds: 900));
     if (!mounted) return;
     setState(() => _isSubmitting = false);
-    context.push('/otp-verification');
+
+    // Pass email to OTP screen via extra so it can display it
+    context.push('/otp-verification', extra: email);
   }
 
   @override
@@ -46,62 +64,80 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         bottom: false,
         child: Column(
           children: [
-            const StatusBarMock(foreground: AppColors.textPrimary),
-            _Header(onBack: () => Navigator.of(context).maybePop()),
+            _RecoveryHeader(
+              title: 'Forgot Password',
+              onBack: () => Navigator.of(context).maybePop(),
+            ),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.x6,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    const SizedBox(height: 24),
-                    _Illustration(),
-                    const SizedBox(height: 24),
-                    const Text(
+                    const SizedBox(height: AppSpacing.x6),
+                    _RecoveryIllustration(
+                      iconPath: 'assets/images/auth/lock.svg',
+                    ),
+                    const SizedBox(height: AppSpacing.x6),
+                    Text(
                       'Forgot Your Password?',
                       textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontFamily: AppTypography.fontFamily,
+                      style: AppTypography.headlineSmall.copyWith(
                         fontSize: 24,
                         fontWeight: FontWeight.w800,
-                        height: 1.25,
-                        color: AppColors.textPrimary,
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      "Enter your email address and we'll send you a verification code to reset your password.",
+                    const SizedBox(height: AppSpacing.x3),
+                    Text(
+                      "Enter your email address and we'll send a 6-digit verification code to reset your password.",
                       textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontFamily: AppTypography.fontFamily,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w400,
-                        height: 1.5,
+                      style: AppTypography.bodyMedium.copyWith(
                         color: AppColors.textSecondary,
+                        height: 1.55,
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: AppSpacing.x6),
+
+                    // ── Email field ────────────────────────────────────
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Email Address',
-                        style: AppTypography.inputLabel,
+                      child: Text('Email Address', style: AppTypography.inputLabel),
+                    ),
+                    const SizedBox(height: AppSpacing.x2),
+                    _EmailInput(
+                      controller: _emailController,
+                      hasError: _emailError != null,
+                      onChanged: (_) {
+                        if (_emailError != null) setState(() => _emailError = null);
+                      },
+                    ),
+                    if (_emailError != null) ...[
+                      const SizedBox(height: AppSpacing.x1),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          _emailError!,
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.danger,
+                            fontSize: 12,
+                          ),
+                        ),
                       ),
+                    ],
+                    const SizedBox(height: AppSpacing.x6),
+
+                    PrimaryPillButton(
+                      label: _isSubmitting ? 'Sending…' : 'Send Code',
+                      onPressed: _isSubmitting ? null : _submit,
                     ),
-                    const SizedBox(height: 8),
-                    _EmailInput(controller: _emailController),
-                    const SizedBox(height: 24),
-                    _PrimaryButton(
-                      label: 'Send Code',
-                      loading: _isSubmitting,
-                      onTap: _submit,
-                    ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: AppSpacing.x6),
                   ],
                 ),
               ),
             ),
-            _Footer(onSignIn: () => context.go('/login')),
+            _SignInFooter(onSignIn: () => context.go('/login')),
             const HomeIndicator(),
           ],
         ),
@@ -110,30 +146,104 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   }
 }
 
-class _Header extends StatelessWidget {
-  const _Header({required this.onBack});
+// ─── Email input ──────────────────────────────────────────────────────────────
 
+class _EmailInput extends StatelessWidget {
+  const _EmailInput({
+    required this.controller,
+    required this.hasError,
+    required this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final bool hasError;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.x4,
+        vertical: 14,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(
+          color: hasError ? AppColors.danger : AppColors.border,
+        ),
+      ),
+      child: Row(
+        children: [
+          SvgPicture.asset(
+            'assets/images/auth/mail.svg',
+            width: 20,
+            height: 20,
+            colorFilter: ColorFilter.mode(
+              hasError ? AppColors.danger : AppColors.textSecondary,
+              BlendMode.srcIn,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              keyboardType: TextInputType.emailAddress,
+              onChanged: onChanged,
+              textInputAction: TextInputAction.done,
+              style: AppTypography.bodyLarge.copyWith(
+                color: AppColors.textPrimary,
+              ),
+              decoration: const InputDecoration(
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+                border: InputBorder.none,
+                hintText: 'Enter your email',
+                hintStyle: TextStyle(
+                  fontFamily: AppTypography.fontFamily,
+                  fontSize: 15,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Shared recovery widgets ──────────────────────────────────────────────────
+
+class _RecoveryHeader extends StatelessWidget {
+  const _RecoveryHeader({required this.title, required this.onBack});
+  final String title;
   final VoidCallback onBack;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.x5,
+        AppSpacing.x2,
+        AppSpacing.x5,
+        AppSpacing.x2,
+      ),
       child: Row(
         children: [
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onBack,
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(100),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: SizedBox(
-                width: 16,
-                height: 16,
+          Semantics(
+            button: true,
+            label: 'Back',
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onBack,
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                  border: Border.all(color: AppColors.border),
+                ),
                 child: SvgPicture.asset(
                   'assets/images/discovery/icons/chevron-left.svg',
                   width: 16,
@@ -146,9 +256,9 @@ class _Header extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppSpacing.x3),
           Text(
-            'Forgot Password',
+            title,
             style: AppTypography.titleLarge.copyWith(fontSize: 18),
           ),
         ],
@@ -157,36 +267,35 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _Illustration extends StatelessWidget {
+class _RecoveryIllustration extends StatelessWidget {
+  const _RecoveryIllustration({required this.iconPath});
+  final String iconPath;
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 120,
-      height: 120,
+      width: 100,
+      height: 100,
       decoration: const BoxDecoration(
-        color: _primary,
+        color: AppColors.primary,
         shape: BoxShape.circle,
       ),
       alignment: Alignment.center,
       child: Container(
-        width: 80,
-        height: 80,
+        width: 68,
+        height: 68,
         decoration: const BoxDecoration(
-          color: _primaryLight,
+          color: AppColors.primarySoft,
           shape: BoxShape.circle,
         ),
         alignment: Alignment.center,
-        child: SizedBox(
-          width: 40,
-          height: 40,
-          child: SvgPicture.asset(
-            'assets/images/auth/lock.svg',
-            width: 40,
-            height: 40,
-            colorFilter: const ColorFilter.mode(
-              _primary,
-              BlendMode.srcIn,
-            ),
+        child: SvgPicture.asset(
+          iconPath,
+          width: 32,
+          height: 32,
+          colorFilter: const ColorFilter.mode(
+            AppColors.primary,
+            BlendMode.srcIn,
           ),
         ),
       ),
@@ -194,136 +303,25 @@ class _Illustration extends StatelessWidget {
   }
 }
 
-class _EmailInput extends StatelessWidget {
-  const _EmailInput({required this.controller});
-
-  final TextEditingController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 20,
-            height: 20,
-            child: SvgPicture.asset(
-              'assets/images/auth/mail.svg',
-              width: 20,
-              height: 20,
-              colorFilter: const ColorFilter.mode(
-                AppColors.textSecondary,
-                BlendMode.srcIn,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              keyboardType: TextInputType.emailAddress,
-              style: AppTypography.bodyLarge.copyWith(color: AppColors.textPrimary),
-              decoration: const InputDecoration(
-                isDense: true,
-                contentPadding: EdgeInsets.zero,
-                border: InputBorder.none,
-                hintText: 'Enter your email',
-                hintStyle: TextStyle(
-                  fontFamily: AppTypography.fontFamily,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w400,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PrimaryButton extends StatelessWidget {
-  const _PrimaryButton({
-    required this.label,
-    required this.onTap,
-    this.loading = false,
-  });
-
-  final String label;
-  final VoidCallback onTap;
-  final bool loading;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: label,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: loading ? null : onTap,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          decoration: BoxDecoration(
-            color: _primary,
-            borderRadius: BorderRadius.circular(100),
-            boxShadow: const [
-              BoxShadow(
-                color: Color.fromRGBO(37, 114, 229, 0.25),
-                blurRadius: 10,
-                offset: Offset(0, 4),
-              ),
-            ],
-          ),
-          alignment: Alignment.center,
-          child: loading
-              ? const SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                )
-              : Text(
-                  label,
-                  style: const TextStyle(
-                    fontFamily: AppTypography.fontFamily,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
-                ),
-        ),
-      ),
-    );
-  }
-}
-
-class _Footer extends StatelessWidget {
-  const _Footer({required this.onSignIn});
-
+class _SignInFooter extends StatelessWidget {
+  const _SignInFooter({required this.onSignIn});
   final VoidCallback onSignIn;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.x6,
+        AppSpacing.x4,
+        AppSpacing.x6,
+        0,
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Text(
+          Text(
             'Remember your password?',
-            style: TextStyle(
-              fontFamily: AppTypography.fontFamily,
-              fontSize: 14,
+            style: AppTypography.bodyMedium.copyWith(
               color: AppColors.textSecondary,
             ),
           ),
@@ -331,13 +329,11 @@ class _Footer extends StatelessWidget {
           GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: onSignIn,
-            child: const Text(
+            child: Text(
               'Sign In',
-              style: TextStyle(
-                fontFamily: AppTypography.fontFamily,
-                fontSize: 14,
+              style: AppTypography.bodyMedium.copyWith(
                 fontWeight: FontWeight.w700,
-                color: _primaryDark,
+                color: AppColors.primaryDarker,
               ),
             ),
           ),

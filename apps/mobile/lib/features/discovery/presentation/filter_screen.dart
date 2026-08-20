@@ -1,13 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
-import '../../../core/widgets/status_bar_mock.dart';
 import '../../../core/widgets/home_indicator.dart';
 import '../../../core/widgets/pill_buttons.dart';
-
-const _primaryDarker = Color(0xFF145AC8);
-const _primaryLight = Color(0xFFE6F0FF);
-const _bgSurface = Color(0xFFF8FAFC);
 
 class FilterScreen extends StatefulWidget {
   const FilterScreen({super.key});
@@ -29,10 +24,9 @@ class _FilterScreenState extends State<FilterScreen> {
     return Scaffold(
       backgroundColor: AppColors.surface,
       body: SafeArea(
-        top: false,
+        top: true,
         child: Column(
           children: [
-            const StatusBarMock(foreground: AppColors.textPrimary),
             const Spacer(flex: 2),
             _sheet(),
             const HomeIndicator(),
@@ -162,7 +156,7 @@ class _FilterScreenState extends State<FilterScreen> {
             Text(
               '${_distance.round()} km',
               style: AppTypography.bodyMedium.copyWith(
-                color: _primaryDarker,
+                color: AppColors.primaryDarker,
                 fontWeight: FontWeight.w600,
                 fontSize: 14,
               ),
@@ -206,7 +200,7 @@ class _FilterScreenState extends State<FilterScreen> {
         Container(
           padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
-            color: _bgSurface,
+            color: AppColors.surfaceSubtle,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: AppColors.border),
           ),
@@ -311,7 +305,7 @@ class _FilterChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: selected ? _primaryLight : _bgSurface,
+          color: selected ? AppColors.primarySoft : AppColors.surfaceSubtle,
           borderRadius: BorderRadius.circular(100),
           border: Border.all(
             color: selected ? AppColors.primary : AppColors.border,

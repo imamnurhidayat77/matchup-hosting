@@ -1,23 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/providers/auth_state_provider.dart';
 import '../../../core/services/biometric_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/utils/secure_screen.dart';
 import '../../../core/widgets/home_indicator.dart';
 import '../../../core/widgets/icon_input_field.dart';
 import '../../../core/widgets/pill_buttons.dart';
-import '../../../core/widgets/status_bar_mock.dart';
 
-class LoginScreen extends StatefulWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends ConsumerState<LoginScreen>
+    with SecureScreenMixin {
   bool _biometricAvailable = false;
 
   @override
@@ -37,9 +40,19 @@ class _LoginScreenState extends State<LoginScreen> {
     );
     if (!mounted) return;
     if (ok) {
-      // In production this would resume a cached session. For now, route
-      // directly to discovery as a placeholder.
-      context.go('/discovery');
+      // Resume cached session from secure storage via auth provider.
+      await ref.read(authStateProvider.notifier).checkSession();
+      // If still unauthenticated (no stored token), fall back gracefully.
+      if (!mounted) return;
+      final status = ref.read(authStatusProvider);
+      if (status != AuthStatus.authenticated) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No saved session. Please sign in with your password.'),
+          ),
+        );
+      }
+      // Router redirect fires automatically if session is valid.
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Biometric authentication failed')),
@@ -83,10 +96,26 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _onLogin() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
-    await Future.delayed(const Duration(seconds: 1));
-    if (mounted) {
-      setState(() => _isLoading = false);
-      context.go('/discovery');
+    try {
+      // TODO: replace with real API call when backend is ready.
+      // For now we simulate a successful login by storing a placeholder token
+      // so the auth guard lets the user through.
+      await Future.delayed(const Duration(milliseconds: 800));
+      if (!mounted) return;
+
+      await ref.read(authStateProvider.notifier).signIn(
+            accessToken: 'demo_access_token',
+            refreshToken: 'demo_refresh_token',
+            userId: 'demo_user_001',
+          );
+      // Router redirect fires automatically — no manual context.go needed.
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Login failed. Please try again.')),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -107,13 +136,12 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       backgroundColor: AppColors.surface,
       body: SafeArea(
-        top: false,
+        top: true,
         child: SingleChildScrollView(
           padding: EdgeInsets.zero,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const StatusBarMock(foreground: AppColors.textPrimary),
               // Header: close X + title block
               Padding(
                 padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
@@ -155,8 +183,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       icon: 'assets/images/auth/google.svg',
                       onPressed: () {},
                     ),
-                    const SizedBox(height: 12),
-                    const OrDivider(label: 'OR SIGN IN WITH EMAIL'),
                   ],
                 ),
               ),

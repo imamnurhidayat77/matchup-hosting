@@ -1,84 +1,137 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/widgets/app_avatar.dart';
+import '../../../core/widgets/empty_state.dart';
+import '../../../core/widgets/error_retry.dart';
+import '../../../core/widgets/notification_icon_button.dart';
+import '../../../core/widgets/skeleton.dart';
+import '../domain/chat_message.dart';
 
-class MessagesScreen extends StatelessWidget {
+// ─── Providers ───────────────────────────────────────────────────────────────
+
+final _conversationsProvider =
+    FutureProvider.autoDispose<List<ChatConversation>>((ref) async {
+  return ref.watch(chatRepositoryProvider).conversations();
+});
+
+// ─── Screen ──────────────────────────────────────────────────────────────────
+
+class MessagesScreen extends ConsumerStatefulWidget {
   const MessagesScreen({super.key});
 
-  final _conversations = const [
-    _Conversation(
-      name: 'Sunset Basketball 5v5',
-      lastMessage: 'Jake: Perfect, see you all at 4pm!',
-      time: '2:35 PM',
-      unreadCount: 2,
-      isGroup: true,
-    ),
-    _Conversation(
-      name: 'Sarah Wilson',
-      lastMessage: 'I can bring extra tennis balls',
-      time: 'Yesterday',
-      unreadCount: 0,
-      isGroup: false,
-    ),
-    _Conversation(
-      name: 'Weekend Soccer Match',
-      lastMessage: 'Alex: Who is bringing the cones?',
-      time: 'Yesterday',
-      unreadCount: 1,
-      isGroup: true,
-    ),
-    _Conversation(
-      name: 'Mia Chen',
-      lastMessage: 'The yoga session is still on, right?',
-      time: 'Mon',
-      unreadCount: 0,
-      isGroup: false,
-    ),
-  ];
+  @override
+  ConsumerState<MessagesScreen> createState() => _MessagesScreenState();
+}
+
+class _MessagesScreenState extends ConsumerState<MessagesScreen> {
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.surface,
       body: SafeArea(
+        bottom: false,
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Header: title + bell
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.x5,
+                AppSpacing.x3,
+                AppSpacing.x5,
+                AppSpacing.x2,
+              ),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Messages', style: AppTypography.headlineSmall),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: IconButton(
-                      icon: const Icon(Icons.search, color: AppColors.textPrimary),
-                      onPressed: () {},
-                    ),
+                  Expanded(
+                    child: Text('Messages', style: AppTypography.titleScreen),
+                  ),
+                  NotificationIconButton(
+                    hasUnread: true,
+                    onTap: () => context.push('/notifications'),
                   ),
                 ],
               ),
             ),
-            Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                itemCount: _conversations.length,
-                itemBuilder: (context, index) {
-                  final conversation = _conversations[index];
-                  return _ConversationTile(
-                    conversation: conversation,
-                    onTap: () => context.push('/chat/${conversation.name}'),
-                  );
-                },
+            const SizedBox(height: AppSpacing.x4),
+
+            // Search bar — always visible
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x6),
+              child: Container(
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                  border: Border.all(color: AppColors.border),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x4),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.search_rounded,
+                      size: 18,
+                      color: AppColors.textTertiary,
+                    ),
+                    const SizedBox(width: AppSpacing.x2),
+                    Expanded(
+                      child: TextField(
+                        controller: _searchController,
+                        onChanged: (v) => setState(() => _query = v),
+                        cursorColor: AppColors.textPrimary,
+                        cursorWidth: 1.5,
+                        style: AppTypography.bodyReading
+                            .copyWith(color: AppColors.textPrimary),
+                        decoration: InputDecoration(
+                          hintText: 'Search chats, sports or matches...',
+                          hintStyle: AppTypography.bodyReading
+                              .copyWith(color: AppColors.textTertiary),
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          isDense: true,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      ),
+                    ),
+                    if (_searchController.text.isNotEmpty)
+                      GestureDetector(
+                        onTap: () {
+                          _searchController.clear();
+                          setState(() => _query = '');
+                        },
+                        behavior: HitTestBehavior.opaque,
+                        child: const Padding(
+                          padding: EdgeInsets.all(4),
+                          child: Icon(
+                            Icons.close_rounded,
+                            size: 16,
+                            color: AppColors.textTertiary,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
+            const SizedBox(height: AppSpacing.x4),
+
+            // Conversation list
+            Expanded(child: _ConversationList(query: _query)),
           ],
         ),
       ),
@@ -86,92 +139,181 @@ class MessagesScreen extends StatelessWidget {
   }
 }
 
-class _Conversation {
-  final String name;
-  final String lastMessage;
-  final String time;
-  final int unreadCount;
-  final bool isGroup;
+// ─── Conversation list ────────────────────────────────────────────────────────
 
-  const _Conversation({
-    required this.name,
-    required this.lastMessage,
-    required this.time,
-    required this.unreadCount,
-    required this.isGroup,
-  });
+class _ConversationList extends ConsumerWidget {
+  const _ConversationList({required this.query});
+  final String query;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(_conversationsProvider);
+    return async.when(
+      loading: () => const SkeletonList(count: 6),
+      error: (_, _) => ErrorRetry(
+        message: 'Could not load messages.',
+        onRetry: () => ref.invalidate(_conversationsProvider),
+      ),
+      data: (all) {
+        final filtered = query.isEmpty
+            ? all
+            : all
+                .where((c) =>
+                    c.name.toLowerCase().contains(query.toLowerCase()) ||
+                    c.lastMessage
+                        .toLowerCase()
+                        .contains(query.toLowerCase()))
+                .toList();
+
+        if (filtered.isEmpty) {
+          return EmptyState(
+            icon: Icons.chat_bubble_outline_rounded,
+            title: query.isEmpty ? 'No messages yet' : 'No results',
+            subtitle: query.isEmpty
+                ? 'Join or create an activity to start chatting.'
+                : 'No conversations match "$query".',
+          );
+        }
+
+        return ListView.separated(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x6),
+          itemCount: filtered.length,
+          separatorBuilder: (_, _) => const Divider(
+            height: 1,
+            color: AppColors.border,
+          ),
+          itemBuilder: (_, i) => _ConversationTile(
+            conversation: filtered[i],
+            onTap: () => context.push('/chat/${filtered[i].name}'),
+          ),
+        );
+      },
+    );
+  }
 }
 
-class _ConversationTile extends StatelessWidget {
-  final _Conversation conversation;
-  final VoidCallback onTap;
+// ─── Conversation tile ────────────────────────────────────────────────────────
 
-  const _ConversationTile({required this.conversation, required this.onTap});
+class _ConversationTile extends StatelessWidget {
+  const _ConversationTile({
+    required this.conversation,
+    required this.onTap,
+  });
+
+  final ChatConversation conversation;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 28,
-                backgroundColor: AppColors.primaryLight,
-                child: Icon(
-                  conversation.isGroup ? Icons.groups : Icons.person,
-                  color: AppColors.primary,
-                  size: 28,
+    final hasUnread = conversation.unreadCount > 0;
+
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.x4),
+        child: Row(
+          children: [
+            // Avatar with unread dot
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                AppAvatar(
+                  assetPath: conversation.avatarAsset,
+                  name: conversation.name,
+                  size: AppAvatarSize.md,
                 ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      conversation.name,
-                      style: AppTypography.titleMedium,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      conversation.lastMessage,
-                      style: AppTypography.bodyMedium,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(conversation.time, style: AppTypography.bodySmall),
-                  if (conversation.unreadCount > 0) ...[
-                    const SizedBox(height: 4),
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: const BoxDecoration(
+                if (hasUnread)
+                  Positioned(
+                    left: 0,
+                    bottom: 0,
+                    child: Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
                         color: AppColors.primary,
                         shape: BoxShape.circle,
-                      ),
-                      child: Text(
-                        conversation.unreadCount.toString(),
-                        style: AppTypography.caption.copyWith(color: Colors.white),
+                        border: Border.all(color: AppColors.surface, width: 2),
                       ),
                     ),
-                  ],
+                  ),
+              ],
+            ),
+            const SizedBox(width: AppSpacing.x3),
+
+            // Name + preview
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    conversation.name,
+                    style: AppTypography.labelField.copyWith(
+                      fontSize: 15,
+                      fontWeight:
+                          hasUnread ? FontWeight.w800 : FontWeight.w700,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    conversation.lastMessage,
+                    style: AppTypography.metaSub.copyWith(
+                      color: hasUnread
+                          ? AppColors.textPrimary
+                          : AppColors.textSecondary,
+                      fontWeight:
+                          hasUnread ? FontWeight.w600 : FontWeight.w400,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ],
               ),
-            ],
-          ),
+            ),
+            const SizedBox(width: AppSpacing.x2),
+
+            // Time + badge
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  conversation.time,
+                  style: AppTypography.metaSub.copyWith(
+                    color: hasUnread
+                        ? AppColors.textPrimary
+                        : AppColors.textTertiary,
+                    fontWeight:
+                        hasUnread ? FontWeight.w600 : FontWeight.w400,
+                  ),
+                ),
+                if (hasUnread) ...[
+                  const SizedBox(height: 6),
+                  Container(
+                    constraints: const BoxConstraints(
+                      minWidth: 22,
+                      minHeight: 22,
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      conversation.unreadCount > 99
+                          ? '99+'
+                          : '${conversation.unreadCount}',
+                      style: AppTypography.badgeSport.copyWith(
+                        color: AppColors.textOnPrimary,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
         ),
       ),
     );

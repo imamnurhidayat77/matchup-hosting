@@ -3,41 +3,54 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/providers/auth_state_provider.dart';
+import '../../../core/providers/profile_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/theme_controller.dart';
+import '../../../core/widgets/notification_icon_button.dart';
+import '../../../core/widgets/skeleton.dart';
 
-const _primaryDarker = Color(0xFF145AC8);
-const _primaryLight = Color(0xFFE6F0FF);
-const _bgSurface = Color(0xFFF8FAFC);
-const _successBg = Color(0xFFE1F9F1);
-const _warningBg = Color(0xFFFFFBEB);
-const _logOutColor = Color(0xFFF43F5E);
-
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final profileAsync = ref.watch(myProfileProvider);
+
     return Scaffold(
       backgroundColor: AppColors.surface,
       body: SafeArea(
         bottom: false,
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: const [
-            SizedBox(height: 12),
-            _Header(),
-            SizedBox(height: 16),
-            _AvatarHero(),
-            SizedBox(height: 16),
-            _StatsBoard(),
-            SizedBox(height: 16),
-            _SportsSection(),
-            SizedBox(height: 16),
-            _OptionsList(),
-            SizedBox(height: 24),
-          ],
+        child: profileAsync.when(
+          loading: () => const SkeletonList(count: 6),
+          error: (_, _) => const Center(child: Text('Could not load profile.')),
+          data: (user) => ListView(
+            padding: EdgeInsets.zero,
+            children: [
+              const SizedBox(height: 12),
+              _Header(
+                onNotificationTap: () => context.push('/notifications'),
+              ),
+              const SizedBox(height: 16),
+              _AvatarHero(
+                displayName: user.displayName,
+                avatarAsset: user.avatarAsset,
+                onEditTap: () => context.push('/edit-profile'),
+              ),
+              const SizedBox(height: 16),
+              _StatsBoard(
+                joined: 24, // TODO: from activity repository
+                hosted: 8,  // TODO: from activity repository
+                rating: user.rating ?? 0.0,
+              ),
+              const SizedBox(height: 16),
+              const _SportsSection(),
+              const SizedBox(height: 16),
+              const _OptionsList(),
+              const SizedBox(height: 24),
+            ],
+          ),
         ),
       ),
     );
@@ -45,50 +58,38 @@ class ProfileScreen extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header();
+  const _Header({required this.onNotificationTap});
+  final VoidCallback onNotificationTap;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 60,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'Profile',
-              style: TextStyle(
-                fontFamily: AppTypography.fontFamily,
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                height: 1.0,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            SizedBox(
-              width: 44,
-              height: 44,
-              child: SvgPicture.asset(
-                'assets/images/discovery/icons/notification.svg',
-                colorFilter: const ColorFilter.mode(
-                  AppColors.textPrimary,
-                  BlendMode.srcIn,
-                ),
-              ),
-            ),
-          ],
-        ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text('Profile', style: AppTypography.titleScreen),
+          NotificationIconButton(onTap: onNotificationTap),
+        ],
       ),
     );
   }
 }
 
 class _AvatarHero extends StatelessWidget {
-  const _AvatarHero();
+  const _AvatarHero({
+    required this.displayName,
+    this.avatarAsset,
+    this.onEditTap,
+  });
+
+  final String displayName;
+  final String? avatarAsset;
+  final VoidCallback? onEditTap;
 
   @override
   Widget build(BuildContext context) {
+    final username = '@${displayName.toLowerCase().replaceAll(' ', '')}';
     return Column(
       children: [
         SizedBox(
@@ -97,34 +98,42 @@ class _AvatarHero extends StatelessWidget {
           child: Stack(
             clipBehavior: Clip.none,
             children: [
-              Container(
-                width: 100,
-                height: 100,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppColors.primaryLight,
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: Image.asset(
-                  'assets/images/discovery/avatars/avatar_alex.png',
-                  fit: BoxFit.cover,
+              GestureDetector(
+                onTap: onEditTap,
+                child: Container(
+                  width: 100,
+                  height: 100,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.primaryLight,
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: avatarAsset != null
+                      ? Image.asset(avatarAsset!, fit: BoxFit.cover)
+                      : const Icon(Icons.person, size: 60, color: AppColors.primary),
                 ),
               ),
               Positioned(
                 right: 0,
                 bottom: 0,
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.surface, width: 2),
-                  ),
-                  child: SvgPicture.asset(
-                    'assets/images/discovery/icons/edit.svg',
-                    width: 16,
-                    height: 16,
-                    colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+                child: GestureDetector(
+                  onTap: onEditTap,
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.surface, width: 2),
+                    ),
+                    child: SvgPicture.asset(
+                      'assets/images/discovery/icons/edit.svg',
+                      width: 16,
+                      height: 16,
+                      colorFilter: const ColorFilter.mode(
+                        Colors.white,
+                        BlendMode.srcIn,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -132,9 +141,9 @@ class _AvatarHero extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        const Text(
-          'Alex Mercer',
-          style: TextStyle(
+        Text(
+          displayName,
+          style: const TextStyle(
             fontFamily: AppTypography.fontFamily,
             fontSize: 20,
             fontWeight: FontWeight.w800,
@@ -143,9 +152,9 @@ class _AvatarHero extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 4),
-        const Text(
-          '@alexmercer',
-          style: TextStyle(
+        Text(
+          username,
+          style: const TextStyle(
             fontFamily: AppTypography.fontFamily,
             fontSize: 14,
             fontWeight: FontWeight.w400,
@@ -159,19 +168,48 @@ class _AvatarHero extends StatelessWidget {
 }
 
 class _StatsBoard extends StatelessWidget {
-  const _StatsBoard();
+  const _StatsBoard({
+    required this.joined,
+    required this.hosted,
+    required this.rating,
+  });
+
+  final int joined;
+  final int hosted;
+  final double rating;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Row(
-        children: const [
-          Expanded(child: _StatCard(value: '24', label: 'Joined', iconAsset: 'assets/images/discovery/icons/users.svg', iconBg: _primaryLight)),
-          SizedBox(width: 6),
-          Expanded(child: _StatCard(value: '8', label: 'Hosted', iconAsset: 'assets/images/discovery/icons/crown.svg', iconBg: _successBg)),
-          SizedBox(width: 6),
-          Expanded(child: _StatCard(value: '4.9', label: 'Rating', iconAsset: 'assets/images/discovery/icons/star.svg', iconBg: _warningBg)),
+        children: [
+          Expanded(
+            child: _StatCard(
+              value: '$joined',
+              label: 'Joined',
+              iconAsset: 'assets/images/discovery/icons/users.svg',
+              iconBg: AppColors.primarySoft,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: _StatCard(
+              value: '$hosted',
+              label: 'Hosted',
+              iconAsset: 'assets/images/discovery/icons/crown.svg',
+              iconBg: AppColors.successBg,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: _StatCard(
+              value: rating > 0 ? rating.toStringAsFixed(1) : '—',
+              label: 'Rating',
+              iconAsset: 'assets/images/discovery/icons/star.svg',
+              iconBg: AppColors.warningBg,
+            ),
+          ),
         ],
       ),
     );
@@ -193,10 +231,13 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Parse numeric value for count-up animation; fall back to static text.
+    final numericValue = double.tryParse(value.replaceAll('—', ''));
+
     return Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: _bgSurface,
+        color: AppColors.surfaceSubtle,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.border),
       ),
@@ -214,20 +255,41 @@ class _StatCard extends StatelessWidget {
               iconAsset,
               width: 14,
               height: 14,
-              colorFilter: const ColorFilter.mode(AppColors.textPrimary, BlendMode.srcIn),
+              colorFilter: const ColorFilter.mode(
+                AppColors.textPrimary,
+                BlendMode.srcIn,
+              ),
             ),
           ),
           const SizedBox(height: 4),
-          Text(
-            value,
-            style: const TextStyle(
-              fontFamily: AppTypography.fontFamily,
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-              height: 1.0,
-              color: AppColors.textPrimary,
-            ),
-          ),
+          numericValue != null
+              ? TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: numericValue),
+                  duration: const Duration(milliseconds: 900),
+                  curve: Curves.easeOutCubic,
+                  builder: (_, v, _) => Text(
+                    numericValue == numericValue.floorToDouble()
+                        ? '${v.round()}'
+                        : v.toStringAsFixed(1),
+                    style: const TextStyle(
+                      fontFamily: AppTypography.fontFamily,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      height: 1.0,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                )
+              : Text(
+                  value,
+                  style: const TextStyle(
+                    fontFamily: AppTypography.fontFamily,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    height: 1.0,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
           const SizedBox(height: 2),
           Text(
             label,
@@ -292,7 +354,7 @@ class _SportBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: selected ? _primaryLight : _bgSurface,
+        color: selected ? AppColors.primarySoft : AppColors.surfaceSubtle,
         borderRadius: BorderRadius.circular(100),
         border: Border.all(
           color: selected ? AppColors.primary : AppColors.border,
@@ -305,7 +367,7 @@ class _SportBadge extends StatelessWidget {
           fontSize: 13,
           fontWeight: FontWeight.w600,
           height: 1.0,
-          color: selected ? _primaryDarker : AppColors.textSecondary,
+          color: selected ? AppColors.primaryDarker : AppColors.textSecondary,
         ),
       ),
     );
@@ -320,30 +382,24 @@ class _OptionsList extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
-        children: const [
-          _OptionRow(
+        children: [
+          const _OptionRow(
             icon: 'assets/images/discovery/icons/user.svg',
             label: 'Edit Profile',
             route: '/edit-profile',
           ),
-          _OptionRow(
+          const _OptionRow(
             icon: 'assets/images/discovery/icons/calendar.svg',
             label: 'Calendar',
             route: '/calendar',
           ),
-          _OptionRow(
+          const _OptionRow(
             icon: 'assets/images/discovery/icons/bell.svg',
             label: 'Notification Settings',
             route: '/notifications',
           ),
-          _ThemeRow(),
-          _OptionRow(
-            icon: 'assets/images/discovery/icons/power.svg',
-            label: 'Log Out',
-            labelColor: _logOutColor,
-            showChevron: false,
-            route: '/welcome',
-          ),
+          const _ThemeRow(),
+          _LogoutRow(),
         ],
       ),
     );
@@ -454,15 +510,11 @@ class _OptionRow extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.route,
-    this.labelColor,
-    this.showChevron = true,
   });
 
   final String icon;
   final String label;
   final String route;
-  final Color? labelColor;
-  final bool showChevron;
 
   @override
   Widget build(BuildContext context) {
@@ -482,25 +534,25 @@ class _OptionRow extends StatelessWidget {
                   icon,
                   width: 18,
                   height: 18,
-                  colorFilter: ColorFilter.mode(
-                    labelColor ?? AppColors.textPrimary,
+                  colorFilter: const ColorFilter.mode(
+                    AppColors.textPrimary,
                     BlendMode.srcIn,
                   ),
                 ),
                 const SizedBox(width: 12),
                 Text(
                   label,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontFamily: AppTypography.fontFamily,
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
                     height: 1.0,
-                    color: labelColor ?? AppColors.textPrimary,
+                    color: AppColors.textPrimary,
                   ),
                 ),
               ],
             ),
-            if (showChevron)
+            if (true)
               SvgPicture.asset(
                 'assets/images/discovery/icons/chevron_down.svg',
                 width: 16,
@@ -514,5 +566,72 @@ class _OptionRow extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Logout row — confirms before clearing tokens and navigating to welcome.
+class _LogoutRow extends ConsumerWidget {
+  const _LogoutRow();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return InkWell(
+      onTap: () => _confirmLogout(context, ref),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          children: [
+            SvgPicture.asset(
+              'assets/images/discovery/icons/power.svg',
+              width: 18,
+              height: 18,
+              colorFilter: const ColorFilter.mode(
+                AppColors.dangerAccent,
+                BlendMode.srcIn,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'Log Out',
+              style: TextStyle(
+                fontFamily: AppTypography.fontFamily,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                height: 1.0,
+                color: AppColors.dangerAccent,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmLogout(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Log Out'),
+        content: const Text('Are you sure you want to log out?'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: AppColors.dangerAccent),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Log Out'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    // Clear tokens from secure storage → authStateProvider triggers router
+    // redirect → GoRouter navigates to /welcome automatically.
+    await ref.read(authStateProvider.notifier).signOut();
   }
 }

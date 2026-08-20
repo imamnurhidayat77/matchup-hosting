@@ -6,7 +6,6 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/home_indicator.dart';
 import '../../../core/widgets/pill_buttons.dart';
-import '../../../core/widgets/status_bar_mock.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -88,10 +87,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             right: 0,
             bottom: 0,
             child: SafeArea(
-              top: false,
+              top: true,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  const SizedBox(height: 24),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 32),
                     child: AnimatedSwitcher(
@@ -103,7 +103,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 32),
                     child: _Pagination(
@@ -120,7 +120,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       icon: 'assets/images/auth/arrow_right.svg',
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 32),
                     child: Center(
@@ -175,7 +175,6 @@ class _OnboardingPageView extends StatelessWidget {
             ),
           ),
         ),
-        const SafeArea(child: StatusBarMock()),
       ],
     );
   }
@@ -223,7 +222,7 @@ class _Pagination extends StatelessWidget {
             width: isActive ? 24 : 8,
             height: 8,
             decoration: BoxDecoration(
-              color: isActive ? AppColors.primary : Colors.white,
+              color: isActive ? AppColors.primary : AppColors.textOnPrimary,
               borderRadius: BorderRadius.circular(4),
             ),
           ),

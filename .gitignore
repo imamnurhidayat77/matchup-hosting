@@ -61,3 +61,7 @@ coverage/
 # Misc
 .DS_Store
 *.iml
+
+# Kiro (local only, not committed)
+.kiro/
+figma-cli.ts

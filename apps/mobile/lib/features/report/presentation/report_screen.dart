@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 
 class ReportScreen extends StatefulWidget {
@@ -39,15 +40,47 @@ class _ReportScreenState extends State<ReportScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        title: Text('Report', style: AppTypography.titleLarge),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.pop(),
-        ),
-      ),
-      body: ListView(
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            // ── Header ──────────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.x5, AppSpacing.x3, AppSpacing.x5, AppSpacing.x2,
+              ),
+              child: Row(
+                children: [
+                  Semantics(
+                    button: true,
+                    label: 'Back',
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => context.pop(),
+                      child: const SizedBox(
+                        width: 40,
+                        height: 44,
+                        child: Icon(
+                          Icons.arrow_back_ios_new_rounded,
+                          size: 18,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      'Report',
+                      textAlign: TextAlign.center,
+                      style: AppTypography.titleScreen,
+                    ),
+                  ),
+                  const SizedBox(width: 40),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView(
         padding: const EdgeInsets.all(24),
         children: [
           Container(
@@ -147,6 +180,10 @@ class _ReportScreenState extends State<ReportScreen> {
           ),
           const SizedBox(height: 40),
         ],
+      ),
+            ),
+          ],
+        ),
       ),
     );
   }

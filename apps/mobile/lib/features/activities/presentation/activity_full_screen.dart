@@ -2,19 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/asset_image.dart';
-import '../../../core/widgets/status_bar_mock.dart';
 import '../../../core/widgets/home_indicator.dart';
-
-const _primaryDarker = Color(0xFF145AC8);
-const _primaryLight = Color(0xFFE6F0FF);
-const _bgSurface = Color(0xFFF8FAFC);
-const _warningBg = Color(0xFFFEF3C7);
-const _warningBorder = Color(0xFFFFEDD5);
-const _warningText = Color(0xFFF59E0B);
-const _errorBg = Color(0xFFFEE2E2);
-const _errorText = Color(0xFFCC3333);
-const _red = Color(0xFFDC2626);
+import '../../../core/widgets/label_badge.dart';
 
 class ActivityFullScreen extends StatelessWidget {
   const ActivityFullScreen({super.key});
@@ -24,10 +15,9 @@ class ActivityFullScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.surface,
       body: SafeArea(
-        top: false,
+        top: true,
         child: Column(
           children: [
-            const StatusBarMock(foreground: AppColors.textPrimary),
             _topHeader(),
             const SizedBox(height: 24),
             _card(),
@@ -57,17 +47,15 @@ class ActivityFullScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             decoration: BoxDecoration(
-              color: _warningBg,
+              color: AppColors.warningBg,
               borderRadius: BorderRadius.circular(99),
-              border: Border.all(color: _warningBorder),
+              border: Border.all(color: AppColors.warningLight),
             ),
-            child: Text(
-              'ACTIVITY FULL',
-              style: AppTypography.bodySmall.copyWith(
-                color: _warningText,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-              ),
+            child: LabelBadge(
+              label: 'ACTIVITY FULL',
+              background: Colors.transparent,
+              foreground: AppColors.warning,
+              padding: EdgeInsets.zero,
             ),
           ),
           const SizedBox(height: 8),
@@ -102,8 +90,8 @@ class ActivityFullScreen extends StatelessWidget {
               shape: BoxShape.circle,
               gradient: RadialGradient(
                 colors: [
-                  _primaryLight.withValues(alpha: 0.6),
-                  _primaryLight.withValues(alpha: 0),
+                  AppColors.primaryLight.withValues(alpha: 0.6),
+                  AppColors.primaryLight.withValues(alpha: 0),
                 ],
               ),
             ),
@@ -169,7 +157,7 @@ class ActivityFullScreen extends StatelessWidget {
                           _metaChip(
                             'zap.svg',
                             'Intermediate',
-                            _primaryDarker,
+                            AppColors.primaryDarker,
                           ),
                           const SizedBox(width: 8),
                           _metaChip(
@@ -208,7 +196,7 @@ class ActivityFullScreen extends StatelessWidget {
                                         Container(color: AppColors.border),
                                         Container(
                                           width: double.infinity,
-                                          color: _red,
+                                          color: AppColors.danger,
                                         ),
                                       ],
                                     ),
@@ -220,13 +208,13 @@ class ActivityFullScreen extends StatelessWidget {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
-                              color: _errorBg,
+                              color: AppColors.errorLight,
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
                               'Full',
                               style: AppTypography.bodySmall.copyWith(
-                                color: _errorText,
+                                color: AppColors.danger,
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -322,7 +310,7 @@ class ActivityFullScreen extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: _bgSurface,
+        color: AppColors.surfaceSubtle,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
@@ -392,8 +380,7 @@ class ActivityFullScreen extends StatelessWidget {
               height: 30,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFF097044),
-                border: Border.all(color: AppColors.border, width: 2),
+                color: const Color(0xFF097044),                border: Border.all(color: AppColors.border, width: 2),
               ),
               child: const Center(
                 child: Text(
@@ -434,9 +421,9 @@ class ActivityFullScreen extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: _warningBg,
+        color: AppColors.warningBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _warningBorder),
+        border: Border.all(color: AppColors.warningLight),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -456,7 +443,7 @@ class ActivityFullScreen extends StatelessWidget {
               Text(
                 '3 people on waiting list',
                 style: AppTypography.bodyMedium.copyWith(
-                  color: _warningText,
+                  color: AppColors.warning,
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
                 ),
@@ -482,34 +469,10 @@ class ActivityFullScreen extends StatelessWidget {
   Widget _actions(BuildContext context) {
     return Column(
       children: [
-        GestureDetector(
-          onTap: () => Navigator.of(context).maybePop(),
-          behavior: HitTestBehavior.opaque,
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            decoration: BoxDecoration(
-              color: AppColors.primary,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color.fromRGBO(45, 127, 249, 0.25),
-                  blurRadius: 10,
-                  offset: Offset(0, 8),
-                ),
-              ],
-            ),
-            child: Center(
-              child: Text(
-                'Join Waiting List',
-                style: AppTypography.bodyMedium.copyWith(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ),
+        AppButton(
+          label: 'Join Waiting List',
+          onPressed: () => Navigator.of(context).maybePop(),
+          size: AppButtonSize.lg,
         ),
         const SizedBox(height: 12),
         GestureDetector(

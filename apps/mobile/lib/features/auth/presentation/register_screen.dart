@@ -4,10 +4,19 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/utils/secure_screen.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/home_indicator.dart';
 import '../../../core/widgets/icon_input_field.dart';
 import '../../../core/widgets/pill_buttons.dart';
-import '../../../core/widgets/status_bar_mock.dart';
+
+void _showSocialComingSoon(BuildContext context) {
+  AppSnackbar.show(
+    context,
+    message: 'Social sign-in coming soon.',
+    variant: AppSnackbarVariant.info,
+  );
+}
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -16,7 +25,8 @@ class RegisterScreen extends StatefulWidget {
   State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-class _RegisterScreenState extends State<RegisterScreen> {
+class _RegisterScreenState extends State<RegisterScreen>
+    with SecureScreenMixin {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
@@ -25,6 +35,38 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
   bool _isLoading = false;
+
+  // ── Password strength helpers ─────────────────────────────────────────────
+  bool get _hasMinLength => _passwordController.text.length >= 8;
+  bool get _hasUppercase => RegExp(r'[A-Z]').hasMatch(_passwordController.text);
+  bool get _hasNumber => RegExp(r'\d').hasMatch(_passwordController.text);
+
+  int get _strength {
+    var s = 0;
+    if (_hasMinLength) s += 33;
+    if (_hasUppercase) s += 33;
+    if (_hasNumber) s += 34;
+    return s;
+  }
+
+  Color get _strengthColor {
+    if (_strength < 34) return AppColors.danger;
+    if (_strength < 67) return AppColors.warning;
+    return AppColors.statusSuccessText;
+  }
+
+  String get _strengthLabel {
+    if (_passwordController.text.isEmpty) return '';
+    if (_strength < 34) return 'Weak';
+    if (_strength < 67) return 'Fair';
+    return 'Strong';
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _passwordController.addListener(() => setState(() {}));
+  }
 
   @override
   void dispose() {
@@ -75,13 +117,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return Scaffold(
       backgroundColor: AppColors.surface,
       body: SafeArea(
-        top: false,
+        top: true,
         child: SingleChildScrollView(
           padding: EdgeInsets.zero,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const StatusBarMock(foreground: AppColors.textPrimary),
               // Header: close X
               Padding(
                 padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
@@ -124,7 +165,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         label: 'Apple',
                         icon: 'assets/images/auth/apple.svg',
                         expand: false,
-                        onPressed: () {},
+                        onPressed: () => _showSocialComingSoon(context),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -133,7 +174,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         label: 'Google',
                         icon: 'assets/images/auth/google.svg',
                         expand: false,
-                        onPressed: () {},
+                        onPressed: () => _showSocialComingSoon(context),
                       ),
                     ),
                   ],
@@ -190,6 +231,38 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           onTap: () => setState(() => _obscurePassword = !_obscurePassword),
                         ),
                       ),
+                      // ── Password strength bar ─────────────────────────
+                      if (_passwordController.text.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(3),
+                                child: LinearProgressIndicator(
+                                  value: _strength / 100,
+                                  minHeight: 4,
+                                  backgroundColor: AppColors.border,
+                                  valueColor: AlwaysStoppedAnimation(_strengthColor),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              _strengthLabel,
+                              style: AppTypography.bodySmall.copyWith(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: _strengthColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        _PwRow(met: _hasMinLength, label: 'At least 8 characters'),
+                        _PwRow(met: _hasUppercase, label: 'Uppercase letter'),
+                        _PwRow(met: _hasNumber, label: 'Contains a number'),
+                      ],
                       const SizedBox(height: 12),
                       IconInputField(
                         label: 'Confirm Password',
@@ -250,6 +323,43 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Compact password requirement row — shared with register_screen.
+class _PwRow extends StatelessWidget {
+  const _PwRow({required this.met, required this.label});
+  final bool met;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 3),
+      child: Row(
+        children: [
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            child: Icon(
+              met
+                  ? Icons.check_circle_rounded
+                  : Icons.radio_button_unchecked_rounded,
+              key: ValueKey(met),
+              size: 14,
+              color: met ? AppColors.statusSuccessText : AppColors.textTertiary,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: AppTypography.bodySmall.copyWith(
+              fontSize: 12,
+              color: met ? AppColors.statusSuccessText : AppColors.textSecondary,
+            ),
+          ),
+        ],
       ),
     );
   }

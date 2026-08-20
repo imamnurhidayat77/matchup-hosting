@@ -1,5 +1,8 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/providers/auth_state_provider.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/presentation/register_screen.dart';
 import '../features/auth/presentation/onboarding_screen.dart';
@@ -13,6 +16,7 @@ import '../features/discovery/presentation/discovery_screen.dart';
 import '../features/discovery/presentation/activity_detail_screen.dart';
 import '../features/discovery/presentation/filter_screen.dart';
 import '../features/activities/presentation/create_activity_screen.dart';
+import '../features/activities/presentation/wizard/create_activity_wizard.dart';
 import '../features/activities/presentation/my_activities_screen.dart';
 import '../features/activities/presentation/joined_activities_screen.dart';
 import '../features/activities/presentation/joined_activity_detail_screen.dart';
@@ -34,9 +38,60 @@ import '../features/chat/presentation/chat_screen.dart';
 import '../features/chat/presentation/messages_screen.dart';
 import 'app_shell.dart';
 
-GoRouter buildRouter() {
+// ─── Public routes (no auth required) ────────────────────────────────────────
+
+const _publicPaths = {
+  '/splash',
+  '/onboarding',
+  '/welcome',
+  '/login',
+  '/register',
+  '/forgot-password',
+  '/otp-verification',
+  '/new-password',
+};
+
+// ─── AuthNotifier → Listenable bridge ────────────────────────────────────────
+// GoRouter's refreshListenable rebuilds the router when auth state changes.
+
+class _AuthListenable extends ChangeNotifier {
+  _AuthListenable(this._ref) {
+    _ref.listen<AuthState>(authStateProvider, (_, _) => notifyListeners());
+  }
+  final Ref _ref;
+}
+
+// ─── Builder ─────────────────────────────────────────────────────────────────
+
+GoRouter buildRouter(Ref ref) {
   return GoRouter(
     initialLocation: '/splash',
+    refreshListenable: _AuthListenable(ref),
+    redirect: (context, state) {
+      final authStatus = ref.read(authStatusProvider);
+      final location = state.matchedLocation;
+
+      // While session check is in progress (AuthStatus.unknown), stay on
+      // splash so the loading animation can finish.
+      if (authStatus == AuthStatus.unknown) {
+        return location == '/splash' ? null : '/splash';
+      }
+
+      final isPublic = _publicPaths.any((p) => location.startsWith(p));
+
+      if (authStatus == AuthStatus.unauthenticated && !isPublic) {
+        // Protected route hit without a session → gate to welcome.
+        return '/welcome';
+      }
+
+      if (authStatus == AuthStatus.authenticated && isPublic) {
+        // Already authenticated but navigating to auth screen → skip to app.
+        if (location == '/splash') return null; // Let splash handle routing.
+        return '/discovery';
+      }
+
+      return null; // No redirect needed.
+    },
     routes: [
       GoRoute(
         path: '/splash',
@@ -64,11 +119,28 @@ GoRouter buildRouter() {
       ),
       GoRoute(
         path: '/otp-verification',
-        builder: (_, _) => const OtpVerificationScreen(),
+        builder: (_, state) {
+          final email = state.extra as String? ?? '';
+          return OtpVerificationScreen(email: email);
+        },
       ),
       GoRoute(
         path: '/new-password',
-        builder: (_, _) => const NewPasswordScreen(),
+        builder: (_, state) {
+          final email = state.extra as String? ?? '';
+          return NewPasswordScreen(email: email);
+        },
+      ),
+      // Activity detail sits OUTSIDE the shell: the Figma design (node 43:201)
+      // has no bottom navigation on this screen — its footer holds only the home
+      // indicator. Note that joined-activity-detail (74:5) DOES keep the tab
+      // bar, so only this route is hoisted out.
+      GoRoute(
+        path: '/activity/:id',
+        builder: (_, state) {
+          final id = state.pathParameters['id'] ?? '1';
+          return ActivityDetailScreen(activityId: id);
+        },
       ),
       ShellRoute(
         builder: (context, state, child) => AppShell(child: child),
@@ -86,6 +158,14 @@ GoRouter buildRouter() {
             builder: (_, _) => const CreateActivityScreen(),
           ),
           GoRoute(
+            path: '/create-activity',
+            builder: (_, state) {
+              final step = state.pathParameters['step'];
+              final initialStep = step != null ? int.parse(step) : 1;
+              return CreateActivityWizard(initialStep: initialStep);
+            },
+          ),
+          GoRoute(
             path: '/messages',
             builder: (_, _) => const MessagesScreen(),
           ),
@@ -96,13 +176,6 @@ GoRouter buildRouter() {
           GoRoute(
             path: '/notifications',
             builder: (_, _) => const NotificationsScreen(),
-          ),
-          GoRoute(
-            path: '/activity/:id',
-            builder: (_, state) {
-              final id = state.pathParameters['id'] ?? '1';
-              return ActivityDetailScreen(activityId: id);
-            },
           ),
           GoRoute(
             path: '/activity/:id/participants',

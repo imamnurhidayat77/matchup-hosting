@@ -4,10 +4,14 @@ import 'package:flutter/material.dart';
 class AppColors {
   AppColors._();
 
-  // Primary blue (Figma: #2572E5 / #2563EB)
-  static const Color primary = Color(0xFF2563EB);
+  // Primary blue — Figma `#2572E5`.
+  // Use for FILLS only. For text on white use [primaryDarker]: primary on white
+  // is 4.03:1 (fails WCAG AA for text), primaryDarker is 6.4:1 (passes).
+  static const Color primary = Color(0xFF2572E5);
   static const Color primaryDark = Color(0xFF1D4ED8);
-  static const Color primaryDarker = Color(0xFF145AC8); // Figma primary-dark token
+  static const Color primaryDarker = Color(
+    0xFF145AC8,
+  ); // Figma primary-dark token
   static const Color primaryLight = Color(0xFFDBEAFE);
 
   // Splash gradient endpoints (Figma)
@@ -43,6 +47,75 @@ class AppColors {
   static const Color borderMuted = Color(0xFFE5E7EB);
   static const Color divider = Color(0xFFE5E7EB);
   static const Color shadow = Color(0x1A000000);
-  static const Color iconPrimary = Color(0xFF1E293B); // Figma icon-primary (home indicator)
-  static const Color scrim = Color(0x660F172A); // 40% black overlay on onboarding illustrations
+  static const Color iconPrimary = Color(
+    0xFF1E293B,
+  ); // Figma icon-primary (home indicator)
+  static const Color scrim = Color(
+    0x660F172A,
+  ); // 40% black overlay on onboarding illustrations
+
+  /// Scrim for a control sitting *on top of* [scrim] (e.g. the back/share
+  /// buttons over a hero photo). 30% slate: dark enough to separate the button
+  /// from the image behind it without stacking into a solid black block.
+  static const Color scrimControl = Color(0x4D0F172A);
+
+  // ─── Semantic status colors ────────────────────────────────────────────
+  /// Success text on soft backgrounds (e.g. "Open" status chip).
+  static const Color statusSuccessText = Color(0xFF04694A);
+
+  /// Soft success background for status chips.
+  static const Color statusSuccessBg = Color(0xFFD1FAE5);
+
+  /// Danger / dislike action.
+  static const Color danger = Color(0xFFCC3333);
+
+  /// Like stamp green.
+  static const Color likeGreen = Color(0xFF22C55E);
+
+  /// Nope stamp red.
+  static const Color nopeRed = Color(0xFFEF4444);
+
+  /// Secondary avatar color for the participant avatar stack.
+  static const Color avatarSecondary = Color(0xFF097044);
+
+  /// Avatar ring / neutral avatar bg.
+  static const Color avatarNeutral = Color(0xFFE2E8F0);
+
+  // ─── Shadows / glows ───────────────────────────────────────────────────
+  /// Soft blue glow under primary action buttons & cards.
+  static const Color glowPrimary = Color(0x402D7FF9);
+
+  /// Card drop shadow (Figma: #2D7FF9 @ 10%).
+  static const Color shadowCard = Color(0x1A2D7FF9);
+
+  /// Soft blue tint for selected/active fills (Figma: #E6F0FF).
+  static const Color primarySoft = Color(0xFFE6F0FF);
+
+  /// Subtle off-white fill for inactive/disabled surfaces (Figma: #F8FAFC).
+  static const Color surfaceSubtle = Color(0xFFF8FAFC);
+
+  /// Input border — slightly stronger than default border (Figma: #CBD5E1).
+  static const Color borderInput = Color(0xFFCBD5E1);
+
+  /// Muted surface — segmented-control track, attachment button, neutral badge
+  /// (Figma: #F1F5F9).
+  static const Color surfaceMuted = Color(0xFFF1F5F9);
+
+  /// Muted slate (Figma: #94A3B8). Contrast on white is only 2.8:1, so this is
+  /// for decorative rules, dots and unselected radio strokes — never for text.
+  static const Color textMuted = Color(0xFF94A3B8);
+
+  /// Destructive sign-out / log out accent (Figma: #F43F5E).
+  static const Color dangerAccent = Color(0xFFF43F5E);
+
+  /// Warning background (Figma: #FFFBEB).
+  static const Color warningBg = Color(0xFFFFFBEB);
+
+  /// Success background variant (Figma: #E1F9F1).
+  static const Color successBg = Color(0xFFE1F9F1);
+
+  /// Dark canvas for media placeholders (empty cover-photo dropzone, image
+  /// upload wells). Slate-800 — reads as "photo goes here" and gives white
+  /// icons/labels on top a 12:1 contrast ratio.
+  static const Color surfaceInverse = Color(0xFF1E293B);
 }

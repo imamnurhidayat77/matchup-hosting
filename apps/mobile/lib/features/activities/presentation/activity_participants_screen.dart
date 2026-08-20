@@ -2,15 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_typography.dart';
-import '../../../core/widgets/status_bar_mock.dart';
 import '../../../core/widgets/home_indicator.dart';
-
-const _primaryDarker = Color(0xFF145AC8);
-const _primaryLight = Color(0xFFE6F0FF);
-const _primaryLightBorder = Color(0xFFBFDBFE);
-const _bgSurface = Color(0xFFF8FAFC);
-const _warningBg = Color(0xFFFEF3C7);
-const _warningText = Color(0xFFD97706);
 
 class _Participant {
   const _Participant({
@@ -50,10 +42,9 @@ class ActivityParticipantsScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.surface,
       body: SafeArea(
-        top: false,
+        top: true,
         child: Column(
           children: [
-            const StatusBarMock(foreground: AppColors.textPrimary),
             _header(context),
             Expanded(
               child: ListView.separated(
@@ -91,7 +82,7 @@ class ActivityParticipantsScreen extends StatelessWidget {
                     width: 36,
                     height: 36,
                     decoration: BoxDecoration(
-                      color: _bgSurface,
+                      color: AppColors.surfaceSubtle,
                       borderRadius: BorderRadius.circular(100),
                     ),
                     alignment: Alignment.center,
@@ -115,7 +106,7 @@ class ActivityParticipantsScreen extends StatelessWidget {
           Text(
             'Basketball at Central Park',
             style: AppTypography.bodyMedium.copyWith(
-              color: _primaryDarker,
+              color: AppColors.primaryDarker,
               fontSize: 14,
               fontWeight: FontWeight.w600,
             ),
@@ -134,7 +125,7 @@ class ActivityParticipantsScreen extends StatelessWidget {
               Text(
                 '83% Full',
                 style: AppTypography.bodySmall.copyWith(
-                  color: _primaryDarker,
+                  color: AppColors.primaryDarker,
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                 ),
@@ -175,10 +166,10 @@ class _ParticipantCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: item.isOrganizer ? _primaryLight : AppColors.surface,
+          color: item.isOrganizer ? AppColors.primarySoft : AppColors.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: item.isOrganizer ? _primaryLightBorder : AppColors.border,
+            color: item.isOrganizer ? AppColors.primaryLight : AppColors.border,
           ),
         ),
         child: Row(
@@ -216,13 +207,13 @@ class _ParticipantCard extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: _warningBg,
+                            color: AppColors.warningBg,
                             borderRadius: BorderRadius.circular(100),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.workspace_premium, size: 10, color: _warningText),
+                              const Icon(Icons.workspace_premium, size: 10, color: AppColors.warning),
                               const SizedBox(width: 4),
                               Text(
                                 'Organizer',
@@ -230,7 +221,7 @@ class _ParticipantCard extends StatelessWidget {
                                   fontFamily: AppTypography.fontFamily,
                                   fontSize: 9,
                                   fontWeight: FontWeight.w700,
-                                  color: _warningText,
+                                  color: AppColors.warning,
                                   height: 1.0,
                                 ),
                               ),
@@ -256,7 +247,7 @@ class _ParticipantCard extends StatelessWidget {
                       Text(
                         'Basketball',
                         style: AppTypography.bodySmall.copyWith(
-                          color: _primaryDarker,
+                          color: AppColors.primaryDarker,
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
                         ),
@@ -283,7 +274,7 @@ class _ParticipantCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: _bgSurface,
+        color: AppColors.surfaceSubtle,
         borderRadius: BorderRadius.circular(100),
       ),
       child: Text(

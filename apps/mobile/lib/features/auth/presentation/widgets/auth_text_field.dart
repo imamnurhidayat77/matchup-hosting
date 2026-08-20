@@ -28,12 +28,10 @@ class AuthTextField extends StatelessWidget {
       keyboardType: keyboardType,
       validator: validator,
       decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
+        hintText: hint ?? label,
         suffixIcon: suffixIcon,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        filled: true,
-        fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+        // Relies on the global InputDecorationTheme for pill shape,
+        // fill color, and border styling. No overrides needed here.
       ),
     );
   }

@@ -1,333 +1,435 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
-import '../../../core/widgets/status_bar_mock.dart';
+import '../../../core/widgets/app_segmented_control.dart';
+import '../../../core/widgets/error_retry.dart';
+import '../../../core/widgets/skeleton.dart';
+import '../domain/app_notification.dart';
 
-class NotificationsScreen extends StatefulWidget {
+// ─── UI extensions on NotificationType ───────────────────────────────────────
+
+extension _NotifTypeUi on NotificationType {
+  Color get color => switch (this) {
+        NotificationType.chat => AppColors.primary,
+        NotificationType.activity => AppColors.accent,
+        NotificationType.system => AppColors.success,
+        NotificationType.request => AppColors.warning,
+        NotificationType.moderation => AppColors.error,
+      };
+
+  String get iconAsset => switch (this) {
+        NotificationType.chat =>
+          'assets/images/discovery/icons/message_square.svg',
+        NotificationType.activity =>
+          'assets/images/discovery/icons/calendar.svg',
+        NotificationType.system =>
+          'assets/images/discovery/icons/check_circle.svg',
+        NotificationType.request =>
+          'assets/images/discovery/icons/users.svg',
+        NotificationType.moderation =>
+          'assets/images/discovery/icons/alert_circle.svg',
+      };
+}
+
+// ─── Providers ────────────────────────────────────────────────────────────────
+
+final _notifProvider =
+    FutureProvider.autoDispose<List<AppNotification>>((ref) {
+  return ref.watch(notificationRepositoryProvider).all();
+});
+
+// ─── Screen ──────────────────────────────────────────────────────────────────
+
+class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
 
   @override
-  State<NotificationsScreen> createState() => _NotificationsScreenState();
+  ConsumerState<NotificationsScreen> createState() =>
+      _NotificationsScreenState();
 }
 
-class _NotificationsScreenState extends State<NotificationsScreen> {
-  int _tabIndex = 0;
-  late final List<_Notif> _all;
+class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
+  int _tab = 0;
 
-  @override
-  void initState() {
-    super.initState();
-    _all = [
-      _Notif('Sarah Chen', 'I brought extra tennis balls!', '10 min ago', _NotifType.chat, unread: true),
-      _Notif('Weekend Soccer Match starting in 2 hours', '', '30 min ago', _NotifType.activity, unread: true),
-      _Notif('Welcome to MatchUp!', 'Start by setting your preferences', '1 hour ago', _NotifType.system),
-      _Notif('Alex wants to join your basketball game', '', '2 hours ago', _NotifType.request),
-      _Notif('Your report was resolved', 'The reported activity has been removed', 'Yesterday', _NotifType.moderation),
-      _Notif('Mike tagged you in a volleyball match', '', 'Yesterday', _NotifType.activity),
-      _Notif('New activity near you', 'Sunset Basketball 5v5 in Brooklyn', '2 days ago', _NotifType.activity),
-    ];
+  Future<void> _markAllRead() async {
+    await ref.read(notificationRepositoryProvider).markAllRead();
+    ref.invalidate(_notifProvider);
   }
 
-  List<_Notif> get _visible =>
-      _tabIndex == 0 ? _all.where((n) => n.unread).toList() : _all;
+  Future<void> _markRead(String id) async {
+    await ref.read(notificationRepositoryProvider).markRead(id);
+    ref.invalidate(_notifProvider);
+  }
 
   @override
   Widget build(BuildContext context) {
+    final async = ref.watch(_notifProvider);
+    final unreadCount = async.valueOrNull?.where((n) => n.unread).length ?? 0;
+
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: AppColors.background,
       body: SafeArea(
         bottom: false,
         child: Column(
           children: [
-            const StatusBarMock(foreground: AppColors.textPrimary),
-            _Header(onBack: () => context.go('/discovery')),
+            // ── Header ──────────────────────────────────────────────────
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
-              child: _SegmentedTabs(
-                index: _tabIndex,
-                onChange: (i) => setState(() => _tabIndex = i),
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.x5, AppSpacing.x3, AppSpacing.x5, AppSpacing.x2,
               ),
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: _visible.isEmpty
-                  ? const _EmptyState()
-                  : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-                      itemCount: _visible.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 12),
-                      itemBuilder: (_, i) => _NotifCard(item: _visible[i]),
-                    ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _Header extends StatelessWidget {
-  const _Header({required this.onBack});
-
-  final VoidCallback onBack;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 44,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Row(
-          children: [
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: onBack,
-              child: SizedBox(
-                width: 40,
-                height: 40,
-                child: Center(
-                  child: SvgPicture.asset(
-                    'assets/images/discovery/icons/arrow_left.svg',
-                    width: 24,
-                    height: 24,
-                    colorFilter: const ColorFilter.mode(
-                      AppColors.textPrimary,
-                      BlendMode.srcIn,
+              child: Row(
+                children: [
+                  Semantics(
+                    button: true,
+                    label: 'Back',
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => context.pop(),
+                      child: const SizedBox(
+                        width: 40,
+                        height: 44,
+                        child: Icon(
+                          Icons.arrow_back_ios_new_rounded,
+                          size: 18,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
                     ),
                   ),
-                ),
+                  Expanded(
+                    child: Text(
+                      'Notifications',
+                      textAlign: TextAlign.center,
+                      style: AppTypography.titleScreen,
+                    ),
+                  ),
+                  if (unreadCount > 0)
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: _markAllRead,
+                      child: Text(
+                        'Mark all read',
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.primaryDarker,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                        ),
+                      ),
+                    )
+                  else
+                    const SizedBox(width: 72),
+                ],
               ),
             ),
+            const SizedBox(height: AppSpacing.x3),
+
+            // ── Segmented tabs ───────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x5),
+              child: AppSegmentedControl(
+                labels: const ['All', 'Unread'],
+                selectedIndex: _tab,
+                onChanged: (i) => setState(() => _tab = i),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.x3),
+
+            // ── List ─────────────────────────────────────────────────────
             Expanded(
-              child: Center(
-                child: Text(
-                  'Notifications',
-                  style: AppTypography.titleMedium.copyWith(fontSize: 16),
+              child: async.when(
+                loading: () => const SkeletonList(count: 5),
+                error: (_, _) => ErrorRetry(
+                  message: 'Could not load notifications.',
+                  onRetry: () => ref.invalidate(_notifProvider),
                 ),
+                data: (all) {
+                  final filtered = _tab == 1
+                      ? all.where((n) => n.unread).toList()
+                      : all;
+
+                  if (filtered.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SvgPicture.asset(
+                            'assets/images/discovery/icons/bell.svg',
+                            width: 48,
+                            height: 48,
+                            colorFilter: const ColorFilter.mode(
+                              AppColors.textTertiary,
+                              BlendMode.srcIn,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            _tab == 1
+                                ? "You're all caught up!"
+                                : 'No notifications yet.',
+                            style: AppTypography.titleMedium,
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  final grouped = _group(filtered);
+                  return ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.x5, 0, AppSpacing.x5, AppSpacing.x8,
+                    ),
+                    itemCount: grouped.length,
+                    itemBuilder: (_, i) {
+                      final item = grouped[i];
+                      if (item is String) {
+                        // Section header
+                        return Padding(
+                          padding: const EdgeInsets.fromLTRB(0, 16, 0, 8),
+                          child: Text(
+                            item,
+                            style: AppTypography.caption.copyWith(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textTertiary,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                        );
+                      }
+                      final notif = item as AppNotification;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.x2),
+                        child: _SwipeToRead(
+                          key: ValueKey(notif.id),
+                          onDismiss: () => _markRead(notif.id),
+                          child: _NotifCard(
+                            item: notif,
+                            onTap: () => _markRead(notif.id),
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
               ),
             ),
-            const SizedBox(width: 40),
           ],
         ),
       ),
     );
   }
+
+  /// Returns a mixed list of String section headers and AppNotification items.
+  List<Object> _group(List<AppNotification> items) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final weekAgo = today.subtract(const Duration(days: 7));
+
+    final todayItems = items
+        .where((n) => n.createdAt.isAfter(today))
+        .toList();
+    final yesterdayItems = items
+        .where(
+          (n) =>
+              n.createdAt.isAfter(yesterday) && !n.createdAt.isAfter(today),
+        )
+        .toList();
+    final weekItems = items
+        .where(
+          (n) =>
+              n.createdAt.isAfter(weekAgo) &&
+              !n.createdAt.isAfter(yesterday),
+        )
+        .toList();
+    final olderItems = items
+        .where((n) => !n.createdAt.isAfter(weekAgo))
+        .toList();
+
+    final result = <Object>[];
+    if (todayItems.isNotEmpty) {
+      result.add('TODAY');
+      result.addAll(todayItems);
+    }
+    if (yesterdayItems.isNotEmpty) {
+      result.add('YESTERDAY');
+      result.addAll(yesterdayItems);
+    }
+    if (weekItems.isNotEmpty) {
+      result.add('THIS WEEK');
+      result.addAll(weekItems);
+    }
+    if (olderItems.isNotEmpty) {
+      result.add('EARLIER');
+      result.addAll(olderItems);
+    }
+    return result;
+  }
 }
 
-class _SegmentedTabs extends StatelessWidget {
-  const _SegmentedTabs({required this.index, required this.onChange});
+// ─── Swipe to mark read ───────────────────────────────────────────────────────
 
-  final int index;
-  final ValueChanged<int> onChange;
+class _SwipeToRead extends StatelessWidget {
+  const _SwipeToRead({super.key, required this.child, required this.onDismiss});
+  final Widget child;
+  final VoidCallback onDismiss;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 42,
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          _seg(label: 'Unread', i: 0),
-          _seg(label: 'All', i: 1),
-        ],
-      ),
-    );
-  }
-
-  Widget _seg({required String label, required int i}) {
-    final selected = i == index;
-    return Expanded(
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => onChange(i),
-        child: Container(
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: selected ? AppColors.surface : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
-            boxShadow: selected
-                ? const [
-                    BoxShadow(
-                      color: Color(0x0F000000),
-                      blurRadius: 8,
-                      offset: Offset(0, 2),
-                    ),
-                  ]
-                : null,
-          ),
-          child: Text(
-            label,
-            style: AppTypography.bodyMedium.copyWith(
-              color: selected ? AppColors.primaryDarker : AppColors.textSecondary,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+    return Dismissible(
+      key: key!,
+      direction: DismissDirection.endToStart,
+      onDismissed: (_) => onDismiss(),
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: AppSpacing.x5),
+        decoration: BoxDecoration(
+          color: AppColors.primarySoft,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.done_all_rounded,
+              color: AppColors.primaryDarker,
+              size: 18,
             ),
-          ),
+            const SizedBox(width: 6),
+            Text(
+              'Mark read',
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.primaryDarker,
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+              ),
+            ),
+          ],
         ),
       ),
+      child: child,
     );
   }
 }
 
-class _NotifCard extends StatelessWidget {
-  const _NotifCard({required this.item});
+// ─── Notification card ────────────────────────────────────────────────────────
 
-  final _Notif item;
+class _NotifCard extends StatelessWidget {
+  const _NotifCard({required this.item, required this.onTap});
+  final AppNotification item;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final c = item.type.color;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: item.unread ? AppColors.primaryLight : AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: c.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Center(
-              child: SvgPicture.asset(
-                item.type.iconAsset,
-                width: 22,
-                height: 22,
-                colorFilter: ColorFilter.mode(c, BlendMode.srcIn),
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        padding: const EdgeInsets.all(AppSpacing.x3 + 2),
+        decoration: BoxDecoration(
+          color: item.unread ? AppColors.primaryLight : AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(
+            color: item.unread
+                ? AppColors.primary.withValues(alpha: 0.2)
+                : AppColors.border,
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Icon
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: c.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(AppRadius.md),
+              ),
+              child: Center(
+                child: SvgPicture.asset(
+                  item.type.iconAsset,
+                  width: 20,
+                  height: 20,
+                  colorFilter: ColorFilter.mode(c, BlendMode.srcIn),
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.title,
-                  style: AppTypography.titleMedium.copyWith(
-                    fontSize: 14,
-                    fontWeight: item.unread ? FontWeight.w700 : FontWeight.w600,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (item.subtitle.isNotEmpty) ...[
-                  const SizedBox(height: 2),
+            const SizedBox(width: AppSpacing.x3),
+
+            // Content
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    item.subtitle,
-                    style: AppTypography.bodyMedium.copyWith(fontSize: 13),
-                    maxLines: 1,
+                    item.title,
+                    style: AppTypography.bodyMedium.copyWith(
+                      fontWeight:
+                          item.unread ? FontWeight.w700 : FontWeight.w600,
+                      color: AppColors.textPrimary,
+                      fontSize: 14,
+                    ),
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
+                  if (item.body != null && item.body!.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      item.body!,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                        fontSize: 12,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                  const SizedBox(height: 4),
+                  Text(
+                    _timeAgo(item.createdAt),
+                    style: AppTypography.caption.copyWith(
+                      fontSize: 11,
+                      color: AppColors.textTertiary,
+                    ),
+                  ),
                 ],
-                const SizedBox(height: 6),
-                Text(item.time, style: AppTypography.bodySmall),
-              ],
-            ),
-          ),
-          if (item.unread)
-            Container(
-              width: 8,
-              height: 8,
-              margin: const EdgeInsets.only(top: 6),
-              decoration: const BoxDecoration(
-                color: AppColors.primary,
-                shape: BoxShape.circle,
               ),
             ),
-        ],
+
+            // Unread dot
+            if (item.unread)
+              Padding(
+                padding: const EdgeInsets.only(top: 6, left: 4),
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: AppColors.primary,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
-}
 
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SvgPicture.asset(
-            'assets/images/discovery/icons/notification.svg',
-            width: 56,
-            height: 56,
-            colorFilter: const ColorFilter.mode(
-              AppColors.textTertiary,
-              BlendMode.srcIn,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text("You're all caught up", style: AppTypography.titleMedium),
-          const SizedBox(height: 4),
-          Text(
-            'New notifications will show up here.',
-            style: AppTypography.bodyMedium,
-          ),
-        ],
-      ),
-    );
+  String _timeAgo(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays == 1) return 'Yesterday';
+    return '${diff.inDays}d ago';
   }
-}
-
-enum _NotifType {
-  chat,
-  activity,
-  system,
-  request,
-  moderation;
-
-  Color get color {
-    switch (this) {
-      case _NotifType.chat:
-        return AppColors.primary;
-      case _NotifType.activity:
-        return AppColors.accent;
-      case _NotifType.system:
-        return AppColors.success;
-      case _NotifType.request:
-        return AppColors.warning;
-      case _NotifType.moderation:
-        return AppColors.error;
-    }
-  }
-
-  String get iconAsset {
-    switch (this) {
-      case _NotifType.chat:
-        return 'assets/images/discovery/icons/message_square.svg';
-      case _NotifType.activity:
-        return 'assets/images/discovery/icons/calendar.svg';
-      case _NotifType.system:
-        return 'assets/images/discovery/icons/check_circle.svg';
-      case _NotifType.request:
-        return 'assets/images/discovery/icons/users.svg';
-      case _NotifType.moderation:
-        return 'assets/images/discovery/icons/alert_circle.svg';
-    }
-  }
-}
-
-class _Notif {
-  _Notif(this.title, this.subtitle, this.time, this.type, {this.unread = false});
-
-  final String title;
-  final String subtitle;
-  final String time;
-  final _NotifType type;
-  final bool unread;
 }

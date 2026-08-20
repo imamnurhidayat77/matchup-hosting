@@ -16,6 +16,7 @@ dependencies:
 
   # Local storage
   shared_preferences: ^2.3.2
+  hive_flutter: ^1.1.0
 
   # Environment variables
   flutter_dotenv: ^5.2.1
@@ -29,6 +30,12 @@ dependencies:
   # Swipe cards
   card_swiper: ^3.0.1
 
+  # Image picker
+  image_picker: ^1.2.3
+
+  # Image processing (decode/encode/crop for wizard uploads)
+  image: ^4.2.0
+
   # Date formatting
   intl: ^0.19.0
 
@@ -38,6 +45,9 @@ dependencies:
   # Biometric authentication (optional / class-two feature)
   local_auth: ^2.3.0
 
+  # Secure storage for tokens/PII (Keychain iOS, Keystore Android)
+  flutter_secure_storage: ^9.2.2
+
   # Calendar integration (optional / class-two feature)
   device_calendar: ^4.3.3
 
@@ -45,9 +55,22 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  mocktail: ^1.0.4
 
 flutter:
   uses-material-design: true
+  fonts:
+    - family: Plus Jakarta Sans
+      fonts:
+        - asset: assets/fonts/PlusJakartaSans-Regular.ttf
+        - asset: assets/fonts/PlusJakartaSans-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/PlusJakartaSans-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/PlusJakartaSans-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/PlusJakartaSans-ExtraBold.ttf
+          weight: 800
   assets:
     - .env.example
     - assets/images/

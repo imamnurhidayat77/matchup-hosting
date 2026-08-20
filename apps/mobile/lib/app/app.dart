@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../core/constants/app_constants.dart';
 import '../core/theme/app_colors.dart';
@@ -8,21 +9,44 @@ import '../core/theme/dark_colors.dart';
 import '../core/theme/theme_controller.dart';
 import 'router.dart';
 
-class MatchUpApp extends ConsumerWidget {
-  MatchUpApp({super.key});
+/// Cached GoRouter instance. Using a provider ensures the router is
+/// constructed once and the refreshListenable can reference a stable [Ref].
+final _routerProvider = Provider<GoRouter>(buildRouter);
 
-  final _router = buildRouter();
+class MatchUpApp extends ConsumerWidget {
+  const MatchUpApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final mode = ref.watch(themeModeProvider);
+    // GoRouter is instantiated once and cached in a provider so it isn't
+    // recreated on every rebuild of MatchUpApp.
+    final router = ref.watch(_routerProvider);
     return MaterialApp.router(
       title: AppConstants.appName,
       debugShowCheckedModeBanner: false,
       theme: _buildLightTheme(),
       darkTheme: _buildDarkTheme(),
       themeMode: mode,
-      routerConfig: _router,
+      routerConfig: router,
+      builder: (context, child) {
+        // Match Figma / CSS line-height semantics:
+        //  - leadingDistribution.even splits the extra leading equally
+        //    above and below each line (Flutter default is proportional to
+        //    the font's ascent/descent, which makes Plus Jakarta Sans "sit
+        //    high" inside its line box compared to how it renders on the web).
+        //  - applyHeightToFirstAscent/LastDescent = false makes single-line
+        //    UI text (buttons, badges, headers) hug the top/bottom of its
+        //    container instead of floating inside inflated whitespace.
+        return DefaultTextHeightBehavior(
+          textHeightBehavior: const TextHeightBehavior(
+            applyHeightToFirstAscent: false,
+            applyHeightToLastDescent: false,
+            leadingDistribution: TextLeadingDistribution.even,
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
     );
   }
 
@@ -89,24 +113,30 @@ class MatchUpApp extends ConsumerWidget {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: AppColors.background,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        fillColor: AppColors.surfaceSubtle,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(100),
           borderSide: const BorderSide(color: AppColors.border),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(100),
           borderSide: const BorderSide(color: AppColors.border),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(100),
           borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(100),
           borderSide: const BorderSide(color: AppColors.error),
         ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(100),
+          borderSide: const BorderSide(color: AppColors.error, width: 1.5),
+        ),
+        hintStyle: AppTypography.bodyReading.copyWith(color: AppColors.textTertiary),
+        floatingLabelBehavior: FloatingLabelBehavior.never,
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
@@ -221,23 +251,28 @@ class MatchUpApp extends ConsumerWidget {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: const Color(0xFF1F2937),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(100),
           borderSide: const BorderSide(color: Color(0xFF334155)),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(100),
           borderSide: const BorderSide(color: Color(0xFF334155)),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(100),
           borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(100),
           borderSide: const BorderSide(color: AppColors.error),
         ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(100),
+          borderSide: const BorderSide(color: AppColors.error, width: 1.5),
+        ),
+        floatingLabelBehavior: FloatingLabelBehavior.never,
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
