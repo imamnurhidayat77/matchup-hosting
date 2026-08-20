@@ -16,19 +16,28 @@ type ListSwipeDecisionsParams = {
 
 export async function saveSwipeDecisionHandler(req: Request, res: Response) {
   try {
-    const { uid, activityId, decision } = req.body as {
-      uid?: unknown;
+    const uid = req.auth?.uid;
+    const { activityId, decision } = req.body as {
       activityId?: unknown;
       decision?: unknown;
     };
 
-    if (
-      typeof uid !== 'string' || typeof activityId !== 'string') {
+    if (!uid) {
+      return res.status(401).json({
+        ok: false,
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'Authenticated user is required',
+        },
+      });
+    }
+
+    if (typeof activityId !== 'string') {
       return res.status(400).json({
         ok: false,
         error: {
           code: 'INVALID_INPUT',
-          message: 'uid and activityId must be strings',
+          message: 'activityId must be a string',
         },
       });
     }
@@ -43,12 +52,12 @@ export async function saveSwipeDecisionHandler(req: Request, res: Response) {
       });
     }
 
-    if (!uid.trim() || !activityId.trim()) {
+    if (!activityId.trim()) {
       return res.status(400).json({
         ok: false,
         error: {
           code: 'EMPTY_INPUT',
-          message: 'uid and activityId are required',
+          message: 'activityId is required',
         },
       });
     }

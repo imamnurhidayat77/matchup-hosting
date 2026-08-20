@@ -63,3 +63,4 @@ coverage/
 
 # Backend Project Folder
 dev-docs/
+apps/api-server/src/modules/auth-dev-only/

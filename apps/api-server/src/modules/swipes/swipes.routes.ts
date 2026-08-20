@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { requireAuth } from '../../middleware/auth.middleware.js';
 import {
     getSwipeDecisionHandler,
     listSwipeDecisionsHandler,
@@ -7,7 +8,7 @@ import {
 
 export const swipesRouter = Router();
 
-swipesRouter.post('/', saveSwipeDecisionHandler);
+swipesRouter.post('/', requireAuth, saveSwipeDecisionHandler);
 swipesRouter.get('/:uid/:activityId', getSwipeDecisionHandler);
 swipesRouter.get('/:uid', listSwipeDecisionsHandler);
 
