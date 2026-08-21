@@ -1,2 +1,0 @@
--- seed.sql — placeholder for development seed data.
--- Real seed scripts will be added during MVP implementation.
