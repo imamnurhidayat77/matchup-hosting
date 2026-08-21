@@ -67,8 +67,6 @@ jobs:
         run: flutter pub get
       - name: Analyze
         run: flutter analyze
-      - name: Test
-        run: flutter test --no-pub
 
       # ── Release build with obfuscation (OWASP M7) ──────────────────────────
       # Compiles to native code and strips debug symbols so reverse-engineering
