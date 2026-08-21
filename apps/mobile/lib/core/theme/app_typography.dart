@@ -1,77 +1,96 @@
 import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
+import 'dark_colors.dart';
 
-/// Figma-based typography for MatchUp.
+/// Typography system for MatchUp — three-font hierarchy.
+///
+/// ## Font roles
+///
+/// | Family            | Role                        | Tier                          |
+/// |-------------------|-----------------------------|-------------------------------|
+/// | **Outfit**        | Heading & Display           | Page titles, game names, hero |
+/// | **Geist**         | Body & Metadata             | Body copy, meta, labels, nav  |
+/// | **Plus Jakarta Sans** | Accent / Highlight      | Badges, sport tags, counts    |
+///
+/// Outfit (Black / ExtraBold / Bold) provides a sporty-geometric, high-impact
+/// character for all headings. Geist (SemiBold / Medium / Regular) is the
+/// workhorse: extremely readable at small sizes, neutral, and modern. Plus
+/// Jakarta Sans (ExtraBold) is reserved for the accent tier — small elements
+/// that need to pop without clashing.
 ///
 /// ## Line height
-/// Figma uses a single ratio — **1.26** — for virtually all UI text. That is the
-/// natural line height of Plus Jakarta Sans, verified across the design file:
-/// `14→17.64`, `12→15.12`, `15→18.9`, `16→20.16`, `18→22.68`, `22→27.72`,
-/// `11→13.86`, `13→16.38`, `20→25.2`, `24→30.24` — every one of them ÷1.26.
-///
-/// The ratio is loosened **only** for long-form reading copy, where Figma is
-/// deliberate: activity description `14/21` (1.5), feed-card description
-/// `13/20.8` (1.6), profile bio `14/20` (1.43).
+/// 1.26 is the natural line height of both Outfit and Geist for UI text —
+/// the ratio works consistently across all three families in Figma.
+/// Loosened to 1.5 only for long-form reading copy (descriptions, chat).
 ///
 /// ## Letter spacing
-/// Plus Jakarta Sans at display sizes is designed with **negative tracking**.
-/// In Figma the setting is "Auto", which for this typeface resolves to roughly
-/// **-2% at headline sizes** — this is why Figma titles look tight and crisp
-/// while a naive Flutter render with `letterSpacing: 0` looks airy and loose.
+/// Outfit at display sizes benefits from slight negative tracking (–2%) to
+/// match the crisp, tight feel of the original Figma mocks. Small UPPERCASE
+/// accent labels (badges, chips) get +0.5 positive tracking so caps don't
+/// visually run together.
 ///
-/// We approximate that with a size-based curve: [_displayTracking] returns
-/// `fontSize × -0.02` for anything 18px and up, `0` for body copy, and slight
-/// positive tracking for small UPPERCASE labels (badges, chips, tabs) where
-/// caps otherwise touch each other visually.
-///
-/// Use [uiLineHeight] for UI text and [readingLineHeight] for paragraphs.
+/// ## Theme-aware colour
+/// Methods that take a [BuildContext] resolve colour from the live theme
+/// (`context.colors.*`). A handful of styles are always paired with a fixed
+/// brand-blue background (splash, onboarding) and use hardcoded colour
+/// constants — those are plain getters.
 class AppTypography {
   AppTypography._();
 
-  static const String fontFamily = 'Plus Jakarta Sans';
+  // ─── Font families ───────────────────────────────────────────────────────
 
-  /// Natural line height of Plus Jakarta Sans — the Figma default for UI text.
+  /// Heading & Display: sporty-geometric, high-impact.
+  static const String _heading = 'Outfit';
+
+  /// Body & Metadata: neutral, highly readable at all sizes.
+  static const String _body = 'Geist';
+
+  /// Accent / Highlight: badges, sport tags, small standout elements.
+  static const String _accent = 'Plus Jakarta Sans';
+
+  /// Back-compat alias — external callers that still reference
+  /// `AppTypography.fontFamily` continue to compile unchanged.
+  static const String fontFamily = _heading;
+
+  // ─── Line heights ────────────────────────────────────────────────────────
+
+  /// Standard UI line height (1.26) — works for Outfit, Geist, and PJS alike.
   static const double uiLineHeight = 1.26;
 
   /// Looser leading for multi-line reading copy (descriptions, chat bubbles).
   static const double readingLineHeight = 1.5;
 
-  /// Negative tracking for display/title text (18px+). At 22px this yields
-  /// -0.44, at 32px -0.64, at 44px -0.88 — matching Figma's "Auto" behaviour
-  /// for Plus Jakarta Sans.
+  // ─── Tracking helpers ────────────────────────────────────────────────────
+
+  /// Negative tracking for display/title text (18 px+). At 22 px this yields
+  /// –0.44, at 32 px –0.64 — keeps Outfit headlines feeling tight and crisp.
   static double _displayTracking(double fontSize) => fontSize * -0.02;
 
-  /// Positive tracking for small UPPERCASE labels — badges, chips, section
-  /// headers like "MY SPORTS". Opens up the caps so they don't visually
-  /// touch each other at 11–12px.
+  /// Positive tracking for small UPPERCASE accent labels (badges, chips).
+  /// Opens caps so they don't visually touch at 11–12 px.
   static const double _capsTracking = 0.5;
 
-  // ─── Display / hero ──────────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════
+  // HEADING TIER — Outfit
+  // ═══════════════════════════════════════════════════════════════════════════
 
-  /// 44px ExtraBold — splash wordmark.
+  // ─── Theme-invariant (fixed white-on-brand-blue backgrounds) ────────────
+
+  /// 44 px Black — splash wordmark. Always white-on-blue; theme-invariant.
   static TextStyle get wordmarkSplash => TextStyle(
-    fontFamily: fontFamily,
+    fontFamily: _heading,
     fontSize: 44,
-    fontWeight: FontWeight.w800,
+    fontWeight: FontWeight.w900,
     letterSpacing: _displayTracking(44),
     height: uiLineHeight,
     color: AppColors.textOnPrimary,
   );
 
-  /// 32px ExtraBold — celebration headings ("It's a Match!", "Spots Filled!").
-  static TextStyle get headlineLarge => TextStyle(
-    fontFamily: fontFamily,
-    fontSize: 32,
-    fontWeight: FontWeight.w800,
-    letterSpacing: _displayTracking(32),
-    height: uiLineHeight,
-    color: AppColors.textPrimary,
-  );
-
-  /// 30px ExtraBold line-height 1.25 — onboarding heading (Figma keeps 1.25).
+  /// 30 px ExtraBold — onboarding heading (line-height 1.25 per Figma).
+  /// Always white-on-illustration; theme-invariant.
   static TextStyle get headingOnboarding => TextStyle(
-    fontFamily: fontFamily,
+    fontFamily: _heading,
     fontSize: 30,
     fontWeight: FontWeight.w800,
     letterSpacing: _displayTracking(30),
@@ -79,250 +98,273 @@ class AppTypography {
     color: AppColors.textOnPrimary,
   );
 
-  /// 28px ExtraBold — welcome / signin / signup headings.
-  static TextStyle get headingDisplay => TextStyle(
-    fontFamily: fontFamily,
+  // ─── Theme-aware ─────────────────────────────────────────────────────────
+
+  /// 32 px ExtraBold — celebration headings ("It's a Match!", "Spots Filled!").
+  static TextStyle headlineLarge(BuildContext context) => TextStyle(
+    fontFamily: _heading,
+    fontSize: 32,
+    fontWeight: FontWeight.w800,
+    letterSpacing: _displayTracking(32),
+    height: uiLineHeight,
+    color: context.colors.textPrimary,
+  );
+
+  /// 28 px ExtraBold — welcome / signin / signup headings.
+  static TextStyle headingDisplay(BuildContext context) => TextStyle(
+    fontFamily: _heading,
     fontSize: 28,
     fontWeight: FontWeight.w800,
     letterSpacing: _displayTracking(28),
     height: uiLineHeight,
-    color: AppColors.textPrimary,
+    color: context.colors.textPrimary,
   );
 
-  /// 24px ExtraBold — recovery-flow headings, OTP digits.
-  static TextStyle get headlineMedium => TextStyle(
-    fontFamily: fontFamily,
+  /// 24 px ExtraBold — recovery-flow headings, OTP digit display.
+  static TextStyle headlineMedium(BuildContext context) => TextStyle(
+    fontFamily: _heading,
     fontSize: 24,
     fontWeight: FontWeight.w800,
     letterSpacing: _displayTracking(24),
     height: uiLineHeight,
-    color: AppColors.textPrimary,
+    color: context.colors.textPrimary,
   );
 
-  // ─── Titles ──────────────────────────────────────────────────────────────
-
-  /// 22px ExtraBold — screen titles and activity titles (Figma 43:224).
-  static TextStyle get titleScreen => TextStyle(
-    fontFamily: fontFamily,
+  /// 22 px ExtraBold — screen titles and activity titles (Figma 43:224).
+  static TextStyle titleScreen(BuildContext context) => TextStyle(
+    fontFamily: _heading,
     fontSize: 22,
     fontWeight: FontWeight.w800,
     letterSpacing: _displayTracking(22),
     height: uiLineHeight,
-    color: AppColors.textPrimary,
+    color: context.colors.textPrimary,
   );
 
-  /// 20px ExtraBold — sheet titles, profile name.
-  static TextStyle get headlineSmall => TextStyle(
-    fontFamily: fontFamily,
+  /// 20 px ExtraBold — sheet titles, profile name.
+  static TextStyle headlineSmall(BuildContext context) => TextStyle(
+    fontFamily: _heading,
     fontSize: 20,
     fontWeight: FontWeight.w800,
     letterSpacing: _displayTracking(20),
     height: uiLineHeight,
-    color: AppColors.textPrimary,
+    color: context.colors.textPrimary,
   );
 
-  /// 18px ExtraBold — "Create Activity", "Edit Profile" (Figma 43:293).
-  static TextStyle get titleSheet => TextStyle(
-    fontFamily: fontFamily,
+  /// 18 px ExtraBold — "Create Activity", "Edit Profile" (Figma 43:293).
+  static TextStyle titleSheet(BuildContext context) => TextStyle(
+    fontFamily: _heading,
     fontSize: 18,
     fontWeight: FontWeight.w800,
     letterSpacing: _displayTracking(18),
     height: uiLineHeight,
-    color: AppColors.textPrimary,
+    color: context.colors.textPrimary,
   );
 
-  /// 18px SemiBold — softer 18px title.
-  static TextStyle get titleLarge => TextStyle(
-    fontFamily: fontFamily,
+  /// 18 px Bold — softer 18 px title variant.
+  static TextStyle titleLarge(BuildContext context) => TextStyle(
+    fontFamily: _heading,
     fontSize: 18,
-    fontWeight: FontWeight.w600,
+    fontWeight: FontWeight.w700,
     letterSpacing: _displayTracking(18),
     height: uiLineHeight,
-    color: AppColors.textPrimary,
+    color: context.colors.textPrimary,
   );
 
-  /// 16px SemiBold.
-  static TextStyle get titleMedium => const TextStyle(
-    fontFamily: fontFamily,
+  /// 16 px Bold — section headers, card titles.
+  static TextStyle titleMedium(BuildContext context) => TextStyle(
+    fontFamily: _heading,
     fontSize: 16,
-    fontWeight: FontWeight.w600,
+    fontWeight: FontWeight.w700,
     height: uiLineHeight,
-    color: AppColors.textPrimary,
+    color: context.colors.textPrimary,
   );
 
-  // ─── Body ────────────────────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════
+  // BODY TIER — Geist
+  // ═══════════════════════════════════════════════════════════════════════════
 
-  static TextStyle get bodyLarge => const TextStyle(
-    fontFamily: fontFamily,
+  /// 16 px Regular — standard body text.
+  static TextStyle bodyLarge(BuildContext context) => TextStyle(
+    fontFamily: _body,
     fontSize: 16,
     fontWeight: FontWeight.normal,
     height: uiLineHeight,
-    color: AppColors.textLabel,
+    color: context.colors.textLabel,
   );
 
-  static TextStyle get bodyMedium => const TextStyle(
-    fontFamily: fontFamily,
+  /// 14 px Regular — default body / list-item text.
+  static TextStyle bodyMedium(BuildContext context) => TextStyle(
+    fontFamily: _body,
     fontSize: 14,
     fontWeight: FontWeight.normal,
     height: uiLineHeight,
-    color: AppColors.textSecondary,
+    color: context.colors.textSecondary,
   );
 
-  /// 12px Regular. Colour fixed at [AppColors.textSecondary] (4.76:1 on
-  /// white) rather than [AppColors.textTertiary] (2.54:1 — fails WCAG AA for
-  /// text). See PRD Appendix E.3: `textTertiary` is fine for icons and
-  /// decorative strokes, never for the default colour of a text style.
-  static TextStyle get bodySmall => const TextStyle(
-    fontFamily: fontFamily,
+  /// 12 px Regular. Colour fixed at `textSecondary` (4.76:1 on white) rather
+  /// than `textTertiary` (2.54:1 — fails WCAG AA for text). See PRD Appendix
+  /// E.3: `textTertiary` is fine for icons and decorative strokes, never for
+  /// the default colour of a text style.
+  static TextStyle bodySmall(BuildContext context) => TextStyle(
+    fontFamily: _body,
     fontSize: 12,
     fontWeight: FontWeight.normal,
     height: uiLineHeight,
-    color: AppColors.textSecondary,
+    color: context.colors.textSecondary,
   );
 
-  /// 14px Regular, leading **1.5** — multi-line reading copy such as
+  /// 14 px Regular, leading **1.5** — multi-line reading copy such as
   /// "About this Activity" (Figma 43:248) and chat bubbles (43:800).
-  static TextStyle get bodyReading => const TextStyle(
-    fontFamily: fontFamily,
+  static TextStyle bodyReading(BuildContext context) => TextStyle(
+    fontFamily: _body,
     fontSize: 14,
     fontWeight: FontWeight.normal,
     height: readingLineHeight,
-    color: AppColors.textPrimary,
+    color: context.colors.textPrimary,
   );
 
-  /// 16px Regular line-height 1.5 — onboarding description (Figma 42:42).
+  /// 16 px Regular line-height 1.5 — onboarding description (Figma 42:42).
+  /// Always white-on-illustration; theme-invariant.
   static TextStyle get bodyOnboarding => const TextStyle(
-    fontFamily: fontFamily,
+    fontFamily: _body,
     fontSize: 16,
     fontWeight: FontWeight.normal,
     height: readingLineHeight,
     color: AppColors.textOnPrimary,
   );
 
-  /// 15px Regular — signin/signup supporting copy.
-  static TextStyle get bodyFormSecondary => const TextStyle(
-    fontFamily: fontFamily,
+  /// 15 px Regular — signin/signup supporting copy.
+  static TextStyle bodyFormSecondary(BuildContext context) => TextStyle(
+    fontFamily: _body,
     fontSize: 15,
     fontWeight: FontWeight.normal,
     height: uiLineHeight,
-    color: AppColors.textSecondary,
+    color: context.colors.textSecondary,
   );
 
-  // ─── Labels & meta ───────────────────────────────────────────────────────
+  // ─── Labels & meta (Geist) ───────────────────────────────────────────────
 
-  /// 14px Bold — form field label (Figma 43:297).
-  static TextStyle get labelField => const TextStyle(
-    fontFamily: fontFamily,
-    fontSize: 14,
-    fontWeight: FontWeight.w700,
-    height: uiLineHeight,
-    color: AppColors.textPrimary,
-  );
-
-  /// 14px SemiBold — Figma input label (signin/signup).
-  static TextStyle get inputLabel => const TextStyle(
-    fontFamily: fontFamily,
+  /// 14 px SemiBold — form field label (Figma 43:297).
+  static TextStyle labelField(BuildContext context) => TextStyle(
+    fontFamily: _body,
     fontSize: 14,
     fontWeight: FontWeight.w600,
     height: uiLineHeight,
-    color: AppColors.textLabel,
+    color: context.colors.textPrimary,
   );
 
-  /// 13px SemiBold — compact input label (signup).
-  static TextStyle get inputLabelSmall => const TextStyle(
-    fontFamily: fontFamily,
+  /// 14 px Medium — Figma input label (signin/signup).
+  static TextStyle inputLabel(BuildContext context) => TextStyle(
+    fontFamily: _body,
+    fontSize: 14,
+    fontWeight: FontWeight.w500,
+    height: uiLineHeight,
+    color: context.colors.textLabel,
+  );
+
+  /// 13 px Medium — compact input label (signup).
+  static TextStyle inputLabelSmall(BuildContext context) => TextStyle(
+    fontFamily: _body,
     fontSize: 13,
-    fontWeight: FontWeight.w600,
+    fontWeight: FontWeight.w500,
     height: uiLineHeight,
-    color: AppColors.textLabel,
+    color: context.colors.textLabel,
   );
 
-  /// 12px Regular — meta-row sub text (Figma 43:239).
+  /// 12 px Regular — meta-row sub text (Figma 43:239).
   ///
   /// Note: Figma renders this `#0f172a`, identical to the row title, which
   /// flattens the hierarchy — and it contradicts itself on
   /// `joined-activity-detail` (74:42) where the same sub text is `#64748b`.
   /// We follow the latter: sub text must read lighter than its heading.
-  static TextStyle get metaSub => const TextStyle(
-    fontFamily: fontFamily,
+  static TextStyle metaSub(BuildContext context) => TextStyle(
+    fontFamily: _body,
     fontSize: 12,
     fontWeight: FontWeight.normal,
     height: uiLineHeight,
-    color: AppColors.textSecondary,
+    color: context.colors.textSecondary,
   );
 
-  /// 13px SemiBold in `primaryDarker` — accent counts such as
-  /// "6 joined / 10 total" (Figma 43:252).
-  static TextStyle get countAccent => const TextStyle(
-    fontFamily: fontFamily,
+  /// 11 px Medium — bottom navigation label (Figma 43:336).
+  static TextStyle tabLabel(BuildContext context) => TextStyle(
+    fontFamily: _body,
+    fontSize: 11,
+    fontWeight: FontWeight.w500,
+    letterSpacing: 0.2,
+    height: uiLineHeight,
+    color: context.colors.textSecondary,
+  );
+
+  /// 12 px Medium — general captions. Colour fixed at `textSecondary` for the
+  /// same contrast reason as [bodySmall] — see Appendix E.3.
+  static TextStyle caption(BuildContext context) => TextStyle(
+    fontFamily: _body,
+    fontSize: 12,
+    fontWeight: FontWeight.w500,
+    height: uiLineHeight,
+    color: context.colors.textSecondary,
+  );
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ACCENT TIER — Plus Jakarta Sans
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /// 13 px SemiBold — counts such as "6 joined / 10 total" (Figma 43:252).
+  /// PJS accent colour keeps it visually distinct from surrounding Geist body.
+  static TextStyle countAccent(BuildContext context) => TextStyle(
+    fontFamily: _accent,
     fontSize: 13,
     fontWeight: FontWeight.w600,
     height: uiLineHeight,
-    color: AppColors.primaryDarker,
+    color: context.colors.primaryOnSurface,
   );
 
-  /// 12px Bold — skill chip text (Figma 57:9).
-  static TextStyle get chipLabel => const TextStyle(
-    fontFamily: fontFamily,
+  /// 12 px ExtraBold — skill chip / status chip text (Figma 57:9).
+  static TextStyle chipLabel(BuildContext context) => TextStyle(
+    fontFamily: _accent,
     fontSize: 12,
-    fontWeight: FontWeight.w700,
+    fontWeight: FontWeight.w800,
     letterSpacing: _capsTracking,
     height: uiLineHeight,
-    color: AppColors.textPrimary,
+    color: context.colors.textPrimary,
   );
 
-  /// 11px ExtraBold — sport tag (Figma 75:5).
-  static TextStyle get badgeSport => const TextStyle(
-    fontFamily: fontFamily,
+  /// 11 px ExtraBold — sport tag badge (Figma 75:5).
+  static TextStyle badgeSport(BuildContext context) => TextStyle(
+    fontFamily: _accent,
     fontSize: 11,
     fontWeight: FontWeight.w800,
     letterSpacing: _capsTracking,
     height: uiLineHeight,
-    color: AppColors.primaryDarker,
+    color: context.colors.primaryOnSurface,
   );
 
-  /// 11px SemiBold — bottom navigation label (Figma 43:336).
-  static TextStyle get tabLabel => const TextStyle(
-    fontFamily: fontFamily,
-    fontSize: 11,
-    fontWeight: FontWeight.w600,
-    letterSpacing: 0.3,
-    height: uiLineHeight,
-    color: AppColors.textSecondary,
-  );
+  // ═══════════════════════════════════════════════════════════════════════════
+  // BUTTON TIER — Outfit (impact + legibility on coloured fills)
+  // ═══════════════════════════════════════════════════════════════════════════
 
-  /// 12px Medium. Colour fixed at [AppColors.textSecondary] for the same
-  /// contrast reason as [bodySmall] — see Appendix E.3.
-  static TextStyle get caption => const TextStyle(
-    fontFamily: fontFamily,
-    fontSize: 12,
-    fontWeight: FontWeight.w500,
-    height: uiLineHeight,
-    color: AppColors.textSecondary,
-  );
-
-  // ─── Buttons ─────────────────────────────────────────────────────────────
-
-  /// 16px Bold — primary pill button (Figma 43:332).
+  /// 16 px Bold — primary pill button (Figma 43:332). Always white text on a
+  /// fixed `primary`-coloured fill; theme-invariant.
   static TextStyle get buttonPrimary => const TextStyle(
-    fontFamily: fontFamily,
+    fontFamily: _heading,
     fontSize: 16,
     fontWeight: FontWeight.w700,
     height: uiLineHeight,
     color: AppColors.textOnPrimary,
   );
 
-  /// 15px SemiBold — social pill button.
-  static TextStyle get buttonSocial => const TextStyle(
-    fontFamily: fontFamily,
+  /// 15 px SemiBold — social pill button (sits on the theme's surface).
+  static TextStyle buttonSocial(BuildContext context) => TextStyle(
+    fontFamily: _heading,
     fontSize: 15,
     fontWeight: FontWeight.w600,
     height: uiLineHeight,
-    color: AppColors.textPrimary,
+    color: context.colors.textPrimary,
   );
 
+  /// 16 px SemiBold — generic button (no fixed colour).
   static TextStyle get button => const TextStyle(
-    fontFamily: fontFamily,
+    fontFamily: _heading,
     fontSize: 16,
     fontWeight: FontWeight.w600,
     height: uiLineHeight,

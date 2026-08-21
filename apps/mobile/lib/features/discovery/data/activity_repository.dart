@@ -1,3 +1,4 @@
+import '../../activities/domain/activity_participant.dart';
 import '../domain/activity_model.dart';
 
 /// Read/write contract for activity data. Both [DummyActivityRepository]
@@ -8,6 +9,9 @@ abstract class ActivityRepository {
   Future<List<ActivityModel>> feed({int limit = 20, int offset = 0});
 
   Future<ActivityModel?> byId(String id);
+
+  /// Roster for a single activity, used by the Activity Participants screen.
+  Future<List<ActivityParticipant>> participants(String activityId);
 
   Future<List<ActivityModel>> joinedByUser(String userId);
 
@@ -27,11 +31,16 @@ abstract class ActivityRepository {
     required int maxParticipants,
     required String skillLevel,
     required double fee,
+    int durationMinutes = 120,
   });
 
   Future<void> join(String activityId);
 
   Future<void> leave(String activityId);
+
+  /// Cancels a hosted activity, notifying all participants. Used by the
+  /// Manage Activity screen's host-only "Cancel Activity" action.
+  Future<void> cancel(String activityId);
 
   Future<List<ActivityModel>> pastByUser(String userId);
 }

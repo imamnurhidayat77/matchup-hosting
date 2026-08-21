@@ -4,33 +4,33 @@ import 'package:flutter/material.dart';
 class AppColors {
   AppColors._();
 
-  // Primary blue — Figma `#2572E5`.
+  // Primary blue — `#0B1F8A`.
   // Use for FILLS only. For text on white use [primaryDarker]: primary on white
   // is 4.03:1 (fails WCAG AA for text), primaryDarker is 6.4:1 (passes).
-  static const Color primary = Color(0xFF2572E5);
-  static const Color primaryDark = Color(0xFF1D4ED8);
+  static const Color primary = Color(0xFF0B1F8A);
+  static const Color primaryDark = Color(0xFF0B1F8A);
   static const Color primaryDarker = Color(
-    0xFF145AC8,
-  ); // Figma primary-dark token
+    0xFF0B1F8A,
+  ); // primary-dark token
   static const Color primaryLight = Color(0xFFDBEAFE);
 
-  // Splash gradient endpoints (Figma)
-  static const Color splashTop = Color(0xFF2D7FF9);
-  static const Color splashBottom = Color(0xFF1A5BC4);
+  // Splash gradient endpoints
+  static const Color splashTop = Color(0xFF0B1F8A);
+  static const Color splashBottom = Color(0xFF0B1F8A);
 
   // Accent orange
   static const Color accent = Color(0xFFFF6B00);
   static const Color accentLight = Color(0xFFFFE5D0);
 
   // Backgrounds
-  static const Color background = Color(0xFFF8F9FA);
+  static const Color background = Color(0xFFF5F7FA);
   static const Color surface = Colors.white;
   static const Color card = Colors.white;
 
   // Text (Figma tokens)
   static const Color textPrimary = Color(0xFF0F172A); // Figma text-primary
   static const Color textLabel = Color(0xFF334155); // Figma text-label
-  static const Color textSecondary = Color(0xFF64748B); // Figma text-secondary
+  static const Color textSecondary = Color(0xFF475569); // Figma text-secondary (slate-600, AA on white)
 
   /// Contrast on white is only 2.54:1 — fails WCAG AA for text (needs 4.5:1).
   /// Decorative use only: unselected nav icons, dots, empty-state glyphs.
@@ -58,6 +58,15 @@ class AppColors {
   static const Color scrim = Color(
     0x660F172A,
   ); // 40% black overlay on onboarding illustrations
+
+  /// 65% slate overlay on full-bleed onboarding illustrations (Figma).
+  static const Color scrimIllustration = Color(0xA60F172A);
+
+  /// 80% black gradient stop for the diagonal onboarding overlay.
+  static const Color scrimGradient = Color(0xCC000000);
+
+  /// Fully transparent stop for gradient ends.
+  static const Color scrimTransparent = Color(0x00000000);
 
   /// Scrim for a control sitting *on top of* [scrim] (e.g. the back/share
   /// buttons over a hero photo). 30% slate: dark enough to separate the button
@@ -105,6 +114,10 @@ class AppColors {
   /// Muted surface — segmented-control track, attachment button, neutral badge
   /// (Figma: #F1F5F9).
   static const Color surfaceMuted = Color(0xFFF1F5F9);
+
+  /// `ColorScheme.surfaceContainerHighest` — a step darker than
+  /// [surfaceMuted], only ever used inside Material's own `ColorScheme`.
+  static const Color surfaceContainerHighest = Color(0xFFF3F4F6);
 
   /// Muted slate (Figma: #94A3B8). Contrast on white is only 2.8:1, so this is
   /// for decorative rules, dots and unselected radio strokes — never for text.

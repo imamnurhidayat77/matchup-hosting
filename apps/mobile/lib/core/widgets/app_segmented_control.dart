@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
+import '../theme/dark_colors.dart';
+import 'pressable_scale.dart';
 
 /// Pill-style segmented control (like iOS UISegmentedControl) used for
 /// tabs that don't need full navigation (e.g. Upcoming/Hosting/Past,
@@ -23,6 +24,7 @@ class AppSegmentedControl extends StatelessWidget {
     required this.selectedIndex,
     required this.onChanged,
     this.height = 40,
+    this.activeLabelColor,
   });
 
   final List<String> labels;
@@ -30,22 +32,26 @@ class AppSegmentedControl extends StatelessWidget {
   final ValueChanged<int> onChanged;
   final double height;
 
+  /// Colour of the selected segment's label. Defaults to
+  /// `primaryOnSurface`; pass `textPrimary` for a neutral high-contrast
+  /// treatment where the white pill alone carries the selected state.
+  final Color? activeLabelColor;
+
   @override
   Widget build(BuildContext context) {
     return Container(
       height: height,
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: AppColors.surfaceSubtle,
+        color: context.colors.surfaceSubtle,
         borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.colors.border),
       ),
       child: Row(
         children: List.generate(labels.length, (i) {
           final selected = i == selectedIndex;
           return Expanded(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
+            child: PressableScale(
               onTap: () {
                 if (i != selectedIndex) {
                   HapticFeedback.selectionClick();
@@ -57,26 +63,18 @@ class AppSegmentedControl extends StatelessWidget {
                 curve: Curves.easeOutCubic,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: selected ? AppColors.surface : Colors.transparent,
+                  color: selected ? context.colors.surface : Colors.transparent,
                   borderRadius: BorderRadius.circular(AppRadius.sm),
-                  boxShadow: selected
-                      ? const [
-                          BoxShadow(
-                            color: Color(0x0F000000),
-                            blurRadius: 6,
-                            offset: Offset(0, 2),
-                          ),
-                        ]
-                      : null,
+                  boxShadow: selected ? AppShadows.card : null,
                 ),
                 child: Text(
                   labels[i],
-                  style: AppTypography.bodyMedium.copyWith(
+                  style: AppTypography.bodyMedium(context).copyWith(
                     fontSize: 13,
                     fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                     color: selected
-                        ? AppColors.primaryDarker
-                        : AppColors.textSecondary,
+                        ? (activeLabelColor ?? context.colors.primaryOnSurface)
+                        : context.colors.textSecondary,
                   ),
                 ),
               ),

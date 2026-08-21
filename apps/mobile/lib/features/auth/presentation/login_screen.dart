@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/providers/auth_state_provider.dart';
 import '../../../core/services/biometric_service.dart';
-import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/theme/dark_colors.dart';
 import '../../../core/utils/secure_screen.dart';
-import '../../../core/widgets/home_indicator.dart';
+import '../../../core/widgets/app_icon.dart';
 import '../../../core/widgets/icon_input_field.dart';
 import '../../../core/widgets/pill_buttons.dart';
+import '../../../core/widgets/pressable_scale.dart';
+import 'widgets/auth_shell.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -23,10 +25,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     with SecureScreenMixin {
   bool _biometricAvailable = false;
 
+  final _formKey = GlobalKey<FormState>();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _obscurePassword = true;
+  bool _isLoading = false;
+
   @override
   void initState() {
     super.initState();
     _detectBiometrics();
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 
   Future<void> _detectBiometrics() async {
@@ -60,38 +75,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         const SnackBar(content: Text('Biometric authentication failed')),
       );
     }
-  }
-
-  Widget _biometricButton() {
-    return OutlinedButton.icon(
-      style: OutlinedButton.styleFrom(
-        side: const BorderSide(color: AppColors.primaryDarker),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-      ),
-      icon: const Icon(Icons.fingerprint, color: AppColors.primaryDarker),
-      label: Text(
-        'Use Biometrics',
-        style: AppTypography.bodyFormSecondary.copyWith(
-          color: AppColors.primaryDarker,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-      onPressed: _onBiometricLogin,
-    );
-  }
-
-  final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  bool _obscurePassword = true;
-  bool _isLoading = false;
-
-  @override
-  void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    super.dispose();
   }
 
   Future<void> _onLogin() async {
@@ -136,167 +119,188 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     return null;
   }
 
+  Widget _biometricButton(BuildContext context) {
+    return OutlinedButton.icon(
+      style: OutlinedButton.styleFrom(
+        side: BorderSide(color: context.colors.primaryOnSurface),
+        shape: const StadiumBorder(),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.x6,
+          vertical: AppSpacing.x3,
+        ),
+      ),
+      icon: AppIcon.material(
+        Icons.fingerprint,
+        color: context.colors.primaryOnSurface,
+      ),
+      label: Text(
+        'Use Biometrics',
+        style: AppTypography.bodyFormSecondary(context).copyWith(
+          color: context.colors.primaryOnSurface,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      onPressed: _onBiometricLogin,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.surface,
-      body: SafeArea(
-        top: true,
-        child: SingleChildScrollView(
-          padding: EdgeInsets.zero,
+    return AuthShell(
+      scrollPadding: EdgeInsets.zero,
+      header: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.x6,
+          AppSpacing.x3,
+          AppSpacing.x6,
+          0,
+        ),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: AuthCloseButton(onTap: () => context.go('/welcome')),
+        ),
+      ),
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x6),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header: close X + title block
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Semantics(
-                      button: true,
-                      label: 'Close',
-                      child: GestureDetector(
-                        onTap: () => context.go('/welcome'),
-                        child: SvgPicture.asset(
-                          'assets/images/auth/close_x.svg',
-                          width: 24,
-                          height: 24,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text('Sign In', style: AppTypography.headingDisplay),
-                    const SizedBox(height: 8),
-                    Text(
-                      "Let's sign in to your MatchUp account",
-                      style: AppTypography.bodyFormSecondary,
-                    ),
-                  ],
-                ),
+              const SizedBox(height: AppSpacing.x4),
+              Text('Sign In', style: AppTypography.headingDisplay(context)),
+              const SizedBox(height: AppSpacing.x2),
+              Text(
+                "Let's sign in to your MatchUp account",
+                style: AppTypography.bodyFormSecondary(context),
               ),
-              const SizedBox(height: 16),
-              // Social buttons
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Column(
-                  children: [
-                    SocialPillButton(
-                      label: 'Sign in with Apple',
-                      icon: 'assets/images/auth/apple.svg',
-                      onPressed: () {},
-                    ),
-                    const SizedBox(height: 12),
-                    SocialPillButton(
-                      label: 'Sign in with Google',
-                      icon: 'assets/images/auth/google.svg',
-                      onPressed: () {},
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              // Form
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      IconInputField(
-                        label: 'Email',
-                        hint: 'Enter your email',
-                        controller: _emailController,
-                        leadingIcon: 'assets/images/auth/mail.svg',
-                        keyboardType: TextInputType.emailAddress,
-                        autofillHints: const [AutofillHints.email],
-                        textInputAction: TextInputAction.next,
-                        validator: _validateEmail,
-                      ),
-                      const SizedBox(height: 16),
-                      IconInputField(
-                        label: 'Password',
-                        hint: 'Enter your password',
-                        controller: _passwordController,
-                        leadingIcon: 'assets/images/auth/lock.svg',
-                        obscureText: _obscurePassword,
-                        autofillHints: const [AutofillHints.password],
-                        textInputAction: TextInputAction.done,
-                        onSubmitted: (_) => _onLogin(),
-                        validator: _validatePassword,
-                        trailing: PasswordToggle(
-                          obscure: _obscurePassword,
-                          onTap: () => setState(
-                            () => _obscurePassword = !_obscurePassword,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: GestureDetector(
-                          onTap: () => context.go('/forgot-password'),
-                          child: Text(
-                            'Forgot Password?',
-                            style: AppTypography.bodyMedium.copyWith(
-                              color: AppColors.primaryDarker,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              // Primary action + sign up prompt
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Column(
-                  children: [
-                    PrimaryPill(
-                      label: _isLoading ? 'Signing in...' : 'Sign In',
-                      onPressed: _isLoading ? null : _onLogin,
-                    ),
-                    if (_biometricAvailable) ...[
-                      const SizedBox(height: 12),
-                      _biometricButton(),
-                    ],
-                    const SizedBox(height: 16),
-                    Center(
-                      child: Wrap(
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        spacing: 4,
-                        children: [
-                          Text(
-                            "Don't have an account?",
-                            style: AppTypography.bodyFormSecondary,
-                          ),
-                          GestureDetector(
-                            onTap: () => context.go('/register'),
-                            child: Text(
-                              'Sign Up',
-                              style: AppTypography.bodyFormSecondary.copyWith(
-                                color: AppColors.primaryDarker,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              const HomeIndicator(),
             ],
           ),
         ),
-      ),
+        const SizedBox(height: AppSpacing.x4),
+        // Social buttons
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x6),
+          child: Column(
+            children: [
+              SocialPillButton(
+                label: 'Sign in with Apple',
+                icon: 'assets/images/auth/apple.svg',
+                onPressed: () {},
+              ),
+              const SizedBox(height: AppSpacing.x3),
+              SocialPillButton(
+                label: 'Sign in with Google',
+                icon: 'assets/images/auth/google.svg',
+                onPressed: () {},
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.x4),
+        // Form
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x6),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                IconInputField(
+                  label: 'Email',
+                  hint: 'Enter your email',
+                  controller: _emailController,
+                  leadingIcon: 'assets/images/auth/mail.svg',
+                  keyboardType: TextInputType.emailAddress,
+                  autofillHints: const [AutofillHints.email],
+                  textInputAction: TextInputAction.next,
+                  validator: _validateEmail,
+                ),
+                const SizedBox(height: AppSpacing.x4),
+                IconInputField(
+                  label: 'Password',
+                  hint: 'Enter your password',
+                  controller: _passwordController,
+                  leadingIcon: 'assets/images/auth/lock.svg',
+                  obscureText: _obscurePassword,
+                  autofillHints: const [AutofillHints.password],
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _onLogin(),
+                  validator: _validatePassword,
+                  trailing: PasswordToggle(
+                    obscure: _obscurePassword,
+                    onTap: () =>
+                        setState(() => _obscurePassword = !_obscurePassword),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.x3),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Semantics(
+                    button: true,
+                    label: 'Forgot password?',
+                    child: PressableScale(
+                      onTap: () => context.go('/forgot-password'),
+                      child: Text(
+                        'Forgot Password?',
+                        style: AppTypography.inputLabel(context).copyWith(
+                          color: context.colors.primaryOnSurface,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.x4),
+        // Primary action + sign up prompt
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x6),
+          child: Column(
+            children: [
+              PrimaryPill(
+                label: _isLoading ? 'Signing in...' : 'Sign In',
+                onPressed: _isLoading ? null : _onLogin,
+              ),
+              if (_biometricAvailable) ...[
+                const SizedBox(height: AppSpacing.x3),
+                _biometricButton(context),
+              ],
+              const SizedBox(height: AppSpacing.x4),
+              Center(
+                child: Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: AppSpacing.x1,
+                  children: [
+                    Text(
+                      "Don't have an account?",
+                      style: AppTypography.bodyFormSecondary(context),
+                    ),
+                    Semantics(
+                      button: true,
+                      label: 'Sign up',
+                      child: PressableScale(
+                        onTap: () => context.go('/register'),
+                        child: Text(
+                          'Sign Up',
+                          style: AppTypography.bodyFormSecondary(context)
+                              .copyWith(
+                                color: context.colors.primaryOnSurface,
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.x4),
+      ],
     );
   }
 }

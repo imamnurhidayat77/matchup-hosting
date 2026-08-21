@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
+import '../theme/dark_colors.dart';
 import 'app_button.dart';
 
 /// Standardized empty state: an icon in a soft tinted circle, a title, an
@@ -36,26 +36,30 @@ class EmptyState extends StatelessWidget {
             Container(
               width: 72,
               height: 72,
-              decoration: const BoxDecoration(
-                color: AppColors.primarySoft,
+              decoration: BoxDecoration(
+                color: context.colors.primarySoft,
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, size: 32, color: AppColors.primaryDarker),
+              child: Icon(
+                icon,
+                size: 32,
+                color: context.colors.primaryOnSurface,
+              ),
             ),
             const SizedBox(height: AppSpacing.x5),
             Text(
               title,
               textAlign: TextAlign.center,
-              style: AppTypography.titleSheet,
+              style: AppTypography.titleSheet(context),
             ),
             if (subtitle != null) ...[
               const SizedBox(height: AppSpacing.x2),
               Text(
                 subtitle!,
                 textAlign: TextAlign.center,
-                style: AppTypography.bodyReading.copyWith(
-                  color: AppColors.textSecondary,
-                ),
+                style: AppTypography.bodyReading(
+                  context,
+                ).copyWith(color: context.colors.textSecondary),
               ),
             ],
             if (actionLabel != null && onAction != null) ...[

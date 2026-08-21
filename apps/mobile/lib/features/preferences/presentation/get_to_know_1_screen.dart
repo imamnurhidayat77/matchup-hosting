@@ -5,8 +5,11 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
-import '../../../core/widgets/home_indicator.dart';
+import '../../../core/theme/dark_colors.dart';
+import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/app_tappable.dart';
 import '../../../core/widgets/pill_buttons.dart';
+import '../../../core/widgets/pressable_scale.dart';
 
 // Persists the selected reason so it's available to analytics / onboarding
 // flow without cluttering a global provider. Local state is enough here.
@@ -31,66 +34,58 @@ class _GetToKnow1ScreenState extends ConsumerState<GetToKnow1Screen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.surface,
-      body: SafeArea(
-        top: true,
-        child: Column(
-          children: [
-            OnboardingProgressHeader(step: 1, total: 3),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.x6,
-                  AppSpacing.x6,
-                  AppSpacing.x6,
-                  0,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "What's your primary\nreason for joining MatchUp?",
-                      style: AppTypography.headlineSmall.copyWith(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        height: 1.3,
+    return AppScaffold(
+      showHomeIndicator: false, // inside ShellRoute — AppShell draws its own.
+      body: Column(
+        children: [
+          OnboardingProgressHeader(step: 1, total: 3),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.x6,
+                AppSpacing.x6,
+                AppSpacing.x6,
+                0,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "What's your primary\nreason for joining MatchUp?",
+                    style: AppTypography.titleScreen(context),
+                  ),
+                  const SizedBox(height: AppSpacing.x3),
+                  Text(
+                    'Pick one that resonates most.',
+                    style: AppTypography.bodyMedium(
+                      context,
+                    ).copyWith(color: context.colors.textSecondary),
+                  ),
+                  const SizedBox(height: AppSpacing.x5),
+                  Expanded(
+                    child: ListView.separated(
+                      itemCount: _options.length,
+                      separatorBuilder: (_, _) =>
+                          const SizedBox(height: AppSpacing.x3),
+                      itemBuilder: (_, i) => _OptionTile(
+                        icon: _options[i].$2,
+                        label: _options[i].$1,
+                        selected: i == _selected,
+                        onTap: () => setState(() => _selected = i),
                       ),
                     ),
-                    const SizedBox(height: AppSpacing.x3),
-                    Text(
-                      'Pick one that resonates most.',
-                      style: AppTypography.bodyMedium.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.x5),
-                    Expanded(
-                      child: ListView.separated(
-                        itemCount: _options.length,
-                        separatorBuilder: (_, _) =>
-                            const SizedBox(height: AppSpacing.x3),
-                        itemBuilder: (_, i) => _OptionTile(
-                          icon: _options[i].$2,
-                          label: _options[i].$1,
-                          selected: i == _selected,
-                          onTap: () => setState(() => _selected = i),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.x4),
-                    PrimaryPillButton(
-                      label: 'Next',
-                      onPressed: () => context.push('/get-to-know-2'),
-                    ),
-                    const SizedBox(height: AppSpacing.x2),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: AppSpacing.x4),
+                  PrimaryPillButton(
+                    label: 'Next',
+                    onPressed: () => context.push('/get-to-know-2'),
+                  ),
+                  const SizedBox(height: AppSpacing.x2),
+                ],
               ),
             ),
-            const HomeIndicator(),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -126,16 +121,15 @@ class OnboardingProgressHeader extends StatelessWidget {
               Semantics(
                 button: true,
                 label: 'Back',
-                child: GestureDetector(
+                child: PressableScale(
                   onTap: () => Navigator.of(context).maybePop(),
-                  behavior: HitTestBehavior.opaque,
-                  child: const SizedBox(
+                  child: SizedBox(
                     width: 40,
                     height: 40,
                     child: Icon(
                       Icons.arrow_back_ios_new_rounded,
                       size: 18,
-                      color: AppColors.textPrimary,
+                      color: context.colors.textPrimary,
                     ),
                   ),
                 ),
@@ -144,8 +138,8 @@ class OnboardingProgressHeader extends StatelessWidget {
                 child: Text(
                   "LET'S GET TO KNOW YOU",
                   textAlign: TextAlign.center,
-                  style: AppTypography.caption.copyWith(
-                    color: AppColors.primaryDarker,
+                  style: AppTypography.caption(context).copyWith(
+                    color: context.colors.primaryOnSurface,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 1.0,
                     fontSize: 11,
@@ -154,8 +148,8 @@ class OnboardingProgressHeader extends StatelessWidget {
               ),
               Text(
                 '$step/$total',
-                style: AppTypography.caption.copyWith(
-                  color: AppColors.textSecondary,
+                style: AppTypography.caption(context).copyWith(
+                  color: context.colors.textSecondary,
                   fontWeight: FontWeight.w700,
                   fontSize: 12,
                 ),
@@ -165,11 +159,11 @@ class OnboardingProgressHeader extends StatelessWidget {
           const SizedBox(height: AppSpacing.x2),
           // Step progress bar
           ClipRRect(
-            borderRadius: BorderRadius.circular(3),
+            borderRadius: AppRadius.pillR,
             child: LinearProgressIndicator(
               value: step / total,
               minHeight: 4,
-              backgroundColor: AppColors.border,
+              backgroundColor: context.colors.border,
               valueColor: const AlwaysStoppedAnimation(AppColors.primary),
             ),
           ),
@@ -194,76 +188,79 @@ class _OptionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      selected: selected,
-      button: true,
-      label: label,
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.x5,
-            vertical: AppSpacing.x4,
+    return AppTappable(
+      semanticLabel: label,
+      minSize: 0,
+      borderRadius: AppRadius.lg,
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: AppDurations.fast,
+        curve: Curves.easeOut,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.x5,
+          vertical: AppSpacing.x4,
+        ),
+        decoration: BoxDecoration(
+          color: selected ? context.colors.primarySoft : context.colors.surface,
+          borderRadius: AppRadius.lgR,
+          border: Border.all(
+            color: selected ? AppColors.primary : context.colors.border,
+            width: selected ? 1.5 : 1,
           ),
-          decoration: BoxDecoration(
-            color: selected ? AppColors.primarySoft : AppColors.surface,
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-            border: Border.all(
-              color: selected ? AppColors.primary : AppColors.border,
-              width: selected ? 1.5 : 1,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: selected
+                    ? AppColors.primary
+                    : context.colors.surfaceSubtle,
+                borderRadius: AppRadius.mdR,
+              ),
+              child: Icon(
+                icon,
+                size: 20,
+                color: selected
+                    ? AppColors.textOnPrimary
+                    : context.colors.textSecondary,
+              ),
             ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: selected ? AppColors.primary : AppColors.surfaceSubtle,
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                ),
-                child: Icon(
-                  icon,
-                  size: 20,
-                  color: selected ? Colors.white : AppColors.textSecondary,
+            const SizedBox(width: AppSpacing.x3),
+            Expanded(
+              child: Text(
+                label,
+                style: AppTypography.bodyMedium(context).copyWith(
+                  color: context.colors.textPrimary,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  fontSize: 15,
                 ),
               ),
-              const SizedBox(width: AppSpacing.x3),
-              Expanded(
-                child: Text(
-                  label,
-                  style: AppTypography.bodyMedium.copyWith(
-                    color: AppColors.textPrimary,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    fontSize: 15,
-                  ),
+            ),
+            // Radio dot
+            Container(
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: selected ? AppColors.primary : Colors.transparent,
+                border: Border.all(
+                  color: selected
+                      ? AppColors.primary
+                      : context.colors.borderInput,
+                  width: 2,
                 ),
               ),
-              // Radio dot
-              Container(
-                width: 22,
-                height: 22,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: selected ? AppColors.primary : Colors.transparent,
-                  border: Border.all(
-                    color: selected ? AppColors.primary : AppColors.borderInput,
-                    width: 2,
-                  ),
-                ),
-                child: selected
-                    ? const Icon(
-                        Icons.check_rounded,
-                        size: 13,
-                        color: Colors.white,
-                      )
-                    : null,
-              ),
-            ],
-          ),
+              child: selected
+                  ? const Icon(
+                      Icons.check_rounded,
+                      size: 13,
+                      color: AppColors.textOnPrimary,
+                    )
+                  : null,
+            ),
+          ],
         ),
       ),
     );

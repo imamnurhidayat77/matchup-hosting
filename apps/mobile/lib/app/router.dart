@@ -19,7 +19,6 @@ import '../features/discovery/presentation/activity_detail_screen.dart';
 import '../features/discovery/presentation/filter_screen.dart';
 import '../features/activities/presentation/create_activity_screen.dart';
 import '../features/activities/presentation/my_activities_screen.dart';
-import '../features/activities/presentation/joined_activities_screen.dart';
 import '../features/activities/presentation/joined_activity_detail_screen.dart';
 import '../features/activities/presentation/past_activity_review_screen.dart';
 import '../features/activities/presentation/activity_participants_screen.dart';
@@ -63,11 +62,13 @@ class _AuthListenable extends ChangeNotifier {
 }
 
 // ─── Shared page transition ──────────────────────────────────────────────────
-// Every pushed route (everything outside the ShellRoute below, and any
-// GoRoute reached via context.push from inside it) gets the same slide+fade
-// instead of the platform default. Tab switches inside ShellRoute stay
-// instant — AppShell swaps `child` directly, it never goes through a
-// GoRoute page transition (PRD Section 0.6 / Appendix D.1).
+// Every route reached via context.push() — whether it lives outside the
+// ShellRoute below or inside it — gets the same slide+fade instead of the
+// platform default (PRD Section 0.6 / Appendix D.1). Routes reached only via
+// context.go() (the five tab roots, plus the swipe-to-match reveal) keep
+// plain `builder:` — go() replaces the shell's matched child in place, it
+// never plays a page transition regardless of what the route's builder
+// returns, so giving those a pageBuilder would be dead code.
 //
 // Usage: replace `builder: (_, state) => Screen()` with
 // `pageBuilder: (_, state) => appPage(state, const Screen())` on any route
@@ -138,16 +139,16 @@ GoRouter buildRouter(Ref ref) {
       ),
       GoRoute(
         path: '/otp-verification',
-        builder: (_, state) {
+        pageBuilder: (_, state) {
           final email = state.extra as String? ?? '';
-          return OtpVerificationScreen(email: email);
+          return appPage(state, OtpVerificationScreen(email: email));
         },
       ),
       GoRoute(
         path: '/new-password',
-        builder: (_, state) {
+        pageBuilder: (_, state) {
           final email = state.extra as String? ?? '';
-          return NewPasswordScreen(email: email);
+          return appPage(state, NewPasswordScreen(email: email));
         },
       ),
       // Activity detail sits OUTSIDE the shell: the Figma design (node 43:201)
@@ -169,6 +170,11 @@ GoRouter buildRouter(Ref ref) {
       ShellRoute(
         builder: (context, state, child) => AppShell(child: child),
         routes: [
+          // Tab roots — reached only via context.go() from AppShell's tab
+          // bar (or the auth/flow redirects above). go() replaces the
+          // shell's matched child in place rather than pushing a page, so
+          // these never animate through appPage regardless of what their
+          // builder returns; kept as plain `builder:` for clarity.
           GoRoute(
             path: '/discovery',
             builder: (_, _) => const DiscoveryScreen(),
@@ -177,96 +183,139 @@ GoRouter buildRouter(Ref ref) {
             path: '/activities',
             builder: (_, _) => const MyActivitiesScreen(),
           ),
+          GoRoute(path: '/profile', builder: (_, _) => const ProfileScreen()),
+
+          // Also tab roots, but ALSO reached via context.push() from other
+          // screens (My Activities' empty-state CTA → /create;
+          // joined-activity-detail's "Message host" → /messages). A
+          // pushed route always animates through its own pageBuilder
+          // regardless of go_router's instant same-shell swap for go(), so
+          // these need appPage for the pushed case without affecting the
+          // tab-bar's go()-based instant switch.
           GoRoute(
             path: '/create',
-            builder: (_, _) => const CreateActivityScreen(),
+            pageBuilder: (_, state) =>
+                appPage(state, const CreateActivityScreen()),
+          ),
+          GoRoute(
+            path: '/messages',
+            pageBuilder: (_, state) => appPage(state, const MessagesScreen()),
           ),
 
-          GoRoute(path: '/messages', builder: (_, _) => const MessagesScreen()),
-          GoRoute(path: '/profile', builder: (_, _) => const ProfileScreen()),
+          // Match reveal — reached only via context.go() from Discovery
+          // after a swipe-right match (PRD: no "back" to the swipe deck
+          // once matched), so it intentionally has no push transition.
+          GoRoute(
+            path: '/match/:id',
+            builder: (_, state) {
+              final id = state.pathParameters['id'] ?? '1';
+              return MatchScreen(activityId: id);
+            },
+          ),
+
+          // Everything below is reached exclusively via context.push() —
+          // each gets the shared appPage slide+fade so every push feels
+          // consistent (PRD Section 0.6 / Appendix D.1).
           GoRoute(
             path: '/notifications',
-            builder: (_, _) => const NotificationsScreen(),
+            pageBuilder: (_, state) =>
+                appPage(state, const NotificationsScreen()),
           ),
           GoRoute(
             path: '/activity/:id/participants',
-            builder: (_, state) {
+            pageBuilder: (_, state) {
               final id = state.pathParameters['id'] ?? '1';
-              return ActivityParticipantsScreen(activityId: id);
+              return appPage(state, ActivityParticipantsScreen(activityId: id));
             },
           ),
           GoRoute(
             path: '/activity/:id/full',
-            builder: (_, _) => const ActivityFullScreen(),
+            pageBuilder: (_, state) {
+              final id = state.pathParameters['id'] ?? '1';
+              return appPage(state, ActivityFullScreen(activityId: id));
+            },
           ),
           GoRoute(
             path: '/manage-activity/:id',
-            builder: (_, state) {
+            pageBuilder: (_, state) {
               final id = state.pathParameters['id'] ?? '1';
-              return ManageActivityScreen(activityId: id);
+              return appPage(state, ManageActivityScreen(activityId: id));
             },
           ),
-          GoRoute(path: '/match/:id', builder: (_, _) => const MatchScreen()),
-          GoRoute(
-            path: '/joined-activities',
-            builder: (_, _) => const JoinedActivitiesScreen(),
-          ),
+          // '/joined-activities' removed (PRD Section 3 / Appendix E.2):
+          // JoinedActivitiesScreen duplicated My Activities and nothing in
+          // the app ever navigated to it — confirmed via a full-repo grep
+          // for '/joined-activities' before deleting the screen + route.
           GoRoute(
             path: '/joined-activity/:id',
-            builder: (_, state) {
+            pageBuilder: (_, state) {
               final id = state.pathParameters['id'] ?? '1';
-              return JoinedActivityDetailScreen(activityId: id);
+              return appPage(state, JoinedActivityDetailScreen(activityId: id));
             },
           ),
           GoRoute(
             path: '/past-activity/:id/review',
-            builder: (_, _) => const PastActivityReviewScreen(),
+            pageBuilder: (_, state) {
+              final id = state.pathParameters['id'] ?? '1';
+              return appPage(state, PastActivityReviewScreen(activityId: id));
+            },
           ),
           GoRoute(
             path: '/get-to-know-1',
-            builder: (_, _) => const GetToKnow1Screen(),
+            pageBuilder: (_, state) => appPage(state, const GetToKnow1Screen()),
           ),
           GoRoute(
             path: '/get-to-know-2',
-            builder: (_, _) => const GetToKnow2Screen(),
+            pageBuilder: (_, state) => appPage(state, const GetToKnow2Screen()),
           ),
           GoRoute(
             path: '/preferences',
-            builder: (_, _) => const PreferencesScreen(),
+            pageBuilder: (_, state) =>
+                appPage(state, const PreferencesScreen()),
           ),
-          GoRoute(path: '/filter', builder: (_, _) => const FilterScreen()),
+          GoRoute(
+            path: '/filter',
+            pageBuilder: (_, state) => appPage(state, const FilterScreen()),
+          ),
           GoRoute(
             path: '/report/:type/:name',
-            builder: (_, state) {
+            pageBuilder: (_, state) {
               final type = state.pathParameters['type'] ?? 'user';
               final name = state.pathParameters['name'] ?? 'Unknown';
-              return ReportScreen(targetType: type, targetName: name);
+              return appPage(
+                state,
+                ReportScreen(targetType: type, targetName: name),
+              );
             },
           ),
           GoRoute(
             path: '/chat/:title',
-            builder: (_, state) {
+            pageBuilder: (_, state) {
               final title = state.pathParameters['title'] ?? 'Chat';
-              return ChatScreen(activityTitle: title);
+              return appPage(state, ChatScreen(activityTitle: title));
             },
           ),
           GoRoute(
             path: '/check-in/:id',
-            builder: (_, state) {
+            pageBuilder: (_, state) {
               final id = state.pathParameters['id'] ?? '1';
-              return CheckInScreen(activityId: id);
+              return appPage(state, CheckInScreen(activityId: id));
             },
           ),
-          GoRoute(path: '/calendar', builder: (_, _) => const CalendarScreen()),
+          GoRoute(
+            path: '/calendar',
+            pageBuilder: (_, state) => appPage(state, const CalendarScreen()),
+          ),
           GoRoute(
             path: '/edit-profile',
-            builder: (_, _) => const EditProfileScreen(),
+            pageBuilder: (_, state) =>
+                appPage(state, const EditProfileScreen()),
           ),
           GoRoute(
             path: '/player-profile/:name',
-            builder: (_, state) {
+            pageBuilder: (_, state) {
               final name = state.pathParameters['name'] ?? 'Player';
-              return PlayerProfileScreen(playerName: name);
+              return appPage(state, PlayerProfileScreen(playerName: name));
             },
           ),
         ],

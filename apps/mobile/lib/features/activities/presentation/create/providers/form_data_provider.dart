@@ -13,6 +13,14 @@ class ActivityFormData {
   final int feeType; // 0 = Free, 1 = Paid
   final String? price;
 
+  /// How long the activity runs, in minutes. Default 120 (2h) matches the
+  /// assumption the detail screen used before this field existed.
+  final int durationMinutes;
+
+  /// Who can discover and join: 'Public', 'Friends', or 'Invite only'.
+  /// Captured on step 2 of the wizard and surfaced in the live preview.
+  final String visibility;
+
   const ActivityFormData({
     this.title = '',
     this.sportType = 'Basketball',
@@ -24,6 +32,8 @@ class ActivityFormData {
     this.skillLevel = 'Intermediate',
     this.feeType = 0,
     this.price,
+    this.durationMinutes = 120,
+    this.visibility = 'Public',
   });
 
   ActivityFormData copyWith({
@@ -37,6 +47,8 @@ class ActivityFormData {
     String? skillLevel,
     int? feeType,
     String? price,
+    int? durationMinutes,
+    String? visibility,
   }) {
     return ActivityFormData(
       title: title ?? this.title,
@@ -49,6 +61,8 @@ class ActivityFormData {
       skillLevel: skillLevel ?? this.skillLevel,
       feeType: feeType ?? this.feeType,
       price: price ?? this.price,
+      durationMinutes: durationMinutes ?? this.durationMinutes,
+      visibility: visibility ?? this.visibility,
     );
   }
 
@@ -64,6 +78,8 @@ class ActivityFormData {
       'skillLevel': skillLevel,
       'feeType': feeType,
       'price': price,
+      'durationMinutes': durationMinutes,
+      'visibility': visibility,
     };
   }
 
@@ -81,6 +97,8 @@ class ActivityFormData {
       skillLevel: json['skillLevel'] as String? ?? 'Intermediate',
       feeType: json['feeType'] as int? ?? 0,
       price: json['price'] as String?,
+      durationMinutes: json['durationMinutes'] as int? ?? 120,
+      visibility: json['visibility'] as String? ?? 'Public',
     );
   }
 }
@@ -132,6 +150,14 @@ class FormDataNotifier extends StateNotifier<ActivityFormData> {
 
   void setPrice(String? price) {
     state = state.copyWith(price: price);
+  }
+
+  void setDurationMinutes(int minutes) {
+    state = state.copyWith(durationMinutes: minutes);
+  }
+
+  void setVisibility(String visibility) {
+    state = state.copyWith(visibility: visibility);
   }
 
   void reset() {

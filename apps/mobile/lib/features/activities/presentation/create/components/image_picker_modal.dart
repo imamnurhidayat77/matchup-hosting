@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/theme/app_spacing.dart';
 import '../../../../../core/theme/app_typography.dart';
+import '../../../../../core/theme/dark_colors.dart';
+import '../../../../../core/widgets/pressable_scale.dart';
 
 /// Result returned by [ImagePickerModal] via `Navigator.pop`.
 enum ImageSourceChoice { gallery, camera }
@@ -20,8 +22,8 @@ class ImagePickerModal extends StatelessWidget {
   Widget build(BuildContext context) {
     return SafeArea(
       child: Container(
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
+        decoration: BoxDecoration(
+          color: context.colors.surface,
           borderRadius: BorderRadius.vertical(
             top: Radius.circular(AppRadius.xl),
           ),
@@ -41,18 +43,17 @@ class ImagePickerModal extends StatelessWidget {
               height: 4,
               margin: const EdgeInsets.only(bottom: AppSpacing.x4),
               decoration: BoxDecoration(
-                color: AppColors.border,
-                borderRadius: BorderRadius.circular(2),
+                color: context.colors.border,
+                borderRadius: AppRadius.pillR,
               ),
             ),
 
             // Header
             Text(
               'Select Image Source',
-              style: AppTypography.titleLarge.copyWith(
-                fontWeight: FontWeight.w800,
-                fontSize: 18,
-              ),
+              style: AppTypography.titleLarge(
+                context,
+              ).copyWith(fontWeight: FontWeight.w800, fontSize: 18),
             ),
 
             const SizedBox(height: AppSpacing.x6),
@@ -80,21 +81,20 @@ class ImagePickerModal extends StatelessWidget {
             // Cancel button
             SizedBox(
               width: double.infinity,
-              child: GestureDetector(
+              child: PressableScale(
                 onTap: () => Navigator.of(context).pop(),
-                behavior: HitTestBehavior.opaque,
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: AppSpacing.x4),
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
+                    color: context.colors.surface,
                     borderRadius: BorderRadius.circular(AppRadius.pill),
-                    border: Border.all(color: AppColors.border),
+                    border: Border.all(color: context.colors.border),
                   ),
                   child: Center(
                     child: Text(
                       'Cancel',
-                      style: AppTypography.bodyMedium.copyWith(
-                        color: AppColors.textSecondary,
+                      style: AppTypography.bodyMedium(context).copyWith(
+                        color: context.colors.textSecondary,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -125,9 +125,8 @@ class _SourceOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return PressableScale(
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
       child: Container(
         padding: const EdgeInsets.symmetric(
           vertical: AppSpacing.x4,
@@ -145,16 +144,16 @@ class _SourceOption extends StatelessWidget {
             Expanded(
               child: Text(
                 label,
-                style: AppTypography.bodyMedium.copyWith(
-                  color: AppColors.textPrimary,
+                style: AppTypography.bodyMedium(context).copyWith(
+                  color: context.colors.textPrimary,
                   fontWeight: FontWeight.w600,
                   fontSize: 15,
                 ),
               ),
             ),
-            const Icon(
+            Icon(
               Icons.arrow_forward_ios,
-              color: AppColors.textSecondary,
+              color: context.colors.textSecondary,
               size: 16,
             ),
           ],

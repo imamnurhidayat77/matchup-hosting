@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
@@ -9,10 +8,13 @@ import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/theme/dark_colors.dart';
 import '../../../core/widgets/app_avatar.dart';
+import '../../../core/widgets/app_icon.dart';
+import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/error_retry.dart';
-import '../../../core/widgets/home_indicator.dart';
+import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../../activities/domain/activity_model.dart';
 
@@ -34,7 +36,7 @@ class ActivityDetailScreen extends ConsumerWidget {
     final async = ref.watch(_activityDetailProvider(activityId));
     return async.when(
       loading: () => _LoadingSkeleton(),
-      error: (e, _) => Scaffold(
+      error: (e, _) => AppScaffold(
         body: ErrorRetry(
           message: 'Could not load activity details.',
           onRetry: () => ref.invalidate(_activityDetailProvider(activityId)),
@@ -42,7 +44,7 @@ class ActivityDetailScreen extends ConsumerWidget {
       ),
       data: (activity) {
         if (activity == null) {
-          return const Scaffold(
+          return const AppScaffold(
             body: Center(child: Text('Activity not found.')),
           );
         }
@@ -57,20 +59,20 @@ class ActivityDetailScreen extends ConsumerWidget {
 class _LoadingSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.surface,
+    return AppScaffold(
+      safeAreaTop: false,
       body: Column(
         children: [
-          const SkeletonBox(width: double.infinity, height: 240, radius: 0),
+          const SkeletonBox(width: double.infinity, height: 280, radius: 0),
           Padding(
             padding: const EdgeInsets.all(AppSpacing.x6),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: const [
-                SkeletonBox(width: 100, height: 28, radius: AppRadius.pill),
-                SizedBox(height: AppSpacing.x3),
-                SkeletonBox(width: double.infinity, height: 28),
-                SizedBox(height: AppSpacing.x4),
+                SkeletonBox(width: double.infinity, height: 32, radius: 6),
+                SizedBox(height: AppSpacing.x2),
+                SkeletonBox(width: 200, height: 24, radius: 6),
+                SizedBox(height: AppSpacing.x5),
                 ListRowSkeleton(),
                 SizedBox(height: AppSpacing.x3),
                 ListRowSkeleton(),
@@ -97,10 +99,6 @@ class _DetailBody extends ConsumerStatefulWidget {
 class _DetailBodyState extends ConsumerState<_DetailBody> {
   bool _joining = false;
   final ScrollController _scrollController = ScrollController();
-
-  // Whether the scroll view has more content below the visible viewport.
-  // Starts true (assume there is more) so the fade never flashes hidden then
-  // visible on first frame; corrected as soon as the layout settles.
   bool _hasMoreBelow = true;
 
   @override
@@ -122,8 +120,6 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   void _updateFadeVisibility() {
     if (!_scrollController.hasClients) return;
     final position = _scrollController.position;
-    // 4px slack so the fade clears right before the physical end, rather
-    // than lingering on the last sub-pixel of scroll extent.
     final atBottom = position.pixels >= position.maxScrollExtent - 4;
     if (atBottom == _hasMoreBelow) {
       setState(() => _hasMoreBelow = !atBottom);
@@ -159,151 +155,119 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   Widget build(BuildContext context) {
     final a = widget.activity;
 
-    return Scaffold(
-      backgroundColor: AppColors.surface,
-      body: SafeArea(
-        top: false,
-        child: Column(
-          children: [
-            // Hero + back/share
-            _Hero(activity: a),
+    // Overlap amount: card naik sejauh ini ke dalam hero.
+    // Pills ada di bottom: x4 (~16px) hero, tinggi pill ~32px → pills
+    // berakhir di heroHeight - 16. Card overlap 20px: card top = heroHeight - 20.
+    // Pills dengan bottom:16 berarti top = heroHeight - 16 - 32 ≈ heroHeight - 48.
+    // Jadi pills tetap di atas card (heroHeight-48 < heroHeight-20). ✓
+    const double overlapAmount = 44;
+    const double heroH = _Hero.heroHeight;
 
-            // Scrollable content. While there's more to see below, the
-            // bottom edge fades out so a partially visible line reads as
-            // "keep scrolling" instead of the content abruptly stopping.
-            // The fade clears once the user reaches the actual end.
-            Expanded(
-              child: ShaderMask(
-                shaderCallback: (rect) => LinearGradient(
-                  begin: Alignment.bottomCenter,
-                  end: Alignment.topCenter,
-                  colors: _hasMoreBelow
-                      ? const [Colors.transparent, Colors.black]
-                      : const [Colors.black, Colors.black],
-                  stops: const [0.0, 0.06],
-                ).createShader(rect),
-                blendMode: BlendMode.dstIn,
+    return AppScaffold(
+      safeAreaTop: false,
+      bottomBar: _ActionBar(
+        activity: widget.activity,
+        joining: _joining,
+        onDislike: () => Navigator.of(context).maybePop(),
+        onJoin: _onJoin,
+      ),
+      body: Stack(
+        children: [
+          // ── Layer 1: hero (fixed height, full-width) ─────────────────
+          SizedBox(
+            height: heroH,
+            width: double.infinity,
+            child: _Hero(activity: a),
+          ),
+
+          // ── Layer 2: white card, starts heroH - overlap from top ─────
+          // Positioned.fill + top leaves the card filling everything from
+          // that top offset to the bottom of the body.
+          Positioned(
+            top: heroH - overlapAmount,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: ShaderMask(
+              shaderCallback: (rect) => LinearGradient(
+                begin: Alignment.bottomCenter,
+                end: Alignment.topCenter,
+                colors: _hasMoreBelow
+                    ? const [AppColors.scrimTransparent, AppColors.textPrimary]
+                    : const [AppColors.textPrimary, AppColors.textPrimary],
+                stops: const [0.0, 0.06],
+              ).createShader(rect),
+              blendMode: BlendMode.dstIn,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: context.colors.surface,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(AppRadius.xl),
+                  ),
+                  boxShadow: AppShadows.sheet,
+                ),
                 child: SingleChildScrollView(
                   controller: _scrollController,
+                  // Extra top padding compensates for the overlap so content
+                  // starts below where the pills hang over.
                   padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.x6,
                     AppSpacing.x5,
-                    AppSpacing.x6,
-                    AppSpacing.x6,
+                    AppSpacing.x5,
+                    AppSpacing.x5,
+                    AppSpacing.x8,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Sport badge + title — tight group, badge tags the title.
-                      _SportBadge(sport: a.sportType),
-                      const SizedBox(height: AppSpacing.x2),
-                      Text(a.title, style: AppTypography.titleScreen),
-                      // Chip is a sub-attribute of the title, so it sits close.
+                      Text(
+                        a.title,
+                        style: AppTypography.headingDisplay(context),
+                      ),
+                      const SizedBox(height: AppSpacing.x5),
+                      _HostCard(
+                        hostName: a.hostName,
+                        hostRating: a.hostRating,
+                      ),
                       const SizedBox(height: AppSpacing.x3),
-
-                      // Skill chip
-                      _SkillChip(level: a.skillLevel),
-                      // Section break before the host block gets full breathing
-                      // room, matched on the other side of the divider below.
+                      _MetaCard(activity: a),
                       const SizedBox(height: AppSpacing.x5),
-
-                      // Host row
-                      _HostRow(hostName: a.hostName),
-                      const SizedBox(height: AppSpacing.x5),
-                      const Divider(height: 1, color: AppColors.border),
-                      const SizedBox(height: AppSpacing.x5),
-
-                      // Meta: date + location
-                      _MetaRow(
-                        icon: 'calendar.svg',
-                        title: _formatDate(a.dateTime),
-                        sub: _formatTime(a.dateTime),
+                      Text(
+                        'About this Activity',
+                        style: AppTypography.titleMedium(context),
                       ),
-                      // Two meta rows are one related pair, so this gap stays
-                      // tighter than the section breaks around them.
                       const SizedBox(height: AppSpacing.x3),
-                      // Figma 43:244/245 — venue name on top, street address below.
-                      // Falls back to distance so the second line is never blank.
-                      _MetaRow(
-                        icon: 'map_pin.svg',
-                        title: a.location,
-                        sub:
-                            a.addressLine ??
-                            '${a.distanceKm.toStringAsFixed(1)} km away',
+                      Text(
+                        a.description,
+                        style: AppTypography.bodyReading(context),
                       ),
                       const SizedBox(height: AppSpacing.x5),
-                      const Divider(height: 1, color: AppColors.border),
+                      _ParticipantsSection(activity: a),
                       const SizedBox(height: AppSpacing.x5),
-
-                      // About
-                      _Section(
-                        title: 'About this Activity',
-                        // Figma 43:248 — 14px with 21px leading (1.5); the one
-                        // place the design deliberately loosens line height.
-                        child: Text(
-                          a.description,
-                          style: AppTypography.bodyReading,
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.x5),
-                      const Divider(height: 1, color: AppColors.border),
-                      const SizedBox(height: AppSpacing.x5),
-
-                      // Participants
-                      _Section(
-                        title: 'Participants',
-                        trailing: Text(
-                          '${a.participantCount} joined / ${a.capacity} total',
-                          style: AppTypography.countAccent,
-                        ),
-                        child: _ParticipantAvatars(count: a.participantCount),
-                      ),
-                      const SizedBox(height: AppSpacing.x5),
-
-                      // Report button
                       _ReportButton(activityId: widget.activityId),
                     ],
                   ),
                 ),
               ),
             ),
-
-            // Action bar
-            _ActionBar(
-              activity: widget.activity,
-              joining: _joining,
-              onDislike: () => Navigator.of(context).maybePop(),
-              onJoin: _onJoin,
-            ),
-            const HomeIndicator(),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
-
-  String _formatDate(DateTime dt) => DateFormat('EEEE, MMMM d').format(dt);
-
-  String _formatTime(DateTime dt) {
-    final start = DateFormat('h:mm a').format(dt);
-    final end = DateFormat('h:mm a').format(dt.add(const Duration(hours: 2)));
-    return '$start – $end';
-  }
 }
 
-// ─── Sub-widgets ──────────────────────────────────────────────────────────────
+// ─── Hero ─────────────────────────────────────────────────────────────────────
 
 class _Hero extends StatelessWidget {
   const _Hero({required this.activity});
   final ActivityModel activity;
 
-  /// Figma 43:203 — hero is exactly 240 tall.
-  static const double _heroHeight = 240;
+  static const double heroHeight = 280;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: _heroHeight,
+      height: heroHeight,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -316,15 +280,19 @@ class _Hero extends StatelessWidget {
                 )
               : _placeholder(),
 
-          // Figma 43:204 — a flat 40% black wash over the whole image, not a
-          // gradient. Keeps the white status bar and controls legible on any
-          // photo.
-          const ColoredBox(color: AppColors.scrim),
+          // Subtle gradient scrim — darkens from bottom so badges stay legible
+          const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [AppColors.scrimTransparent, AppColors.scrimGradient],
+                stops: [0.45, 1.0],
+              ),
+            ),
+          ),
 
-          // Buttons — pinned to the top edge. `Stack`'s `StackFit.expand`
-          // stretches every non-positioned child to fill the full 240 hero,
-          // which was vertically centering this row instead of anchoring it
-          // to the top. `Positioned` opts it out of that stretch.
+          // Back + Share buttons pinned to top
           Positioned(
             top: 0,
             left: 0,
@@ -333,25 +301,38 @@ class _Hero extends StatelessWidget {
               bottom: false,
               child: Padding(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.x6,
-                  vertical: AppSpacing.x1,
+                  horizontal: AppSpacing.x5,
+                  vertical: AppSpacing.x2,
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     _HeroBtn(
-                      assetPath: 'assets/images/discovery/icons/arrow_left.svg',
+                      icon: AppIcons.arrowLeft,
                       onTap: () => Navigator.of(context).maybePop(),
                       label: 'Back',
                     ),
                     _HeroBtn(
-                      assetPath: 'assets/images/discovery/icons/share.svg',
+                      icon: AppIcons.share,
                       onTap: () {},
                       label: 'Share',
                     ),
                   ],
                 ),
               ),
+            ),
+          ),
+
+          // Pills — bottom, selalu di atas card (z-order terakhir dalam Stack)
+          Positioned(
+            left: AppSpacing.x5,
+            bottom: AppSpacing.x4 + 20 + 20,
+            child: Row(
+              children: [
+                _SportBadgeHero(sport: activity.sportType),
+                const SizedBox(width: AppSpacing.x2),
+                _SkillBadgeHero(level: activity.skillLevel),
+              ],
             ),
           ),
         ],
@@ -368,8 +349,6 @@ class _Hero extends StatelessWidget {
       ),
     ),
     child: Center(
-      // Held back to 38% so the placeholder reads as absent artwork
-      // rather than as a deliberate icon.
       child: Icon(
         Icons.sports,
         size: 64,
@@ -381,11 +360,11 @@ class _Hero extends StatelessWidget {
 
 class _HeroBtn extends StatelessWidget {
   const _HeroBtn({
-    required this.assetPath,
+    required this.icon,
     required this.onTap,
     required this.label,
   });
-  final String assetPath;
+  final String icon;
   final VoidCallback onTap;
   final String label;
 
@@ -394,12 +373,8 @@ class _HeroBtn extends StatelessWidget {
     return Semantics(
       button: true,
       label: label,
-      child: GestureDetector(
+      child: PressableScale(
         onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        // Visual sized down from Figma's 40×40 (43:215) to 36×36 — 40 read
-        // heavy against the 240 hero. Hit area still padded to the 44pt
-        // minimum tap target so it stays easy to press.
         child: SizedBox(
           width: 44,
           height: 44,
@@ -409,17 +384,13 @@ class _HeroBtn extends StatelessWidget {
               height: 36,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: AppColors.scrimControl,
+                color: context.colors.scrimControl,
                 borderRadius: BorderRadius.circular(AppRadius.md),
               ),
-              child: SvgPicture.asset(
-                assetPath,
-                width: 18,
-                height: 18,
-                colorFilter: const ColorFilter.mode(
-                  AppColors.textOnPrimary,
-                  BlendMode.srcIn,
-                ),
+              child: AppIcon(
+                icon,
+                size: AppIconSize.lg,
+                color: AppColors.textOnPrimary,
               ),
             ),
           ),
@@ -429,122 +400,253 @@ class _HeroBtn extends StatelessWidget {
   }
 }
 
-class _SportBadge extends StatelessWidget {
-  const _SportBadge({required this.sport});
+/// White pill badge for sport type — shown over hero image.
+class _SportBadgeHero extends StatelessWidget {
+  const _SportBadgeHero({required this.sport});
   final String sport;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: AppColors.primarySoft,
+        color: AppColors.textOnPrimary,
         borderRadius: BorderRadius.circular(AppRadius.pill),
       ),
-      // Figma 43:223 sets this text to #0f172a, but every other screen
-      // (e.g. 74:31) uses primaryDarker and the exported mock renders blue.
-      // Following the majority for consistency.
-      child: Text(sport.toUpperCase(), style: AppTypography.badgeSport),
+      child: Text(
+        sport.toUpperCase(),
+        style: AppTypography.chipLabel(context).copyWith(
+          color: AppColors.textPrimary,
+        ),
+      ),
     );
   }
 }
 
-class _SkillChip extends StatelessWidget {
-  const _SkillChip({required this.level});
+/// Blue filled pill badge for skill level — shown over hero image.
+class _SkillBadgeHero extends StatelessWidget {
+  const _SkillBadgeHero({required this.level});
   final String level;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: AppColors.surfaceSubtle,
-        // Figma 57:6 — radius 20, not the 28 used for modals.
-        borderRadius: BorderRadius.circular(AppRadius.lg),
+        color: AppColors.primary,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          SvgPicture.asset(
-            'assets/images/discovery/icons/zap.svg',
-            width: 13,
-            height: 13,
-            colorFilter: const ColorFilter.mode(
-              AppColors.primaryDarker,
-              BlendMode.srcIn,
+          const Icon(Icons.flash_on_rounded, size: 13, color: AppColors.textOnPrimary),
+          const SizedBox(width: 4),
+          Text(
+            level.toUpperCase(),
+            style: AppTypography.chipLabel(context).copyWith(
+              color: AppColors.textOnPrimary,
             ),
           ),
-          const SizedBox(width: 6),
-          Text(level.toUpperCase(), style: AppTypography.chipLabel),
         ],
       ),
     );
   }
 }
 
-class _HostRow extends StatelessWidget {
-  const _HostRow({required this.hostName});
+// ─── Host card ────────────────────────────────────────────────────────────────
+
+class _HostCard extends StatelessWidget {
+  const _HostCard({required this.hostName, required this.hostRating});
   final String hostName;
+  final double hostRating;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        AppAvatar(
-          assetPath: 'assets/images/discovery/avatars/avatar_alex.png',
-          name: hostName,
-          size: AppAvatarSize.sm,
-        ),
-        const SizedBox(width: AppSpacing.x3),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.x4,
+        vertical: AppSpacing.x3,
+      ),
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        border: Border.all(color: context.colors.border),
+        boxShadow: AppShadows.card,
+      ),
+      child: Row(
+        children: [
+          AppAvatar(
+            assetPath: 'assets/images/discovery/avatars/avatar_alex.png',
+            name: hostName,
+            size: AppAvatarSize.sm,
+          ),
+          const SizedBox(width: AppSpacing.x3),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  hostName,
+                  style: AppTypography.labelField(context).copyWith(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text('Host', style: AppTypography.metaSub(context)),
+              ],
+            ),
+          ),
+          // Rating badge
+          Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
+              Icon(
+                Icons.star_rounded,
+                size: 16,
+                color: AppColors.success,
+              ),
+              const SizedBox(width: 4),
               Text(
-                hostName,
-                style: AppTypography.bodyFormSecondary.copyWith(
-                  color: AppColors.textPrimary,
+                hostRating.toStringAsFixed(1),
+                style: AppTypography.labelField(context).copyWith(
+                  color: AppColors.success,
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              Text('Host', style: AppTypography.metaSub),
             ],
           ),
-        ),
-        SvgPicture.asset(
-          'assets/images/discovery/icons/star.svg',
-          width: 14,
-          height: 14,
-          colorFilter: const ColorFilter.mode(
-            AppColors.warning,
-            BlendMode.srcIn,
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Meta card (date + location) ─────────────────────────────────────────────
+
+class _MetaCard extends StatelessWidget {
+  const _MetaCard({required this.activity});
+  final ActivityModel activity;
+
+  @override
+  Widget build(BuildContext context) {
+    final date = DateFormat('EEEE, MMMM d').format(activity.dateTime);
+    final startTime = DateFormat('h:mm a').format(activity.dateTime);
+    final endTime = DateFormat('h:mm a').format(activity.endTime);
+    final timeRange = '$startTime - $endTime';
+    final address =
+        activity.addressLine ??
+        '${activity.distanceKm.toStringAsFixed(1)} km away';
+
+    return Container(
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        border: Border.all(color: context.colors.border),
+        boxShadow: AppShadows.card,
+      ),
+      child: Column(
+        children: [
+          _MetaRow(
+            icon: AppIcons.calendar,
+            title: date,
+            sub: timeRange,
           ),
-        ),
-        const SizedBox(width: 4),
-        Text(
-          '4.9',
-          style: AppTypography.countAccent.copyWith(
-            color: AppColors.textPrimary,
-            fontWeight: FontWeight.w700,
+          Divider(height: 1, color: context.colors.border, indent: 60),
+          _MetaRow(
+            icon: AppIcons.mapPin,
+            title: activity.location,
+            sub: address,
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MetaRow extends StatelessWidget {
+  const _MetaRow({required this.icon, required this.title, required this.sub});
+  final String icon;
+  final String title;
+  final String sub;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.x4,
+        vertical: AppSpacing.x3,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: context.colors.primarySoft,
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: AppIcon(
+              icon,
+              size: AppIconSize.lg,
+              color: context.colors.primaryOnSurface,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.x3),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: AppTypography.labelField(context)),
+                const SizedBox(height: 2),
+                Text(sub, style: AppTypography.metaSub(context)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Participants section ─────────────────────────────────────────────────────
+
+class _ParticipantsSection extends StatelessWidget {
+  const _ParticipantsSection({required this.activity});
+  final ActivityModel activity;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Participants',
+                style: AppTypography.titleMedium(context),
+              ),
+            ),
+            Text(
+              '${activity.participantCount} joined / ${activity.capacity} total',
+              style: AppTypography.countAccent(context),
+            ),
+          ],
         ),
+        const SizedBox(height: AppSpacing.x3),
+        _ParticipantAvatars(count: activity.participantCount),
       ],
     );
   }
 }
 
 /// Overlapping participant avatars with a `+N` overflow badge.
-///
-/// Figma 43:253 draws five avatars plus a `+2` badge — seven people — while the
-/// label beside it reads "6 joined / 10 total". That is an off-by-one in the
-/// mock, so the count is derived from data here instead: up to
-/// [_maxVisible] faces, then `+N` for the remainder. Always self-consistent.
 class _ParticipantAvatars extends StatelessWidget {
   const _ParticipantAvatars({required this.count});
-
   final int count;
 
-  /// Figma sizing: 32pt circles stepping 22pt apart (10pt overlap).
   static const double _size = 32;
   static const double _step = 22;
   static const int _maxVisible = 4;
@@ -563,7 +665,10 @@ class _ParticipantAvatars extends StatelessWidget {
     final slots = visible + (overflow > 0 ? 1 : 0);
 
     if (slots == 0) {
-      return Text('No one has joined yet', style: AppTypography.metaSub);
+      return Text(
+        'No one has joined yet',
+        style: AppTypography.metaSub(context),
+      );
     }
 
     return SizedBox(
@@ -581,7 +686,7 @@ class _ParticipantAvatars extends StatelessWidget {
                   height: _size,
                   fit: BoxFit.cover,
                   errorBuilder: (_, _, _) =>
-                      const ColoredBox(color: AppColors.avatarNeutral),
+                      ColoredBox(color: context.colors.avatarNeutral),
                 ),
               ),
             ),
@@ -590,13 +695,13 @@ class _ParticipantAvatars extends StatelessWidget {
               left: visible * _step,
               child: _Ring(
                 child: ColoredBox(
-                  color: AppColors.border,
+                  color: context.colors.border,
                   child: Center(
                     child: Text(
                       '+$overflow',
-                      style: AppTypography.badgeSport.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
+                      style: AppTypography.badgeSport(
+                        context,
+                      ).copyWith(color: context.colors.textSecondary),
                     ),
                   ),
                 ),
@@ -608,7 +713,6 @@ class _ParticipantAvatars extends StatelessWidget {
   }
 }
 
-/// 32pt circle with the white separator ring Figma uses on stacked avatars.
 class _Ring extends StatelessWidget {
   const _Ring({required this.child});
   final Widget child;
@@ -620,81 +724,14 @@ class _Ring extends StatelessWidget {
       height: _ParticipantAvatars._size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        border: Border.all(color: AppColors.surface, width: 2),
+        border: Border.all(color: context.colors.surface, width: 2),
       ),
       child: ClipOval(child: child),
     );
   }
 }
 
-class _MetaRow extends StatelessWidget {
-  const _MetaRow({required this.icon, required this.title, required this.sub});
-  final String icon;
-  final String title;
-  final String sub;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Figma 43:235 — 34×34 and fully round (radius 100), not a rounded square.
-        Container(
-          width: 34,
-          height: 34,
-          decoration: const BoxDecoration(
-            color: AppColors.primarySoft,
-            shape: BoxShape.circle,
-          ),
-          alignment: Alignment.center,
-          child: SvgPicture.asset(
-            'assets/images/discovery/icons/$icon',
-            width: 18,
-            height: 18,
-            colorFilter: const ColorFilter.mode(
-              AppColors.primaryDarker,
-              BlendMode.srcIn,
-            ),
-          ),
-        ),
-        const SizedBox(width: AppSpacing.x3),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: AppTypography.labelField),
-              Text(sub, style: AppTypography.metaSub),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _Section extends StatelessWidget {
-  const _Section({required this.title, required this.child, this.trailing});
-  final String title;
-  final Widget child;
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(child: Text(title, style: AppTypography.labelField)),
-            ?trailing,
-          ],
-        ),
-        const SizedBox(height: AppSpacing.x3),
-        child,
-      ],
-    );
-  }
-}
+// ─── Report button ────────────────────────────────────────────────────────────
 
 class _ReportButton extends StatelessWidget {
   const _ReportButton({required this.activityId});
@@ -702,35 +739,29 @@ class _ReportButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return PressableScale(
       onTap: () => context.push('/report/activity/$activityId'),
-      behavior: HitTestBehavior.opaque,
       child: Container(
         height: 44,
         decoration: BoxDecoration(
-          color: AppColors.surfaceSubtle,
-          // Figma 62:9 — radius 12.
+          color: context.colors.surfaceSubtle,
           borderRadius: BorderRadius.circular(AppRadius.input),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: context.colors.border),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            SvgPicture.asset(
-              'assets/images/discovery/icons/alert_circle.svg',
-              width: 18,
-              height: 18,
-              colorFilter: const ColorFilter.mode(
-                AppColors.danger,
-                BlendMode.srcIn,
-              ),
+            AppIcon(
+              AppIcons.alertCircle,
+              size: AppIconSize.lg,
+              color: AppColors.danger,
             ),
             const SizedBox(width: 8),
-            // Figma 62:11 fills this text white on an #f8fafc surface —
-            // unreadable. Using danger, which the flag icon already implies.
             Text(
               'Report Activity',
-              style: AppTypography.labelField.copyWith(color: AppColors.danger),
+              style: AppTypography.labelField(
+                context,
+              ).copyWith(color: AppColors.danger),
             ),
           ],
         ),
@@ -738,6 +769,8 @@ class _ReportButton extends StatelessWidget {
     );
   }
 }
+
+// ─── Action bar ───────────────────────────────────────────────────────────────
 
 class _ActionBar extends StatelessWidget {
   const _ActionBar({
@@ -753,81 +786,82 @@ class _ActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final canJoin = !activity.isFull;
+
     return Container(
       padding: const EdgeInsets.fromLTRB(
-        AppSpacing.x6,
-        AppSpacing.x4,
-        AppSpacing.x6,
-        AppSpacing.x4,
+        AppSpacing.x5,
+        AppSpacing.x3,
+        AppSpacing.x5,
+        AppSpacing.x3,
       ),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        // Separates the pinned action bar from whatever's scrolled beneath
-        // it — without this the buttons look like they're floating loose on
-        // top of the content instead of anchored to the screen.
+      decoration: BoxDecoration(
+        color: context.colors.surface,
         boxShadow: AppShadows.bottomBar,
       ),
-      // Figma 58:2 / 58:4 — the two buttons are deliberately different sizes:
-      // dismiss is 56, join is 64. Visual weight signals which action matters.
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          // Small dismiss circle button on the left
           Semantics(
             button: true,
             label: 'Not interested',
-            child: GestureDetector(
+            child: PressableScale(
               onTap: onDislike,
-              behavior: HitTestBehavior.opaque,
               child: Container(
-                width: 56,
-                height: 56,
+                width: 52,
+                height: 52,
                 decoration: BoxDecoration(
-                  color: AppColors.surface,
+                  color: context.colors.surface,
                   shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.border),
+                  border: Border.all(color: context.colors.border),
                   boxShadow: AppShadows.card,
                 ),
                 alignment: Alignment.center,
-                child: const Icon(
+                child: Icon(
                   Icons.close_rounded,
-                  size: 26,
-                  color: AppColors.danger,
+                  size: 22,
+                  color: context.colors.textSecondary,
                 ),
               ),
             ),
           ),
-          const SizedBox(width: AppSpacing.x5),
-          Semantics(
-            button: true,
-            label: activity.isFull ? 'Join waiting list' : 'Join activity',
-            child: GestureDetector(
-              onTap: activity.isFull ? null : onJoin,
-              behavior: HitTestBehavior.opaque,
-              child: Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: activity.isFull ? AppColors.border : AppColors.primary,
-                  shape: BoxShape.circle,
-                  boxShadow: activity.isFull ? null : AppShadows.glowPrimary,
-                ),
-                alignment: Alignment.center,
-                child: joining
-                    ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            AppColors.textOnPrimary,
+          const SizedBox(width: AppSpacing.x3),
+
+          // Full-width Join Game pill button
+          Expanded(
+            child: Semantics(
+              button: true,
+              label: canJoin ? 'Join Game' : 'Activity is full',
+              child: PressableScale(
+                onTap: canJoin ? onJoin : null,
+                child: Container(
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: canJoin
+                        ? AppColors.primary
+                        : context.colors.border,
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                    boxShadow: canJoin ? AppShadows.glowPrimary : null,
+                  ),
+                  alignment: Alignment.center,
+                  child: joining
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              AppColors.textOnPrimary,
+                            ),
+                            strokeWidth: 2.5,
                           ),
-                          strokeWidth: 2.5,
+                        )
+                      : Text(
+                          canJoin ? 'Join Game' : 'Activity Full',
+                          style: AppTypography.buttonPrimary.copyWith(
+                            color: AppColors.textOnPrimary,
+                          ),
                         ),
-                      )
-                    : const Icon(
-                        Icons.favorite_rounded,
-                        size: 26,
-                        color: AppColors.textOnPrimary,
-                      ),
+                ),
               ),
             ),
           ),

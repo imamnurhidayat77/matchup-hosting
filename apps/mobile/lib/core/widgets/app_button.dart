@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
+import '../theme/dark_colors.dart';
+import 'pressable_scale.dart';
 
 /// Unified button for MatchUp.
 ///
@@ -95,23 +97,23 @@ class AppButton extends StatelessWidget {
 
   // ── Style resolution ─────────────────────────────────────────────────────
 
-  Color get _bg => switch (variant) {
+  Color _bg(BuildContext context) => switch (variant) {
     AppButtonVariant.primary => AppColors.primary,
-    AppButtonVariant.secondary => AppColors.surface,
+    AppButtonVariant.secondary => context.colors.surface,
     AppButtonVariant.ghost => Colors.transparent,
-    AppButtonVariant.danger => AppColors.errorLight,
+    AppButtonVariant.danger => context.colors.errorLight,
   };
 
-  Color get _fg => switch (variant) {
-    AppButtonVariant.primary => Colors.white,
-    AppButtonVariant.secondary => AppColors.textPrimary,
+  Color _fg(BuildContext context) => switch (variant) {
+    AppButtonVariant.primary => AppColors.textOnPrimary,
+    AppButtonVariant.secondary => context.colors.textPrimary,
     AppButtonVariant.ghost => AppColors.primary,
     AppButtonVariant.danger => AppColors.danger,
   };
 
-  BorderSide get _border => switch (variant) {
-    AppButtonVariant.secondary => const BorderSide(color: AppColors.border),
-    AppButtonVariant.danger => const BorderSide(color: AppColors.errorLight),
+  BorderSide _border(BuildContext context) => switch (variant) {
+    AppButtonVariant.secondary => BorderSide(color: context.colors.border),
+    AppButtonVariant.danger => BorderSide(color: context.colors.errorLight),
     _ => BorderSide.none,
   };
 
@@ -143,6 +145,9 @@ class AppButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bg = _bg(context);
+    final fg = _fg(context);
+    final border = _border(context);
     return Semantics(
       button: true,
       label: label,
@@ -150,7 +155,7 @@ class AppButton extends StatelessWidget {
       child: AnimatedOpacity(
         duration: const Duration(milliseconds: 150),
         opacity: _disabled ? 0.55 : 1.0,
-        child: GestureDetector(
+        child: PressableScale(
           onTap: _disabled
               ? null
               : () {
@@ -160,9 +165,9 @@ class AppButton extends StatelessWidget {
           child: Container(
             width: expand ? double.infinity : null,
             decoration: BoxDecoration(
-              color: _bg,
+              color: bg,
               borderRadius: BorderRadius.circular(AppRadius.pill),
-              border: Border.fromBorderSide(_border),
+              border: Border.fromBorderSide(border),
               boxShadow: _shadow,
             ),
             padding: _padding,
@@ -176,16 +181,21 @@ class AppButton extends StatelessWidget {
                     height: 18,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation(_fg),
+                      valueColor: AlwaysStoppedAnimation(fg),
                     ),
                   )
                 else ...[
                   if (leading != null) ...[leading!, const SizedBox(width: 8)],
-                  Text(
-                    label,
-                    style: AppTypography.buttonPrimary.copyWith(
-                      color: _fg,
-                      fontSize: _fontSize,
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: AppTypography.buttonPrimary.copyWith(
+                        color: fg,
+                        fontSize: _fontSize,
+                      ),
                     ),
                   ),
                   if (trailing != null) ...[

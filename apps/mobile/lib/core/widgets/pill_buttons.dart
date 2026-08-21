@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart' show SvgPicture;
 
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
+import '../theme/dark_colors.dart';
 
 /// Primary pill button matching Figma (`border-radius: 100px`, 16px vertical
 /// padding, 24px horizontal padding, white bold text on `primary`).
@@ -96,9 +97,11 @@ class SocialPillButton extends StatelessWidget {
       child: SizedBox(
         width: expand ? double.infinity : null,
         child: Material(
-          color: AppColors.surface,
+          color: context.colors.surface,
           shape: StadiumBorder(
-            side: BorderSide(color: AppColors.border.withValues(alpha: 0.9)),
+            side: BorderSide(
+              color: context.colors.border.withValues(alpha: 0.9),
+            ),
           ),
           child: InkWell(
             customBorder: const StadiumBorder(),
@@ -113,7 +116,7 @@ class SocialPillButton extends StatelessWidget {
                     SizedBox(width: 20, height: 20, child: _icon(icon!)),
                     const SizedBox(width: 12),
                   ],
-                  Text(label, style: AppTypography.buttonSocial),
+                  Text(label, style: AppTypography.buttonSocial(context)),
                 ],
               ),
             ),

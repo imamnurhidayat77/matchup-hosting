@@ -1,26 +1,46 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+
+import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/dark_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/app_button.dart';
-import '../../../core/widgets/home_indicator.dart';
+import '../../../core/widgets/app_icon.dart';
+import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/error_retry.dart';
+import '../../../core/widgets/pressable_scale.dart';
+import '../../../core/widgets/skeleton.dart';
+import '../../discovery/domain/activity_model.dart';
 
-class MatchScreen extends StatefulWidget {
-  const MatchScreen({super.key});
+final _matchActivityProvider = FutureProvider.autoDispose
+    .family<ActivityModel, String>((ref, activityId) async {
+      final activity = await ref
+          .watch(activityRepositoryProvider)
+          .byId(activityId);
+      if (activity == null) throw StateError('Activity not found');
+      return activity;
+    });
+
+class MatchScreen extends ConsumerStatefulWidget {
+  const MatchScreen({super.key, required this.activityId});
+
+  final String activityId;
 
   @override
-  State<MatchScreen> createState() => _MatchScreenState();
+  ConsumerState<MatchScreen> createState() => _MatchScreenState();
 }
 
-class _MatchScreenState extends State<MatchScreen>
+class _MatchScreenState extends ConsumerState<MatchScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _confettiCtrl = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 1800),
+    duration: AppDurations.emphasized * 5, // ~1.6s celebratory arc
   );
 
   @override
@@ -41,81 +61,128 @@ class _MatchScreenState extends State<MatchScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.surface,
-      body: SafeArea(
-        top: true,
-        child: Stack(
-          children: [
-            Column(
-              children: [
-                _topHeader(),
-                Expanded(child: _card(context)),
-                _actions(context),
-                const HomeIndicator(),
-              ],
+    final async = ref.watch(_matchActivityProvider(widget.activityId));
+
+    return AppScaffold(
+      backgroundColor: context.colors.surface,
+      showHomeIndicator: false, // reached from inside ShellRoute screens.
+      body: Stack(
+        children: [
+          async.when(
+            loading: () => const SkeletonList(count: 3),
+            error: (_, _) => ErrorRetry(
+              message: 'Could not load this match.',
+              onRetry: () =>
+                  ref.invalidate(_matchActivityProvider(widget.activityId)),
             ),
-            Positioned.fill(
-              top: 80,
-              child: IgnorePointer(
-                child: AnimatedBuilder(
-                  animation: _confettiCtrl,
-                  builder: (_, _) =>
-                      _ConfettiLayer(progress: _confettiCtrl.value),
-                ),
+            data: (activity) => _MatchBody(activity: activity),
+          ),
+          Positioned.fill(
+            top: 80,
+            child: IgnorePointer(
+              child: AnimatedBuilder(
+                animation: _confettiCtrl,
+                builder: (_, _) =>
+                    _ConfettiLayer(progress: _confettiCtrl.value),
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MatchBody extends StatelessWidget {
+  const _MatchBody({required this.activity});
+  final ActivityModel activity;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.x4),
+        child: Column(
+          children: [
+            const _TopHeader(),
+            const SizedBox(height: AppSpacing.x2),
+            _MatchCard(activity: activity),
+            const SizedBox(height: AppSpacing.x4),
+            _Actions(activityId: activity.id),
           ],
         ),
       ),
     );
   }
+}
 
-  Widget _topHeader() {
+class _TopHeader extends StatelessWidget {
+  const _TopHeader();
+
+  @override
+  Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.x6,
+        AppSpacing.x6,
+        AppSpacing.x6,
+        AppSpacing.x3,
+      ),
       child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.x4,
+              vertical: AppSpacing.x1 + 2,
+            ),
             decoration: BoxDecoration(
-              color: AppColors.primaryLight,
-              borderRadius: BorderRadius.circular(99),
+              color: context.colors.primaryLight,
+              borderRadius: AppRadius.pillR,
             ),
             child: Text(
               'SUCCESS MATCH',
-              style: AppTypography.bodySmall.copyWith(
-                color: AppColors.primaryDarker,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
+              style: AppTypography.chipLabel(
+                context,
+              ).copyWith(fontSize: 12, color: context.colors.primaryOnSurface),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.x2),
           Text(
-            "It's a Match!",
-            style: AppTypography.headlineLarge.copyWith(
-              fontSize: 32,
-              color: AppColors.primaryDarker,
-            ),
+            "It's a Match",
+            style: AppTypography.headlineLarge(
+              context,
+            ).copyWith(color: context.colors.primaryOnSurface),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.x2),
           Text(
             "You've been matched to this activity",
-            style: AppTypography.bodyMedium.copyWith(
-              color: AppColors.textSecondary,
-              fontSize: 15,
-            ),
+            style: AppTypography.bodyFormSecondary(
+              context,
+            ).copyWith(color: context.colors.textSecondary),
             textAlign: TextAlign.center,
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _card(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+class _MatchCard extends StatelessWidget {
+  const _MatchCard({required this.activity});
+  final ActivityModel activity;
+
+  @override
+  Widget build(BuildContext context) {
+    final timeFmt = DateFormat('EEE, h:mm a');
+    final fillRatio = activity.capacity == 0
+        ? 0.0
+        : (activity.participantCount / activity.capacity).clamp(0.0, 1.0);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.x6,
+        vertical: AppSpacing.x2,
+      ),
       child: Center(
         child: Stack(
           alignment: Alignment.topCenter,
@@ -129,8 +196,8 @@ class _MatchScreenState extends State<MatchScreen>
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
                     colors: [
-                      AppColors.primaryLight.withValues(alpha: 0.7),
-                      AppColors.primaryLight.withValues(alpha: 0),
+                      context.colors.primaryLight.withValues(alpha: 0.7),
+                      context.colors.primaryLight.withValues(alpha: 0),
                     ],
                   ),
                 ),
@@ -139,101 +206,91 @@ class _MatchScreenState extends State<MatchScreen>
             Container(
               width: double.infinity,
               decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(28),
+                color: context.colors.surface,
+                borderRadius: BorderRadius.circular(AppRadius.xl),
                 boxShadow: AppShadows.floating,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _coverImage(),
+                  _CoverImage(activity: activity),
                   Padding(
-                    padding: const EdgeInsets.all(18),
+                    padding: const EdgeInsets.all(AppSpacing.x4 + 2),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Sunset Basketball 5v5',
-                          style: AppTypography.headlineSmall.copyWith(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w800,
-                          ),
+                          activity.title,
+                          style: AppTypography.titleLarge(context),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: AppSpacing.x1),
                         Row(
                           children: [
-                            SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: SvgPicture.asset(
-                                'assets/images/discovery/icons/map_pin.svg',
-                                width: 14,
-                                height: 14,
-                              ),
+                            const AppIcon(
+                              AppIcons.mapPin,
+                              size: AppIconSize.sm,
                             ),
-                            const SizedBox(width: 6),
+                            const SizedBox(width: AppSpacing.x1 + 2),
                             Expanded(
                               child: Text(
-                                'Brooklyn Public Courts',
-                                style: AppTypography.bodyMedium.copyWith(
-                                  color: AppColors.textSecondary,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                                activity.location,
+                                style: AppTypography.chipLabel(
+                                  context,
+                                ).copyWith(color: context.colors.textSecondary),
                                 overflow: TextOverflow.ellipsis,
                                 maxLines: 1,
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: AppSpacing.x3),
                         Row(
                           children: [
-                            _metaChip(
-                              'zap.svg',
-                              'Intermediate',
-                              AppColors.primaryDarker,
+                            _MetaChip(
+                              icon: AppIcons.zap,
+                              label: activity.skillLevel,
+                              color: context.colors.primaryOnSurface,
                             ),
-                            const SizedBox(width: 8),
-                            _metaChip(
-                              'clock.svg',
-                              'Today, 6:30 PM',
-                              AppColors.textSecondary,
+                            const SizedBox(width: AppSpacing.x2),
+                            _MetaChip(
+                              icon: AppIcons.clock,
+                              label: timeFmt.format(activity.dateTime),
+                              color: context.colors.textSecondary,
                             ),
                           ],
                         ),
-                        const SizedBox(height: 12),
-                        Container(height: 1, color: AppColors.border),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: AppSpacing.x3),
+                        Container(height: 1, color: context.colors.border),
+                        const SizedBox(height: AppSpacing.x3),
                         Row(
                           children: [
-                            _avatarStack(),
-                            const SizedBox(width: 8),
+                            const _AvatarStack(),
+                            const SizedBox(width: AppSpacing.x2),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    '8 / 12 spots',
-                                    style: AppTypography.bodySmall.copyWith(
-                                      color: AppColors.textPrimary,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w700,
-                                    ),
+                                    '${activity.participantCount} / ${activity.capacity} spots',
+                                    style: AppTypography.chipLabel(context),
                                     overflow: TextOverflow.ellipsis,
                                     maxLines: 1,
                                   ),
                                   const SizedBox(height: 2),
                                   ClipRRect(
-                                    borderRadius: BorderRadius.circular(3),
+                                    borderRadius: BorderRadius.circular(
+                                      AppRadius.xs,
+                                    ),
                                     child: SizedBox(
                                       height: 5,
                                       child: Stack(
                                         children: [
-                                          Container(color: AppColors.border),
+                                          Container(
+                                            color: context.colors.border,
+                                          ),
                                           FractionallySizedBox(
-                                            widthFactor: 0.67,
+                                            widthFactor: fillRatio,
                                             child: Container(
                                               color: AppColors.primary,
                                             ),
@@ -245,23 +302,25 @@ class _MatchScreenState extends State<MatchScreen>
                                 ],
                               ),
                             ),
-                            const SizedBox(width: 8),
+                            const SizedBox(width: AppSpacing.x2),
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 6,
+                                horizontal: AppSpacing.x3,
+                                vertical: AppSpacing.x1 + 2,
                               ),
                               decoration: BoxDecoration(
-                                color: AppColors.statusSuccessBg,
-                                borderRadius: BorderRadius.circular(20),
+                                color: context.colors.statusSuccessBg,
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.lg,
+                                ),
                               ),
                               child: Text(
                                 'Matched',
-                                style: AppTypography.bodySmall.copyWith(
-                                  color: AppColors.statusSuccessText,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                ),
+                                style: AppTypography.chipLabel(context)
+                                    .copyWith(
+                                      fontSize: 11,
+                                      color: AppColors.statusSuccessText,
+                                    ),
                               ),
                             ),
                           ],
@@ -277,8 +336,14 @@ class _MatchScreenState extends State<MatchScreen>
       ),
     );
   }
+}
 
-  Widget _coverImage() {
+class _CoverImage extends StatelessWidget {
+  const _CoverImage({required this.activity});
+  final ActivityModel activity;
+
+  @override
+  Widget build(BuildContext context) {
     return SizedBox(
       height: 160,
       width: double.infinity,
@@ -286,63 +351,59 @@ class _MatchScreenState extends State<MatchScreen>
         fit: StackFit.expand,
         children: [
           ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            borderRadius: BorderRadius.vertical(
+              top: Radius.circular(AppRadius.xl),
+            ),
             child: Image.asset(
-              'assets/images/discovery/covers/basketball_full.png',
+              activity.coverImageUrl ??
+                  'assets/images/discovery/covers/basketball_full.png',
               fit: BoxFit.cover,
             ),
           ),
           Padding(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.all(AppSpacing.x3 + 2),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
+                    horizontal: AppSpacing.x3,
+                    vertical: AppSpacing.x1 + 2,
                   ),
                   decoration: BoxDecoration(
                     color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
                   ),
                   child: Text(
-                    'BASKETBALL',
-                    style: AppTypography.bodySmall.copyWith(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    activity.sportType.toUpperCase(),
+                    style: AppTypography.chipLabel(
+                      context,
+                    ).copyWith(fontSize: 11, color: AppColors.textOnPrimary),
                   ),
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
+                    horizontal: AppSpacing.x2 + 2,
+                    vertical: AppSpacing.x1 + 2,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color.fromRGBO(0, 0, 0, 0.6),
-                    borderRadius: BorderRadius.circular(20),
+                    color: context.colors.scrimControl,
+                    borderRadius: BorderRadius.circular(AppRadius.lg),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      SizedBox(
-                        width: 12,
-                        height: 12,
-                        child: SvgPicture.asset(
-                          'assets/images/discovery/icons/map_pin.svg',
-                          width: 12,
-                          height: 12,
-                        ),
+                      AppIcon(
+                        AppIcons.mapPin,
+                        size: AppIconSize.sm,
+                        color: context.colors.textOnPrimary,
                       ),
-                      const SizedBox(width: 5),
+                      const SizedBox(width: AppSpacing.x1),
                       Text(
-                        '2.5 km away',
-                        style: AppTypography.bodySmall.copyWith(
-                          color: Colors.white,
+                        '${activity.distanceKm.toStringAsFixed(1)} km away',
+                        style: AppTypography.chipLabel(context).copyWith(
                           fontSize: 11,
-                          fontWeight: FontWeight.w600,
+                          color: context.colors.textOnPrimary,
                         ),
                       ),
                     ],
@@ -355,108 +416,87 @@ class _MatchScreenState extends State<MatchScreen>
       ),
     );
   }
+}
 
-  Widget _metaChip(String icon, String label, Color color) {
+class _MetaChip extends StatelessWidget {
+  const _MetaChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+  final String icon;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.x2 + 2,
+        vertical: AppSpacing.x1 + 2,
+      ),
       decoration: BoxDecoration(
-        color: AppColors.surfaceSubtle,
-        borderRadius: BorderRadius.circular(20),
+        color: context.colors.surfaceSubtle,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          SizedBox(
-            width: 13,
-            height: 13,
-            child: SvgPicture.asset(
-              'assets/images/discovery/icons/$icon',
-              width: 13,
-              height: 13,
-            ),
-          ),
-          const SizedBox(width: 6),
+          AppIcon(icon, size: AppIconSize.sm, color: color),
+          const SizedBox(width: AppSpacing.x1 + 2),
           Text(
             label,
-            style: TextStyle(
-              fontFamily: AppTypography.fontFamily,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: color,
-              height: 1.0,
-            ),
+            style: AppTypography.chipLabel(
+              context,
+            ).copyWith(fontSize: 11, color: color),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _avatarStack() {
+/// Celebratory pair of avatars — the current user's avatar and the activity
+/// host's — the two parties of the "match". Kept as initials-in-circles
+/// (rather than real photos) since there is no current-user avatar asset,
+/// but colours now come from tokens rather than a hardcoded duplicate hex.
+class _AvatarStack extends StatelessWidget {
+  const _AvatarStack();
+
+  @override
+  Widget build(BuildContext context) {
     return SizedBox(
       width: 70,
       height: 30,
       child: Stack(
         children: [
-          Positioned(
-            left: 0,
-            child: _avatar('avatar_alex.png', borderColor: AppColors.border),
-          ),
+          const Positioned(left: 0, child: _StackAvatar('avatar_alex.png')),
           Positioned(
             left: 20,
-            child: Container(
-              width: 30,
-              height: 30,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppColors.primary,
-                border: Border.all(color: AppColors.border, width: 2),
-              ),
-              child: const Center(
-                child: Text(
-                  'M',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
+            child: _StackInitial(letter: 'M', color: AppColors.primary),
           ),
           Positioned(
             left: 40,
-            child: Container(
-              width: 30,
-              height: 30,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFF097044),
-                border: Border.all(color: AppColors.border, width: 2),
-              ),
-              child: const Center(
-                child: Text(
-                  'J',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
+            child: _StackInitial(letter: 'J', color: AppColors.avatarSecondary),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _avatar(String asset, {required Color borderColor}) {
+class _StackAvatar extends StatelessWidget {
+  const _StackAvatar(this.asset);
+  final String asset;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       width: 30,
       height: 30,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        border: Border.all(color: borderColor, width: 2),
+        border: Border.all(color: context.colors.border, width: 2),
       ),
       child: ClipOval(
         child: Image.asset(
@@ -466,33 +506,66 @@ class _MatchScreenState extends State<MatchScreen>
       ),
     );
   }
+}
 
-  Widget _actions(BuildContext context) {
+class _StackInitial extends StatelessWidget {
+  const _StackInitial({required this.letter, required this.color});
+  final String letter;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 30,
+      height: 30,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: color,
+        border: Border.all(color: context.colors.border, width: 2),
+      ),
+      child: Center(
+        child: Text(
+          letter,
+          style: AppTypography.chipLabel(
+            context,
+          ).copyWith(fontSize: 11, color: AppColors.textOnPrimary),
+        ),
+      ),
+    );
+  }
+}
+
+class _Actions extends StatelessWidget {
+  const _Actions({required this.activityId});
+  final String activityId;
+
+  @override
+  Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.x6,
+        vertical: AppSpacing.x4,
+      ),
       child: Column(
         children: [
           AppButton(
             label: 'View Activity Details',
             onPressed: () {
               HapticFeedback.lightImpact();
-              context.go('/joined-activity/1');
+              context.go('/joined-activity/$activityId');
             },
             size: AppButtonSize.lg,
           ),
-          const SizedBox(height: 12),
-          GestureDetector(
+          const SizedBox(height: AppSpacing.x3),
+          PressableScale(
             onTap: () => context.go('/discovery'),
-            behavior: HitTestBehavior.opaque,
             child: Padding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(AppSpacing.x3),
               child: Text(
                 'Keep Swiping',
-                style: AppTypography.bodyMedium.copyWith(
-                  color: AppColors.textSecondary,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
+                style: AppTypography.labelField(
+                  context,
+                ).copyWith(color: context.colors.textSecondary, fontSize: 15),
               ),
             ),
           ),
@@ -527,13 +600,17 @@ class _ConfettiParticle {
   final bool isCircle;
 }
 
+// Confetti is decorative celebration content, not a UI surface — using
+// AppColors.accent (orange) here alongside primary/warning/success is
+// intentional variety for a one-off animation, not the "two competing
+// accents" anti-pattern PRD Appendix C.2 warns against for persistent chrome.
 const _kConfettiColors = [
   AppColors.primary,
   AppColors.primaryLight,
   AppColors.primaryDarker,
   AppColors.warning,
   AppColors.statusSuccessBg,
-  Color(0xFFFFD700), // gold
+  AppColors.accent,
 ];
 
 class _ConfettiLayer extends StatelessWidget {

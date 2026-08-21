@@ -1,83 +1,151 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+
+import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/dark_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/app_button.dart';
+import '../../../core/widgets/app_icon.dart';
+import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/asset_image.dart';
-import '../../../core/widgets/home_indicator.dart';
-import '../../../core/widgets/label_badge.dart';
+import '../../../core/widgets/error_retry.dart';
+import '../../../core/widgets/pressable_scale.dart';
+import '../../../core/widgets/skeleton.dart';
+import '../../discovery/domain/activity_model.dart';
 
-class ActivityFullScreen extends StatelessWidget {
-  const ActivityFullScreen({super.key});
+typedef _FullData = ({ActivityModel activity, List<ActivityModel> similar});
+
+final _fullProvider = FutureProvider.autoDispose.family<_FullData, String>((
+  ref,
+  activityId,
+) async {
+  final repo = ref.watch(activityRepositoryProvider);
+  final activity = await repo.byId(activityId);
+  if (activity == null) throw StateError('Activity not found');
+  final matches = await repo.search(sport: activity.sportType);
+  final similar = matches
+      .where((a) => a.id != activityId && !a.isFull)
+      .take(3)
+      .toList();
+  return (activity: activity, similar: similar);
+});
+
+class ActivityFullScreen extends ConsumerWidget {
+  const ActivityFullScreen({super.key, required this.activityId});
+
+  final String activityId;
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.surface,
-      body: SafeArea(
-        top: true,
-        child: Column(
-          children: [
-            _topHeader(),
-            const SizedBox(height: 24),
-            _card(),
-            const SizedBox(height: 24),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: _waitingList(),
-            ),
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: _actions(context),
-            ),
-            const Spacer(),
-            const HomeIndicator(),
-          ],
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(_fullProvider(activityId));
+
+    return AppScaffold(
+      backgroundColor: context.colors.surface,
+      showHomeIndicator: false, // reached from inside ShellRoute screens.
+      body: async.when(
+        loading: () => const SkeletonList(count: 3),
+        error: (_, _) => ErrorRetry(
+          message: 'Could not load this activity.',
+          onRetry: () => ref.invalidate(_fullProvider(activityId)),
         ),
+        data: (data) =>
+            _FullBody(activity: data.activity, similar: data.similar),
       ),
     );
   }
+}
 
-  Widget _topHeader() {
+class _FullBody extends StatelessWidget {
+  const _FullBody({required this.activity, required this.similar});
+
+  final ActivityModel activity;
+  final List<ActivityModel> similar;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(0, AppSpacing.x4, 0, AppSpacing.x6),
+      child: Column(
+        children: [
+          const _TopHeader(),
+          const SizedBox(height: AppSpacing.x6),
+          _ActivityCard(activity: activity),
+          const SizedBox(height: AppSpacing.x6),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x6),
+            child: Column(
+              children: [
+                const _WaitingListNotice(),
+                const SizedBox(height: AppSpacing.x4),
+                if (similar.isNotEmpty) ...[
+                  _SimilarActivities(activities: similar),
+                  const SizedBox(height: AppSpacing.x4),
+                ],
+                _Actions(activityId: activity.id),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TopHeader extends StatelessWidget {
+  const _TopHeader();
+
+  @override
+  Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x6),
       child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.x4,
+              vertical: AppSpacing.x1 + 2,
+            ),
             decoration: BoxDecoration(
-              color: AppColors.warningBg,
-              borderRadius: BorderRadius.circular(99),
-              border: Border.all(color: AppColors.warningLight),
+              color: context.colors.warningBg,
+              borderRadius: AppRadius.pillR,
+              border: Border.all(color: context.colors.warningLight),
             ),
-            child: LabelBadge(
-              label: 'ACTIVITY FULL',
-              background: Colors.transparent,
-              foreground: AppColors.warning,
-              padding: EdgeInsets.zero,
+            child: Text(
+              'ACTIVITY FULL',
+              style: AppTypography.chipLabel(
+                context,
+              ).copyWith(fontSize: 11, color: AppColors.warning),
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            'Spots Filled!',
-            style: AppTypography.headlineLarge.copyWith(fontSize: 32),
-          ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.x2),
+          Text('Spots Filled', style: AppTypography.headlineLarge(context)),
+          const SizedBox(height: AppSpacing.x2),
           Text(
             'This activity has reached maximum capacity',
-            style: AppTypography.bodyMedium.copyWith(
-              color: AppColors.textSecondary,
-              fontSize: 15,
-            ),
+            style: AppTypography.bodyFormSecondary(
+              context,
+            ).copyWith(color: context.colors.textSecondary),
             textAlign: TextAlign.center,
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _card() {
+class _ActivityCard extends StatelessWidget {
+  const _ActivityCard({required this.activity});
+  final ActivityModel activity;
+
+  @override
+  Widget build(BuildContext context) {
+    final timeFmt = DateFormat('EEE, h:mm a');
+
     return Stack(
       alignment: Alignment.topCenter,
       children: [
@@ -90,110 +158,93 @@ class ActivityFullScreen extends StatelessWidget {
               shape: BoxShape.circle,
               gradient: RadialGradient(
                 colors: [
-                  AppColors.primaryLight.withValues(alpha: 0.6),
-                  AppColors.primaryLight.withValues(alpha: 0),
+                  context.colors.primaryLight.withValues(alpha: 0.6),
+                  context.colors.primaryLight.withValues(alpha: 0),
                 ],
               ),
             ),
           ),
         ),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x6),
           child: Container(
             decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: AppColors.border),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color.fromRGBO(0, 0, 0, 0.04),
-                  blurRadius: 32,
-                  offset: Offset(0, 16),
-                ),
-              ],
+              color: context.colors.surface,
+              borderRadius: BorderRadius.circular(AppRadius.xl),
+              border: Border.all(color: context.colors.border),
+              boxShadow: AppShadows.floating,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _coverImage(),
+                _CoverImage(activity: activity),
                 Padding(
-                  padding: const EdgeInsets.all(18),
+                  padding: const EdgeInsets.all(AppSpacing.x4 + 2),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Sunset Basketball 5v5',
-                        style: AppTypography.headlineSmall.copyWith(
-                          fontSize: 19,
-                          fontWeight: FontWeight.w800,
-                        ),
+                        activity.title,
+                        style: AppTypography.titleLarge(context),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: AppSpacing.x1),
                       Row(
                         children: [
-                          SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: SvgPicture.asset(
-                              'assets/images/discovery/icons/map_pin.svg',
-                              width: 14,
-                              height: 14,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Brooklyn Public Courts',
-                            style: AppTypography.bodyMedium.copyWith(
-                              color: AppColors.textSecondary,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
+                          const AppIcon(AppIcons.mapPin, size: AppIconSize.sm),
+                          const SizedBox(width: AppSpacing.x1 + 2),
+                          Expanded(
+                            child: Text(
+                              activity.location,
+                              style: AppTypography.chipLabel(
+                                context,
+                              ).copyWith(color: context.colors.textSecondary),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: AppSpacing.x3),
                       Row(
                         children: [
-                          _metaChip(
-                            'zap.svg',
-                            'Intermediate',
-                            AppColors.primaryDarker,
+                          _MetaChip(
+                            icon: AppIcons.zap,
+                            label: activity.skillLevel,
+                            color: context.colors.primaryOnSurface,
                           ),
-                          const SizedBox(width: 8),
-                          _metaChip(
-                            'clock.svg',
-                            'Today, 6:30 PM',
-                            AppColors.textSecondary,
+                          const SizedBox(width: AppSpacing.x2),
+                          _MetaChip(
+                            icon: AppIcons.clock,
+                            label: timeFmt.format(activity.dateTime),
+                            color: context.colors.textSecondary,
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
-                      Container(height: 1, color: AppColors.border),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: AppSpacing.x3),
+                      Container(height: 1, color: context.colors.border),
+                      const SizedBox(height: AppSpacing.x3),
                       Row(
                         children: [
-                          _avatarStack(),
-                          const SizedBox(width: 8),
+                          const _AvatarStack(),
+                          const SizedBox(width: AppSpacing.x2),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  '12 / 12 spots',
-                                  style: AppTypography.bodySmall.copyWith(
-                                    color: AppColors.textPrimary,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                  ),
+                                  '${activity.capacity} / ${activity.capacity} spots',
+                                  style: AppTypography.chipLabel(context),
                                 ),
                                 const SizedBox(height: 2),
                                 ClipRRect(
-                                  borderRadius: BorderRadius.circular(3),
+                                  borderRadius: BorderRadius.circular(
+                                    AppRadius.xs,
+                                  ),
                                   child: SizedBox(
                                     height: 5,
                                     child: Stack(
                                       children: [
-                                        Container(color: AppColors.border),
+                                        Container(color: context.colors.border),
                                         Container(
                                           width: double.infinity,
                                           color: AppColors.danger,
@@ -207,20 +258,18 @@ class ActivityFullScreen extends StatelessWidget {
                           ),
                           Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
+                              horizontal: AppSpacing.x3,
+                              vertical: AppSpacing.x1 + 2,
                             ),
                             decoration: BoxDecoration(
-                              color: AppColors.errorLight,
-                              borderRadius: BorderRadius.circular(20),
+                              color: context.colors.errorLight,
+                              borderRadius: BorderRadius.circular(AppRadius.lg),
                             ),
                             child: Text(
                               'Full',
-                              style: AppTypography.bodySmall.copyWith(
-                                color: AppColors.danger,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                              ),
+                              style: AppTypography.chipLabel(
+                                context,
+                              ).copyWith(fontSize: 11, color: AppColors.danger),
                             ),
                           ),
                         ],
@@ -235,8 +284,14 @@ class ActivityFullScreen extends StatelessWidget {
       ],
     );
   }
+}
 
-  Widget _coverImage() {
+class _CoverImage extends StatelessWidget {
+  const _CoverImage({required this.activity});
+  final ActivityModel activity;
+
+  @override
+  Widget build(BuildContext context) {
     return SizedBox(
       height: 140,
       width: double.infinity,
@@ -244,64 +299,61 @@ class ActivityFullScreen extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            borderRadius: BorderRadius.vertical(
+              top: Radius.circular(AppRadius.xl),
+            ),
             child: AssetImageWithFallback(
-              assetPath: 'assets/images/discovery/covers/basketball_full.png',
+              assetPath:
+                  activity.coverImageUrl ??
+                  'assets/images/discovery/covers/basketball_full.png',
               width: double.infinity,
               fit: BoxFit.cover,
             ),
           ),
           Padding(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.all(AppSpacing.x3 + 2),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
+                    horizontal: AppSpacing.x3,
+                    vertical: AppSpacing.x1 + 2,
                   ),
                   decoration: BoxDecoration(
                     color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
                   ),
                   child: Text(
-                    'BASKETBALL',
-                    style: AppTypography.bodySmall.copyWith(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    activity.sportType.toUpperCase(),
+                    style: AppTypography.chipLabel(
+                      context,
+                    ).copyWith(fontSize: 11, color: AppColors.textOnPrimary),
                   ),
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
+                    horizontal: AppSpacing.x2 + 2,
+                    vertical: AppSpacing.x1 + 2,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color.fromRGBO(0, 0, 0, 0.6),
-                    borderRadius: BorderRadius.circular(20),
+                    color: context.colors.scrimControl,
+                    borderRadius: BorderRadius.circular(AppRadius.lg),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      SizedBox(
-                        width: 12,
-                        height: 12,
-                        child: SvgPicture.asset(
-                          'assets/images/discovery/icons/map_pin.svg',
-                          width: 12,
-                          height: 12,
-                        ),
+                      AppIcon(
+                        AppIcons.mapPin,
+                        size: AppIconSize.sm,
+                        color: context.colors.textOnPrimary,
                       ),
-                      const SizedBox(width: 5),
+                      const SizedBox(width: AppSpacing.x1),
                       Text(
-                        '2.5 km away',
-                        style: AppTypography.bodySmall.copyWith(
-                          color: Colors.white,
+                        '${activity.distanceKm.toStringAsFixed(1)} km away',
+                        style: AppTypography.chipLabel(context).copyWith(
                           fontSize: 11,
-                          fontWeight: FontWeight.w600,
+                          color: context.colors.textOnPrimary,
                         ),
                       ),
                     ],
@@ -314,108 +366,83 @@ class ActivityFullScreen extends StatelessWidget {
       ),
     );
   }
+}
 
-  Widget _metaChip(String icon, String label, Color color) {
+class _MetaChip extends StatelessWidget {
+  const _MetaChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+  final String icon;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.x2 + 2,
+        vertical: AppSpacing.x1 + 2,
+      ),
       decoration: BoxDecoration(
-        color: AppColors.surfaceSubtle,
-        borderRadius: BorderRadius.circular(20),
+        color: context.colors.surfaceSubtle,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          SizedBox(
-            width: 13,
-            height: 13,
-            child: SvgPicture.asset(
-              'assets/images/discovery/icons/$icon',
-              width: 13,
-              height: 13,
-            ),
-          ),
-          const SizedBox(width: 6),
+          AppIcon(icon, size: AppIconSize.sm, color: color),
+          const SizedBox(width: AppSpacing.x1 + 2),
           Text(
             label,
-            style: TextStyle(
-              fontFamily: AppTypography.fontFamily,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: color,
-              height: 1.0,
-            ),
+            style: AppTypography.chipLabel(
+              context,
+            ).copyWith(fontSize: 11, color: color),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _avatarStack() {
+class _AvatarStack extends StatelessWidget {
+  const _AvatarStack();
+
+  @override
+  Widget build(BuildContext context) {
     return SizedBox(
       width: 70,
       height: 30,
       child: Stack(
         children: [
-          Positioned(
-            left: 0,
-            child: _avatar('avatar_alex.png', borderColor: AppColors.border),
-          ),
+          const Positioned(left: 0, child: _StackAvatar('avatar_alex.png')),
           Positioned(
             left: 20,
-            child: Container(
-              width: 30,
-              height: 30,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppColors.primary,
-                border: Border.all(color: AppColors.border, width: 2),
-              ),
-              child: const Center(
-                child: Text(
-                  'M',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
+            child: _StackInitial(letter: 'M', color: AppColors.primary),
           ),
           Positioned(
             left: 40,
-            child: Container(
-              width: 30,
-              height: 30,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFF097044),
-                border: Border.all(color: AppColors.border, width: 2),
-              ),
-              child: const Center(
-                child: Text(
-                  'J',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
+            child: _StackInitial(letter: 'J', color: AppColors.avatarSecondary),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _avatar(String asset, {required Color borderColor}) {
+class _StackAvatar extends StatelessWidget {
+  const _StackAvatar(this.asset);
+  final String asset;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       width: 30,
       height: 30,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        border: Border.all(color: borderColor, width: 2),
+        border: Border.all(color: context.colors.border, width: 2),
       ),
       child: ClipOval(
         child: AssetImageWithFallback(
@@ -426,77 +453,188 @@ class ActivityFullScreen extends StatelessWidget {
       ),
     );
   }
+}
 
-  Widget _waitingList() {
+class _StackInitial extends StatelessWidget {
+  const _StackInitial({required this.letter, required this.color});
+  final String letter;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      width: 30,
+      height: 30,
       decoration: BoxDecoration(
-        color: AppColors.warningBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.warningLight),
+        shape: BoxShape.circle,
+        color: color,
+        border: Border.all(color: context.colors.border, width: 2),
+      ),
+      child: Center(
+        child: Text(
+          letter,
+          style: AppTypography.chipLabel(
+            context,
+          ).copyWith(fontSize: 11, color: AppColors.textOnPrimary),
+        ),
+      ),
+    );
+  }
+}
+
+class _WaitingListNotice extends StatelessWidget {
+  const _WaitingListNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.x3),
+      decoration: BoxDecoration(
+        color: context.colors.warningBg,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        border: Border.all(color: context.colors.warningLight),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              SizedBox(
-                width: 16,
-                height: 16,
-                child: SvgPicture.asset(
-                  'assets/images/discovery/icons/alert_circle.svg',
-                  width: 16,
-                  height: 16,
-                ),
+              const AppIcon(
+                AppIcons.alertCircle,
+                size: AppIconSize.md,
+                color: AppColors.warning,
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppSpacing.x2),
               Text(
-                '3 people on waiting list',
-                style: AppTypography.bodyMedium.copyWith(
-                  color: AppColors.warning,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                ),
+                'Waiting list is open',
+                style: AppTypography.labelField(
+                  context,
+                ).copyWith(color: AppColors.warning),
               ),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: AppSpacing.x1),
           Padding(
-            padding: const EdgeInsets.only(left: 24),
+            padding: const EdgeInsets.only(left: AppSpacing.x6),
             child: Text(
-              'You will be notified if a spot opens up.',
-              style: AppTypography.bodySmall.copyWith(
-                color: AppColors.textSecondary,
-                fontSize: 12,
-              ),
+              "You'll be notified if a spot opens up.",
+              style: AppTypography.bodySmall(context),
             ),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _actions(BuildContext context) {
+class _SimilarActivities extends StatelessWidget {
+  const _SimilarActivities({required this.activities});
+  final List<ActivityModel> activities;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Similar activities nearby',
+          style: AppTypography.titleMedium(context),
+        ),
+        const SizedBox(height: AppSpacing.x3),
+        for (final activity in activities) ...[
+          _SimilarActivityRow(activity: activity),
+          const SizedBox(height: AppSpacing.x2),
+        ],
+      ],
+    );
+  }
+}
+
+class _SimilarActivityRow extends StatelessWidget {
+  const _SimilarActivityRow({required this.activity});
+  final ActivityModel activity;
+
+  @override
+  Widget build(BuildContext context) {
+    final timeFmt = DateFormat('EEE, h:mm a');
+    return PressableScale(
+      onTap: () => context.push('/activity/${activity.id}'),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.x3),
+        decoration: BoxDecoration(
+          color: context.colors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          border: Border.all(color: context.colors.border),
+        ),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(AppRadius.input),
+              child: AssetImageWithFallback(
+                assetPath:
+                    activity.coverImageUrl ??
+                    'assets/images/discovery/covers/basketball_full.png',
+                width: 48,
+                height: 48,
+                fit: BoxFit.cover,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.x3),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    activity.title,
+                    style: AppTypography.labelField(context),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    '${timeFmt.format(activity.dateTime)} • ${activity.spotsLeft} spots left',
+                    style: AppTypography.bodySmall(context),
+                  ),
+                ],
+              ),
+            ),
+            const AppIcon(AppIcons.chevronRight, size: AppIconSize.sm),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Actions extends StatelessWidget {
+  const _Actions({required this.activityId});
+  final String activityId;
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
       children: [
         AppButton(
           label: 'Join Waiting List',
-          onPressed: () => Navigator.of(context).maybePop(),
+          onPressed: () {
+            AppSnackbar.show(
+              context,
+              message: "You're on the waiting list.",
+              variant: AppSnackbarVariant.info,
+            );
+            Navigator.of(context).maybePop();
+          },
           size: AppButtonSize.lg,
         ),
-        const SizedBox(height: 12),
-        GestureDetector(
+        const SizedBox(height: AppSpacing.x3),
+        PressableScale(
           onTap: () => Navigator.of(context).maybePop(),
-          behavior: HitTestBehavior.opaque,
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(AppSpacing.x3),
             child: Text(
-              'Keep Swiping',
-              style: AppTypography.bodyMedium.copyWith(
-                color: AppColors.textSecondary,
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-              ),
+              'Keep Browsing',
+              style: AppTypography.labelField(
+                context,
+              ).copyWith(color: context.colors.textSecondary, fontSize: 15),
             ),
           ),
         ),

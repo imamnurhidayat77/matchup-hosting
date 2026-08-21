@@ -1,3 +1,4 @@
+import '../../activities/domain/activity_participant.dart';
 import '../domain/activity_model.dart';
 import 'activity_repository.dart';
 
@@ -174,6 +175,7 @@ class DummyActivityRepository implements ActivityRepository {
     required int maxParticipants,
     required String skillLevel,
     required double fee,
+    int durationMinutes = 120,
   }) async {
     await _delay();
     final id = '${_all.length + 1}';
@@ -191,6 +193,7 @@ class DummyActivityRepository implements ActivityRepository {
       hostName: 'You',
       coverImageUrl: 'assets/images/discovery/covers/basketball_full.png',
       status: ActivityStatus.hosted,
+      durationMinutes: durationMinutes,
     );
     _all.insert(0, created);
     return created;
@@ -209,9 +212,82 @@ class DummyActivityRepository implements ActivityRepository {
   }
 
   @override
+  Future<void> cancel(String activityId) async {
+    await _delay();
+    final index = _all.indexWhere((a) => a.id == activityId);
+    if (index == -1) return;
+    _all[index] = _all[index].copyWith(status: ActivityStatus.past);
+  }
+
+  @override
   Future<List<ActivityModel>> pastByUser(String userId) async {
     await _delay();
     return _all.take(1).toList();
+  }
+
+  @override
+  Future<List<ActivityParticipant>> participants(String activityId) async {
+    await _delay();
+    final activity = _all
+        .where((a) => a.id == activityId)
+        .cast<ActivityModel?>()
+        .firstWhere((a) => a != null, orElse: () => null);
+    final now = DateTime.now();
+    final roster = [
+      ActivityParticipant(
+        userId: 'host',
+        name: activity?.hostName ?? 'James Wilson',
+        avatarAsset: 'host_james.png',
+        skillLevel: 'Advanced',
+        joinedAt: now.subtract(const Duration(days: 6, hours: 3)),
+        isOrganizer: true,
+        isCheckedIn: true,
+      ),
+      ActivityParticipant(
+        userId: 'u2',
+        name: 'Alex Mercer',
+        avatarAsset: 'avatar_alex.png',
+        skillLevel: 'Intermediate',
+        joinedAt: now.subtract(const Duration(days: 2, hours: 9)),
+        isOrganizer: false,
+        isCheckedIn: true,
+      ),
+      ActivityParticipant(
+        userId: 'u3',
+        name: 'Sarah Chen',
+        avatarAsset: 'sarah_c.png',
+        skillLevel: 'Intermediate',
+        joinedAt: now.subtract(const Duration(days: 2, hours: 1)),
+        isOrganizer: false,
+      ),
+      ActivityParticipant(
+        userId: 'u4',
+        name: 'Marcus Brodie',
+        avatarAsset: 'avatar_1.png',
+        skillLevel: 'Advanced',
+        joinedAt: now.subtract(const Duration(days: 1, hours: 4)),
+        isOrganizer: false,
+      ),
+      ActivityParticipant(
+        userId: 'u5',
+        name: 'Daniel Kim',
+        avatarAsset: 'avatar_2.png',
+        skillLevel: 'Beginner',
+        joinedAt: now.subtract(const Duration(hours: 21)),
+        isOrganizer: false,
+      ),
+      ActivityParticipant(
+        userId: 'u6',
+        name: 'Elena Rostova',
+        avatarAsset: 'avatar_3.png',
+        skillLevel: 'Intermediate',
+        joinedAt: now.subtract(const Duration(hours: 6, minutes: 40)),
+        isOrganizer: false,
+      ),
+    ];
+    final capacity = activity?.capacity ?? roster.length;
+    final count = activity?.participantCount ?? roster.length;
+    return roster.take(count.clamp(0, capacity)).toList();
   }
 
   Future<void> _delay() => Future.delayed(const Duration(milliseconds: 50));

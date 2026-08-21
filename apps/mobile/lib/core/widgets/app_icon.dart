@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
-import '../theme/app_colors.dart';
+import '../theme/dark_colors.dart';
 
 /// Token sizes for [AppIcon]. Pick the closest one instead of an arbitrary
 /// pixel value, the same discipline as [AppSpacing] / [AppRadius].
@@ -42,12 +42,8 @@ extension _AppIconSizeX on AppIconSize {
 /// AppIcon.material(Icons.qr_code_scanner_rounded) // only when no SVG exists
 /// ```
 class AppIcon extends StatelessWidget {
-  const AppIcon(
-    this.asset, {
-    super.key,
-    this.size = AppIconSize.md,
-    this.color = AppColors.textSecondary,
-  }) : materialIcon = null;
+  const AppIcon(this.asset, {super.key, this.size = AppIconSize.md, this.color})
+    : materialIcon = null;
 
   /// Escape hatch for glyphs the SVG set does not cover. Keep these rare and
   /// obvious — every use should be easy to find with a search for
@@ -56,26 +52,30 @@ class AppIcon extends StatelessWidget {
     IconData icon, {
     super.key,
     this.size = AppIconSize.md,
-    this.color = AppColors.textSecondary,
+    this.color,
   }) : asset = '',
        materialIcon = icon;
 
   final String asset;
   final IconData? materialIcon;
   final AppIconSize size;
-  final Color color;
+
+  /// Icon tint. Defaults to `context.colors.textSecondary` (theme-aware)
+  /// when null.
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
     final px = size.px;
+    final tint = color ?? context.colors.textSecondary;
     if (materialIcon != null) {
-      return Icon(materialIcon, size: px, color: color);
+      return Icon(materialIcon, size: px, color: tint);
     }
     return SvgPicture.asset(
       asset,
       width: px,
       height: px,
-      colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+      colorFilter: ColorFilter.mode(tint, BlendMode.srcIn),
     );
   }
 }

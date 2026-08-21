@@ -7,11 +7,13 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/dark_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/secure_screen.dart';
 import '../../../core/widgets/app_snackbar.dart';
-import '../../../core/widgets/home_indicator.dart';
 import '../../../core/widgets/pill_buttons.dart';
+import '../../../core/widgets/pressable_scale.dart';
+import '../presentation/widgets/auth_shell.dart';
 
 /// Receives the email address via GoRouter's [GoRouterState.extra].
 class OtpVerificationScreen extends StatefulWidget {
@@ -163,167 +165,146 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
     final email = widget.email.isNotEmpty ? widget.email : 'your email';
     final canVerify = _enteredCode.length == _codeLength && !_isVerifying;
 
-    return Scaffold(
-      backgroundColor: AppColors.surface,
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            _RecoveryHeader(
-              title: 'Verification',
-              onBack: () => Navigator.of(context).maybePop(),
-            ),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x6),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const SizedBox(height: AppSpacing.x6),
-                    _RecoveryIllustration(
-                      iconPath: 'assets/images/auth/mail.svg',
-                    ),
-                    const SizedBox(height: AppSpacing.x6),
-                    Text(
-                      'Check Your Email',
-                      textAlign: TextAlign.center,
-                      style: AppTypography.headlineSmall.copyWith(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.x3),
-                    Text.rich(
-                      TextSpan(
-                        style: AppTypography.bodyMedium.copyWith(
-                          color: AppColors.textSecondary,
-                          height: 1.55,
-                        ),
-                        children: [
-                          const TextSpan(text: 'We sent a 6-digit code to '),
-                          TextSpan(
-                            text: email,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                        ],
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: AppSpacing.x6),
-
-                    // ── OTP boxes with shake animation ─────────────────
-                    AnimatedBuilder(
-                      animation: _shakeAnimation,
-                      builder: (_, child) {
-                        final offset = (_shakeController.isAnimating)
-                            ? (8 *
-                                  (0.5 - (_shakeAnimation.value - 0.5).abs()) *
-                                  2)
-                            : 0.0;
-                        return Transform.translate(
-                          offset: Offset(offset, 0),
-                          child: child,
-                        );
-                      },
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: List.generate(_codeLength, (i) {
-                          return Padding(
-                            padding: EdgeInsets.only(
-                              right: i < _codeLength - 1 ? AppSpacing.x2 : 0,
-                            ),
-                            child: _OtpBox(
-                              controller: _controllers[i],
-                              focusNode: _focusNodes[i],
-                              hasError: _hasError,
-                              onChanged: (v) => _onOtpChanged(i, v),
-                            ),
-                          );
-                        }),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.x4),
-
-                    // ── Timer ──────────────────────────────────────────
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        SvgPicture.asset(
-                          'assets/images/discovery/icons/clock.svg',
-                          width: 15,
-                          height: 15,
-                          colorFilter: const ColorFilter.mode(
-                            AppColors.textSecondary,
-                            BlendMode.srcIn,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          _secondsRemaining > 0
-                              ? 'Resend code in $_timerText'
-                              : 'Code expired',
-                          style: AppTypography.bodyMedium.copyWith(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: _secondsRemaining > 0
-                                ? AppColors.textSecondary
-                                : AppColors.danger,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.x6),
-
-                    PrimaryPillButton(
-                      label: _isVerifying ? 'Verifying…' : 'Verify',
-                      onPressed: canVerify ? _verify : null,
-                    ),
-                    const SizedBox(height: AppSpacing.x6),
-                  ],
+    return AuthShell(
+      header: AuthHeaderBar(
+        title: 'Verification',
+        onBack: () => Navigator.of(context).maybePop(),
+      ),
+      bottom: Padding(
+        padding: const EdgeInsets.only(top: AppSpacing.x2),
+        child: Semantics(
+          button: true,
+          enabled: _secondsRemaining == 0,
+          label: _secondsRemaining == 0
+              ? 'Resend code'
+              : 'Resend code, available in $_secondsRemaining seconds',
+          child: PressableScale(
+            onTap: _secondsRemaining == 0 ? _resend : null,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  "Didn't receive the code? ",
+                  style: AppTypography.bodyMedium(
+                    context,
+                  ).copyWith(color: context.colors.textSecondary),
                 ),
-              ),
-            ),
-
-            // ── Resend footer ────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.x6,
-                AppSpacing.x4,
-                AppSpacing.x6,
-                0,
-              ),
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: _secondsRemaining == 0 ? _resend : null,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      "Didn't receive the code? ",
-                      style: AppTypography.bodyMedium.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    Text(
-                      'Resend',
-                      style: AppTypography.bodyMedium.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: _secondsRemaining == 0
-                            ? AppColors.primaryDarker
-                            : AppColors.textTertiary,
-                      ),
-                    ),
-                  ],
+                Text(
+                  'Resend',
+                  style: AppTypography.bodyMedium(context).copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: _secondsRemaining == 0
+                        ? context.colors.primaryOnSurface
+                        : context.colors.textTertiary,
+                  ),
                 ),
-              ),
+              ],
             ),
-            const HomeIndicator(),
-          ],
+          ),
         ),
       ),
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            const SizedBox(height: AppSpacing.x6),
+            AuthIllustration(iconPath: 'assets/images/auth/mail.svg'),
+            const SizedBox(height: AppSpacing.x6),
+            Text(
+              'Check Your Email',
+              textAlign: TextAlign.center,
+              style: AppTypography.headlineSmall(
+                context,
+              ).copyWith(fontSize: 24, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: AppSpacing.x3),
+            Text.rich(
+              TextSpan(
+                style: AppTypography.bodyReading(
+                  context,
+                ).copyWith(color: context.colors.textSecondary),
+                children: [
+                  const TextSpan(text: 'We sent a 6-digit code to '),
+                  TextSpan(
+                    text: email,
+                    style: AppTypography.bodyReading(context).copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: context.colors.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: AppSpacing.x6),
+
+            // ── OTP boxes with shake animation ─────────────────
+            AnimatedBuilder(
+              animation: _shakeAnimation,
+              builder: (_, child) {
+                final offset = (_shakeController.isAnimating)
+                    ? (8 * (0.5 - (_shakeAnimation.value - 0.5).abs()) * 2)
+                    : 0.0;
+                return Transform.translate(
+                  offset: Offset(offset, 0),
+                  child: child,
+                );
+              },
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(_codeLength, (i) {
+                  return Padding(
+                    padding: EdgeInsets.only(
+                      right: i < _codeLength - 1 ? AppSpacing.x2 : 0,
+                    ),
+                    child: _OtpBox(
+                      controller: _controllers[i],
+                      focusNode: _focusNodes[i],
+                      hasError: _hasError,
+                      onChanged: (v) => _onOtpChanged(i, v),
+                    ),
+                  );
+                }),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.x4),
+
+            // ── Timer ──────────────────────────────────────────
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SvgPicture.asset(
+                  'assets/images/discovery/icons/clock.svg',
+                  width: 15,
+                  height: 15,
+                  colorFilter: ColorFilter.mode(
+                    context.colors.textSecondary,
+                    BlendMode.srcIn,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.x2 - 2),
+                Text(
+                  _secondsRemaining > 0
+                      ? 'Resend code in $_timerText'
+                      : 'Code expired',
+                  style: AppTypography.inputLabelSmall(context).copyWith(
+                    color: _secondsRemaining > 0
+                        ? context.colors.textSecondary
+                        : AppColors.danger,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.x6),
+
+            PrimaryPillButton(
+              label: _isVerifying ? 'Verifying…' : 'Verify',
+              onPressed: canVerify ? _verify : null,
+            ),
+            const SizedBox(height: AppSpacing.x6),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -356,20 +337,22 @@ class _OtpBox extends StatelessWidget {
         maxLength: 1,
         keyboardType: TextInputType.number,
         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-        style: AppTypography.headlineSmall.copyWith(
+        style: AppTypography.headlineSmall(context).copyWith(
           fontSize: 22,
           fontWeight: FontWeight.w800,
-          color: hasError ? AppColors.danger : AppColors.textPrimary,
+          color: hasError ? AppColors.danger : context.colors.textPrimary,
         ),
         decoration: InputDecoration(
           counterText: '',
           filled: true,
-          fillColor: hasError ? AppColors.errorLight : AppColors.surface,
+          fillColor: hasError
+              ? context.colors.errorLight
+              : context.colors.surface,
           contentPadding: EdgeInsets.zero,
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(AppRadius.md),
             borderSide: BorderSide(
-              color: hasError ? AppColors.danger : AppColors.border,
+              color: hasError ? AppColors.danger : context.colors.border,
             ),
           ),
           focusedBorder: OutlineInputBorder(
@@ -378,93 +361,6 @@ class _OtpBox extends StatelessWidget {
               color: hasError ? AppColors.danger : AppColors.primary,
               width: 2,
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Shared recovery header + illustration (re-declared for use in this file)
-
-class _RecoveryHeader extends StatelessWidget {
-  const _RecoveryHeader({required this.title, required this.onBack});
-  final String title;
-  final VoidCallback onBack;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.x5,
-        AppSpacing.x2,
-        AppSpacing.x5,
-        AppSpacing.x2,
-      ),
-      child: Row(
-        children: [
-          Semantics(
-            button: true,
-            label: 'Back',
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: onBack,
-              child: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: SvgPicture.asset(
-                  'assets/images/discovery/icons/chevron-left.svg',
-                  width: 16,
-                  height: 16,
-                  colorFilter: const ColorFilter.mode(
-                    AppColors.textPrimary,
-                    BlendMode.srcIn,
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: AppSpacing.x3),
-          Text(title, style: AppTypography.titleLarge.copyWith(fontSize: 18)),
-        ],
-      ),
-    );
-  }
-}
-
-class _RecoveryIllustration extends StatelessWidget {
-  const _RecoveryIllustration({required this.iconPath});
-  final String iconPath;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 100,
-      height: 100,
-      decoration: const BoxDecoration(
-        color: AppColors.primary,
-        shape: BoxShape.circle,
-      ),
-      alignment: Alignment.center,
-      child: Container(
-        width: 68,
-        height: 68,
-        decoration: const BoxDecoration(
-          color: AppColors.primarySoft,
-          shape: BoxShape.circle,
-        ),
-        alignment: Alignment.center,
-        child: SvgPicture.asset(
-          iconPath,
-          width: 32,
-          height: 32,
-          colorFilter: const ColorFilter.mode(
-            AppColors.primary,
-            BlendMode.srcIn,
           ),
         ),
       ),

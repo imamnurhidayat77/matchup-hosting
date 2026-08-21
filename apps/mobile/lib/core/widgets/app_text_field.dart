@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
+import '../theme/dark_colors.dart';
 
 enum _FieldVariant { pill, form }
 
@@ -13,7 +14,7 @@ enum _FieldVariant { pill, form }
 /// - [AppTextField.pill] — radius `pill`, fill `surfaceSubtle`, no label.
 ///   Search bars, chat composers.
 /// - [AppTextField.form] — radius `input` (12), fill `surface`, hairline
-///   border, uppercase [AppTypography.metaSub]-style label above the field.
+///   border, uppercase [AppTypography.metaSub(context)]-style label above the field.
 ///   Every form field (Create Activity, Edit Profile, auth screens, …).
 ///
 /// Both variants set `border` / `enabledBorder` / `focusedBorder` /
@@ -112,9 +113,9 @@ class AppTextField extends StatelessWidget {
       children: [
         Text(
           label!,
-          style: AppTypography.metaSub.copyWith(
+          style: AppTypography.metaSub(context).copyWith(
             fontWeight: FontWeight.w700,
-            color: AppColors.textSecondary,
+            color: context.colors.textSecondary,
             letterSpacing: 0.5,
           ),
         ),
@@ -129,9 +130,11 @@ class AppTextField extends StatelessWidget {
       height: maxLines == 1 ? 44 : null,
       constraints: maxLines == 1 ? null : const BoxConstraints(minHeight: 44),
       decoration: BoxDecoration(
-        color: enabled ? AppColors.surfaceSubtle : AppColors.surfaceMuted,
+        color: enabled
+            ? context.colors.surfaceSubtle
+            : context.colors.surfaceMuted,
         borderRadius: BorderRadius.circular(AppRadius.pill),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.colors.border),
       ),
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x4),
       child: Row(
@@ -158,14 +161,16 @@ class AppTextField extends StatelessWidget {
       autofocus: autofocus,
       enabled: enabled,
       validator: validator,
-      cursorColor: AppColors.textPrimary,
+      cursorColor: context.colors.textPrimary,
       cursorWidth: 1.5,
-      style: AppTypography.bodyReading.copyWith(color: AppColors.textPrimary),
+      style: AppTypography.bodyReading(
+        context,
+      ).copyWith(color: context.colors.textPrimary),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: AppTypography.bodyReading.copyWith(
-          color: AppColors.textTertiary,
-        ),
+        hintStyle: AppTypography.bodyReading(
+          context,
+        ).copyWith(color: context.colors.textTertiary),
         errorText: errorText,
         prefixIcon: leading == null
             ? null
@@ -183,17 +188,19 @@ class AppTextField extends StatelessWidget {
         suffixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
         isDense: true,
         filled: true,
-        fillColor: enabled ? AppColors.surface : AppColors.surfaceMuted,
+        fillColor: enabled
+            ? context.colors.surface
+            : context.colors.surfaceMuted,
         contentPadding: EdgeInsets.symmetric(
           horizontal: leading != null ? 4 : 14,
           vertical: 14,
         ),
-        border: _formBorder(AppColors.border),
-        enabledBorder: _formBorder(AppColors.border),
+        border: _formBorder(context.colors.border),
+        enabledBorder: _formBorder(context.colors.border),
         focusedBorder: _formBorder(AppColors.primary, width: 1.5),
         errorBorder: _formBorder(AppColors.error),
         focusedErrorBorder: _formBorder(AppColors.error, width: 1.5),
-        disabledBorder: _formBorder(AppColors.border),
+        disabledBorder: _formBorder(context.colors.border),
       ),
     );
   }
@@ -209,14 +216,16 @@ class AppTextField extends StatelessWidget {
       onSubmitted: onSubmitted,
       autofocus: autofocus,
       enabled: enabled,
-      cursorColor: AppColors.textPrimary,
+      cursorColor: context.colors.textPrimary,
       cursorWidth: 1.5,
-      style: AppTypography.bodyReading.copyWith(color: AppColors.textPrimary),
+      style: AppTypography.bodyReading(
+        context,
+      ).copyWith(color: context.colors.textPrimary),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: AppTypography.bodyReading.copyWith(
-          color: AppColors.textTertiary,
-        ),
+        hintStyle: AppTypography.bodyReading(
+          context,
+        ).copyWith(color: context.colors.textTertiary),
         border: InputBorder.none,
         enabledBorder: InputBorder.none,
         focusedBorder: InputBorder.none,

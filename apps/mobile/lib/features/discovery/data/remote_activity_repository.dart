@@ -1,4 +1,5 @@
 import '../../../core/network/api_client.dart';
+import '../../activities/domain/activity_participant.dart';
 import '../domain/activity_model.dart';
 import 'activity_repository.dart';
 import 'dummy_activity_repository.dart';
@@ -98,6 +99,7 @@ class RemoteActivityRepository implements ActivityRepository {
     required int maxParticipants,
     required String skillLevel,
     required double fee,
+    int durationMinutes = 120,
   }) async {
     try {
       final res = await _client.dio.post(
@@ -110,6 +112,7 @@ class RemoteActivityRepository implements ActivityRepository {
           'max_participants': maxParticipants,
           'skill_level': skillLevel,
           'fee': fee,
+          'duration_minutes': durationMinutes,
         },
       );
       return _parse(res.data as Map<String, dynamic>)!;
@@ -122,6 +125,7 @@ class RemoteActivityRepository implements ActivityRepository {
         maxParticipants: maxParticipants,
         skillLevel: skillLevel,
         fee: fee,
+        durationMinutes: durationMinutes,
       );
     }
   }
@@ -145,6 +149,15 @@ class RemoteActivityRepository implements ActivityRepository {
   }
 
   @override
+  Future<void> cancel(String activityId) async {
+    try {
+      await _client.dio.post('$_base/$activityId/cancel');
+    } catch (_) {
+      await _fallback.cancel(activityId);
+    }
+  }
+
+  @override
   Future<List<ActivityModel>> pastByUser(String userId) async {
     try {
       final res = await _client.dio.get(
@@ -154,6 +167,32 @@ class RemoteActivityRepository implements ActivityRepository {
     } catch (_) {
       return _fallback.pastByUser(userId);
     }
+  }
+
+  @override
+  Future<List<ActivityParticipant>> participants(String activityId) async {
+    try {
+      final res = await _client.dio.get('$_base/$activityId/participants');
+      return (res.data as List)
+          .map((e) => _parseParticipant(e as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return _fallback.participants(activityId);
+    }
+  }
+
+  ActivityParticipant _parseParticipant(Map<String, dynamic> json) {
+    return ActivityParticipant(
+      userId: json['user_id']?.toString() ?? '',
+      name: json['name'] as String? ?? '',
+      avatarAsset: json['avatar_asset'] as String? ?? 'avatar_1.png',
+      skillLevel: json['skill_level'] as String? ?? 'All',
+      joinedAt:
+          DateTime.tryParse(json['joined_at'] as String? ?? '') ??
+          DateTime.now(),
+      isOrganizer: json['is_organizer'] as bool? ?? false,
+      isCheckedIn: json['is_checked_in'] as bool? ?? false,
+    );
   }
 
   ActivityModel? _parse(Map<String, dynamic>? json) {
@@ -174,6 +213,7 @@ class RemoteActivityRepository implements ActivityRepository {
       hostName: json['host_name'] as String? ?? '',
       coverImageUrl: json['cover_image_url'] as String?,
       status: ActivityStatus.available,
+      durationMinutes: (json['duration_minutes'] as num?)?.toInt() ?? 120,
     );
   }
 

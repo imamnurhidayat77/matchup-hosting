@@ -1,17 +1,22 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_colors.dart';
+import '../theme/app_spacing.dart';
+import '../theme/dark_colors.dart';
 
 /// iOS home indicator pill (139×5px, 100px radius) shown at the bottom of
 /// every screen to match Figma designs.
 class HomeIndicator extends StatelessWidget {
   const HomeIndicator({
     super.key,
-    this.color = AppColors.iconPrimary,
+    this.color,
     this.padding = const EdgeInsets.only(top: 16, bottom: 8),
   });
 
-  final Color color;
+  /// Defaults to `context.colors.iconPrimary` (theme-aware) when null. Pass
+  /// an explicit colour for indicators drawn on top of a fixed-colour
+  /// surface (e.g. the primary-blue splash/onboarding screens), where the
+  /// indicator must stay a fixed light colour regardless of the app theme.
+  final Color? color;
   final EdgeInsets padding;
 
   @override
@@ -23,8 +28,8 @@ class HomeIndicator extends StatelessWidget {
           width: 139,
           height: 5,
           decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(100),
+            color: color ?? context.colors.iconPrimary,
+            borderRadius: AppRadius.pillR,
           ),
         ),
       ),

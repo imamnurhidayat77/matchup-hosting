@@ -22,6 +22,25 @@ class ActivityModel {
   final String? coverImageUrl;
   final ActivityStatus status;
 
+  /// How long the activity runs, in minutes. Defaults to 120 (2h) — the same
+  /// assumption the detail screen used to hardcode as `start + 2h` before
+  /// this field existed. Create Activity now captures it explicitly via a
+  /// Duration segmented control (1h / 1.5h / 2h / 3h — PRD Section 1.4).
+  final int durationMinutes;
+
+  /// Whether joining costs money. Drives the Free/Paid chip on the discovery
+  /// card. Defaults to false (Free) since most pickup games are.
+  final bool isPaid;
+
+  /// Host's average rating (0–5) and the number of games they've hosted —
+  /// shown as "★ 4.8 (32 games)" on the discovery card's social row.
+  final double hostRating;
+  final int hostGamesCount;
+
+  /// Short atmosphere/expectation tags shown as small chips ("Friendly
+  /// people", "Great vibes", "Arrive 15m early"). Purely descriptive.
+  final List<String> vibeTags;
+
   const ActivityModel({
     required this.id,
     required this.title,
@@ -37,7 +56,49 @@ class ActivityModel {
     required this.hostName,
     this.coverImageUrl,
     this.status = ActivityStatus.available,
+    this.durationMinutes = 120,
+    this.isPaid = false,
+    this.hostRating = 4.8,
+    this.hostGamesCount = 32,
+    this.vibeTags = const ['Friendly people', 'Great vibes'],
   });
+
+  /// The activity's end time, derived from [dateTime] + [durationMinutes].
+  DateTime get endTime => dateTime.add(Duration(minutes: durationMinutes));
+
+  /// Compact duration label for the discovery card meta row, e.g. `~2h`,
+  /// `~1.5h`, `~45m`.
+  String get durationLabel {
+    if (durationMinutes % 60 == 0) return '~${durationMinutes ~/ 60}h';
+    if (durationMinutes > 60) {
+      return '~${(durationMinutes / 60).toStringAsFixed(1)}h';
+    }
+    return '~${durationMinutes}m';
+  }
+
+  ActivityModel copyWith({ActivityStatus? status, int? participantCount}) {
+    return ActivityModel(
+      id: id,
+      title: title,
+      sportType: sportType,
+      description: description,
+      location: location,
+      addressLine: addressLine,
+      distanceKm: distanceKm,
+      dateTime: dateTime,
+      skillLevel: skillLevel,
+      capacity: capacity,
+      participantCount: participantCount ?? this.participantCount,
+      hostName: hostName,
+      coverImageUrl: coverImageUrl,
+      status: status ?? this.status,
+      durationMinutes: durationMinutes,
+      isPaid: isPaid,
+      hostRating: hostRating,
+      hostGamesCount: hostGamesCount,
+      vibeTags: vibeTags,
+    );
+  }
 
   bool get isFull => participantCount >= capacity;
   bool get isAlmostFull => participantCount >= (capacity * 0.8).ceil();
@@ -60,6 +121,11 @@ class ActivityModel {
       'hostName': hostName,
       'coverImageUrl': coverImageUrl,
       'status': status.index,
+      'durationMinutes': durationMinutes,
+      'isPaid': isPaid,
+      'hostRating': hostRating,
+      'hostGamesCount': hostGamesCount,
+      'vibeTags': vibeTags,
     };
   }
 
@@ -81,6 +147,13 @@ class ActivityModel {
       hostName: json['hostName'] as String? ?? '',
       coverImageUrl: json['coverImageUrl'] as String?,
       status: ActivityStatus.values[json['status'] as int? ?? 0],
+      durationMinutes: json['durationMinutes'] as int? ?? 120,
+      isPaid: json['isPaid'] as bool? ?? false,
+      hostRating: (json['hostRating'] as num?)?.toDouble() ?? 4.8,
+      hostGamesCount: json['hostGamesCount'] as int? ?? 32,
+      vibeTags:
+          (json['vibeTags'] as List?)?.map((e) => e.toString()).toList() ??
+          const ['Friendly people', 'Great vibes'],
     );
   }
 }

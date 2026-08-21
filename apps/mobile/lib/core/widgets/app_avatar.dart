@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
+import '../theme/dark_colors.dart';
+import 'pressable_scale.dart';
 
 /// Sizes for [AppAvatar].
 enum AppAvatarSize { xs, sm, md, lg, xl }
@@ -84,8 +85,8 @@ class AppAvatar extends StatelessWidget {
 
     Widget avatar = CircleAvatar(
       radius: d / 2,
-      backgroundColor: backgroundColor ?? AppColors.primaryLight,
-      child: _buildContent(d),
+      backgroundColor: backgroundColor ?? context.colors.primaryLight,
+      child: _buildContent(context, d),
     );
 
     if (hasBorder) {
@@ -101,17 +102,13 @@ class AppAvatar extends StatelessWidget {
     }
 
     if (onTap != null) {
-      avatar = GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: avatar,
-      );
+      avatar = PressableScale(onTap: onTap, child: avatar);
     }
 
     return avatar;
   }
 
-  Widget _buildContent(double d) {
+  Widget _buildContent(BuildContext context, double d) {
     // Asset image
     if (assetPath != null) {
       return ClipOval(
@@ -120,7 +117,7 @@ class AppAvatar extends StatelessWidget {
           width: d,
           height: d,
           fit: BoxFit.cover,
-          errorBuilder: (_, _, _) => _fallback(d),
+          errorBuilder: (_, _, _) => _fallback(context, d),
         ),
       );
     }
@@ -133,28 +130,25 @@ class AppAvatar extends StatelessWidget {
           width: d,
           height: d,
           fit: BoxFit.cover,
-          errorBuilder: (_, _, _) => _fallback(d),
+          errorBuilder: (_, _, _) => _fallback(context, d),
           loadingBuilder: (_, child, progress) =>
-              progress == null ? child : _shimmer(d),
+              progress == null ? child : _shimmer(context, d),
         ),
       );
     }
 
-    return _fallback(d);
+    return _fallback(context, d);
   }
 
-  Widget _fallback(double d) => Text(
+  Widget _fallback(BuildContext context, double d) => Text(
     _initials,
-    style: TextStyle(
-      fontFamily: AppTypography.fontFamily,
-      fontSize: size.fontSize,
-      fontWeight: FontWeight.w700,
-      color: AppColors.primaryDarker,
-    ),
+    style: AppTypography.chipLabel(
+      context,
+    ).copyWith(fontSize: size.fontSize, color: context.colors.primaryOnSurface),
   );
 
-  Widget _shimmer(double d) =>
-      Container(width: d, height: d, color: AppColors.surfaceSubtle);
+  Widget _shimmer(BuildContext context, double d) =>
+      Container(width: d, height: d, color: context.colors.surfaceSubtle);
 }
 
 /// Overlapping avatar stack — shows the first [maxVisible] avatars
@@ -208,7 +202,7 @@ class AppAvatarStack extends StatelessWidget {
                 assetPath: visible[i].startsWith('assets/') ? visible[i] : null,
                 imageUrl: visible[i].startsWith('assets/') ? null : visible[i],
                 size: size,
-                borderColor: AppColors.surface,
+                borderColor: context.colors.surface,
                 borderWidth: 2,
               ),
             ),
@@ -217,14 +211,12 @@ class AppAvatarStack extends StatelessWidget {
               left: visible.length * (d - overlap),
               child: CircleAvatar(
                 radius: d / 2,
-                backgroundColor: AppColors.surfaceSubtle,
+                backgroundColor: context.colors.surfaceSubtle,
                 child: Text(
                   '+$overflow',
-                  style: TextStyle(
-                    fontFamily: AppTypography.fontFamily,
+                  style: AppTypography.chipLabel(context).copyWith(
                     fontSize: size.fontSize - 1,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textSecondary,
+                    color: context.colors.textSecondary,
                   ),
                 ),
               ),

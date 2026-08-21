@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
+import '../theme/dark_colors.dart';
 
 /// Standard card surface for MatchUp.
 ///
@@ -32,7 +33,7 @@ class AppCard extends StatelessWidget {
     this.onTap,
     this.padding = const EdgeInsets.all(AppSpacing.x5),
     this.radius = AppRadius.card,
-    this.color = AppColors.surface,
+    this.color,
     this.border = false,
     this.shadow = true,
   });
@@ -41,7 +42,11 @@ class AppCard extends StatelessWidget {
   final VoidCallback? onTap;
   final EdgeInsetsGeometry padding;
   final double radius;
-  final Color color;
+
+  /// Card surface colour. Defaults to `context.colors.card` (theme-aware)
+  /// when null — pass an explicit colour only for the rare card that needs
+  /// to diverge from the standard card surface.
+  final Color? color;
   final bool border;
   final bool shadow;
 
@@ -54,7 +59,7 @@ class AppCard extends StatelessWidget {
         boxShadow: shadow ? AppShadows.card : null,
       ),
       child: Material(
-        color: color,
+        color: color ?? context.colors.card,
         borderRadius: borderRadius,
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -66,7 +71,7 @@ class AppCard extends StatelessWidget {
           child: Container(
             decoration: BoxDecoration(
               borderRadius: borderRadius,
-              border: border ? Border.all(color: AppColors.border) : null,
+              border: border ? Border.all(color: context.colors.border) : null,
             ),
             child: Padding(padding: padding, child: child),
           ),

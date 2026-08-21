@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
+import '../theme/dark_colors.dart';
+import 'pressable_scale.dart';
 
 /// Standardized notification icon button used in top headers across the app.
 /// 44×44 tap target (Material a11y minimum), 24×24 icon centered, optional red
@@ -23,9 +25,8 @@ class NotificationIconButton extends StatelessWidget {
     return Semantics(
       button: true,
       label: 'Notifications',
-      child: GestureDetector(
+      child: PressableScale(
         onTap: onTap,
-        behavior: HitTestBehavior.opaque,
         child: SizedBox(
           width: 44,
           height: 44,
@@ -35,7 +36,7 @@ class NotificationIconButton extends StatelessWidget {
               Icon(
                 Icons.notifications_none,
                 size: 24,
-                color: color ?? AppColors.textPrimary,
+                color: color ?? context.colors.textPrimary,
               ),
               if (hasUnread)
                 Positioned(

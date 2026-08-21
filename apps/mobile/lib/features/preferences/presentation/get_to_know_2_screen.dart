@@ -6,8 +6,11 @@ import '../../../core/providers/preferences_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
-import '../../../core/widgets/home_indicator.dart';
+import '../../../core/theme/dark_colors.dart';
+import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/app_tappable.dart';
 import '../../../core/widgets/pill_buttons.dart';
+import '../../../core/widgets/pressable_scale.dart';
 import 'get_to_know_1_screen.dart' show OnboardingProgressHeader;
 
 class GetToKnow2Screen extends ConsumerStatefulWidget {
@@ -62,125 +65,114 @@ class _GetToKnow2ScreenState extends ConsumerState<GetToKnow2Screen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.surface,
-      body: SafeArea(
-        top: true,
-        child: Column(
-          children: [
-            OnboardingProgressHeader(step: 2, total: 3),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.x6,
-                  AppSpacing.x4,
-                  AppSpacing.x6,
-                  AppSpacing.x4,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Which sports do you play?',
-                      style: AppTypography.headlineSmall.copyWith(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.x1),
-                    Text(
-                      'Pick any — then set your skill level.',
-                      style: AppTypography.bodyMedium.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.x5),
+    return AppScaffold(
+      showHomeIndicator: false, // inside ShellRoute — AppShell draws its own.
+      body: Column(
+        children: [
+          OnboardingProgressHeader(step: 2, total: 3),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.x6,
+                AppSpacing.x4,
+                AppSpacing.x6,
+                AppSpacing.x4,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Which sports do you play?',
+                    style: AppTypography.titleScreen(context),
+                  ),
+                  const SizedBox(height: AppSpacing.x1),
+                  Text(
+                    'Pick any — then set your skill level.',
+                    style: AppTypography.bodyMedium(
+                      context,
+                    ).copyWith(color: context.colors.textSecondary),
+                  ),
+                  const SizedBox(height: AppSpacing.x5),
 
-                    // ── Sport grid ─────────────────────────────────────
-                    GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 3,
-                            crossAxisSpacing: AppSpacing.x3,
-                            mainAxisSpacing: AppSpacing.x3,
-                            childAspectRatio: 0.9,
-                          ),
-                      itemCount: _sportOptions.length,
-                      itemBuilder: (_, i) {
-                        final (name, icon) = _sportOptions[i];
-                        final level = _sports[name];
-                        final selected = level != null;
-                        return _SportChip(
-                          icon: icon,
-                          name: name,
-                          level: level,
-                          selected: selected,
-                          onTap: () => _toggleSport(name),
-                          onLevelTap: selected
-                              ? () => _showLevelSheet(context, name, level)
-                              : null,
-                        );
-                      },
-                    ),
-                    const SizedBox(height: AppSpacing.x6),
+                  // ── Sport grid ─────────────────────────────────────
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          crossAxisSpacing: AppSpacing.x3,
+                          mainAxisSpacing: AppSpacing.x3,
+                          childAspectRatio: 0.9,
+                        ),
+                    itemCount: _sportOptions.length,
+                    itemBuilder: (_, i) {
+                      final (name, icon) = _sportOptions[i];
+                      final level = _sports[name];
+                      final selected = level != null;
+                      return _SportChip(
+                        icon: icon,
+                        name: name,
+                        level: level,
+                        selected: selected,
+                        onTap: () => _toggleSport(name),
+                        onLevelTap: selected
+                            ? () => _showLevelSheet(context, name, level)
+                            : null,
+                      );
+                    },
+                  ),
+                  const SizedBox(height: AppSpacing.x6),
 
-                    // ── Distance ───────────────────────────────────────
-                    Row(
-                      children: [
-                        Text(
-                          'Discovery distance',
-                          style: AppTypography.titleMedium.copyWith(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 15,
-                          ),
-                        ),
-                        const Spacer(),
-                        Text(
-                          '${_distanceKm.round()} km',
-                          style: AppTypography.bodyMedium.copyWith(
-                            color: AppColors.primaryDarker,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.x2),
-                    SliderTheme(
-                      data: SliderTheme.of(context).copyWith(
-                        trackHeight: 4,
-                        activeTrackColor: AppColors.primary,
-                        inactiveTrackColor: AppColors.border,
-                        thumbColor: AppColors.primary,
-                        overlayColor: AppColors.primary.withValues(alpha: 0.12),
-                        thumbShape: const RoundSliderThumbShape(
-                          enabledThumbRadius: 9,
-                        ),
+                  // ── Distance ───────────────────────────────────────
+                  Row(
+                    children: [
+                      Text(
+                        'Discovery distance',
+                        style: AppTypography.labelField(context),
                       ),
-                      child: Slider(
-                        value: _distanceKm,
-                        min: 1,
-                        max: 50,
-                        divisions: 49,
-                        onChanged: (v) => setState(() => _distanceKm = v),
+                      const Spacer(),
+                      Text(
+                        '${_distanceKm.round()} km',
+                        style: AppTypography.chipLabel(
+                          context,
+                        ).copyWith(color: context.colors.primaryOnSurface),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.x2),
+                  SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      trackHeight: 4,
+                      activeTrackColor: AppColors.primary,
+                      inactiveTrackColor: context.colors.border,
+                      thumbColor: AppColors.primary,
+                      overlayColor: AppColors.primary.withValues(alpha: 0.12),
+                      thumbShape: const RoundSliderThumbShape(
+                        enabledThumbRadius: 9,
                       ),
                     ),
-                    const SizedBox(height: AppSpacing.x6),
-
-                    PrimaryPillButton(
-                      label: _sports.isEmpty
-                          ? 'Skip for now'
-                          : 'Next  (${_sports.length} selected)',
-                      onPressed: _onNext,
+                    child: Slider(
+                      value: _distanceKm,
+                      min: 1,
+                      max: 50,
+                      divisions: 49,
+                      onChanged: (v) => setState(() => _distanceKm = v),
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: AppSpacing.x6),
+
+                  PrimaryPillButton(
+                    label: _sports.isEmpty
+                        ? 'Skip for now'
+                        : 'Next  (${_sports.length} selected)',
+                    onPressed: _onNext,
+                  ),
+                ],
               ),
             ),
-            const HomeIndicator(),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -221,21 +213,23 @@ class _SportChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return AppTappable(
+      semanticLabel: selected ? '$name, $level' : '$name, not selected',
+      minSize: 0,
+      borderRadius: AppRadius.lg,
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
+        duration: AppDurations.fast,
         curve: Curves.easeOut,
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.x2,
           vertical: AppSpacing.x3,
         ),
         decoration: BoxDecoration(
-          color: selected ? AppColors.primarySoft : AppColors.surface,
-          borderRadius: BorderRadius.circular(AppRadius.lg),
+          color: selected ? context.colors.primarySoft : context.colors.surface,
+          borderRadius: AppRadius.lgR,
           border: Border.all(
-            color: selected ? AppColors.primary : AppColors.border,
+            color: selected ? AppColors.primary : context.colors.border,
             width: selected ? 1.5 : 1,
           ),
         ),
@@ -246,39 +240,42 @@ class _SportChip extends StatelessWidget {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: selected ? AppColors.primary : AppColors.surfaceSubtle,
-                borderRadius: BorderRadius.circular(AppRadius.md),
+                color: selected
+                    ? AppColors.primary
+                    : context.colors.surfaceSubtle,
+                borderRadius: AppRadius.mdR,
               ),
               child: Icon(
                 icon,
                 size: 22,
-                color: selected ? Colors.white : AppColors.textPrimary,
+                color: selected
+                    ? AppColors.textOnPrimary
+                    : context.colors.textPrimary,
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: AppSpacing.x1 + 2),
             Text(
               name,
               textAlign: TextAlign.center,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AppTypography.bodySmall.copyWith(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: selected ? AppColors.primaryDarker : AppColors.textLabel,
+              style: AppTypography.chipLabel(context).copyWith(
+                color: selected
+                    ? context.colors.primaryOnSurface
+                    : context.colors.textLabel,
               ),
             ),
             const SizedBox(height: 3),
             if (selected && level != null)
-              GestureDetector(
+              PressableScale(
                 onTap: onLevelTap,
-                behavior: HitTestBehavior.opaque,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       level!.substring(0, 3), // abbreviate
-                      style: AppTypography.caption.copyWith(
+                      style: AppTypography.caption(context).copyWith(
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
                         color: AppColors.primary,
@@ -293,10 +290,10 @@ class _SportChip extends StatelessWidget {
                 ),
               )
             else
-              const Icon(
+              Icon(
                 Icons.add_rounded,
                 size: 14,
-                color: AppColors.textTertiary,
+                color: context.colors.textTertiary,
               ),
           ],
         ),
@@ -323,9 +320,11 @@ class _LevelSheet extends StatelessWidget {
     return SafeArea(
       top: false,
       child: Container(
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        decoration: BoxDecoration(
+          color: context.colors.surface,
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(AppRadius.xl),
+          ),
         ),
         padding: const EdgeInsets.fromLTRB(
           AppSpacing.x6,
@@ -340,22 +339,19 @@ class _LevelSheet extends StatelessWidget {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: AppColors.border,
-                borderRadius: BorderRadius.circular(2),
+                color: context.colors.border,
+                borderRadius: AppRadius.xsR,
               ),
             ),
             const SizedBox(height: AppSpacing.x4),
             Text(
               '$sport — Skill level',
-              style: AppTypography.titleMedium.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
+              style: AppTypography.titleSheet(context),
             ),
             const SizedBox(height: AppSpacing.x4),
             ...levels.map(
-              (l) => GestureDetector(
+              (l) => PressableScale(
                 onTap: () => Navigator.of(context).pop(l),
-                behavior: HitTestBehavior.opaque,
                 child: Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.x4,
@@ -364,13 +360,13 @@ class _LevelSheet extends StatelessWidget {
                   margin: const EdgeInsets.only(bottom: AppSpacing.x2),
                   decoration: BoxDecoration(
                     color: l == current
-                        ? AppColors.primarySoft
-                        : AppColors.surfaceSubtle,
-                    borderRadius: BorderRadius.circular(AppRadius.md),
+                        ? context.colors.primarySoft
+                        : context.colors.surfaceSubtle,
+                    borderRadius: AppRadius.mdR,
                     border: Border.all(
                       color: l == current
                           ? AppColors.primary
-                          : AppColors.border,
+                          : context.colors.border,
                     ),
                   ),
                   child: Row(
@@ -378,9 +374,9 @@ class _LevelSheet extends StatelessWidget {
                       Expanded(
                         child: Text(
                           l,
-                          style: AppTypography.bodyMedium.copyWith(
+                          style: AppTypography.bodyMedium(context).copyWith(
                             fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
+                            color: context.colors.textPrimary,
                           ),
                         ),
                       ),

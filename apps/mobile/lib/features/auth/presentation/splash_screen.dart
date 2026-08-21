@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/providers/auth_state_provider.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/home_indicator.dart';
 
@@ -30,6 +31,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         statusBarBrightness: Brightness.dark,
       ),
     );
+    // 2200ms is well beyond AppDurations.emphasized (320ms) — deliberately
+    // so. This isn't a UI transition being animated, it's the wordmark
+    // reveal + minimum splash dwell time while the session check runs in
+    // the background; the emphasized cap governs route/element motion, not
+    // a one-time brand moment shown once per cold start.
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 2200),
@@ -63,6 +69,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Deliberate deviation from AuthShell (PRD 2.1 principle 1): the splash
+    // screen is a full-bleed gradient with no scroll body or header — the
+    // one screen in the auth flow with nothing to scroll.
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -109,17 +118,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                           width: 96,
                           height: 96,
                           decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(24),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.15),
-                                blurRadius: 24,
-                                offset: const Offset(0, 12),
-                              ),
-                            ],
+                            borderRadius: BorderRadius.circular(AppRadius.xl),
+                            boxShadow: AppShadows.floating,
                           ),
                           child: ClipRRect(
-                            borderRadius: BorderRadius.circular(24),
+                            borderRadius: BorderRadius.circular(AppRadius.xl),
                             child: Image.asset(
                               'assets/images/splash/logo.png',
                               fit: BoxFit.cover,
@@ -139,7 +142,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                       ],
                     ),
                   ),
-                  // Progress bar loader
+                  // Progress bar loader. 90px inset is a fixed Figma
+                  // component width, not a layout gutter — acceptable per
+                  // PRD Appendix D.5 (pin exact component dimensions).
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 90),
                     child: AnimatedBuilder(
@@ -149,8 +154,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                           width: double.infinity,
                           height: 3,
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.25),
-                            borderRadius: BorderRadius.circular(2),
+                            color: AppColors.textOnPrimary.withValues(
+                              alpha: 0.25,
+                            ),
+                            borderRadius: AppRadius.pillR,
                           ),
                           child: FractionallySizedBox(
                             alignment: Alignment.centerLeft,
@@ -158,7 +165,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                             child: Container(
                               decoration: BoxDecoration(
                                 color: AppColors.primary,
-                                borderRadius: BorderRadius.circular(2),
+                                borderRadius: AppRadius.pillR,
                               ),
                             ),
                           ),

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_colors.dart';
+import '../theme/dark_colors.dart';
 
 /// Image widget that gracefully falls back to a default placeholder when the
 /// requested asset is missing or fails to load.
@@ -17,7 +17,7 @@ class AssetImageWithFallback extends StatelessWidget {
     this.fit = BoxFit.cover,
     this.semanticLabel,
     this.borderRadius,
-    this.placeholderColor = const Color(0xFFE5E7EB),
+    this.placeholderColor,
     this.placeholderIcon = Icons.image_outlined,
     this.isAvatar = false,
   });
@@ -29,7 +29,9 @@ class AssetImageWithFallback extends StatelessWidget {
   final BoxFit fit;
   final String? semanticLabel;
   final BorderRadius? borderRadius;
-  final Color placeholderColor;
+
+  /// Defaults to `context.colors.divider` (theme-aware) when null.
+  final Color? placeholderColor;
   final IconData placeholderIcon;
 
   /// When true, the placeholder is rendered as a circle with a person icon,
@@ -38,12 +40,16 @@ class AssetImageWithFallback extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final resolvedPlaceholderColor = placeholderColor ?? context.colors.divider;
     final placeholder = isAvatar
-        ? _AvatarPlaceholder(size: width ?? height, color: placeholderColor)
+        ? _AvatarPlaceholder(
+            size: width ?? height,
+            color: resolvedPlaceholderColor,
+          )
         : _CoverPlaceholder(
             width: width,
             height: height,
-            color: placeholderColor,
+            color: resolvedPlaceholderColor,
             icon: placeholderIcon,
           );
 
@@ -84,7 +90,7 @@ class _CoverPlaceholder extends StatelessWidget {
       height: height,
       color: color,
       alignment: Alignment.center,
-      child: Icon(icon, size: h * 0.3, color: AppColors.textSecondary),
+      child: Icon(icon, size: h * 0.3, color: context.colors.textSecondary),
     );
   }
 }
@@ -106,7 +112,7 @@ class _AvatarPlaceholder extends StatelessWidget {
       child: Icon(
         Icons.person_outline_rounded,
         size: s * 0.6,
-        color: AppColors.textSecondary,
+        color: context.colors.textSecondary,
       ),
     );
   }

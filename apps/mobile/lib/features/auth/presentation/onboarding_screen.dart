@@ -3,9 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/home_indicator.dart';
 import '../../../core/widgets/pill_buttons.dart';
+import '../../../core/widgets/pressable_scale.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -54,7 +56,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   void _next() {
     if (_currentPage < _pages.length - 1) {
       _pageController.nextPage(
-        duration: const Duration(milliseconds: 320),
+        duration: AppDurations.emphasized,
         curve: Curves.easeInOut,
       );
     } else {
@@ -70,6 +72,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Deliberate deviation from AuthShell (PRD 2.1 principle 1): this screen
+    // is full-bleed edge-to-edge illustration with content overlaid on top,
+    // structurally incompatible with AuthShell's SafeArea + scroll body.
     return Scaffold(
       body: Stack(
         children: [
@@ -91,11 +96,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const SizedBox(height: 24),
+                  const SizedBox(height: AppSpacing.x6),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.x8,
+                    ),
                     child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 300),
+                      duration: AppDurations.base,
                       child: _Content(
                         key: ValueKey(_currentPage),
                         heading: _pages[_currentPage].heading,
@@ -103,17 +110,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: AppSpacing.x5),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.x8,
+                    ),
                     child: _Pagination(
                       currentPage: _currentPage,
                       totalPages: _pages.length,
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: AppSpacing.x4),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.x8,
+                    ),
                     child: PrimaryPill(
                       label: _currentPage < _pages.length - 1
                           ? 'Next'
@@ -122,16 +133,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       icon: 'assets/images/auth/arrow_right.svg',
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: AppSpacing.x3),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.x8,
+                    ),
                     child: Center(
                       child: _SignInPrompt(onTap: () => context.go('/login')),
                     ),
                   ),
                   const HomeIndicator(
                     color: AppColors.textOnPrimary,
-                    padding: EdgeInsets.only(top: 8, bottom: 8),
+                    padding: EdgeInsets.only(
+                      top: AppSpacing.x2,
+                      bottom: AppSpacing.x2,
+                    ),
                   ),
                 ],
               ),
@@ -157,7 +173,9 @@ class _OnboardingPageView extends StatelessWidget {
           child: Image.asset(page.illustration, fit: BoxFit.cover),
         ),
         // Dark scrim 65% per Figma
-        const Positioned.fill(child: ColoredBox(color: Color(0xA60F172A))),
+        const Positioned.fill(
+          child: ColoredBox(color: AppColors.scrimIllustration),
+        ),
         // Diagonal gradient overlay (top-left dark → bottom-right transparent)
         const Positioned.fill(
           child: DecoratedBox(
@@ -167,10 +185,10 @@ class _OnboardingPageView extends StatelessWidget {
                 end: Alignment.bottomRight,
                 stops: [0.0, 0.33, 0.67, 1.0],
                 colors: [
-                  Color(0xCC000000), // ~80%
-                  Color(0xCC000000),
-                  Color(0x00000000),
-                  Color(0x00000000),
+                  AppColors.scrimGradient,
+                  AppColors.scrimGradient,
+                  AppColors.scrimTransparent,
+                  AppColors.scrimTransparent,
                 ],
               ),
             ),
@@ -193,7 +211,7 @@ class _Content extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(heading, style: AppTypography.headingOnboarding),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.x4),
         Text(description, style: AppTypography.bodyOnboarding),
       ],
     );
@@ -213,15 +231,15 @@ class _Pagination extends StatelessWidget {
       children: List.generate(totalPages, (i) {
         final isActive = i == currentPage;
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x1),
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 250),
+            duration: AppDurations.base,
             curve: Curves.easeInOut,
             width: isActive ? 24 : 8,
             height: 8,
             decoration: BoxDecoration(
               color: isActive ? AppColors.primary : AppColors.textOnPrimary,
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: AppRadius.pillR,
             ),
           ),
         );
@@ -239,7 +257,7 @@ class _SignInPrompt extends StatelessWidget {
   Widget build(BuildContext context) {
     return Wrap(
       crossAxisAlignment: WrapCrossAlignment.center,
-      spacing: 4,
+      spacing: AppSpacing.x1,
       children: [
         Text(
           'Already have an account?',
@@ -247,12 +265,16 @@ class _SignInPrompt extends StatelessWidget {
             fontWeight: FontWeight.w400,
           ),
         ),
-        GestureDetector(
-          onTap: onTap,
-          child: Text(
-            'Sign In',
-            style: AppTypography.bodyOnboarding.copyWith(
-              fontWeight: FontWeight.w700,
+        Semantics(
+          button: true,
+          label: 'Sign in',
+          child: PressableScale(
+            onTap: onTap,
+            child: Text(
+              'Sign In',
+              style: AppTypography.bodyOnboarding.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ),

@@ -5,9 +5,10 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/theme/dark_colors.dart';
 import '../../../core/utils/secure_screen.dart';
-import '../../../core/widgets/home_indicator.dart';
 import '../../../core/widgets/pill_buttons.dart';
+import '../presentation/widgets/auth_shell.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -58,93 +59,76 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.surface,
-      body: SafeArea(
-        bottom: false,
-        child: Column(
+    return AuthShell(
+      header: AuthHeaderBar(
+        title: 'Forgot Password',
+        onBack: () => Navigator.of(context).maybePop(),
+      ),
+      bottom: AuthSignInFooter(onSignIn: () => context.go('/login')),
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            _RecoveryHeader(
-              title: 'Forgot Password',
-              onBack: () => Navigator.of(context).maybePop(),
+            const SizedBox(height: AppSpacing.x6),
+            AuthIllustration(iconPath: 'assets/images/auth/lock.svg'),
+            const SizedBox(height: AppSpacing.x6),
+            Text(
+              'Forgot Your Password?',
+              textAlign: TextAlign.center,
+              style: AppTypography.headlineSmall(
+                context,
+              ).copyWith(fontSize: 24, fontWeight: FontWeight.w800),
             ),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x6),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const SizedBox(height: AppSpacing.x6),
-                    _RecoveryIllustration(
-                      iconPath: 'assets/images/auth/lock.svg',
-                    ),
-                    const SizedBox(height: AppSpacing.x6),
-                    Text(
-                      'Forgot Your Password?',
-                      textAlign: TextAlign.center,
-                      style: AppTypography.headlineSmall.copyWith(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.x3),
-                    Text(
-                      "Enter your email address and we'll send a 6-digit verification code to reset your password.",
-                      textAlign: TextAlign.center,
-                      style: AppTypography.bodyMedium.copyWith(
-                        color: AppColors.textSecondary,
-                        height: 1.55,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.x6),
+            const SizedBox(height: AppSpacing.x3),
+            Text(
+              "Enter your email address and we'll send a 6-digit verification code to reset your password.",
+              textAlign: TextAlign.center,
+              style: AppTypography.bodyReading(
+                context,
+              ).copyWith(color: context.colors.textSecondary),
+            ),
+            const SizedBox(height: AppSpacing.x6),
 
-                    // ── Email field ────────────────────────────────────
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Email Address',
-                        style: AppTypography.inputLabel,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.x2),
-                    _EmailInput(
-                      controller: _emailController,
-                      hasError: _emailError != null,
-                      onChanged: (_) {
-                        if (_emailError != null) {
-                          setState(() => _emailError = null);
-                        }
-                      },
-                    ),
-                    if (_emailError != null) ...[
-                      const SizedBox(height: AppSpacing.x1),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          _emailError!,
-                          style: AppTypography.bodySmall.copyWith(
-                            color: AppColors.danger,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: AppSpacing.x6),
-
-                    PrimaryPillButton(
-                      label: _isSubmitting ? 'Sending…' : 'Send Code',
-                      onPressed: _isSubmitting ? null : _submit,
-                    ),
-                    const SizedBox(height: AppSpacing.x6),
-                  ],
-                ),
+            // ── Email field ────────────────────────────────────
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Email Address',
+                style: AppTypography.inputLabel(context),
               ),
             ),
-            _SignInFooter(onSignIn: () => context.go('/login')),
-            const HomeIndicator(),
+            const SizedBox(height: AppSpacing.x2),
+            _EmailInput(
+              controller: _emailController,
+              hasError: _emailError != null,
+              onChanged: (_) {
+                if (_emailError != null) {
+                  setState(() => _emailError = null);
+                }
+              },
+            ),
+            if (_emailError != null) ...[
+              const SizedBox(height: AppSpacing.x1),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  _emailError!,
+                  style: AppTypography.bodySmall(
+                    context,
+                  ).copyWith(color: AppColors.danger),
+                ),
+              ),
+            ],
+            const SizedBox(height: AppSpacing.x6),
+
+            PrimaryPillButton(
+              label: _isSubmitting ? 'Sending…' : 'Send Code',
+              onPressed: _isSubmitting ? null : _submit,
+            ),
+            const SizedBox(height: AppSpacing.x6),
           ],
         ),
-      ),
+      ],
     );
   }
 }
@@ -167,13 +151,13 @@ class _EmailInput extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.x4,
-        vertical: 14,
+        vertical: AppSpacing.x3 + 2,
       ),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.colors.surface,
         borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.all(
-          color: hasError ? AppColors.danger : AppColors.border,
+          color: hasError ? AppColors.danger : context.colors.border,
         ),
       ),
       child: Row(
@@ -183,157 +167,26 @@ class _EmailInput extends StatelessWidget {
             width: 20,
             height: 20,
             colorFilter: ColorFilter.mode(
-              hasError ? AppColors.danger : AppColors.textSecondary,
+              hasError ? AppColors.danger : context.colors.textSecondary,
               BlendMode.srcIn,
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppSpacing.x3),
           Expanded(
             child: TextField(
               controller: controller,
               keyboardType: TextInputType.emailAddress,
               onChanged: onChanged,
               textInputAction: TextInputAction.done,
-              style: AppTypography.bodyLarge.copyWith(
-                color: AppColors.textPrimary,
-              ),
-              decoration: const InputDecoration(
+              style: AppTypography.bodyFormSecondary(
+                context,
+              ).copyWith(color: context.colors.textPrimary),
+              decoration: InputDecoration(
                 isDense: true,
                 contentPadding: EdgeInsets.zero,
                 border: InputBorder.none,
                 hintText: 'Enter your email',
-                hintStyle: TextStyle(
-                  fontFamily: AppTypography.fontFamily,
-                  fontSize: 15,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Shared recovery widgets ──────────────────────────────────────────────────
-
-class _RecoveryHeader extends StatelessWidget {
-  const _RecoveryHeader({required this.title, required this.onBack});
-  final String title;
-  final VoidCallback onBack;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.x5,
-        AppSpacing.x2,
-        AppSpacing.x5,
-        AppSpacing.x2,
-      ),
-      child: Row(
-        children: [
-          Semantics(
-            button: true,
-            label: 'Back',
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: onBack,
-              child: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: SvgPicture.asset(
-                  'assets/images/discovery/icons/chevron-left.svg',
-                  width: 16,
-                  height: 16,
-                  colorFilter: const ColorFilter.mode(
-                    AppColors.textPrimary,
-                    BlendMode.srcIn,
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: AppSpacing.x3),
-          Text(title, style: AppTypography.titleLarge.copyWith(fontSize: 18)),
-        ],
-      ),
-    );
-  }
-}
-
-class _RecoveryIllustration extends StatelessWidget {
-  const _RecoveryIllustration({required this.iconPath});
-  final String iconPath;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 100,
-      height: 100,
-      decoration: const BoxDecoration(
-        color: AppColors.primary,
-        shape: BoxShape.circle,
-      ),
-      alignment: Alignment.center,
-      child: Container(
-        width: 68,
-        height: 68,
-        decoration: const BoxDecoration(
-          color: AppColors.primarySoft,
-          shape: BoxShape.circle,
-        ),
-        alignment: Alignment.center,
-        child: SvgPicture.asset(
-          iconPath,
-          width: 32,
-          height: 32,
-          colorFilter: const ColorFilter.mode(
-            AppColors.primary,
-            BlendMode.srcIn,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SignInFooter extends StatelessWidget {
-  const _SignInFooter({required this.onSignIn});
-  final VoidCallback onSignIn;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.x6,
-        AppSpacing.x4,
-        AppSpacing.x6,
-        0,
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            'Remember your password?',
-            style: AppTypography.bodyMedium.copyWith(
-              color: AppColors.textSecondary,
-            ),
-          ),
-          const SizedBox(width: 4),
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onSignIn,
-            child: Text(
-              'Sign In',
-              style: AppTypography.bodyMedium.copyWith(
-                fontWeight: FontWeight.w700,
-                color: AppColors.primaryDarker,
+                hintStyle: AppTypography.bodyFormSecondary(context),
               ),
             ),
           ),

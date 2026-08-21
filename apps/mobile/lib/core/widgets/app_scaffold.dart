@@ -4,7 +4,9 @@ import 'package:flutter/services.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
+import '../theme/dark_colors.dart';
 import 'home_indicator.dart';
+import 'pressable_scale.dart';
 
 /// The three header shapes every screen in the app needs. Picking one of
 /// these via the named constructors — instead of hand-rolling a header per
@@ -188,7 +190,7 @@ class AppScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: backgroundColor ?? AppColors.background,
+      backgroundColor: backgroundColor ?? context.colors.background,
       resizeToAvoidBottomInset: resizeToAvoidBottomInset,
       body: SafeArea(
         top: safeAreaTop,
@@ -219,14 +221,14 @@ class AppScaffold extends StatelessWidget {
 
       case _HeaderVariant.primary:
         return Container(
-          color: AppColors.surface,
+          color: context.colors.surface,
           padding: headerPadding,
           child: Row(
             children: [
               Expanded(
                 child: Text(
                   title!,
-                  style: AppTypography.titleScreen,
+                  style: AppTypography.headlineLarge(context),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -247,10 +249,9 @@ class AppScaffold extends StatelessWidget {
                 child: Center(
                   child: Text(
                     title!,
-                    style: AppTypography.labelField.copyWith(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                    ),
+                    style: AppTypography.labelField(
+                      context,
+                    ).copyWith(fontSize: 16, fontWeight: FontWeight.w800),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -276,7 +277,7 @@ class AppScaffold extends StatelessWidget {
                 child: Center(
                   child: Text(
                     title!,
-                    style: AppTypography.titleSheet,
+                    style: AppTypography.titleSheet(context),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -292,17 +293,16 @@ class AppScaffold extends StatelessWidget {
                           button: true,
                           label: trailingAction,
                           enabled: trailingActionEnabled,
-                          child: GestureDetector(
+                          child: PressableScale(
                             onTap: trailingActionEnabled
                                 ? onTrailingAction
                                 : null,
-                            behavior: HitTestBehavior.opaque,
                             child: Text(
                               trailingAction!,
-                              style: AppTypography.labelField.copyWith(
+                              style: AppTypography.labelField(context).copyWith(
                                 color: trailingActionEnabled
                                     ? AppColors.primary
-                                    : AppColors.textTertiary,
+                                    : context.colors.textTertiary,
                               ),
                             ),
                           ),
@@ -351,7 +351,7 @@ class AppScreenHeader extends StatelessWidget {
           Expanded(
             child: Text(
               title,
-              style: style ?? AppTypography.titleScreen,
+              style: style ?? AppTypography.titleScreen(context),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -377,7 +377,7 @@ class AppBackButton extends StatelessWidget {
     return Semantics(
       button: true,
       label: 'Back',
-      child: GestureDetector(
+      child: PressableScale(
         onTap: () {
           HapticFeedback.lightImpact();
           if (onPressed != null) {
@@ -386,7 +386,6 @@ class AppBackButton extends StatelessWidget {
             Navigator.of(context).maybePop();
           }
         },
-        behavior: HitTestBehavior.opaque,
         child: SizedBox(
           width: 44,
           height: 44,
@@ -395,14 +394,14 @@ class AppBackButton extends StatelessWidget {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: AppColors.surfaceSubtle,
+                color: context.colors.surfaceSubtle,
                 borderRadius: BorderRadius.circular(AppRadius.pill),
-                border: Border.all(color: AppColors.border),
+                border: Border.all(color: context.colors.border),
               ),
               child: Icon(
                 Icons.arrow_back_ios_new_rounded,
                 size: 16,
-                color: color ?? AppColors.textPrimary,
+                color: color ?? context.colors.textPrimary,
               ),
             ),
           ),

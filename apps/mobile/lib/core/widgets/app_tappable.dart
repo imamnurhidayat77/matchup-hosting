@@ -116,9 +116,15 @@ class _AppTappableState extends State<AppTappable> {
           )
         : GestureDetector(
             onTap: _interactive ? _handleTap : null,
-            onTapDown: _interactive ? (_) => setState(() => _pressed = true) : null,
-            onTapUp: _interactive ? (_) => setState(() => _pressed = false) : null,
-            onTapCancel: _interactive ? () => setState(() => _pressed = false) : null,
+            onTapDown: _interactive
+                ? (_) => setState(() => _pressed = true)
+                : null,
+            onTapUp: _interactive
+                ? (_) => setState(() => _pressed = false)
+                : null,
+            onTapCancel: _interactive
+                ? () => setState(() => _pressed = false)
+                : null,
             behavior: HitTestBehavior.opaque,
             child: AnimatedScale(
               scale: _pressed ? 0.97 : 1.0,

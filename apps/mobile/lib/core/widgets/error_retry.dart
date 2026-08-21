@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
+import '../theme/dark_colors.dart';
 import 'app_button.dart';
 
 /// Full-page error state with retry CTA.
@@ -35,8 +36,8 @@ class ErrorRetry extends StatelessWidget {
             Container(
               width: 72,
               height: 72,
-              decoration: const BoxDecoration(
-                color: AppColors.errorLight,
+              decoration: BoxDecoration(
+                color: context.colors.errorLight,
                 shape: BoxShape.circle,
               ),
               child: const Icon(
@@ -49,15 +50,15 @@ class ErrorRetry extends StatelessWidget {
             Text(
               "Something didn't load",
               textAlign: TextAlign.center,
-              style: AppTypography.titleSheet,
+              style: AppTypography.titleSheet(context),
             ),
             const SizedBox(height: AppSpacing.x2),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: AppTypography.bodyReading.copyWith(
-                color: AppColors.textSecondary,
-              ),
+              style: AppTypography.bodyReading(
+                context,
+              ).copyWith(color: context.colors.textSecondary),
             ),
             const SizedBox(height: AppSpacing.x6),
             AppButton(

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
+import '../theme/dark_colors.dart';
 import 'asset_image.dart';
 
 /// Horizontal stack of overlapping circular avatars ending with an optional
@@ -27,20 +27,20 @@ class AvatarStackRow extends StatelessWidget {
       child: Row(
         children: [
           for (var i = 0; i < avatars.length; i++)
-            _avatar(avatars[i], i == 0 ? 0 : overlap),
-          if (moreLabel != null) _more(moreLabel!, overlap),
+            _avatar(context, avatars[i], i == 0 ? 0 : overlap),
+          if (moreLabel != null) _more(context, moreLabel!, overlap),
         ],
       ),
     );
   }
 
-  Widget _avatar(String asset, double right) {
+  Widget _avatar(BuildContext context, String asset, double right) {
     return Padding(
       padding: EdgeInsets.only(right: right),
       child: Container(
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          border: Border.all(color: AppColors.surface, width: 2),
+          border: Border.all(color: context.colors.surface, width: 2),
         ),
         child: ClipOval(
           child: AssetImageWithFallback(
@@ -55,7 +55,7 @@ class AvatarStackRow extends StatelessWidget {
     );
   }
 
-  Widget _more(String label, double right) {
+  Widget _more(BuildContext context, String label, double right) {
     return Padding(
       padding: EdgeInsets.only(right: right),
       child: Container(
@@ -63,14 +63,14 @@ class AvatarStackRow extends StatelessWidget {
         height: size,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: AppColors.border,
-          border: Border.all(color: AppColors.surface, width: 2),
+          color: context.colors.border,
+          border: Border.all(color: context.colors.surface, width: 2),
         ),
         child: Center(
           child: Text(
             label,
-            style: AppTypography.bodySmall.copyWith(
-              color: AppColors.textSecondary,
+            style: AppTypography.bodySmall(context).copyWith(
+              color: context.colors.textSecondary,
               fontSize: 11,
               fontWeight: FontWeight.w700,
             ),

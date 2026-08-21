@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
-import '../theme/app_colors.dart';
+import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
+import '../theme/dark_colors.dart';
 
 /// Icon + title/subtitle row used in activity detail screens (date, location,
 /// etc). Matches Figma: 36×36 primaryLight pill behind a centered 18×18 SVG,
@@ -21,8 +22,6 @@ class DetailRowItem extends StatelessWidget {
   final String sub;
   final Color? iconBackground;
 
-  static const _defaultIconBg = Color(0xFFE6F0FF);
-
   @override
   Widget build(BuildContext context) {
     return Row(
@@ -30,8 +29,8 @@ class DetailRowItem extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: iconBackground ?? _defaultIconBg,
-            borderRadius: BorderRadius.circular(100),
+            color: iconBackground ?? context.colors.primarySoft,
+            borderRadius: BorderRadius.circular(AppRadius.pill),
           ),
           child: SizedBox(
             width: 18,
@@ -50,8 +49,8 @@ class DetailRowItem extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: AppTypography.bodyMedium.copyWith(
-                  color: AppColors.textPrimary,
+                style: AppTypography.bodyMedium(context).copyWith(
+                  color: context.colors.textPrimary,
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
                 ),
@@ -60,10 +59,9 @@ class DetailRowItem extends StatelessWidget {
               ),
               Text(
                 sub,
-                style: AppTypography.bodySmall.copyWith(
-                  color: AppColors.textSecondary,
-                  fontSize: 12,
-                ),
+                style: AppTypography.bodySmall(
+                  context,
+                ).copyWith(color: context.colors.textSecondary, fontSize: 12),
                 overflow: TextOverflow.ellipsis,
                 maxLines: 1,
               ),

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
+import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
+import '../theme/dark_colors.dart';
 
 /// Pill-shaped label matching Figma activity badges (e.g. "BASKETBALL",
 /// "CONFIRMED", "JOINED"). Stadium shape, 11px bold text, configurable
@@ -29,11 +31,11 @@ class LabelBadge extends StatelessWidget {
       padding: padding,
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(100),
+        borderRadius: AppRadius.pillR,
       ),
       child: Text(
         label,
-        style: AppTypography.bodySmall.copyWith(
+        style: AppTypography.bodySmall(context).copyWith(
           color: foreground,
           fontSize: fontSize,
           fontWeight: FontWeight.w700,
@@ -54,23 +56,28 @@ class StatusBadge extends StatelessWidget {
   final String label;
   final StatusTone tone;
 
-  static const _checkedBg = Color(0xFFD1FAE5);
-  static const _checkedFg = Color(0xFF097044);
-
   @override
   Widget build(BuildContext context) {
     final isChecked = tone == StatusTone.checkedIn;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: isChecked ? _checkedBg : AppColors.surface,
-        borderRadius: BorderRadius.circular(100),
-        border: isChecked ? null : Border.all(color: AppColors.border),
+        // Was a separately hardcoded #D1FAE5/#097044 pair — consolidated onto
+        // the existing success status tokens (already #D1FAE5/#04694A used by
+        // the discovery "Open" chip) so the app carries one success-green
+        // family instead of two near-duplicates (PRD Appendix C.2).
+        color: isChecked
+            ? context.colors.statusSuccessBg
+            : context.colors.surface,
+        borderRadius: AppRadius.pillR,
+        border: isChecked ? null : Border.all(color: context.colors.border),
       ),
       child: Text(
         label,
-        style: AppTypography.bodySmall.copyWith(
-          color: isChecked ? _checkedFg : AppColors.textSecondary,
+        style: AppTypography.bodySmall(context).copyWith(
+          color: isChecked
+              ? AppColors.statusSuccessText
+              : context.colors.textSecondary,
           fontSize: 11,
           fontWeight: FontWeight.w700,
         ),

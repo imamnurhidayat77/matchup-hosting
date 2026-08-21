@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../theme/app_colors.dart';
+import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
+import '../theme/dark_colors.dart';
+import 'pressable_scale.dart';
 
 /// Icon-prefixed text input matching Figma signin/signup (12px radius, 1px
 /// border, 16px horizontal padding, 12px vertical padding, optional trailing
@@ -40,7 +43,7 @@ class IconInputField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: AppTypography.inputLabel),
+        Text(label, style: AppTypography.inputLabel(context)),
         const SizedBox(height: 8),
         TextFormField(
           controller: controller,
@@ -50,23 +53,22 @@ class IconInputField extends StatelessWidget {
           autofillHints: autofillHints,
           textInputAction: textInputAction,
           onFieldSubmitted: onSubmitted,
-          style: AppTypography.bodyLarge.copyWith(
-            fontSize: 15,
-            color: AppColors.textPrimary,
-          ),
+          style: AppTypography.bodyLarge(
+            context,
+          ).copyWith(fontSize: 15, color: context.colors.textPrimary),
           cursorColor: AppColors.primary,
           decoration: InputDecoration(
             isDense: true,
             hintText: hint,
-            hintStyle: AppTypography.bodyFormSecondary,
+            hintStyle: AppTypography.bodyFormSecondary(context),
             filled: true,
-            fillColor: AppColors.surfaceSubtle,
+            fillColor: context.colors.surfaceSubtle,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
               vertical: 12,
             ),
-            border: _border(AppColors.border),
-            enabledBorder: _border(AppColors.border),
+            border: _border(context.colors.border),
+            enabledBorder: _border(context.colors.border),
             focusedBorder: _border(AppColors.primary, width: 1.5),
             errorBorder: _border(AppColors.error),
             focusedErrorBorder: _border(AppColors.error, width: 1.5),
@@ -82,8 +84,8 @@ class IconInputField extends StatelessWidget {
                       height: 20,
                       child: SvgPicture.asset(
                         leadingIcon!,
-                        colorFilter: const ColorFilter.mode(
-                          AppColors.textSecondary,
+                        colorFilter: ColorFilter.mode(
+                          context.colors.textSecondary,
                           BlendMode.srcIn,
                         ),
                       ),
@@ -114,7 +116,7 @@ class IconInputField extends StatelessWidget {
 
   OutlineInputBorder _border(Color color, {double width = 1}) {
     return OutlineInputBorder(
-      borderRadius: BorderRadius.circular(100),
+      borderRadius: AppRadius.pillR,
       borderSide: BorderSide(color: color, width: width),
     );
   }
@@ -132,13 +134,12 @@ class PasswordToggle extends StatelessWidget {
     return Semantics(
       button: true,
       label: obscure ? 'Show password' : 'Hide password',
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
+      child: PressableScale(
         onTap: onTap,
         child: SvgPicture.asset(
           'assets/images/auth/eye.svg',
-          colorFilter: const ColorFilter.mode(
-            AppColors.textSecondary,
+          colorFilter: ColorFilter.mode(
+            context.colors.textSecondary,
             BlendMode.srcIn,
           ),
         ),
@@ -157,19 +158,19 @@ class OrDivider extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        const Expanded(child: Divider(color: AppColors.border, height: 1)),
+        Expanded(child: Divider(color: context.colors.border, height: 1)),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Text(
             label,
-            style: AppTypography.bodyMedium.copyWith(
+            style: AppTypography.bodyMedium(context).copyWith(
               fontWeight: FontWeight.w600,
               fontSize: 12,
               letterSpacing: 0.5,
             ),
           ),
         ),
-        const Expanded(child: Divider(color: AppColors.border, height: 1)),
+        Expanded(child: Divider(color: context.colors.border, height: 1)),
       ],
     );
   }

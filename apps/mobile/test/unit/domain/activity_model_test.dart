@@ -99,5 +99,38 @@ void main() {
         expect(ActivityModel.fromJson(json).status, status);
       }
     });
+
+    group('durationMinutes / endTime', () {
+      test('should default durationMinutes to 120 when absent from JSON', () {
+        final model = ActivityModel.fromJson(baseJson);
+        expect(model.durationMinutes, 120);
+      });
+
+      test('should read durationMinutes from JSON when present', () {
+        final model = ActivityModel.fromJson({
+          ...baseJson,
+          'durationMinutes': 90,
+        });
+        expect(model.durationMinutes, 90);
+      });
+
+      test('should compute endTime as dateTime + durationMinutes', () {
+        final model = ActivityModel.fromJson({
+          ...baseJson,
+          'dateTime': '2026-09-15T16:00:00.000Z',
+          'durationMinutes': 90,
+        });
+        expect(model.endTime, DateTime.parse('2026-09-15T17:30:00.000Z'));
+      });
+
+      test('should round-trip durationMinutes through toJson/fromJson', () {
+        final original = ActivityModel.fromJson({
+          ...baseJson,
+          'durationMinutes': 180,
+        });
+        final roundTripped = ActivityModel.fromJson(original.toJson());
+        expect(roundTripped.durationMinutes, 180);
+      });
+    });
   });
 }

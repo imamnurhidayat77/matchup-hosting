@@ -68,6 +68,15 @@ void main() {
       expect(state().coverImageBase64, 'base64string==');
     });
 
+    test('should default durationMinutes to 120', () {
+      expect(state().durationMinutes, 120);
+    });
+
+    test('should update durationMinutes via setDurationMinutes', () {
+      notifier().setDurationMinutes(90);
+      expect(state().durationMinutes, 90);
+    });
+
     test('should reset all fields to defaults via reset', () {
       notifier().setTitle('Something');
       notifier().setLocation('Somewhere');

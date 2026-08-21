@@ -3,7 +3,7 @@ import '../domain/user_model.dart';
 import 'user_repository.dart';
 
 class DummyUserRepository implements UserRepository {
-  UserModel _me = const UserModel(
+  UserModel _me = UserModel(
     id: 'me',
     displayName: 'Alex Mercer',
     avatarAsset: 'assets/images/discovery/avatars/avatar_alex.png',
@@ -12,10 +12,16 @@ class DummyUserRepository implements UserRepository {
     location: 'Auckland, NZ',
     activitiesCount: 24,
     hostedCount: 8,
-    sports: [
+    sports: const [
       (sport: 'Basketball', level: 'Intermediate'),
       (sport: 'Running', level: 'Beginner'),
     ],
+    email: 'alex.mercer@email.com',
+    phone: '+64 21 555 0173',
+    dateOfBirth: DateTime(1996, 3, 29),
+    heightCm: 181,
+    weightKg: 76,
+    goal: 'Stay active with new sports',
   );
 
   static const _users = <UserModel>[
@@ -84,17 +90,29 @@ class DummyUserRepository implements UserRepository {
   }
 
   @override
-  Future<UserModel> updateProfile({String? displayName, String? bio}) async {
-    _me = UserModel(
-      id: _me.id,
-      displayName: displayName ?? _me.displayName,
-      avatarAsset: _me.avatarAsset,
-      rating: _me.rating,
-      bio: bio ?? _me.bio,
-      location: _me.location,
-      activitiesCount: _me.activitiesCount,
-      hostedCount: _me.hostedCount,
-      sports: _me.sports,
+  Future<UserModel> updateProfile({
+    String? displayName,
+    String? bio,
+    String? location,
+    String? email,
+    String? phone,
+    DateTime? dateOfBirth,
+    int? heightCm,
+    int? weightKg,
+    String? goal,
+    List<({String sport, String level})>? sports,
+  }) async {
+    _me = _me.copyWith(
+      displayName: displayName,
+      bio: bio,
+      location: location,
+      email: email,
+      phone: phone,
+      dateOfBirth: dateOfBirth,
+      heightCm: heightCm,
+      weightKg: weightKg,
+      goal: goal,
+      sports: sports,
     );
     return _me;
   }
@@ -122,15 +140,51 @@ class RemoteUserRepository implements UserRepository {
   }
 
   @override
-  Future<UserModel> updateProfile({String? displayName, String? bio}) async {
+  Future<UserModel> updateProfile({
+    String? displayName,
+    String? bio,
+    String? location,
+    String? email,
+    String? phone,
+    DateTime? dateOfBirth,
+    int? heightCm,
+    int? weightKg,
+    String? goal,
+    List<({String sport, String level})>? sports,
+  }) async {
     try {
       final res = await _client.dio.patch(
         '/api/v1/users/me',
-        data: {'display_name': ?displayName, 'bio': ?bio},
+        data: {
+          'display_name': ?displayName,
+          'bio': ?bio,
+          'location': ?location,
+          'email': ?email,
+          'phone': ?phone,
+          'date_of_birth': dateOfBirth?.toIso8601String(),
+          'height_cm': ?heightCm,
+          'weight_kg': ?weightKg,
+          'goal': ?goal,
+          if (sports != null)
+            'sports': sports
+                .map((s) => {'sport': s.sport, 'level': s.level})
+                .toList(),
+        },
       );
       return _parse(res.data as Map<String, dynamic>) ?? await _fallback.me();
     } catch (_) {
-      return _fallback.updateProfile(displayName: displayName, bio: bio);
+      return _fallback.updateProfile(
+        displayName: displayName,
+        bio: bio,
+        location: location,
+        email: email,
+        phone: phone,
+        dateOfBirth: dateOfBirth,
+        heightCm: heightCm,
+        weightKg: weightKg,
+        goal: goal,
+        sports: sports,
+      );
     }
   }
 
@@ -156,6 +210,14 @@ class RemoteUserRepository implements UserRepository {
               )
               .toList() ??
           const [],
+      email: json['email'] as String?,
+      phone: json['phone'] as String?,
+      dateOfBirth: json['date_of_birth'] != null
+          ? DateTime.tryParse(json['date_of_birth'] as String)
+          : null,
+      heightCm: json['height_cm'] as int?,
+      weightKg: json['weight_kg'] as int?,
+      goal: json['goal'] as String?,
     );
   }
 }

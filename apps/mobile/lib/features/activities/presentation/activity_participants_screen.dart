@@ -1,211 +1,156 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
+import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/dark_colors.dart';
 import '../../../core/theme/app_typography.dart';
-import '../../../core/widgets/home_indicator.dart';
+import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/error_retry.dart';
+import '../../../core/widgets/pressable_scale.dart';
+import '../../../core/widgets/skeleton.dart';
+import '../domain/activity_participant.dart';
 
-class _Participant {
-  const _Participant({
-    required this.name,
-    required this.avatar,
-    required this.skill,
-    required this.joined,
-    required this.isOrganizer,
-  });
-  final String name;
-  final String avatar;
-  final String skill;
-  final String joined;
-  final bool isOrganizer;
-}
+typedef _ParticipantsData = ({
+  List<ActivityParticipant> roster,
+  int capacity,
+  String activityTitle,
+});
 
-class ActivityParticipantsScreen extends StatelessWidget {
+final _participantsProvider = FutureProvider.autoDispose
+    .family<_ParticipantsData, String>((ref, activityId) async {
+      final activityRepo = ref.watch(activityRepositoryProvider);
+      final activity = await activityRepo.byId(activityId);
+      final roster = await activityRepo.participants(activityId);
+      return (
+        roster: roster,
+        capacity: activity?.capacity ?? roster.length,
+        activityTitle: activity?.title ?? 'this activity',
+      );
+    });
+
+class ActivityParticipantsScreen extends ConsumerWidget {
   final String activityId;
 
   const ActivityParticipantsScreen({super.key, required this.activityId});
 
-  static const _participants = [
-    _Participant(
-      name: 'James Wilson',
-      avatar: 'host_james.png',
-      skill: 'Advanced',
-      joined: 'Joined 5 days ago',
-      isOrganizer: true,
-    ),
-    _Participant(
-      name: 'Alex Mercer',
-      avatar: 'avatar_alex.png',
-      skill: 'Intermediate',
-      joined: 'Joined 2 days ago',
-      isOrganizer: false,
-    ),
-    _Participant(
-      name: 'Sarah Chen',
-      avatar: 'msg_sarah.png',
-      skill: 'Intermediate',
-      joined: 'Joined 2 days ago',
-      isOrganizer: false,
-    ),
-    _Participant(
-      name: 'Marcus Brodie',
-      avatar: 'avatar_1.png',
-      skill: 'Advanced',
-      joined: 'Joined 1 day ago',
-      isOrganizer: false,
-    ),
-    _Participant(
-      name: 'Daniel Kim',
-      avatar: 'avatar_2.png',
-      skill: 'Beginner',
-      joined: 'Joined 18 hours ago',
-      isOrganizer: false,
-    ),
-    _Participant(
-      name: 'Elena Rostova',
-      avatar: 'avatar_3.png',
-      skill: 'Intermediate',
-      joined: 'Joined 5 hours ago',
-      isOrganizer: false,
-    ),
-    _Participant(
-      name: 'Tyler Vance',
-      avatar: 'avatar_4.png',
-      skill: 'Intermediate',
-      joined: 'Joined 2 hours ago',
-      isOrganizer: false,
-    ),
-    _Participant(
-      name: 'Sofia Martinez',
-      avatar: 'sarah_c2.png',
-      skill: 'Advanced',
-      joined: 'Joined 3 days ago',
-      isOrganizer: false,
-    ),
-    _Participant(
-      name: 'Ryan Thompson',
-      avatar: 'avatar_5.png',
-      skill: 'Intermediate',
-      joined: 'Joined 4 days ago',
-      isOrganizer: false,
-    ),
-    _Participant(
-      name: 'Mia Johnson',
-      avatar: 'avatar_6.png',
-      skill: 'Beginner',
-      joined: 'Joined 5 days ago',
-      isOrganizer: false,
-    ),
-  ];
-
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.surface,
-      body: SafeArea(
-        top: true,
-        child: Column(
-          children: [
-            _header(context),
-            Expanded(
-              child: ListView.separated(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-                itemCount: _participants.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 12),
-                itemBuilder: (_, i) => _ParticipantCard(item: _participants[i]),
-              ),
-            ),
-            const HomeIndicator(),
-          ],
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(_participantsProvider(activityId));
+
+    return AppScaffold.detail(
+      title: 'Participants',
+      showHomeIndicator: false, // reached from inside ShellRoute screens.
+      backgroundColor: context.colors.surface,
+      body: async.when(
+        loading: () => const SkeletonList(count: 6),
+        error: (_, _) => ErrorRetry(
+          message: 'Could not load participants.',
+          onRetry: () => ref.invalidate(_participantsProvider(activityId)),
         ),
+        data: (result) {
+          final roster = result.roster;
+          final capacity = result.capacity;
+          final fillRatio = capacity == 0
+              ? 0.0
+              : (roster.length / capacity).clamp(0.0, 1.0);
+
+          return Column(
+            children: [
+              _CapacitySummary(
+                activityTitle: result.activityTitle,
+                joined: roster.length,
+                capacity: capacity,
+                fillRatio: fillRatio,
+              ),
+              Expanded(
+                child: ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.x4,
+                    AppSpacing.x4,
+                    AppSpacing.x4,
+                    AppSpacing.x4,
+                  ),
+                  itemCount: roster.length,
+                  separatorBuilder: (_, _) =>
+                      const SizedBox(height: AppSpacing.x3),
+                  itemBuilder: (_, i) => _ParticipantCard(item: roster[i]),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
+}
 
-  Widget _header(BuildContext context) {
+class _CapacitySummary extends StatelessWidget {
+  const _CapacitySummary({
+    required this.activityTitle,
+    required this.joined,
+    required this.capacity,
+    required this.fillRatio,
+  });
+
+  final String activityTitle;
+  final int joined;
+  final int capacity;
+  final double fillRatio;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.border)),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.x5,
+        0,
+        AppSpacing.x5,
+        AppSpacing.x4,
+      ),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: context.colors.border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Semantics(
-                button: true,
-                label: 'Back',
-                child: GestureDetector(
-                  onTap: () => Navigator.of(context).maybePop(),
-                  behavior: HitTestBehavior.opaque,
-                  child: Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceSubtle,
-                      borderRadius: BorderRadius.circular(100),
-                    ),
-                    alignment: Alignment.center,
-                    child: const Icon(
-                      Icons.arrow_back,
-                      size: 20,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Participants',
-                  style: AppTypography.titleLarge.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 36),
-            ],
-          ),
-          const SizedBox(height: 16),
           Text(
-            'Basketball at Central Park',
-            style: AppTypography.bodyMedium.copyWith(
-              color: AppColors.primaryDarker,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
+            activityTitle,
+            style: AppTypography.labelField(
+              context,
+            ).copyWith(color: context.colors.primaryOnSurface),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: AppSpacing.x1),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '10/12 spots filled',
-                style: AppTypography.bodySmall.copyWith(
-                  color: AppColors.textSecondary,
-                  fontSize: 12,
-                ),
+                '$joined/$capacity spots filled',
+                style: AppTypography.bodySmall(
+                  context,
+                ).copyWith(color: context.colors.textSecondary),
               ),
               Text(
-                '83% Full',
-                style: AppTypography.bodySmall.copyWith(
-                  color: AppColors.primaryDarker,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
+                '${(fillRatio * 100).round()}% full',
+                style: AppTypography.chipLabel(
+                  context,
+                ).copyWith(color: context.colors.primaryOnSurface),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.x2),
           ClipRRect(
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: BorderRadius.circular(AppRadius.xs),
             child: SizedBox(
               height: 8,
               child: Stack(
                 children: [
-                  Container(color: AppColors.border),
+                  Container(color: context.colors.border),
                   FractionallySizedBox(
-                    widthFactor: 0.83,
+                    widthFactor: fillRatio,
                     child: Container(color: AppColors.primary),
                   ),
                 ],
@@ -220,34 +165,37 @@ class ActivityParticipantsScreen extends StatelessWidget {
 
 class _ParticipantCard extends StatelessWidget {
   const _ParticipantCard({required this.item});
-  final _Participant item;
+  final ActivityParticipant item;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return PressableScale(
       onTap: () => context.push('/player-profile/${item.name}'),
-      behavior: HitTestBehavior.opaque,
       child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(AppSpacing.x3),
         decoration: BoxDecoration(
-          color: item.isOrganizer ? AppColors.primarySoft : AppColors.surface,
-          borderRadius: BorderRadius.circular(16),
+          color: item.isOrganizer
+              ? context.colors.primarySoft
+              : context.colors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.card),
           border: Border.all(
-            color: item.isOrganizer ? AppColors.primaryLight : AppColors.border,
+            color: item.isOrganizer
+                ? context.colors.primaryLight
+                : context.colors.border,
           ),
         ),
         child: Row(
           children: [
             ClipRRect(
-              borderRadius: BorderRadius.circular(22),
+              borderRadius: BorderRadius.circular(AppRadius.lg),
               child: Image.asset(
-                'assets/images/discovery/avatars/${item.avatar}',
+                'assets/images/discovery/avatars/${item.avatarAsset}',
                 width: 44,
                 height: 44,
                 fit: BoxFit.cover,
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: AppSpacing.x3),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -257,83 +205,27 @@ class _ParticipantCard extends StatelessWidget {
                       Flexible(
                         child: Text(
                           item.name,
-                          style: AppTypography.bodyMedium.copyWith(
-                            color: AppColors.textPrimary,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                          ),
+                          style: AppTypography.labelField(
+                            context,
+                          ).copyWith(fontSize: 15),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       if (item.isOrganizer) ...[
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.warningBg,
-                            borderRadius: BorderRadius.circular(100),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(
-                                Icons.workspace_premium,
-                                size: 10,
-                                color: AppColors.warning,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                'Organizer',
-                                style: TextStyle(
-                                  fontFamily: AppTypography.fontFamily,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.warning,
-                                  height: 1.0,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                        const SizedBox(width: AppSpacing.x1 + 2),
+                        _OrganizerBadge(),
                       ],
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      _skillChip(item.skill),
-                      const SizedBox(width: 6),
-                      Text(
-                        '•',
-                        style: AppTypography.bodySmall.copyWith(
-                          color: AppColors.textSecondary,
-                          fontSize: 11,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Basketball',
-                        style: AppTypography.bodySmall.copyWith(
-                          color: AppColors.primaryDarker,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
+                  const SizedBox(height: AppSpacing.x1),
+                  _SkillChip(label: item.skillLevel),
                 ],
               ),
             ),
             Text(
-              item.joined,
-              style: AppTypography.bodySmall.copyWith(
-                color: AppColors.textSecondary,
-                fontSize: 11,
-              ),
+              _timeAgo(item.joinedAt),
+              style: AppTypography.caption(context),
             ),
           ],
         ),
@@ -341,20 +233,70 @@ class _ParticipantCard extends StatelessWidget {
     );
   }
 
-  Widget _skillChip(String label) {
+  String _timeAgo(DateTime joinedAt) {
+    final diff = DateTime.now().difference(joinedAt);
+    if (diff.inHours < 1) return 'Joined ${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return 'Joined ${diff.inHours}h ago';
+    if (diff.inDays == 1) return 'Joined 1 day ago';
+    return 'Joined ${diff.inDays} days ago';
+  }
+}
+
+/// "Organizer" role badge. Raised from the original 9px to 11px per PRD
+/// Section 3 — 9px sits below practical legibility.
+class _OrganizerBadge extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.x1 + 2,
+        vertical: 2,
+      ),
       decoration: BoxDecoration(
-        color: AppColors.surfaceSubtle,
-        borderRadius: BorderRadius.circular(100),
+        color: context.colors.warningBg,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.workspace_premium,
+            size: 12,
+            color: AppColors.warning,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            'Organizer',
+            style: AppTypography.chipLabel(
+              context,
+            ).copyWith(fontSize: 11, color: AppColors.warning, height: 1.0),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SkillChip extends StatelessWidget {
+  const _SkillChip({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.x2,
+        vertical: 3,
+      ),
+      decoration: BoxDecoration(
+        color: context.colors.surfaceSubtle,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
       ),
       child: Text(
         label,
-        style: AppTypography.bodySmall.copyWith(
-          color: AppColors.textSecondary,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-        ),
+        style: AppTypography.chipLabel(
+          context,
+        ).copyWith(fontSize: 11, color: context.colors.textSecondary),
       ),
     );
   }

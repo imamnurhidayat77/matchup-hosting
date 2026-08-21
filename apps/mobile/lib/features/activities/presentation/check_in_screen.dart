@@ -1,454 +1,68 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
+import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/dark_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/asset_image.dart';
-import '../../../core/widgets/home_indicator.dart';
+import '../../../core/widgets/error_retry.dart';
+import '../../../core/widgets/pressable_scale.dart';
+import '../../../core/widgets/skeleton.dart';
+import '../../discovery/domain/activity_model.dart';
+
+final _checkInActivityProvider = FutureProvider.autoDispose
+    .family<ActivityModel, String>((ref, activityId) async {
+      final activity = await ref
+          .watch(activityRepositoryProvider)
+          .byId(activityId);
+      if (activity == null) throw StateError('Activity not found');
+      return activity;
+    });
 
 /// Check-In Screen (spec 5.12)
 ///
 /// Allows location-based attendance check-in for a joined activity.
 /// Shows the activity title, location, current check-in status, and a
 /// location-permission prompt if needed.
-class CheckInScreen extends StatefulWidget {
+class CheckInScreen extends ConsumerStatefulWidget {
   final String activityId;
 
   const CheckInScreen({super.key, required this.activityId});
 
   @override
-  State<CheckInScreen> createState() => _CheckInScreenState();
+  ConsumerState<CheckInScreen> createState() => _CheckInScreenState();
 }
 
 enum _CheckInStatus { notCheckedIn, locating, checkedIn, locationDenied }
 
-class _CheckInScreenState extends State<CheckInScreen> {
+class _CheckInScreenState extends ConsumerState<CheckInScreen> {
   _CheckInStatus _status = _CheckInStatus.notCheckedIn;
-
-  // Mock activity metadata. In a real app this would be loaded via the
-  // activityId passed into the route.
-  static const _activityTitle = 'Saturday Afternoon 5v5 Basketball';
-  static const _activityLocation = 'Central Park Court B';
-  static const _activitySchedule = 'Sat, Aug 8 • 4:00 PM - 6:00 PM';
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.surface,
-      body: SafeArea(
-        top: true,
-        child: Column(
-          children: [
-            _header(context),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.only(bottom: 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _hero(),
-                    const SizedBox(height: 20),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _activityInfo(),
-                          const SizedBox(height: 20),
-                          _statusCard(),
-                          const SizedBox(height: 16),
-                          if (_status == _CheckInStatus.locationDenied)
-                            _permissionPrompt(),
-                          if (_status == _CheckInStatus.locationDenied)
-                            const SizedBox(height: 16),
-                          _primaryAction(context),
-                          const SizedBox(height: 12),
-                          if (_status != _CheckInStatus.checkedIn)
-                            _secondaryAction(context),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const HomeIndicator(),
-          ],
+    final async = ref.watch(_checkInActivityProvider(widget.activityId));
+
+    return AppScaffold.detail(
+      title: 'Check-In',
+      showHomeIndicator: false, // reached from inside ShellRoute screens.
+      backgroundColor: context.colors.surface,
+      body: async.when(
+        loading: () => const SkeletonList(count: 3),
+        error: (_, _) => ErrorRetry(
+          message: 'Could not load this activity.',
+          onRetry: () =>
+              ref.invalidate(_checkInActivityProvider(widget.activityId)),
         ),
-      ),
-    );
-  }
-
-  Widget _header(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.border)),
-      ),
-      child: Row(
-        children: [
-          _circleBtn(
-            'assets/images/discovery/icons/arrow_left.svg',
-            Icons.arrow_back,
-            onTap: () => context.pop(),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'Check-In',
-              style: AppTypography.headlineSmall.copyWith(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _circleBtn(String asset, IconData fallback, {VoidCallback? onTap}) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: AppColors.surfaceSubtle,
-          shape: BoxShape.circle,
-          border: Border.all(color: AppColors.border),
-        ),
-        alignment: Alignment.center,
-        child: SizedBox(
-          width: 20,
-          height: 20,
-          child: SvgPicture.asset(
-            asset,
-            width: 20,
-            height: 20,
-            colorFilter: const ColorFilter.mode(
-              AppColors.textPrimary,
-              BlendMode.srcIn,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _hero() {
-    return SizedBox(
-      height: 160,
-      width: double.infinity,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          AssetImageWithFallback(
-            assetPath: 'assets/images/discovery/covers/basketball_full.png',
-            width: double.infinity,
-            height: 160,
-            fit: BoxFit.cover,
-            semanticLabel: 'Activity cover',
-          ),
-          Container(color: const Color.fromRGBO(0, 0, 0, 0.15)),
-          Positioned(
-            left: 20,
-            bottom: 16,
-            right: 20,
-            child: Text(
-              _activityTitle,
-              style: AppTypography.headlineSmall.copyWith(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _activityInfo() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceSubtle,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _infoRow(
-            'assets/images/discovery/icons/calendar.svg',
-            'Schedule',
-            _activitySchedule,
-          ),
-          const SizedBox(height: 14),
-          _infoRow(
-            'assets/images/discovery/icons/map_pin.svg',
-            'Location',
-            _activityLocation,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _infoRow(String icon, String label, String value) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 32,
-          height: 32,
-          decoration: BoxDecoration(
-            color: AppColors.primaryLight,
-            shape: BoxShape.circle,
-          ),
-          alignment: Alignment.center,
-          child: SvgPicture.asset(
-            icon,
-            width: 16,
-            height: 16,
-            colorFilter: const ColorFilter.mode(
-              AppColors.primaryDarker,
-              BlendMode.srcIn,
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: AppTypography.caption.copyWith(
-                  color: AppColors.textSecondary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                value,
-                style: AppTypography.bodyMedium.copyWith(
-                  color: AppColors.textPrimary,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _statusCard() {
-    switch (_status) {
-      case _CheckInStatus.notCheckedIn:
-        return _statusBadge(
-          bg: AppColors.warningBg,
-          fg: AppColors.warning,
-          icon: Icons.access_time_rounded,
-          label: 'Not checked in yet',
-          description:
-              'Arrive at the location and tap "Check In" to confirm '
-              'your attendance.',
-        );
-      case _CheckInStatus.locating:
-        return _statusBadge(
-          bg: AppColors.primaryLight,
-          fg: AppColors.primaryDarker,
-          icon: Icons.my_location_rounded,
-          label: 'Detecting your location…',
-          description: 'We are verifying that you are at the activity venue.',
-        );
-      case _CheckInStatus.checkedIn:
-        return _statusBadge(
-          bg: AppColors.statusSuccessBg,
-          fg: AppColors.avatarSecondary,
-          icon: Icons.check_circle_rounded,
-          label: 'Checked in',
-          description: 'Your attendance has been confirmed. Enjoy the game!',
-        );
-      case _CheckInStatus.locationDenied:
-        return _statusBadge(
-          bg: AppColors.warningBg,
-          fg: AppColors.warning,
-          icon: Icons.location_off_rounded,
-          label: 'Location permission needed',
-          description:
-              'Enable location access so we can verify your attendance.',
-        );
-    }
-  }
-
-  Widget _statusBadge({
-    required Color bg,
-    required Color fg,
-    required IconData icon,
-    required String label,
-    required String description,
-  }) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: fg, size: 24),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: AppTypography.bodyMedium.copyWith(
-                    color: fg,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  description,
-                  style: AppTypography.bodySmall.copyWith(
-                    color: fg,
-                    fontSize: 13,
-                    height: 1.4,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _permissionPrompt() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceSubtle,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            Icons.privacy_tip_outlined,
-            color: AppColors.primaryDarker,
-            size: 20,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              'MatchUp uses your location only to confirm you are at the venue. '
-              'You can revoke this at any time in your device settings.',
-              style: AppTypography.bodySmall.copyWith(
-                color: AppColors.textSecondary,
-                fontSize: 12,
-                height: 1.4,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _primaryAction(BuildContext context) {
-    final bool isCheckingIn = _status == _CheckInStatus.locating;
-    final bool isDone = _status == _CheckInStatus.checkedIn;
-
-    final label = isDone
-        ? 'Checked In'
-        : (isCheckingIn ? 'Locating…' : 'Check In');
-    final bg = isDone ? AppColors.avatarSecondary : AppColors.primaryDarker;
-
-    return GestureDetector(
-      onTap: isCheckingIn || isDone ? null : _onCheckIn,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        alignment: Alignment.center,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (isCheckingIn)
-              const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
-                ),
-              )
-            else
-              Icon(
-                isDone ? Icons.check_rounded : Icons.location_on_rounded,
-                color: Colors.white,
-                size: 18,
-              ),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: AppTypography.bodyMedium.copyWith(
-                color: Colors.white,
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _secondaryAction(BuildContext context) {
-    final showRetry =
-        _status == _CheckInStatus.locationDenied ||
-        _status == _CheckInStatus.notCheckedIn;
-
-    if (!showRetry) {
-      return const SizedBox.shrink();
-    }
-
-    return Center(
-      child: GestureDetector(
-        onTap: _onRetry,
-        behavior: HitTestBehavior.opaque,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Text(
-            _status == _CheckInStatus.locationDenied
-                ? 'Retry location detection'
-                : 'Refresh my location',
-            style: AppTypography.bodySmall.copyWith(
-              color: AppColors.primaryDarker,
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+        data: (activity) => _CheckInBody(
+          activity: activity,
+          status: _status,
+          onCheckIn: _onCheckIn,
+          onRetry: _onRetry,
         ),
       ),
     );
@@ -479,5 +93,416 @@ class _CheckInScreenState extends State<CheckInScreen> {
     if (!mounted) return;
     // On retry we simulate a successful detection.
     setState(() => _status = _CheckInStatus.checkedIn);
+  }
+}
+
+class _CheckInBody extends StatelessWidget {
+  const _CheckInBody({
+    required this.activity,
+    required this.status,
+    required this.onCheckIn,
+    required this.onRetry,
+  });
+
+  final ActivityModel activity;
+  final _CheckInStatus status;
+  final Future<void> Function() onCheckIn;
+  final Future<void> Function() onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(bottom: AppSpacing.x6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _Hero(activity: activity),
+          const SizedBox(height: AppSpacing.x5),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x5),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _ActivityInfo(activity: activity),
+                const SizedBox(height: AppSpacing.x5),
+                _StatusCard(status: status),
+                const SizedBox(height: AppSpacing.x4),
+                if (status == _CheckInStatus.locationDenied) ...[
+                  const _PermissionPrompt(),
+                  const SizedBox(height: AppSpacing.x4),
+                ],
+                _PrimaryAction(status: status, onCheckIn: onCheckIn),
+                const SizedBox(height: AppSpacing.x3),
+                if (status != _CheckInStatus.checkedIn)
+                  _SecondaryAction(status: status, onRetry: onRetry),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Hero extends StatelessWidget {
+  const _Hero({required this.activity});
+  final ActivityModel activity;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 160,
+      width: double.infinity,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          AssetImageWithFallback(
+            assetPath:
+                activity.coverImageUrl ??
+                'assets/images/discovery/covers/basketball_full.png',
+            width: double.infinity,
+            height: 160,
+            fit: BoxFit.cover,
+            semanticLabel: 'Activity cover',
+          ),
+          Container(color: context.colors.shadow),
+          Positioned(
+            left: AppSpacing.x5,
+            bottom: AppSpacing.x4,
+            right: AppSpacing.x5,
+            child: Text(
+              activity.title,
+              style: AppTypography.headlineSmall(
+                context,
+              ).copyWith(color: context.colors.textOnPrimary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActivityInfo extends StatelessWidget {
+  const _ActivityInfo({required this.activity});
+  final ActivityModel activity;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheduleFmt = DateFormat('EEE, MMM d • h:mm a');
+    final timeRangeFmt = DateFormat('h:mm a');
+    final schedule =
+        '${scheduleFmt.format(activity.dateTime)} - '
+        '${timeRangeFmt.format(activity.endTime)}';
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.x4),
+      decoration: BoxDecoration(
+        color: context.colors.surfaceSubtle,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        border: Border.all(color: context.colors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _InfoRow(
+            icon: 'assets/images/discovery/icons/calendar.svg',
+            label: 'Schedule',
+            value: schedule,
+          ),
+          const SizedBox(height: AppSpacing.x3 + 2),
+          _InfoRow(
+            icon: 'assets/images/discovery/icons/map_pin.svg',
+            label: 'Location',
+            value: activity.location,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  const _InfoRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+  final String icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: context.colors.primaryLight,
+            shape: BoxShape.circle,
+          ),
+          alignment: Alignment.center,
+          child: SvgPicture.asset(
+            icon,
+            width: 16,
+            height: 16,
+            colorFilter: ColorFilter.mode(
+              context.colors.primaryOnSurface,
+              BlendMode.srcIn,
+            ),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.x3),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: AppTypography.caption(
+                  context,
+                ).copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 2),
+              Text(value, style: AppTypography.labelField(context)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StatusCard extends StatelessWidget {
+  const _StatusCard({required this.status});
+  final _CheckInStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    switch (status) {
+      case _CheckInStatus.notCheckedIn:
+        return _StatusBadge(
+          bg: context.colors.warningBg,
+          fg: AppColors.warning,
+          icon: Icons.access_time_rounded,
+          label: 'Not checked in yet',
+          description:
+              'Arrive at the location and tap "Check In" to confirm '
+              'your attendance.',
+        );
+      case _CheckInStatus.locating:
+        return _StatusBadge(
+          bg: context.colors.primaryLight,
+          fg: context.colors.primaryOnSurface,
+          icon: Icons.my_location_rounded,
+          label: 'Detecting your location…',
+          description: 'We are verifying that you are at the activity venue.',
+        );
+      case _CheckInStatus.checkedIn:
+        return _StatusBadge(
+          bg: context.colors.statusSuccessBg,
+          fg: AppColors.avatarSecondary,
+          icon: Icons.check_circle_rounded,
+          label: 'Checked in',
+          description: 'Your attendance has been confirmed. Enjoy the game!',
+        );
+      case _CheckInStatus.locationDenied:
+        return _StatusBadge(
+          bg: context.colors.warningBg,
+          fg: AppColors.warning,
+          icon: Icons.location_off_rounded,
+          label: 'Location permission needed',
+          description:
+              'Enable location access so we can verify your attendance.',
+        );
+    }
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  const _StatusBadge({
+    required this.bg,
+    required this.fg,
+    required this.icon,
+    required this.label,
+    required this.description,
+  });
+
+  final Color bg;
+  final Color fg;
+  final IconData icon;
+  final String label;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.x4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: fg, size: 24),
+          const SizedBox(width: AppSpacing.x3),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: AppTypography.labelField(
+                    context,
+                  ).copyWith(color: fg, fontSize: 15),
+                ),
+                const SizedBox(height: AppSpacing.x1),
+                Text(
+                  description,
+                  style: AppTypography.bodyReading(
+                    context,
+                  ).copyWith(color: fg, fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PermissionPrompt extends StatelessWidget {
+  const _PermissionPrompt();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.x4),
+      decoration: BoxDecoration(
+        color: context.colors.surfaceSubtle,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        border: Border.all(color: context.colors.border),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.privacy_tip_outlined,
+            color: context.colors.primaryOnSurface,
+            size: 20,
+          ),
+          const SizedBox(width: AppSpacing.x2 + 2),
+          Expanded(
+            child: Text(
+              'MatchUp uses your location only to confirm you are at the venue. '
+              'You can revoke this at any time in your device settings.',
+              style: AppTypography.bodySmall(
+                context,
+              ).copyWith(color: context.colors.textSecondary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PrimaryAction extends StatelessWidget {
+  const _PrimaryAction({required this.status, required this.onCheckIn});
+  final _CheckInStatus status;
+  final Future<void> Function() onCheckIn;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isCheckingIn = status == _CheckInStatus.locating;
+    final bool isDone = status == _CheckInStatus.checkedIn;
+
+    final label = isDone
+        ? 'Checked In'
+        : (isCheckingIn ? 'Locating…' : 'Check In');
+    final bg = isDone
+        ? AppColors.avatarSecondary
+        : context.colors.primaryOnSurface;
+
+    return PressableScale(
+      onTap: isCheckingIn || isDone ? null : onCheckIn,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.x3 + 2),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(AppRadius.input),
+        ),
+        alignment: Alignment.center,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (isCheckingIn)
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: context.colors.textOnPrimary,
+                ),
+              )
+            else
+              Icon(
+                isDone ? Icons.check_rounded : Icons.location_on_rounded,
+                color: context.colors.textOnPrimary,
+                size: 18,
+              ),
+            const SizedBox(width: AppSpacing.x2),
+            Text(
+              label,
+              style: AppTypography.labelField(
+                context,
+              ).copyWith(color: context.colors.textOnPrimary, fontSize: 15),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SecondaryAction extends StatelessWidget {
+  const _SecondaryAction({required this.status, required this.onRetry});
+  final _CheckInStatus status;
+  final Future<void> Function() onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final showRetry =
+        status == _CheckInStatus.locationDenied ||
+        status == _CheckInStatus.notCheckedIn;
+
+    if (!showRetry) {
+      return const SizedBox.shrink();
+    }
+
+    return Center(
+      child: PressableScale(
+        onTap: onRetry,
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.x3),
+          child: Text(
+            status == _CheckInStatus.locationDenied
+                ? 'Retry location detection'
+                : 'Refresh my location',
+            style: AppTypography.chipLabel(
+              context,
+            ).copyWith(color: context.colors.primaryOnSurface),
+          ),
+        ),
+      ),
+    );
   }
 }

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
-import '../theme/app_colors.dart';
+import '../theme/app_spacing.dart';
+import '../theme/dark_colors.dart';
+import 'pressable_scale.dart';
 
 /// Circular icon button used in screen headers (back, more, share). Matches
 /// Figma header pattern: 36×36 surface pill with an SVG centered at 20×20.
@@ -25,15 +27,14 @@ class HeaderCircleButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return PressableScale(
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
       child: Container(
         width: 36,
         height: 36,
         decoration: BoxDecoration(
-          color: background ?? AppColors.surface,
-          borderRadius: BorderRadius.circular(100),
+          color: background ?? context.colors.surface,
+          borderRadius: AppRadius.pillR,
         ),
         alignment: Alignment.center,
         child: assetPath != null
@@ -42,7 +43,7 @@ class HeaderCircleButton extends StatelessWidget {
                 height: 20,
                 child: SvgPicture.asset(assetPath!, width: 20, height: 20),
               )
-            : Icon(fallbackIcon, size: 20, color: AppColors.textPrimary),
+            : Icon(fallbackIcon, size: 20, color: context.colors.textPrimary),
       ),
     );
   }

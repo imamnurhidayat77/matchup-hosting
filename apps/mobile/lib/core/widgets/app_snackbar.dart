@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
+import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
+import '../theme/dark_colors.dart';
+import 'app_tappable.dart';
 
 enum AppSnackbarVariant { success, error, info, warning }
 
@@ -55,18 +58,18 @@ class _AppSnackbarContent extends StatelessWidget {
   final String? actionLabel;
   final VoidCallback? onAction;
 
-  Color get _bg => switch (variant) {
-    AppSnackbarVariant.success => AppColors.statusSuccessBg,
-    AppSnackbarVariant.error => AppColors.errorLight,
-    AppSnackbarVariant.warning => AppColors.warningBg,
-    AppSnackbarVariant.info => AppColors.primarySoft,
+  Color _bg(BuildContext context) => switch (variant) {
+    AppSnackbarVariant.success => context.colors.statusSuccessBg,
+    AppSnackbarVariant.error => context.colors.errorLight,
+    AppSnackbarVariant.warning => context.colors.warningBg,
+    AppSnackbarVariant.info => context.colors.primarySoft,
   };
 
-  Color get _fg => switch (variant) {
+  Color _fg(BuildContext context) => switch (variant) {
     AppSnackbarVariant.success => AppColors.statusSuccessText,
     AppSnackbarVariant.error => AppColors.danger,
     AppSnackbarVariant.warning => AppColors.warning,
-    AppSnackbarVariant.info => AppColors.primaryDarker,
+    AppSnackbarVariant.info => context.colors.primaryOnSurface,
   };
 
   IconData get _icon => switch (variant) {
@@ -78,41 +81,37 @@ class _AppSnackbarContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bg = _bg(context);
+    final fg = _fg(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: _bg,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _fg.withValues(alpha: 0.25)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x18000000),
-            blurRadius: 12,
-            offset: Offset(0, 4),
-          ),
-        ],
+        color: bg,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: fg.withValues(alpha: 0.25)),
+        boxShadow: AppShadows.floating,
       ),
       child: Row(
         children: [
-          Icon(_icon, color: _fg, size: 20),
+          Icon(_icon, color: fg, size: 20),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               message,
-              style: AppTypography.bodyMedium.copyWith(
-                color: _fg,
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
-              ),
+              style: AppTypography.bodyMedium(
+                context,
+              ).copyWith(color: fg, fontWeight: FontWeight.w600, fontSize: 14),
             ),
           ),
           if (actionLabel != null && onAction != null)
-            GestureDetector(
+            AppTappable(
               onTap: onAction,
+              semanticLabel: actionLabel!,
+              feedback: AppTapFeedback.scale,
               child: Text(
                 actionLabel!,
-                style: AppTypography.bodyMedium.copyWith(
-                  color: _fg,
+                style: AppTypography.bodyMedium(context).copyWith(
+                  color: fg,
                   fontWeight: FontWeight.w800,
                   fontSize: 13,
                 ),

@@ -1,235 +1,283 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+
+import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/dark_colors.dart';
 import '../../../core/theme/app_typography.dart';
-import '../../../core/widgets/home_indicator.dart';
+import '../../../core/widgets/app_avatar.dart';
+import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/app_snackbar.dart';
+import '../../../core/widgets/app_tappable.dart';
+import '../../../core/widgets/error_retry.dart';
+import '../../../core/widgets/pressable_scale.dart';
+import '../../../core/widgets/skeleton.dart';
+import '../domain/activity_participant.dart';
+import '../../discovery/domain/activity_model.dart';
 
-class _Participant {
-  const _Participant({
-    required this.name,
-    required this.avatar,
-    required this.rating,
-    required this.given,
-  });
-  final String name;
-  final String avatar;
-  final int rating;
-  final bool given;
-}
+// ─── Data ─────────────────────────────────────────────────────────────────────
 
-class PastActivityReviewScreen extends StatefulWidget {
-  const PastActivityReviewScreen({super.key});
+typedef _ReviewData = ({
+  ActivityModel activity,
+  List<ActivityParticipant> participants,
+});
+
+final _reviewDataProvider = FutureProvider.autoDispose
+    .family<_ReviewData, String>((ref, activityId) async {
+  final repo = ref.watch(activityRepositoryProvider);
+  final activity = await repo.byId(activityId);
+  if (activity == null) throw StateError('Activity not found');
+  final participants = await repo.participants(activityId);
+  return (activity: activity, participants: participants);
+});
+
+// ─── Screen ──────────────────────────────────────────────────────────────────
+
+class PastActivityReviewScreen extends ConsumerStatefulWidget {
+  const PastActivityReviewScreen({super.key, required this.activityId});
+  final String activityId;
 
   @override
-  State<PastActivityReviewScreen> createState() =>
+  ConsumerState<PastActivityReviewScreen> createState() =>
       _PastActivityReviewScreenState();
 }
 
-class _PastActivityReviewScreenState extends State<PastActivityReviewScreen> {
+class _PastActivityReviewScreenState
+    extends ConsumerState<PastActivityReviewScreen> {
   int _stars = 4;
-  final List<_Participant> _participants = [
-    _Participant(
-      name: 'Sarah Connor',
-      avatar: 'sarah_c.png',
-      rating: 5,
-      given: true,
-    ),
-    _Participant(
-      name: 'Mike Chen',
-      avatar: 'mike_c.png',
-      rating: 4,
-      given: true,
-    ),
-    _Participant(
-      name: 'Lisa Park',
-      avatar: 'lisa_p.png',
-      rating: 5,
-      given: false,
-    ),
-    _Participant(
-      name: 'James Wilson',
-      avatar: 'james_w.png',
-      rating: 4,
-      given: true,
-    ),
-  ];
+  final _commentController = TextEditingController();
+  /// userId → star rating (1–5). Empty until user rates that participant.
+  final Map<String, int> _participantRatings = {};
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    AppSnackbar.show(
+      context,
+      message: 'Review submitted!',
+      variant: AppSnackbarVariant.success,
+    );
+    Navigator.of(context).pop();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.surface,
-      body: SafeArea(
-        top: true,
-        child: Column(
+    final async = ref.watch(_reviewDataProvider(widget.activityId));
+
+    return AppScaffold(
+      safeAreaTop: true,
+      showHomeIndicator: false,
+      backgroundColor: context.colors.background,
+      body: async.when(
+        loading: () => const SkeletonList(count: 4),
+        error: (_, _) => ErrorRetry(
+          message: 'Could not load this activity.',
+          onRetry: () =>
+              ref.invalidate(_reviewDataProvider(widget.activityId)),
+        ),
+        data: (data) => Column(
           children: [
-            _header(),
+            // Header
+            _Header(),
+            // Scrollable content
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.x5,
+                  AppSpacing.x4,
+                  AppSpacing.x5,
+                  AppSpacing.x6,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _summaryCard(),
-                    const SizedBox(height: 20),
-                    _rateActivitySection(),
-                    const SizedBox(height: 20),
-                    _rateParticipantsSection(),
+                    // Activity summary card
+                    _SummaryCard(activity: data.activity),
+                    const SizedBox(height: AppSpacing.x5),
+
+                    // Star rating + comment
+                    _RateActivitySection(
+                      stars: _stars,
+                      onStarTap: (i) => setState(() => _stars = i),
+                      commentController: _commentController,
+                    ),
+                    const SizedBox(height: AppSpacing.x5),
+
+                    // Rate participants
+                    _RateParticipantsSection(
+                      participants: data.participants,
+                      ratings: _participantRatings,
+                      onRate: (id, stars) => setState(
+                        () => _participantRatings[id] = stars,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.x2),
                   ],
                 ),
               ),
             ),
-            _submitButton(),
-            const HomeIndicator(),
+
+            // Pinned submit button
+            _SubmitBar(onTap: _submit),
           ],
         ),
       ),
     );
   }
+}
 
-  Widget _header() {
+// ─── Header ───────────────────────────────────────────────────────────────────
+
+class _Header extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.border)),
+      color: context.colors.surface,
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.x4,
+        AppSpacing.x3,
+        AppSpacing.x5,
+        AppSpacing.x3,
       ),
       child: Row(
         children: [
           Semantics(
             button: true,
             label: 'Back',
-            child: GestureDetector(
+            child: PressableScale(
               onTap: () => Navigator.of(context).maybePop(),
-              behavior: HitTestBehavior.opaque,
               child: Container(
-                width: 36,
-                height: 36,
+                width: 38,
+                height: 38,
                 decoration: BoxDecoration(
-                  color: AppColors.surfaceSubtle,
-                  borderRadius: BorderRadius.circular(100),
+                  color: context.colors.surface,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  border: Border.all(color: context.colors.border),
+                  boxShadow: AppShadows.card,
                 ),
                 alignment: Alignment.center,
-                child: const Icon(
-                  Icons.arrow_back,
-                  size: 20,
-                  color: AppColors.textPrimary,
+                child: Icon(
+                  Icons.arrow_back_ios_new_rounded,
+                  size: 16,
+                  color: context.colors.textPrimary,
                 ),
               ),
             ),
           ),
+          const SizedBox(width: AppSpacing.x3),
           Expanded(
-            child: Center(
-              child: Text(
-                'Activity Review',
-                style: AppTypography.bodyMedium.copyWith(
-                  color: AppColors.textPrimary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
+            child: Text(
+              'Activity Review',
+              style: AppTypography.titleSheet(context),
+              textAlign: TextAlign.center,
             ),
           ),
-          const SizedBox(width: 36),
+          // Mirror spacer so title is centred
+          const SizedBox(width: 38),
         ],
       ),
     );
   }
+}
 
-  Widget _summaryCard() {
+// ─── Summary card ─────────────────────────────────────────────────────────────
+
+class _SummaryCard extends StatelessWidget {
+  const _SummaryCard({required this.activity});
+  final ActivityModel activity;
+
+  @override
+  Widget build(BuildContext context) {
+    final dateFmt = DateFormat("EEE, MMM d '•' h:mm a");
+
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppSpacing.x4),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-        boxShadow: const [
-          BoxShadow(
-            color: AppColors.shadowCard,
-            blurRadius: 8,
-            offset: Offset(0, 4),
-          ),
-        ],
+        color: context.colors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        border: Border.all(color: context.colors.border),
+        boxShadow: AppShadows.card,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Thumbnail
           ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Image.asset(
-              'assets/images/discovery/sports/volleyball.png',
-              width: 70,
-              height: 70,
-              fit: BoxFit.cover,
-            ),
+            borderRadius: BorderRadius.circular(AppRadius.input),
+            child: activity.coverImageUrl != null
+                ? Image.asset(
+                    activity.coverImageUrl!,
+                    width: 72,
+                    height: 72,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => _thumbPlaceholder(),
+                  )
+                : _thumbPlaceholder(),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppSpacing.x3),
+
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Badges row
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _badge(
-                      'VOLLEYBALL',
-                      AppColors.primarySoft,
-                      AppColors.primaryDarker,
+                    _Pill(
+                      label: activity.sportType.toUpperCase(),
+                      bgColor: context.colors.primarySoft,
+                      textColor: context.colors.primaryOnSurface,
                     ),
-                    _badge(
-                      'COMPLETED',
-                      AppColors.border,
-                      AppColors.textSecondary,
+                    const SizedBox(width: AppSpacing.x2),
+                    _Pill(
+                      label: 'COMPLETED',
+                      bgColor: context.colors.surfaceMuted,
+                      textColor: context.colors.textSecondary,
                     ),
                   ],
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: AppSpacing.x2),
+
+                // Title
                 Text(
-                  'Morning Beach Volleyball',
-                  style: AppTypography.bodyMedium.copyWith(
-                    color: AppColors.textPrimary,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                  ),
+                  activity.title,
+                  style: AppTypography.labelField(context)
+                      .copyWith(fontSize: 15),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
+
+                // Date
                 Row(
                   children: [
-                    const Icon(
-                      Icons.access_time,
-                      size: 14,
-                      color: AppColors.textSecondary,
-                    ),
-                    const SizedBox(width: 6),
+                    Icon(Icons.access_time_rounded,
+                        size: 13, color: context.colors.textTertiary),
+                    const SizedBox(width: 4),
                     Text(
-                      'Sun, Jul 26 • 8:00 AM',
-                      style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.textSecondary,
-                        fontSize: 12,
-                      ),
+                      dateFmt.format(activity.dateTime),
+                      style: AppTypography.metaSub(context),
                     ),
                   ],
                 ),
                 const SizedBox(height: 4),
+
+                // Location
                 Row(
                   children: [
-                    SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: SvgPicture.asset(
-                        'assets/images/discovery/icons/map_pin.svg',
-                        width: 14,
-                        height: 14,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
+                    Icon(Icons.place_outlined,
+                        size: 13, color: context.colors.textTertiary),
+                    const SizedBox(width: 4),
                     Expanded(
                       child: Text(
-                        'Sunset Beach Court',
-                        style: AppTypography.bodySmall.copyWith(
-                          color: AppColors.textSecondary,
-                          fontSize: 12,
-                        ),
+                        activity.location,
+                        style: AppTypography.metaSub(context),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -244,225 +292,301 @@ class _PastActivityReviewScreenState extends State<PastActivityReviewScreen> {
     );
   }
 
-  Widget _badge(String text, Color bg, Color fg) {
+  Widget _thumbPlaceholder() => Container(
+    width: 72,
+    height: 72,
+    decoration: const BoxDecoration(
+      gradient: LinearGradient(
+        colors: [AppColors.primary, AppColors.primaryDark],
+      ),
+    ),
+    alignment: Alignment.center,
+    child: Icon(Icons.sports,
+        size: 28, color: AppColors.textOnPrimary.withValues(alpha: 0.5)),
+  );
+}
+
+class _Pill extends StatelessWidget {
+  const _Pill({
+    required this.label,
+    required this.bgColor,
+    required this.textColor,
+  });
+  final String label;
+  final Color bgColor;
+  final Color textColor;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(6),
+        color: bgColor,
+        borderRadius: BorderRadius.circular(AppRadius.xs),
       ),
       child: Text(
-        text,
-        style: AppTypography.bodySmall.copyWith(
-          color: fg,
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-        ),
+        label,
+        style: AppTypography.chipLabel(context)
+            .copyWith(fontSize: 10, color: textColor),
       ),
     );
   }
+}
 
-  Widget _rateActivitySection() {
+// ─── Rate activity section ────────────────────────────────────────────────────
+
+class _RateActivitySection extends StatelessWidget {
+  const _RateActivitySection({
+    required this.stars,
+    required this.onStarTap,
+    required this.commentController,
+  });
+
+  final int stars;
+  final ValueChanged<int> onStarTap;
+  final TextEditingController commentController;
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Rate This Activity',
-          style: AppTypography.bodyMedium.copyWith(
-            color: AppColors.textPrimary,
-            fontSize: 15,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 12),
+        Text('Rate this activity', style: AppTypography.titleMedium(context)),
+        const SizedBox(height: AppSpacing.x4),
+
+        // Stars — centered
         Center(
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: List.generate(5, (i) {
-              final filled = i < _stars;
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                child: GestureDetector(
-                  onTap: () => setState(() => _stars = i + 1),
-                  behavior: HitTestBehavior.opaque,
-                  child: SizedBox(
-                    width: 32,
-                    height: 32,
-                    child: SvgPicture.asset(
-                      filled
-                          ? 'assets/images/discovery/icons/star.svg'
-                          : 'assets/images/discovery/icons/star_empty.svg',
-                      width: 32,
-                      height: 32,
-                    ),
+              final filled = i < stars;
+              return Semantics(
+                button: true,
+                label: '${i + 1} star${i == 0 ? '' : 's'}',
+                child: AppTappable(
+                  semanticLabel: '${i + 1} stars',
+                  feedback: AppTapFeedback.scale,
+                  onTap: () => onStarTap(i + 1),
+                  minSize: 44,
+                  child: Icon(
+                    filled ? Icons.star_rounded : Icons.star_border_rounded,
+                    size: 36,
+                    color: filled
+                        ? AppColors.warning
+                        : context.colors.textTertiary,
                   ),
                 ),
               );
             }),
           ),
         ),
-        const SizedBox(height: 12),
-        Container(
-          height: 80,
-          width: double.infinity,
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceSubtle,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.border),
+        const SizedBox(height: AppSpacing.x4),
+
+        // Comment label
+        Text(
+          'COMMENT',
+          style: AppTypography.metaSub(context).copyWith(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.8,
           ),
-          child: Text(
-            'Share your experience...',
-            style: AppTypography.bodySmall.copyWith(
-              color: AppColors.textSecondary,
-              fontSize: 13,
+        ),
+        const SizedBox(height: AppSpacing.x2),
+
+        // Comment field
+        Container(
+          decoration: BoxDecoration(
+            color: context.colors.surface,
+            borderRadius: BorderRadius.circular(AppRadius.card),
+            border: Border.all(color: context.colors.border),
+          ),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.x4,
+            vertical: AppSpacing.x3,
+          ),
+          child: TextField(
+            controller: commentController,
+            minLines: 3,
+            maxLines: 5,
+            cursorColor: AppColors.primary,
+            cursorWidth: 1.5,
+            style: AppTypography.bodyReading(context),
+            decoration: InputDecoration(
+              hintText: 'Share your experience...',
+              hintStyle: AppTypography.bodyReading(context).copyWith(
+                color: context.colors.textTertiary,
+              ),
+              filled: true,
+              fillColor: Colors.transparent,
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              isDense: true,
+              contentPadding: EdgeInsets.zero,
             ),
           ),
         ),
       ],
     );
   }
+}
 
-  Widget _rateParticipantsSection() {
+// ─── Rate participants section ────────────────────────────────────────────────
+
+class _RateParticipantsSection extends StatelessWidget {
+  const _RateParticipantsSection({
+    required this.participants,
+    required this.ratings,
+    required this.onRate,
+  });
+
+  final List<ActivityParticipant> participants;
+  final Map<String, int> ratings;
+  final void Function(String userId, int stars) onRate;
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Text('Rate participants', style: AppTypography.titleMedium(context)),
+        const SizedBox(height: AppSpacing.x1),
         Text(
-          'Rate Participants',
-          style: AppTypography.bodyMedium.copyWith(
-            color: AppColors.textPrimary,
-            fontSize: 15,
-            fontWeight: FontWeight.w800,
+          'Your ratings are anonymous and help others find great teammates.',
+          style: AppTypography.metaSub(context),
+        ),
+        const SizedBox(height: AppSpacing.x3),
+        Container(
+          decoration: BoxDecoration(
+            color: context.colors.surface,
+            borderRadius: BorderRadius.circular(AppRadius.card),
+            border: Border.all(color: context.colors.border),
+            boxShadow: AppShadows.card,
+          ),
+          child: Column(
+            children: [
+              for (var i = 0; i < participants.length; i++) ...[
+                _ParticipantRow(
+                  item: participants[i],
+                  stars: ratings[participants[i].userId] ?? 0,
+                  onRate: (s) => onRate(participants[i].userId, s),
+                ),
+                if (i < participants.length - 1)
+                  Divider(
+                    height: 1,
+                    color: context.colors.border,
+                    indent: AppSpacing.x4,
+                    endIndent: AppSpacing.x4,
+                  ),
+              ],
+            ],
           ),
         ),
-        const SizedBox(height: 4),
-        for (var i = 0; i < _participants.length; i++) ...[
-          _participantRow(i, isLast: i == _participants.length - 1),
-        ],
       ],
     );
   }
+}
 
-  Widget _participantRow(int index, {required bool isLast}) {
-    final p = _participants[index];
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(
-        border: isLast
-            ? null
-            : const Border(bottom: BorderSide(color: AppColors.border)),
+class _ParticipantRow extends StatelessWidget {
+  const _ParticipantRow({
+    required this.item,
+    required this.stars,
+    required this.onRate,
+  });
+
+  final ActivityParticipant item;
+  final int stars;       // 0 = not yet rated
+  final ValueChanged<int> onRate;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.x4,
+        vertical: AppSpacing.x3,
       ),
       child: Row(
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: Image.asset(
-              'assets/images/discovery/avatars/${p.avatar}',
-              width: 40,
-              height: 40,
-              fit: BoxFit.cover,
-            ),
+          // Avatar
+          AppAvatar(
+            assetPath: 'assets/images/discovery/avatars/${item.avatarAsset}',
+            name: item.name,
+            size: AppAvatarSize.md,
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppSpacing.x3),
+
+          // Name + skill
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  p.name,
-                  style: AppTypography.bodyMedium.copyWith(
-                    color: AppColors.textPrimary,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                Row(
-                  children: List.generate(5, (i) {
-                    final filled = i < p.rating;
-                    return SizedBox(
-                      width: 12,
-                      height: 12,
-                      child: SvgPicture.asset(
-                        filled
-                            ? 'assets/images/discovery/icons/star.svg'
-                            : 'assets/images/discovery/icons/star_empty.svg',
-                        width: 12,
-                        height: 12,
-                      ),
-                    );
-                  }),
-                ),
+                Text(item.name, style: AppTypography.labelField(context)),
+                Text(item.skillLevel, style: AppTypography.metaSub(context)),
               ],
             ),
           ),
-          GestureDetector(
-            onTap: () => setState(() {
-              _participants[index] = _Participant(
-                name: p.name,
-                avatar: p.avatar,
-                rating: p.rating,
-                given: !p.given,
+
+          // 5-star mini row
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: List.generate(5, (i) {
+              final filled = i < stars;
+              return Semantics(
+                button: true,
+                label: '${i + 1} star${i == 0 ? '' : 's'} for ${item.name}',
+                child: AppTappable(
+                  semanticLabel: '${i + 1} stars',
+                  feedback: AppTapFeedback.scale,
+                  onTap: () => onRate(i + 1),
+                  minSize: 32,
+                  child: Icon(
+                    filled ? Icons.star_rounded : Icons.star_border_rounded,
+                    size: 22,
+                    color: filled ? AppColors.warning : context.colors.textTertiary,
+                  ),
+                ),
               );
             }),
-            behavior: HitTestBehavior.opaque,
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: p.given
-                    ? AppColors.primarySoft
-                    : AppColors.surfaceSubtle,
-                borderRadius: BorderRadius.circular(100),
-                border: Border.all(
-                  color: p.given ? AppColors.primary : AppColors.border,
-                ),
-              ),
-              child: SizedBox(
-                width: 16,
-                height: 16,
-                child: SvgPicture.asset(
-                  p.given
-                      ? 'assets/images/discovery/icons/thumbs_up_filled.svg'
-                      : 'assets/images/discovery/icons/thumbs_up.svg',
-                  width: 16,
-                  height: 16,
-                ),
-              ),
-            ),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _submitButton() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-      child: GestureDetector(
-        onTap: () => Navigator.of(context).pop(),
-        behavior: HitTestBehavior.opaque,
+// ─── Submit bar ───────────────────────────────────────────────────────────────
+
+class _SubmitBar extends StatelessWidget {
+  const _SubmitBar({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.x5,
+        AppSpacing.x3,
+        AppSpacing.x5,
+        AppSpacing.x5 + MediaQuery.of(context).viewPadding.bottom,
+      ),
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        boxShadow: AppShadows.bottomBar,
+      ),
+      child: PressableScale(
+        onTap: onTap,
         child: Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 14),
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.x4),
           decoration: BoxDecoration(
             color: AppColors.primary,
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: const [
-              BoxShadow(
-                color: Color.fromRGBO(45, 127, 249, 0.14),
-                blurRadius: 6,
-                offset: Offset(0, 4),
-              ),
-            ],
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            boxShadow: AppShadows.glowPrimary,
           ),
-          child: Center(
-            child: Text(
-              'Submit Review',
-              style: AppTypography.bodyMedium.copyWith(
-                color: Colors.white,
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+          alignment: Alignment.center,
+          child: Text(
+            'Submit Review',
+            style: AppTypography.buttonPrimary,
           ),
         ),
       ),

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../core/constants/app_constants.dart';
 import '../core/theme/app_colors.dart';
+import '../core/theme/app_spacing.dart';
 import '../core/theme/app_typography.dart';
 import '../core/theme/dark_colors.dart';
 import '../core/theme/theme_controller.dart';
@@ -53,19 +54,19 @@ class MatchUpApp extends ConsumerWidget {
   ThemeData _buildLightTheme() {
     const colorScheme = ColorScheme.light(
       primary: AppColors.primary,
-      onPrimary: Colors.white,
+      onPrimary: AppColors.textOnPrimary,
       primaryContainer: AppColors.primaryLight,
       onPrimaryContainer: AppColors.primary,
       secondary: AppColors.accent,
-      onSecondary: Colors.white,
+      onSecondary: AppColors.textOnPrimary,
       secondaryContainer: AppColors.accentLight,
       onSecondaryContainer: AppColors.accent,
       surface: AppColors.surface,
       onSurface: AppColors.textPrimary,
-      surfaceContainerHighest: Color(0xFFF3F4F6),
+      surfaceContainerHighest: AppColors.surfaceContainerHighest,
       onSurfaceVariant: AppColors.textSecondary,
       error: AppColors.error,
-      onError: Colors.white,
+      onError: AppColors.textOnPrimary,
       outline: AppColors.border,
       shadow: AppColors.shadow,
     );
@@ -76,39 +77,46 @@ class MatchUpApp extends ConsumerWidget {
       colorScheme: colorScheme,
       fontFamily: AppTypography.fontFamily,
       scaffoldBackgroundColor: AppColors.background,
-      appBarTheme: const AppBarTheme(
+      appBarTheme: AppBarTheme(
         backgroundColor: AppColors.background,
         elevation: 0,
         centerTitle: true,
-        iconTheme: IconThemeData(color: AppColors.textPrimary),
-        titleTextStyle: TextStyle(
+        iconTheme: const IconThemeData(color: AppColors.textPrimary),
+        titleTextStyle: const TextStyle(
           fontFamily: AppTypography.fontFamily,
           fontSize: 18,
           fontWeight: FontWeight.w600,
+          letterSpacing: -0.36,
+          height: AppTypography.uiLineHeight,
           color: AppColors.textPrimary,
         ),
       ),
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.surface,
         selectedItemColor: AppColors.primary,
-        unselectedItemColor: AppColors.textTertiary,
+        // textSecondary (4.76:1), not textTertiary (2.54:1) — this colours
+        // real always-visible tab labels, which must clear WCAG AA (PRD
+        // Appendix E.3). AppShell's own tab bar (the one actually on
+        // screen) already gets this right; this theme config exists for
+        // any Material BottomNavigationBar that might be added later.
+        unselectedItemColor: AppColors.textSecondary,
         type: BottomNavigationBarType.fixed,
         elevation: 8,
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.surface,
         indicatorColor: AppColors.primaryLight,
         iconTheme: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
             return const IconThemeData(color: AppColors.primary);
           }
-          return const IconThemeData(color: AppColors.textTertiary);
+          return const IconThemeData(color: AppColors.textSecondary);
         }),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return AppTypography.caption.copyWith(color: AppColors.primary);
+            return _captionStyle.copyWith(color: AppColors.primary);
           }
-          return AppTypography.caption.copyWith(color: AppColors.textTertiary);
+          return _captionStyle.copyWith(color: AppColors.textSecondary);
         }),
       ),
       inputDecorationTheme: InputDecorationTheme(
@@ -119,37 +127,35 @@ class MatchUpApp extends ConsumerWidget {
           vertical: 14,
         ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(100),
+          borderRadius: AppRadius.pillR,
           borderSide: const BorderSide(color: AppColors.border),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(100),
+          borderRadius: AppRadius.pillR,
           borderSide: const BorderSide(color: AppColors.border),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(100),
+          borderRadius: AppRadius.pillR,
           borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(100),
+          borderRadius: AppRadius.pillR,
           borderSide: const BorderSide(color: AppColors.error),
         ),
         focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(100),
+          borderRadius: AppRadius.pillR,
           borderSide: const BorderSide(color: AppColors.error, width: 1.5),
         ),
-        hintStyle: AppTypography.bodyReading.copyWith(
-          color: AppColors.textTertiary,
-        ),
+        hintStyle: _bodyReadingStyle.copyWith(color: AppColors.textTertiary),
         floatingLabelBehavior: FloatingLabelBehavior.never,
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
+          foregroundColor: AppColors.textOnPrimary,
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(AppRadius.card),
           ),
           textStyle: AppTypography.button,
         ),
@@ -157,10 +163,10 @@ class MatchUpApp extends ConsumerWidget {
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
+          foregroundColor: AppColors.textOnPrimary,
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(AppRadius.card),
           ),
           textStyle: AppTypography.button,
         ),
@@ -170,7 +176,7 @@ class MatchUpApp extends ConsumerWidget {
           foregroundColor: AppColors.textPrimary,
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(AppRadius.card),
           ),
           side: const BorderSide(color: AppColors.border),
           textStyle: AppTypography.button,
@@ -186,38 +192,70 @@ class MatchUpApp extends ConsumerWidget {
         color: AppColors.card,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(16)),
+          borderRadius: BorderRadius.all(Radius.circular(AppRadius.card)),
         ),
       ),
       chipTheme: ChipThemeData(
         backgroundColor: AppColors.background,
         selectedColor: AppColors.primaryLight,
-        labelStyle: AppTypography.bodyMedium,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        labelStyle: _bodyMediumStyle.copyWith(color: AppColors.textSecondary),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
         side: const BorderSide(color: AppColors.border),
       ),
       extensions: const [AppColorTokens.light],
     );
   }
 
+  // ── Context-free style helpers ──────────────────────────────────────────
+  // `AppTypography`'s styles are theme-aware and require a `BuildContext`
+  // (see its doc comment) — but these `ThemeData` builder methods run
+  // *before* there's a `BuildContext` to read a `Theme` from (they build
+  // the `Theme` itself). These mirror the base shape of the relevant
+  // `AppTypography` styles with an explicit colour supplied by the caller
+  // instead, since baking a fixed colour in here is correct: each builder
+  // (`_buildLightTheme` / `_buildDarkTheme`) already knows which palette
+  // it's building for.
+  static const TextStyle _captionStyle = TextStyle(
+    fontFamily: AppTypography.fontFamily,
+    fontSize: 12,
+    fontWeight: FontWeight.w500,
+    height: AppTypography.uiLineHeight,
+  );
+
+  static const TextStyle _bodyReadingStyle = TextStyle(
+    fontFamily: AppTypography.fontFamily,
+    fontSize: 14,
+    fontWeight: FontWeight.normal,
+    height: AppTypography.readingLineHeight,
+  );
+
+  static const TextStyle _bodyMediumStyle = TextStyle(
+    fontFamily: AppTypography.fontFamily,
+    fontSize: 14,
+    fontWeight: FontWeight.normal,
+    height: AppTypography.uiLineHeight,
+  );
+
   ThemeData _buildDarkTheme() {
     const colorScheme = ColorScheme.dark(
       primary: AppColors.primary,
-      onPrimary: Colors.white,
-      primaryContainer: Color(0xFF1E3A8A),
-      onPrimaryContainer: Color(0xFFDBEAFE),
+      onPrimary: AppColors.textOnPrimary,
+      primaryContainer: DarkPalette.primaryContainer,
+      onPrimaryContainer: AppColors.primaryLight,
       secondary: AppColors.accent,
-      onSecondary: Colors.white,
-      secondaryContainer: Color(0xFF7C2D12),
-      onSecondaryContainer: Color(0xFFFFE5D0),
-      surface: Color(0xFF111827),
-      onSurface: Color(0xFFF1F5F9),
-      surfaceContainerHighest: Color(0xFF1F2937),
-      onSurfaceVariant: Color(0xFF94A3B8),
+      onSecondary: AppColors.textOnPrimary,
+      secondaryContainer: DarkPalette.secondaryContainer,
+      onSecondaryContainer: AppColors.accentLight,
+      surface: DarkPalette.surface,
+      onSurface: DarkPalette.textPrimary,
+      surfaceContainerHighest: DarkPalette.card,
+      onSurfaceVariant: DarkPalette.textSecondary,
       error: AppColors.error,
-      onError: Colors.white,
-      outline: Color(0xFF334155),
-      shadow: Color(0x66000000),
+      onError: AppColors.textOnPrimary,
+      outline: DarkPalette.border,
+      shadow: DarkPalette.shadow,
     );
 
     return ThemeData(
@@ -225,67 +263,69 @@ class MatchUpApp extends ConsumerWidget {
       brightness: Brightness.dark,
       colorScheme: colorScheme,
       fontFamily: AppTypography.fontFamily,
-      scaffoldBackgroundColor: const Color(0xFF0B1220),
-      appBarTheme: const AppBarTheme(
-        backgroundColor: Color(0xFF0B1220),
+      scaffoldBackgroundColor: DarkPalette.background,
+      appBarTheme: AppBarTheme(
+        backgroundColor: DarkPalette.background,
         elevation: 0,
         centerTitle: true,
-        iconTheme: IconThemeData(color: Color(0xFFF1F5F9)),
-        titleTextStyle: TextStyle(
+        iconTheme: const IconThemeData(color: DarkPalette.textPrimary),
+        titleTextStyle: const TextStyle(
           fontFamily: AppTypography.fontFamily,
           fontSize: 18,
           fontWeight: FontWeight.w600,
-          color: Color(0xFFF1F5F9),
+          letterSpacing: -0.36,
+          height: AppTypography.uiLineHeight,
+          color: DarkPalette.textPrimary,
         ),
       ),
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-        backgroundColor: Color(0xFF111827),
+        backgroundColor: DarkPalette.surface,
         selectedItemColor: AppColors.primary,
-        unselectedItemColor: Color(0xFF64748B),
+        unselectedItemColor: DarkPalette.textSecondary,
         type: BottomNavigationBarType.fixed,
         elevation: 8,
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: const Color(0xFF111827),
-        indicatorColor: const Color(0xFF1E3A8A),
+        backgroundColor: DarkPalette.surface,
+        indicatorColor: DarkPalette.primaryContainer,
         iconTheme: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
             return const IconThemeData(color: AppColors.primary);
           }
-          return const IconThemeData(color: Color(0xFF64748B));
+          return const IconThemeData(color: DarkPalette.textSecondary);
         }),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return AppTypography.caption.copyWith(color: AppColors.primary);
+            return _captionStyle.copyWith(color: AppColors.primary);
           }
-          return AppTypography.caption.copyWith(color: const Color(0xFF64748B));
+          return _captionStyle.copyWith(color: DarkPalette.textSecondary);
         }),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: const Color(0xFF1F2937),
+        fillColor: DarkPalette.card,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 20,
           vertical: 14,
         ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(100),
-          borderSide: const BorderSide(color: Color(0xFF334155)),
+          borderRadius: AppRadius.pillR,
+          borderSide: const BorderSide(color: DarkPalette.border),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(100),
-          borderSide: const BorderSide(color: Color(0xFF334155)),
+          borderRadius: AppRadius.pillR,
+          borderSide: const BorderSide(color: DarkPalette.border),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(100),
+          borderRadius: AppRadius.pillR,
           borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(100),
+          borderRadius: AppRadius.pillR,
           borderSide: const BorderSide(color: AppColors.error),
         ),
         focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(100),
+          borderRadius: AppRadius.pillR,
           borderSide: const BorderSide(color: AppColors.error, width: 1.5),
         ),
         floatingLabelBehavior: FloatingLabelBehavior.never,
@@ -293,10 +333,10 @@ class MatchUpApp extends ConsumerWidget {
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
+          foregroundColor: AppColors.textOnPrimary,
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(AppRadius.card),
           ),
           textStyle: AppTypography.button,
         ),
@@ -304,22 +344,22 @@ class MatchUpApp extends ConsumerWidget {
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
+          foregroundColor: AppColors.textOnPrimary,
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(AppRadius.card),
           ),
           textStyle: AppTypography.button,
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: const Color(0xFFF1F5F9),
+          foregroundColor: DarkPalette.textPrimary,
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(AppRadius.card),
           ),
-          side: const BorderSide(color: Color(0xFF334155)),
+          side: const BorderSide(color: DarkPalette.border),
           textStyle: AppTypography.button,
         ),
       ),
@@ -330,20 +370,20 @@ class MatchUpApp extends ConsumerWidget {
         ),
       ),
       cardTheme: const CardThemeData(
-        color: Color(0xFF1F2937),
+        color: DarkPalette.card,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(16)),
+          borderRadius: BorderRadius.all(Radius.circular(AppRadius.card)),
         ),
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: const Color(0xFF1F2937),
-        selectedColor: const Color(0xFF1E3A8A),
-        labelStyle: AppTypography.bodyMedium.copyWith(
-          color: const Color(0xFFF1F5F9),
+        backgroundColor: DarkPalette.card,
+        selectedColor: DarkPalette.primaryContainer,
+        labelStyle: _bodyMediumStyle.copyWith(color: DarkPalette.textPrimary),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
         ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        side: const BorderSide(color: Color(0xFF334155)),
+        side: const BorderSide(color: DarkPalette.border),
       ),
       extensions: const [AppColorTokens.dark],
     );

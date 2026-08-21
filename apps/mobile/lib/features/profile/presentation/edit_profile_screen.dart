@@ -1,14 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../../core/providers/profile_providers.dart';
 import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/theme/dark_colors.dart';
+import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_snackbar.dart';
+import '../../../core/widgets/app_tappable.dart';
+import '../../../core/widgets/app_text_field.dart';
+import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
+import '../domain/user_model.dart';
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
@@ -21,54 +28,102 @@ class EditProfileScreen extends ConsumerStatefulWidget {
 
 class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   final _nameController = TextEditingController();
-  final _usernameController = TextEditingController();
   final _bioController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _locationController = TextEditingController();
-  final _dobController = TextEditingController();
   final _heightController = TextEditingController();
   final _weightController = TextEditingController();
   final _goalController = TextEditingController();
 
+  DateTime? _dob;
   bool _loading = false;
   bool _initialised = false;
+  bool _dirty = false;
 
   final List<_SportEntry> _sports = [];
 
   @override
+  void initState() {
+    super.initState();
+    for (final c in [
+      _nameController,
+      _bioController,
+      _emailController,
+      _phoneController,
+      _locationController,
+      _heightController,
+      _weightController,
+      _goalController,
+    ]) {
+      c.addListener(_markDirty);
+    }
+  }
+
+  void _markDirty() {
+    if (!_dirty) setState(() => _dirty = true);
+  }
+
+  @override
   void dispose() {
     _nameController.dispose();
-    _usernameController.dispose();
     _bioController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
     _locationController.dispose();
-    _dobController.dispose();
     _heightController.dispose();
     _weightController.dispose();
     _goalController.dispose();
     super.dispose();
   }
 
-  void _initFields(String name, String? bio) {
+  void _initFields(UserModel user) {
     if (_initialised) return;
-    _nameController.text = name;
-    _usernameController.text = name.toLowerCase().replaceAll(' ', '');
-    _bioController.text = bio ?? 'Sports enthusiast. Always up for a game!';
-    _emailController.text = 'alex@email.com';
-    _phoneController.text = '+1 234 567 890';
-    _locationController.text = 'New York, NY';
-    _dobController.text = '29 March 1996';
-    _heightController.text = '183 cm';
-    _weightController.text = '73 kg';
-    _goalController.text = 'Stay active with new sports';
-    _sports.addAll([
-      _SportEntry(name: 'Basketball', level: 1),
-      _SportEntry(name: 'Tennis', level: 0),
-      _SportEntry(name: 'Running', level: 2),
-    ]);
+    _nameController.text = user.displayName;
+    _bioController.text = user.bio ?? '';
+    _emailController.text = user.email ?? '';
+    _phoneController.text = user.phone ?? '';
+    _locationController.text = user.location ?? '';
+    _dob = user.dateOfBirth;
+    _heightController.text = user.heightCm?.toString() ?? '';
+    _weightController.text = user.weightKg?.toString() ?? '';
+    _goalController.text = user.goal ?? '';
+    _sports.addAll(
+      user.sports.map(
+        (s) => _SportEntry(name: s.sport, level: _levelIndex(s.level)),
+      ),
+    );
     _initialised = true;
+  }
+
+  static int _levelIndex(String level) => switch (level) {
+    'Beginner' => 0,
+    'Advanced' => 2,
+    _ => 1,
+  };
+
+  Future<void> _pickDob() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _dob ?? DateTime(1996, 1, 1),
+      firstDate: DateTime(1900),
+      lastDate: DateTime.now(),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.light(
+            primary: AppColors.primary,
+            onPrimary: AppColors.textOnPrimary,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null) {
+      setState(() {
+        _dob = picked;
+        _dirty = true;
+      });
+    }
   }
 
   Future<void> _save() async {
@@ -83,14 +138,33 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     }
     setState(() => _loading = true);
     try {
-      await ref
-          .read(userRepositoryProvider)
-          .updateProfile(displayName: name, bio: _bioController.text.trim());
+      await ref.read(userRepositoryProvider).updateProfile(
+        displayName: name,
+        bio: _bioController.text.trim(),
+        location: _locationController.text.trim(),
+        email: _emailController.text.trim(),
+        phone: _phoneController.text.trim(),
+        dateOfBirth: _dob,
+        heightCm: int.tryParse(_heightController.text.trim()),
+        weightKg: int.tryParse(_weightController.text.trim()),
+        goal: _goalController.text.trim(),
+        sports: _sports
+            .map((s) => (
+                  sport: s.name,
+                  level: const [
+                    'Beginner',
+                    'Intermediate',
+                    'Advanced',
+                  ][s.level],
+                ))
+            .toList(),
+      );
       ref.invalidate(myProfileProvider);
       if (!mounted) return;
+      _dirty = false;
       AppSnackbar.show(
         context,
-        message: 'Profile saved!',
+        message: 'Profile saved',
         variant: AppSnackbarVariant.success,
       );
       context.pop();
@@ -98,7 +172,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       if (!mounted) return;
       AppSnackbar.show(
         context,
-        message: 'Could not save. Please try again.',
+        message: "Couldn't save your changes. Please try again.",
         variant: AppSnackbarVariant.error,
       );
     } finally {
@@ -106,241 +180,454 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     }
   }
 
+  Future<bool> _confirmDiscard() async {
+    if (!_dirty) return true;
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Discard changes?'),
+        content: const Text('Your edits have not been saved.'),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.card),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Keep editing'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: AppColors.danger),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Discard'),
+          ),
+        ],
+      ),
+    );
+    return discard ?? false;
+  }
+
+  Future<void> _onBack() async {
+    final discard = await _confirmDiscard();
+    if (!discard || !mounted) return;
+    if (!context.mounted) return;
+    context.pop();
+  }
+
   @override
   Widget build(BuildContext context) {
     final profileAsync = ref.watch(myProfileProvider);
 
-    return Scaffold(
-      backgroundColor: AppColors.surface,
-      body: SafeArea(
-        bottom: false,
-        child: profileAsync.when(
-          loading: () => const SkeletonList(count: 6),
-          error: (_, _) => const Center(child: Text('Could not load profile.')),
-          data: (user) {
-            _initFields(user.displayName, user.bio);
-            return Column(
-              children: [
-                // Header
-                _Header(loading: _loading, onSave: _save),
+    return PopScope(
+      canPop: !_dirty,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        final discard = await _confirmDiscard();
+        if (!discard || !mounted || !context.mounted) return;
+        context.pop();
+      },
+      child: AppScaffold(
+        safeAreaTop: true,
+        showHomeIndicator: false,
+        backgroundColor: context.colors.background,
+        body: Column(
+          children: [
+            // ── Header ────────────────────────────────────────────────
+            Container(
+              color: context.colors.surface,
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.x4,
+                AppSpacing.x3,
+                AppSpacing.x5,
+                AppSpacing.x3,
+              ),
+              child: Row(
+                children: [
+                  Semantics(
+                    button: true,
+                    label: 'Back',
+                    child: PressableScale(
+                      onTap: _onBack,
+                      child: Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: context.colors.surface,
+                          borderRadius:
+                              BorderRadius.circular(AppRadius.sm),
+                          border: Border.all(color: context.colors.border),
+                          boxShadow: AppShadows.card,
+                        ),
+                        alignment: Alignment.center,
+                        child: Icon(
+                          Icons.arrow_back_ios_new_rounded,
+                          size: 16,
+                          color: context.colors.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.x3),
+                  Expanded(
+                    child: Text(
+                      'Edit Profile',
+                      style: AppTypography.titleSheet(context),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  // Mirror spacer
+                  const SizedBox(width: 38),
+                ],
+              ),
+            ),
 
-                Expanded(
-                  child: SingleChildScrollView(
+            // ── Body ──────────────────────────────────────────────────
+            Expanded(
+              child: profileAsync.when(
+                loading: () => const SkeletonList(count: 6),
+                error: (_, _) => const Center(
+                  child: Text('Could not load profile.'),
+                ),
+                data: (user) {
+                  _initFields(user);
+                  return SingleChildScrollView(
                     padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.x6,
-                      AppSpacing.x4,
-                      AppSpacing.x6,
+                      AppSpacing.x5,
+                      AppSpacing.x5,
+                      AppSpacing.x5,
                       AppSpacing.x8,
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // Avatar
                         Center(child: _AvatarBlock(user: user)),
-                        const SizedBox(height: AppSpacing.x6),
+                        const SizedBox(height: AppSpacing.x5),
 
-                        // Personal info
-                        _BoxedField(
-                          label: 'FULL NAME',
-                          controller: _nameController,
-                        ),
-                        _BoxedField(
-                          label: 'USERNAME',
-                          controller: _usernameController,
-                          leadingIcon: Icons.alternate_email,
-                        ),
-                        _BoxedField(
-                          label: 'BIO',
-                          controller: _bioController,
-                          maxLines: 3,
-                        ),
-                        _BoxedField(
-                          label: 'EMAIL',
-                          controller: _emailController,
-                          leadingIcon: Icons.mail_outline_rounded,
-                          keyboardType: TextInputType.emailAddress,
-                        ),
-                        _BoxedField(
-                          label: 'PHONE',
-                          controller: _phoneController,
-                          leadingIcon: Icons.phone_outlined,
-                          keyboardType: TextInputType.phone,
-                        ),
-                        _BoxedField(
-                          label: 'LOCATION',
-                          controller: _locationController,
-                          leadingIcon: Icons.location_on_outlined,
-                        ),
-                        _BoxedField(
-                          label: 'DATE OF BIRTH',
-                          controller: _dobController,
-                          leadingIcon: Icons.calendar_today_outlined,
-                        ),
-                        _BoxedField(
-                          label: 'HEIGHT',
-                          controller: _heightController,
-                          leadingIcon: Icons.straighten_outlined,
-                        ),
-                        _BoxedField(
-                          label: 'WEIGHT',
-                          controller: _weightController,
-                        ),
-                        _BoxedField(
-                          label: 'PRIMARY GOAL',
-                          controller: _goalController,
-                          trailingIcon: Icons.mail_outline_rounded,
+                        // Personal info card
+                        _SectionCard(
+                          title: 'Personal Info',
+                          child: Column(
+                            children: [
+                              AppTextField.form(
+                                label: 'FULL NAME',
+                                controller: _nameController,
+                              ),
+                              const SizedBox(height: AppSpacing.x4),
+                              AppTextField.form(
+                                label: 'BIO',
+                                controller: _bioController,
+                                maxLines: 3,
+                              ),
+                              const SizedBox(height: AppSpacing.x4),
+                              AppTextField.form(
+                                label: 'LOCATION',
+                                controller: _locationController,
+                              ),
+                              const SizedBox(height: AppSpacing.x4),
+                              PressableScale(
+                                onTap: _pickDob,
+                                child: AbsorbPointer(
+                                  child: AppTextField.form(
+                                    label: 'DATE OF BIRTH',
+                                    controller: TextEditingController(
+                                      text: _dob != null
+                                          ? DateFormat('d MMMM y')
+                                              .format(_dob!)
+                                          : '',
+                                    ),
+                                    hint: 'Select date',
+                                    trailing: Icon(
+                                      Icons.calendar_month_outlined,
+                                      size: 18,
+                                      color: context.colors.textTertiary,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                         const SizedBox(height: AppSpacing.x4),
 
-                        // Sports
-                        Text('MY SPORTS', style: _sectionLabel),
-                        const SizedBox(height: AppSpacing.x3),
-                        ...List.generate(_sports.length, (i) {
-                          final sport = _sports[i];
-                          return Padding(
-                            padding: const EdgeInsets.only(
-                              bottom: AppSpacing.x3,
-                            ),
-                            child: _SportCard(
-                              entry: sport,
-                              onLevelChanged: (level) => setState(
-                                () => _sports[i] = _SportEntry(
-                                  name: sport.name,
-                                  level: level,
-                                ),
+                        // Contact card
+                        _SectionCard(
+                          title: 'Contact',
+                          child: Column(
+                            children: [
+                              AppTextField.form(
+                                label: 'EMAIL',
+                                controller: _emailController,
+                                keyboardType: TextInputType.emailAddress,
                               ),
-                              onRemove: () =>
-                                  setState(() => _sports.removeAt(i)),
-                            ),
-                          );
-                        }),
-                        const SizedBox(height: AppSpacing.x2),
-                        Center(
-                          child: GestureDetector(
-                            onTap: () {},
-                            behavior: HitTestBehavior.opaque,
+                              const SizedBox(height: AppSpacing.x4),
+                              AppTextField.form(
+                                label: 'PHONE',
+                                controller: _phoneController,
+                                keyboardType: TextInputType.phone,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.x4),
+
+                        // Physical card
+                        _SectionCard(
+                          title: 'Physical',
+                          child: Column(
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: AppTextField.form(
+                                      label: 'HEIGHT (CM)',
+                                      controller: _heightController,
+                                      keyboardType: TextInputType.number,
+                                    ),
+                                  ),
+                                  const SizedBox(width: AppSpacing.x3),
+                                  Expanded(
+                                    child: AppTextField.form(
+                                      label: 'WEIGHT (KG)',
+                                      controller: _weightController,
+                                      keyboardType: TextInputType.number,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: AppSpacing.x4),
+                              AppTextField.form(
+                                label: 'PRIMARY GOAL',
+                                controller: _goalController,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.x4),
+
+                        // My sports card
+                        _SectionCard(
+                          title: 'My Sports',
+                          trailing: AppTappable(
+                            semanticLabel: 'Add sport',
+                            feedback: AppTapFeedback.scale,
+                            onTap: () => _showAddSportSheet(context),
+                            minSize: 0,
                             child: Container(
                               padding: const EdgeInsets.symmetric(
-                                horizontal: AppSpacing.x4,
-                                vertical: AppSpacing.x3,
+                                horizontal: AppSpacing.x3,
+                                vertical: 5,
                               ),
                               decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(
-                                  AppRadius.pill,
+                                color: AppColors.primarySoft,
+                                borderRadius:
+                                    BorderRadius.circular(AppRadius.pill),
+                                border: Border.all(
+                                  color: AppColors.primary
+                                      .withValues(alpha: 0.4),
                                 ),
-                                border: Border.all(color: AppColors.primary),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   const Icon(
                                     Icons.add_rounded,
-                                    size: 16,
+                                    size: 14,
                                     color: AppColors.primary,
                                   ),
-                                  const SizedBox(width: 6),
+                                  const SizedBox(width: 4),
                                   Text(
-                                    'Add Sport',
-                                    style: AppTypography.chipLabel.copyWith(
+                                    'Add sport',
+                                    style:
+                                        AppTypography.chipLabel(context)
+                                            .copyWith(
                                       color: AppColors.primary,
+                                      fontSize: 12,
                                     ),
                                   ),
                                 ],
                               ),
                             ),
                           ),
+                          child: _sports.isEmpty
+                              ? Text(
+                                  'No sports added yet. Tap Add sport to get started.',
+                                  style: AppTypography.metaSub(context),
+                                )
+                              : Column(
+                                  children: List.generate(
+                                    _sports.length,
+                                    (i) => Padding(
+                                      padding: EdgeInsets.only(
+                                        bottom: i < _sports.length - 1
+                                            ? AppSpacing.x3
+                                            : 0,
+                                      ),
+                                      child: _SportCard(
+                                        entry: _sports[i],
+                                        onLevelChanged: (level) =>
+                                            setState(() {
+                                              _sports[i] = _SportEntry(
+                                                name: _sports[i].name,
+                                                level: level,
+                                              );
+                                              _dirty = true;
+                                            }),
+                                        onRemove: () => setState(() {
+                                          _sports.removeAt(i);
+                                          _dirty = true;
+                                        }),
+                                      ),
+                                    ),
+                                  ),
+                                ),
                         ),
                       ],
                     ),
-                  ),
-                ),
-              ],
-            );
-          },
+                  );
+                },
+              ),
+            ),
+
+            // ── Pinned save bar ────────────────────────────────────────
+            _SaveBar(loading: _loading, onSave: _save),
+          ],
         ),
       ),
     );
   }
 
-  TextStyle get _sectionLabel => AppTypography.metaSub.copyWith(
-    fontWeight: FontWeight.w700,
-    color: AppColors.textSecondary,
-    letterSpacing: 0.5,
-  );
-}
+  static const _addableSports = [
+    'Basketball',
+    'Tennis',
+    'Soccer',
+    'Running',
+    'Volleyball',
+    'Cycling',
+    'Swimming',
+    'Golf',
+  ];
 
-// ─── Header ──────────────────────────────────────────────────────────────────
+  Future<void> _showAddSportSheet(BuildContext context) async {
+    final existing = _sports.map((s) => s.name).toSet();
+    final options =
+        _addableSports.where((s) => !existing.contains(s)).toList();
+    if (options.isEmpty) return;
 
-class _Header extends StatelessWidget {
-  const _Header({required this.loading, required this.onSave});
-  final bool loading;
-  final VoidCallback onSave;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.x4,
-        AppSpacing.x2,
-        AppSpacing.x4,
-        0,
-      ),
-      child: Row(
-        children: [
-          Semantics(
-            button: true,
-            label: 'Back',
-            child: GestureDetector(
-              onTap: () => context.pop(),
-              behavior: HitTestBehavior.opaque,
-              child: const SizedBox(
-                width: 44,
-                height: 44,
-                child: Center(
-                  child: Icon(
-                    Icons.arrow_back_rounded,
-                    size: 22,
-                    color: AppColors.textPrimary,
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => SafeArea(
+        top: false,
+        child: Container(
+          decoration: BoxDecoration(
+            color: context.colors.surface,
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(AppRadius.xl),
+            ),
+          ),
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.x5,
+            AppSpacing.x3,
+            AppSpacing.x5,
+            AppSpacing.x5,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Drag handle
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: AppSpacing.x4),
+                  decoration: BoxDecoration(
+                    color: context.colors.border,
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
                   ),
                 ),
               ),
-            ),
-          ),
-          Expanded(
-            child: Center(
-              child: Text(
-                'Edit Profile',
-                style: AppTypography.labelField.copyWith(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
+              Text('Add a sport', style: AppTypography.titleSheet(context)),
+              const SizedBox(height: AppSpacing.x4),
+              ...options.map(
+                (s) => PressableScale(
+                  onTap: () => Navigator.of(context).pop(s),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: AppSpacing.x3,
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            s,
+                            style: AppTypography.bodyReading(context),
+                          ),
+                        ),
+                        Icon(
+                          Icons.add_rounded,
+                          size: 18,
+                          color: context.colors.textTertiary,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ),
+            ],
           ),
-          GestureDetector(
-            onTap: loading ? null : onSave,
-            behavior: HitTestBehavior.opaque,
-            child: SizedBox(
-              width: 44,
-              height: 44,
-              child: Center(
-                child: loading
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation(AppColors.primary),
-                        ),
-                      )
-                    : Text(
-                        'Save',
-                        style: AppTypography.labelField.copyWith(
-                          color: AppColors.primary,
-                        ),
-                      ),
+        ),
+      ),
+    );
+
+    if (picked != null) {
+      setState(() {
+        _sports.add(_SportEntry(name: picked, level: 1));
+        _dirty = true;
+      });
+    }
+  }
+}
+
+// ─── Section card ─────────────────────────────────────────────────────────────
+
+class _SectionCard extends StatelessWidget {
+  const _SectionCard({
+    required this.title,
+    required this.child,
+    this.trailing,
+  });
+  final String title;
+  final Widget child;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.x4),
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        border: Border.all(color: context.colors.border),
+        boxShadow: AppShadows.card,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: AppTypography.titleMedium(context),
+                ),
               ),
-            ),
+              ?trailing,
+            ],
           ),
+          const SizedBox(height: AppSpacing.x4),
+          child,
         ],
       ),
     );
@@ -351,7 +638,7 @@ class _Header extends StatelessWidget {
 
 class _AvatarBlock extends StatelessWidget {
   const _AvatarBlock({required this.user});
-  final dynamic user;
+  final UserModel user;
 
   @override
   Widget build(BuildContext context) {
@@ -360,31 +647,43 @@ class _AvatarBlock extends StatelessWidget {
         Stack(
           clipBehavior: Clip.none,
           children: [
+            // Avatar with blue ring (matches profile screen)
             Container(
               width: 96,
               height: 96,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppColors.primaryLight,
+                border: Border.all(color: AppColors.primary, width: 3),
               ),
-              clipBehavior: Clip.antiAlias,
-              child: user.avatarAsset != null
-                  ? Image.asset(user.avatarAsset!, fit: BoxFit.cover)
-                  : const Icon(
-                      Icons.person,
-                      size: 48,
-                      color: AppColors.primary,
-                    ),
+              child: Padding(
+                padding: const EdgeInsets.all(2),
+                child: ClipOval(
+                  child: user.avatarAsset != null
+                      ? Image.asset(user.avatarAsset!, fit: BoxFit.cover)
+                      : Container(
+                          color: AppColors.primarySoft,
+                          child: const Icon(
+                            Icons.person,
+                            size: 48,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                ),
+              ),
             ),
+            // Camera badge
             Positioned(
-              right: 0,
-              bottom: 0,
+              right: 2,
+              bottom: 2,
               child: Container(
                 padding: const EdgeInsets.all(7),
                 decoration: BoxDecoration(
                   color: AppColors.primary,
                   shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.surface, width: 2),
+                  border: Border.all(
+                    color: AppColors.textOnPrimary,
+                    width: 2,
+                  ),
                 ),
                 child: const Icon(
                   Icons.camera_alt_rounded,
@@ -398,120 +697,22 @@ class _AvatarBlock extends StatelessWidget {
         const SizedBox(height: AppSpacing.x2),
         Text(
           'Change Photo',
-          style: AppTypography.chipLabel.copyWith(color: AppColors.primary),
+          style: AppTypography.chipLabel(context).copyWith(
+            color: AppColors.primary,
+          ),
         ),
       ],
     );
   }
 }
 
-// ─── Boxed field ──────────────────────────────────────────────────────────────
-
-class _BoxedField extends StatelessWidget {
-  const _BoxedField({
-    required this.label,
-    required this.controller,
-    this.leadingIcon,
-    this.trailingIcon,
-    this.maxLines = 1,
-    this.keyboardType,
-  });
-
-  final String label;
-  final TextEditingController controller;
-  final IconData? leadingIcon;
-  final IconData? trailingIcon;
-  final int maxLines;
-  final TextInputType? keyboardType;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.x4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: AppTypography.metaSub.copyWith(
-              fontWeight: FontWeight.w700,
-              color: AppColors.textSecondary,
-              letterSpacing: 0.5,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.x2),
-          TextField(
-            controller: controller,
-            maxLines: maxLines,
-            keyboardType: keyboardType,
-            cursorColor: AppColors.textPrimary,
-            cursorWidth: 1.5,
-            style: AppTypography.bodyReading.copyWith(
-              color: AppColors.textPrimary,
-            ),
-            decoration: InputDecoration(
-              prefixIcon: leadingIcon != null
-                  ? Padding(
-                      padding: const EdgeInsets.only(left: 14, right: 8),
-                      child: Icon(
-                        leadingIcon,
-                        size: 18,
-                        color: AppColors.textSecondary,
-                      ),
-                    )
-                  : null,
-              prefixIconConstraints: const BoxConstraints(
-                minWidth: 0,
-                minHeight: 0,
-              ),
-              suffixIcon: trailingIcon != null
-                  ? Padding(
-                      padding: const EdgeInsets.only(right: 14, left: 8),
-                      child: Icon(
-                        trailingIcon,
-                        size: 18,
-                        color: AppColors.textSecondary,
-                      ),
-                    )
-                  : null,
-              suffixIconConstraints: const BoxConstraints(
-                minWidth: 0,
-                minHeight: 0,
-              ),
-              isDense: true,
-              filled: true,
-              fillColor: AppColors.surface,
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: leadingIcon != null ? 4 : 14,
-                vertical: 14,
-              ),
-              // Rectangular rounded box (not pill) — override the global
-              // pill input theme so this screen looks like a form, not a
-              // chat search bar.
-              border: _border(AppColors.border),
-              enabledBorder: _border(AppColors.border),
-              focusedBorder: _border(AppColors.primary, width: 1.5),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  OutlineInputBorder _border(Color color, {double width = 1}) =>
-      OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppRadius.input),
-        borderSide: BorderSide(color: color, width: width),
-      );
-}
-
-// ─── Sport card ───────────────────────────────────────────────────────────────
+// ─── Sport entry + card ───────────────────────────────────────────────────────
 
 class _SportEntry {
   const _SportEntry({required this.name, required this.level});
   final String name;
 
-  /// 0=Beginner, 1=Intermediate, 2=Advanced
+  /// 0 = Beginner, 1 = Intermediate, 2 = Advanced
   final int level;
 }
 
@@ -527,88 +728,136 @@ class _SportCard extends StatelessWidget {
 
   static const _levels = ['Beginner', 'Intermediate', 'Advanced'];
 
-  IconData get _leadingIcon => switch (entry.name.toLowerCase()) {
-    // Running gets an activity icon instead of the remove-X to hint it's
-    // a cardio activity — matches the design comp.
-    'running' => Icons.monitor_heart_outlined,
-    _ => Icons.cancel_outlined,
-  };
-
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.x4),
+      padding: const EdgeInsets.all(AppSpacing.x3),
       decoration: BoxDecoration(
-        color: AppColors.primarySoft,
+        color: context.colors.surfaceMuted,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
+        border: Border.all(color: context.colors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              GestureDetector(
-                onTap: entry.name.toLowerCase() == 'running' ? null : onRemove,
-                behavior: HitTestBehavior.opaque,
+              Expanded(
+                child: Text(
+                  entry.name,
+                  style: AppTypography.labelField(context),
+                ),
+              ),
+              AppTappable(
+                semanticLabel: 'Remove ${entry.name}',
+                feedback: AppTapFeedback.scale,
+                minSize: 32,
+                onTap: onRemove,
                 child: Icon(
-                  _leadingIcon,
-                  size: 20,
-                  color: AppColors.primaryDarker,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.x2),
-              Text(
-                entry.name,
-                style: AppTypography.labelField.copyWith(
-                  color: AppColors.primaryDarker,
-                ),
-              ),
-              const Spacer(),
-              Container(
-                width: 20,
-                height: 20,
-                decoration: const BoxDecoration(
-                  color: AppColors.primary,
-                  shape: BoxShape.circle,
+                  Icons.close_rounded,
+                  size: 18,
+                  color: context.colors.textTertiary,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.x3),
-          Row(
-            children: List.generate(_levels.length, (i) {
-              final selected = i == entry.level;
-              return Expanded(
-                child: GestureDetector(
-                  onTap: () => onLevelChanged(i),
-                  behavior: HitTestBehavior.opaque,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    decoration: BoxDecoration(
-                      color: selected
-                          ? AppColors.textPrimary
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(AppRadius.pill),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      _levels[i],
-                      style: AppTypography.chipLabel.copyWith(
+          const SizedBox(height: AppSpacing.x2),
+          // Level segmented toggle
+          Container(
+            height: 34,
+            decoration: BoxDecoration(
+              color: context.colors.surface,
+              borderRadius: BorderRadius.circular(AppRadius.lg),
+              border: Border.all(color: context.colors.border),
+            ),
+            child: Row(
+              children: List.generate(_levels.length, (i) {
+                final selected = i == entry.level;
+                return Expanded(
+                  child: PressableScale(
+                    onTap: () => onLevelChanged(i),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      margin: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
                         color: selected
-                            ? AppColors.textOnPrimary
-                            : AppColors.textSecondary,
-                        fontWeight: selected
-                            ? FontWeight.w700
-                            : FontWeight.w600,
+                            ? AppColors.primary
+                            : Colors.transparent,
+                        borderRadius:
+                            BorderRadius.circular(AppRadius.sm),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        _levels[i],
+                        style: AppTypography.metaSub(context).copyWith(
+                          fontSize: 11,
+                          color: selected
+                              ? AppColors.textOnPrimary
+                              : context.colors.textSecondary,
+                          fontWeight: selected
+                              ? FontWeight.w700
+                              : FontWeight.w400,
+                        ),
                       ),
                     ),
                   ),
-                ),
-              );
-            }),
+                );
+              }),
+            ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Save bar ─────────────────────────────────────────────────────────────────
+
+class _SaveBar extends StatelessWidget {
+  const _SaveBar({required this.loading, required this.onSave});
+  final bool loading;
+  final VoidCallback onSave;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.x5,
+        AppSpacing.x3,
+        AppSpacing.x5,
+        AppSpacing.x5 + MediaQuery.of(context).viewPadding.bottom,
+      ),
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        boxShadow: AppShadows.bottomBar,
+      ),
+      child: PressableScale(
+        onTap: loading ? null : onSave,
+        child: Container(
+          width: double.infinity,
+          height: 54,
+          decoration: BoxDecoration(
+            color: loading
+                ? AppColors.primary.withValues(alpha: 0.6)
+                : AppColors.primary,
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            boxShadow: loading ? null : AppShadows.glowPrimary,
+          ),
+          alignment: Alignment.center,
+          child: loading
+              ? const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    valueColor: AlwaysStoppedAnimation(AppColors.textOnPrimary),
+                  ),
+                )
+              : Text(
+                  'Save Changes',
+                  style: AppTypography.buttonPrimary,
+                ),
+        ),
       ),
     );
   }

@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/providers/profile_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/theme/dark_colors.dart';
+import '../../../core/widgets/app_button.dart';
+import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/app_icon.dart';
+import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/error_retry.dart';
+import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../domain/user_model.dart';
 
@@ -22,8 +27,8 @@ class PlayerProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final playerAsync = ref.watch(playerProfileProvider(playerName));
 
-    return Scaffold(
-      backgroundColor: AppColors.surface,
+    return AppScaffold(
+      showHomeIndicator: false, // inside ShellRoute — AppShell draws its own.
       body: playerAsync.when(
         loading: () => const SkeletonList(count: 6),
         error: (_, _) => ErrorRetry(
@@ -35,9 +40,9 @@ class PlayerProfileScreen extends ConsumerWidget {
             return Center(
               child: Text(
                 'Player not found.',
-                style: AppTypography.bodyReading.copyWith(
-                  color: AppColors.textSecondary,
-                ),
+                style: AppTypography.bodyReading(
+                  context,
+                ).copyWith(color: context.colors.textSecondary),
               ),
             );
           }
@@ -129,9 +134,9 @@ class _ProfileContent extends StatelessWidget {
                           height: _avatarSize,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: AppColors.primaryLight,
+                            color: context.colors.primaryLight,
                             border: Border.all(
-                              color: AppColors.surface,
+                              color: context.colors.surface,
                               width: 4,
                             ),
                           ),
@@ -161,28 +166,28 @@ class _ProfileContent extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(user.displayName, style: AppTypography.titleScreen),
+                      Text(
+                        user.displayName,
+                        style: AppTypography.titleScreen(context),
+                      ),
                       if (user.location != null || (user.rating ?? 0) > 0) ...[
                         const SizedBox(height: AppSpacing.x1),
                         Row(
                           children: [
                             if ((user.rating ?? 0) > 0) ...[
-                              SvgPicture.asset(
-                                'assets/images/discovery/icons/star.svg',
-                                width: 14,
-                                height: 14,
-                                colorFilter: const ColorFilter.mode(
-                                  AppColors.warning,
-                                  BlendMode.srcIn,
-                                ),
+                              AppIcon(
+                                AppIcons.star,
+                                size: AppIconSize.sm,
+                                color: AppColors.warning,
                               ),
                               const SizedBox(width: 4),
                               Text(
                                 user.rating!.toStringAsFixed(1),
-                                style: AppTypography.countAccent.copyWith(
-                                  color: AppColors.textPrimary,
-                                  fontWeight: FontWeight.w700,
-                                ),
+                                style: AppTypography.countAccent(context)
+                                    .copyWith(
+                                      color: context.colors.textPrimary,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                               ),
                             ],
                             if ((user.rating ?? 0) > 0 && user.location != null)
@@ -190,13 +195,16 @@ class _ProfileContent extends StatelessWidget {
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 6,
                                 ),
-                                child: Text('·', style: AppTypography.metaSub),
+                                child: Text(
+                                  '·',
+                                  style: AppTypography.metaSub(context),
+                                ),
                               ),
                             if (user.location != null)
                               Flexible(
                                 child: Text(
                                   user.location!,
-                                  style: AppTypography.metaSub,
+                                  style: AppTypography.metaSub(context),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -232,9 +240,9 @@ class _ProfileContent extends StatelessWidget {
                       title: 'About',
                       child: Text(
                         user.bio!,
-                        style: AppTypography.bodyReading.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
+                        style: AppTypography.bodyReading(
+                          context,
+                        ).copyWith(color: context.colors.textSecondary),
                       ),
                     ),
                   ),
@@ -271,22 +279,22 @@ class _ProfileContent extends StatelessWidget {
                   child: Row(
                     children: [
                       Expanded(
-                        child: _ActionButton(
+                        child: AppButton.secondary(
                           label: 'Message',
-                          icon: Icons.chat_bubble_outline_rounded,
-                          filled: false,
-                          onTap: () =>
+                          leading: Icon(
+                            Icons.chat_bubble_outline_rounded,
+                            size: 18,
+                            color: context.colors.textPrimary,
+                          ),
+                          onPressed: () =>
                               context.push('/chat/${user.displayName}'),
                         ),
                       ),
                       const SizedBox(width: AppSpacing.x3),
                       Expanded(
-                        child: _ActionButton(
+                        child: AppButton.danger(
                           label: 'Report',
-                          icon: Icons.flag_outlined,
-                          filled: false,
-                          isDanger: true,
-                          onTap: () =>
+                          onPressed: () =>
                               context.push('/report/user/${user.displayName}'),
                         ),
                       ),
@@ -320,12 +328,11 @@ class _CircleBtn extends StatelessWidget {
     return Semantics(
       button: true,
       label: label,
-      child: GestureDetector(
+      child: PressableScale(
         onTap: () {
           HapticFeedback.lightImpact();
           onTap();
         },
-        behavior: HitTestBehavior.opaque,
         child: SizedBox(
           width: 44,
           height: 44,
@@ -334,7 +341,7 @@ class _CircleBtn extends StatelessWidget {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: AppColors.scrimControl,
+                color: context.colors.scrimControl,
                 shape: BoxShape.circle,
               ),
               alignment: Alignment.center,
@@ -354,14 +361,13 @@ class _AvatarFallback extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: AppColors.primaryLight,
+      color: context.colors.primaryLight,
       alignment: Alignment.center,
       child: Text(
         name.isNotEmpty ? name[0].toUpperCase() : '?',
-        style: AppTypography.titleScreen.copyWith(
-          color: AppColors.primary,
-          fontSize: 32,
-        ),
+        style: AppTypography.titleScreen(
+          context,
+        ).copyWith(color: AppColors.primary, fontSize: 32),
       ),
     );
   }
@@ -379,23 +385,18 @@ class _StatsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return AppCard(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.x4),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: AppColors.border),
-      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
           _StatItem(value: '$activities', label: 'Activities'),
-          Container(width: 1, height: 36, color: AppColors.border),
+          Container(width: 1, height: 36, color: context.colors.border),
           _StatItem(
             value: rating > 0 ? rating.toStringAsFixed(1) : '—',
             label: 'Rating',
           ),
-          Container(width: 1, height: 36, color: AppColors.border),
+          Container(width: 1, height: 36, color: context.colors.border),
           _StatItem(value: '$hosted', label: 'Hosted'),
         ],
       ),
@@ -414,13 +415,12 @@ class _StatItem extends StatelessWidget {
       children: [
         Text(
           value,
-          style: AppTypography.titleScreen.copyWith(
-            color: AppColors.primaryDarker,
-            fontSize: 20,
-          ),
+          style: AppTypography.titleScreen(
+            context,
+          ).copyWith(color: context.colors.primaryOnSurface, fontSize: 20),
         ),
         const SizedBox(height: 2),
-        Text(label, style: AppTypography.metaSub),
+        Text(label, style: AppTypography.metaSub(context)),
       ],
     );
   }
@@ -433,21 +433,18 @@ class _Card extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
+    return AppCard(
       padding: const EdgeInsets.all(AppSpacing.x4),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: AppTypography.labelField),
-          const SizedBox(height: AppSpacing.x3),
-          child,
-        ],
+      child: SizedBox(
+        width: double.infinity,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: AppTypography.labelField(context)),
+            const SizedBox(height: AppSpacing.x3),
+            child,
+          ],
+        ),
       ),
     );
   }
@@ -463,81 +460,34 @@ class _SportChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       decoration: BoxDecoration(
-        color: AppColors.surfaceSubtle,
+        color: context.colors.surfaceSubtle,
         borderRadius: BorderRadius.circular(AppRadius.pill),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.colors.border),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
             sport,
-            style: AppTypography.labelField.copyWith(
-              color: AppColors.textPrimary,
-            ),
+            style: AppTypography.labelField(
+              context,
+            ).copyWith(color: context.colors.textPrimary),
           ),
           const SizedBox(width: AppSpacing.x2),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
-              color: AppColors.primarySoft,
+              color: context.colors.primarySoft,
               borderRadius: BorderRadius.circular(AppRadius.pill),
             ),
             child: Text(
               level,
-              style: AppTypography.chipLabel.copyWith(
-                color: AppColors.primaryDarker,
-              ),
+              style: AppTypography.chipLabel(
+                context,
+              ).copyWith(color: context.colors.primaryOnSurface),
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _ActionButton extends StatelessWidget {
-  const _ActionButton({
-    required this.label,
-    required this.icon,
-    required this.filled,
-    required this.onTap,
-    this.isDanger = false,
-  });
-  final String label;
-  final IconData icon;
-  final bool filled;
-  final bool isDanger;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final fg = isDanger ? AppColors.danger : AppColors.textPrimary;
-    final bg = isDanger ? AppColors.errorLight : AppColors.surface;
-    final borderColor = isDanger ? AppColors.errorLight : AppColors.border;
-
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.lightImpact();
-        onTap();
-      },
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        height: 48,
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(AppRadius.card),
-          border: Border.all(color: borderColor),
-        ),
-        alignment: Alignment.center,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 18, color: fg),
-            const SizedBox(width: AppSpacing.x2),
-            Text(label, style: AppTypography.labelField.copyWith(color: fg)),
-          ],
-        ),
       ),
     );
   }

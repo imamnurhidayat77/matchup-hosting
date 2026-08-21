@@ -6,9 +6,11 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/theme/dark_colors.dart';
 import '../../../core/utils/secure_screen.dart';
-import '../../../core/widgets/home_indicator.dart';
 import '../../../core/widgets/pill_buttons.dart';
+import '../../../core/widgets/pressable_scale.dart';
+import '../presentation/widgets/auth_shell.dart';
 
 class NewPasswordScreen extends StatefulWidget {
   const NewPasswordScreen({super.key, this.email = ''});
@@ -111,8 +113,8 @@ class _NewPasswordScreenState extends State<NewPasswordScreen>
               Container(
                 width: 72,
                 height: 72,
-                decoration: const BoxDecoration(
-                  color: AppColors.statusSuccessBg,
+                decoration: BoxDecoration(
+                  color: context.colors.statusSuccessBg,
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
@@ -124,18 +126,17 @@ class _NewPasswordScreenState extends State<NewPasswordScreen>
               const SizedBox(height: AppSpacing.x4),
               Text(
                 'Password Reset!',
-                style: AppTypography.headlineSmall.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
+                style: AppTypography.headlineSmall(
+                  context,
+                ).copyWith(fontWeight: FontWeight.w800),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: AppSpacing.x2),
               Text(
                 'Your password has been changed successfully. You can now sign in with your new password.',
-                style: AppTypography.bodyMedium.copyWith(
-                  color: AppColors.textSecondary,
-                  height: 1.5,
-                ),
+                style: AppTypography.bodyMedium(
+                  context,
+                ).copyWith(color: context.colors.textSecondary, height: 1.5),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: AppSpacing.x5),
@@ -155,121 +156,98 @@ class _NewPasswordScreenState extends State<NewPasswordScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.surface,
-      body: SafeArea(
-        bottom: false,
-        child: Column(
+    return AuthShell(
+      header: AuthHeaderBar(
+        title: 'New Password',
+        onBack: () => Navigator.of(context).maybePop(),
+      ),
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            _RecoveryHeader(
-              title: 'New Password',
-              onBack: () => Navigator.of(context).maybePop(),
+            const SizedBox(height: AppSpacing.x4),
+            AuthIllustration(
+              iconPath: 'assets/images/discovery/icons/shield-check.svg',
             ),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x6),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const SizedBox(height: AppSpacing.x4),
-                    _RecoveryIllustration(
-                      iconPath:
-                          'assets/images/discovery/icons/shield-check.svg',
-                    ),
-                    const SizedBox(height: AppSpacing.x5),
-                    Text(
-                      'Create New Password',
-                      textAlign: TextAlign.center,
-                      style: AppTypography.headlineSmall.copyWith(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.x2),
-                    Text(
-                      'Your new password must be different from previously used passwords.',
-                      textAlign: TextAlign.center,
-                      style: AppTypography.bodyMedium.copyWith(
-                        color: AppColors.textSecondary,
-                        height: 1.55,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.x5),
+            const SizedBox(height: AppSpacing.x5),
+            Text(
+              'Create New Password',
+              textAlign: TextAlign.center,
+              style: AppTypography.headlineSmall(
+                context,
+              ).copyWith(fontSize: 22, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: AppSpacing.x2),
+            Text(
+              'Your new password must be different from previously used passwords.',
+              textAlign: TextAlign.center,
+              style: AppTypography.bodyReading(
+                context,
+              ).copyWith(color: context.colors.textSecondary),
+            ),
+            const SizedBox(height: AppSpacing.x5),
 
-                    // ── New password ───────────────────────────────────
-                    _FieldLabel('New Password'),
-                    const SizedBox(height: AppSpacing.x2),
-                    _PasswordField(
-                      controller: _newController,
-                      obscure: _obscureNew,
-                      onToggle: () =>
-                          setState(() => _obscureNew = !_obscureNew),
-                    ),
+            // ── New password ───────────────────────────────────
+            _FieldLabel('New Password'),
+            const SizedBox(height: AppSpacing.x2),
+            _PasswordField(
+              controller: _newController,
+              obscure: _obscureNew,
+              onToggle: () => setState(() => _obscureNew = !_obscureNew),
+            ),
 
-                    // Strength bar
-                    if (_newController.text.isNotEmpty) ...[
-                      const SizedBox(height: AppSpacing.x2),
-                      _StrengthBar(
-                        strength: _strength,
-                        color: _strengthColor,
-                        label: _strengthLabel,
-                      ),
-                    ],
-                    const SizedBox(height: AppSpacing.x4),
+            // Strength bar
+            if (_newController.text.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.x2),
+              _StrengthBar(
+                strength: _strength,
+                color: _strengthColor,
+                label: _strengthLabel,
+              ),
+            ],
+            const SizedBox(height: AppSpacing.x4),
 
-                    // ── Confirm password ───────────────────────────────
-                    _FieldLabel('Confirm Password'),
-                    const SizedBox(height: AppSpacing.x2),
-                    _PasswordField(
-                      controller: _confirmController,
-                      obscure: _obscureConfirm,
-                      hasError: _confirmError,
-                      onToggle: () =>
-                          setState(() => _obscureConfirm = !_obscureConfirm),
-                    ),
-                    if (_confirmError) ...[
-                      const SizedBox(height: AppSpacing.x1),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          'Passwords do not match.',
-                          style: AppTypography.bodySmall.copyWith(
-                            color: AppColors.danger,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: AppSpacing.x4),
-
-                    // ── Requirements checklist ─────────────────────────
-                    _RequirementRow(
-                      met: _hasMinLength,
-                      label: 'At least 8 characters',
-                    ),
-                    _RequirementRow(
-                      met: _hasUppercase,
-                      label: 'Contains an uppercase letter',
-                    ),
-                    _RequirementRow(
-                      met: _hasNumber,
-                      label: 'Contains a number',
-                    ),
-                    const SizedBox(height: AppSpacing.x5),
-
-                    PrimaryPillButton(
-                      label: _isSubmitting ? 'Resetting…' : 'Reset Password',
-                      onPressed: _canSubmit ? _submit : null,
-                    ),
-                    const SizedBox(height: AppSpacing.x6),
-                  ],
+            // ── Confirm password ───────────────────────────────
+            _FieldLabel('Confirm Password'),
+            const SizedBox(height: AppSpacing.x2),
+            _PasswordField(
+              controller: _confirmController,
+              obscure: _obscureConfirm,
+              hasError: _confirmError,
+              onToggle: () =>
+                  setState(() => _obscureConfirm = !_obscureConfirm),
+            ),
+            if (_confirmError) ...[
+              const SizedBox(height: AppSpacing.x1),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Passwords do not match.',
+                  style: AppTypography.bodySmall(
+                    context,
+                  ).copyWith(color: AppColors.danger),
                 ),
               ),
+            ],
+            const SizedBox(height: AppSpacing.x4),
+
+            // ── Requirements checklist ─────────────────────────
+            _RequirementRow(met: _hasMinLength, label: 'At least 8 characters'),
+            _RequirementRow(
+              met: _hasUppercase,
+              label: 'Contains an uppercase letter',
             ),
-            const HomeIndicator(),
+            _RequirementRow(met: _hasNumber, label: 'Contains a number'),
+            const SizedBox(height: AppSpacing.x5),
+
+            PrimaryPillButton(
+              label: _isSubmitting ? 'Resetting…' : 'Reset Password',
+              onPressed: _canSubmit ? _submit : null,
+            ),
+            const SizedBox(height: AppSpacing.x6),
           ],
         ),
-      ),
+      ],
     );
   }
 }
@@ -284,7 +262,7 @@ class _FieldLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.centerLeft,
-      child: Text(text, style: AppTypography.inputLabel),
+      child: Text(text, style: AppTypography.inputLabel(context)),
     );
   }
 }
@@ -305,11 +283,11 @@ class _StrengthBar extends StatelessWidget {
       children: [
         Expanded(
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(3),
+            borderRadius: BorderRadius.circular(AppRadius.xs),
             child: LinearProgressIndicator(
               value: strength / 100,
               minHeight: 4,
-              backgroundColor: AppColors.border,
+              backgroundColor: context.colors.border,
               valueColor: AlwaysStoppedAnimation(color),
             ),
           ),
@@ -317,11 +295,7 @@ class _StrengthBar extends StatelessWidget {
         const SizedBox(width: AppSpacing.x2),
         Text(
           label,
-          style: AppTypography.bodySmall.copyWith(
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            color: color,
-          ),
+          style: AppTypography.chipLabel(context).copyWith(color: color),
         ),
       ],
     );
@@ -346,13 +320,13 @@ class _PasswordField extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.x4,
-        vertical: 14,
+        vertical: AppSpacing.x3 + 2,
       ),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.colors.surface,
         borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.all(
-          color: hasError ? AppColors.danger : AppColors.border,
+          color: hasError ? AppColors.danger : context.colors.border,
         ),
       ),
       child: Row(
@@ -362,7 +336,7 @@ class _PasswordField extends StatelessWidget {
             width: 20,
             height: 20,
             colorFilter: ColorFilter.mode(
-              hasError ? AppColors.danger : AppColors.textSecondary,
+              hasError ? AppColors.danger : context.colors.textSecondary,
               BlendMode.srcIn,
             ),
           ),
@@ -371,33 +345,28 @@ class _PasswordField extends StatelessWidget {
             child: TextField(
               controller: controller,
               obscureText: obscure,
-              style: AppTypography.bodyLarge.copyWith(
-                color: AppColors.textPrimary,
-              ),
-              decoration: const InputDecoration(
+              style: AppTypography.bodyFormSecondary(
+                context,
+              ).copyWith(color: context.colors.textPrimary),
+              decoration: InputDecoration(
                 isDense: true,
                 contentPadding: EdgeInsets.zero,
                 border: InputBorder.none,
-                hintStyle: TextStyle(
-                  fontFamily: AppTypography.fontFamily,
-                  fontSize: 15,
-                  color: AppColors.textSecondary,
-                ),
+                hintStyle: AppTypography.bodyFormSecondary(context),
               ),
             ),
           ),
           Semantics(
             button: true,
             label: obscure ? 'Show password' : 'Hide password',
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
+            child: PressableScale(
               onTap: onToggle,
               child: SvgPicture.asset(
                 'assets/images/auth/eye.svg',
                 width: 20,
                 height: 20,
-                colorFilter: const ColorFilter.mode(
-                  AppColors.textSecondary,
+                colorFilter: ColorFilter.mode(
+                  context.colors.textSecondary,
                   BlendMode.srcIn,
                 ),
               ),
@@ -430,108 +399,21 @@ class _RequirementRow extends StatelessWidget {
               size: 16,
               color: met
                   ? AppColors.statusSuccessText
-                  : AppColors.textSecondary,
+                  : context.colors.textSecondary,
             ),
           ),
           const SizedBox(width: AppSpacing.x2),
           Text(
             label,
-            style: AppTypography.bodyMedium.copyWith(
+            style: AppTypography.bodyMedium(context).copyWith(
               fontSize: 13,
               fontWeight: FontWeight.w500,
               color: met
                   ? AppColors.statusSuccessText
-                  : AppColors.textSecondary,
+                  : context.colors.textSecondary,
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-// ─── Shared recovery components (keep local to avoid cross-file pollution) ────
-
-class _RecoveryHeader extends StatelessWidget {
-  const _RecoveryHeader({required this.title, required this.onBack});
-  final String title;
-  final VoidCallback onBack;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.x5,
-        AppSpacing.x2,
-        AppSpacing.x5,
-        AppSpacing.x2,
-      ),
-      child: Row(
-        children: [
-          Semantics(
-            button: true,
-            label: 'Back',
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: onBack,
-              child: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: SvgPicture.asset(
-                  'assets/images/discovery/icons/chevron-left.svg',
-                  width: 16,
-                  height: 16,
-                  colorFilter: const ColorFilter.mode(
-                    AppColors.textPrimary,
-                    BlendMode.srcIn,
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: AppSpacing.x3),
-          Text(title, style: AppTypography.titleLarge.copyWith(fontSize: 18)),
-        ],
-      ),
-    );
-  }
-}
-
-class _RecoveryIllustration extends StatelessWidget {
-  const _RecoveryIllustration({required this.iconPath});
-  final String iconPath;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 100,
-      height: 100,
-      decoration: const BoxDecoration(
-        color: AppColors.primary,
-        shape: BoxShape.circle,
-      ),
-      alignment: Alignment.center,
-      child: Container(
-        width: 68,
-        height: 68,
-        decoration: const BoxDecoration(
-          color: AppColors.primarySoft,
-          shape: BoxShape.circle,
-        ),
-        alignment: Alignment.center,
-        child: SvgPicture.asset(
-          iconPath,
-          width: 32,
-          height: 32,
-          colorFilter: const ColorFilter.mode(
-            AppColors.primary,
-            BlendMode.srcIn,
-          ),
-        ),
       ),
     );
   }

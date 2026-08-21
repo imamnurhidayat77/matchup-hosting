@@ -1,23 +1,35 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
+import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
-import '../../../core/widgets/home_indicator.dart';
+import '../../../core/theme/dark_colors.dart';
+import '../../../core/widgets/app_icon.dart';
+import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/notification_icon_button.dart';
+import '../../../core/widgets/pressable_scale.dart';
+import '../../../core/widgets/skeleton.dart';
+import '../domain/calendar_event.dart';
 
-class CalendarScreen extends StatefulWidget {
+final _upcomingEventsProvider = FutureProvider.autoDispose<List<CalendarEvent>>(
+  (ref) => ref.watch(calendarRepositoryProvider).upcoming(),
+);
+
+class CalendarScreen extends ConsumerStatefulWidget {
   const CalendarScreen({super.key});
 
   @override
-  State<CalendarScreen> createState() => _CalendarScreenState();
+  ConsumerState<CalendarScreen> createState() => _CalendarScreenState();
 }
 
-class _CalendarScreenState extends State<CalendarScreen> {
+class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   late DateTime _viewMonth;
   late int? _selectedDay;
-  static const _activityDays = <int>{4, 7, 8, 12, 15, 20, 22, 31};
 
   @override
   void initState() {
@@ -39,53 +51,88 @@ class _CalendarScreenState extends State<CalendarScreen> {
     setState(() => _selectedDay = _selectedDay == day ? null : day);
   }
 
-  String _monthLabel() {
-    const names = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
-    ];
-    return '${names[_viewMonth.month - 1]} ${_viewMonth.year}';
-  }
+  String _monthLabel() => DateFormat('MMMM yyyy').format(_viewMonth);
 
-  String _todayLabel() {
-    final now = DateTime.now();
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return 'Today, ${months[now.month - 1]} ${now.day}';
+  String _todayLabel() =>
+      'Today, ${DateFormat('MMM d').format(DateTime.now())}';
+
+  @override
+  Widget build(BuildContext context) {
+    final async = ref.watch(_upcomingEventsProvider);
+
+    return AppScaffold.detail(
+      title: 'Calendar',
+      showHomeIndicator: false,
+      actions: [
+        NotificationIconButton(onTap: () => context.push('/notifications')),
+      ],
+      body: Column(
+        children: [
+          _MonthNav(
+            label: _monthLabel(),
+            onPrev: () => _shiftMonth(-1),
+            onNext: () => _shiftMonth(1),
+          ),
+          Expanded(
+            child: async.when(
+              loading: () => const SkeletonList(count: 4),
+              error: (_, _) => ErrorRetry(
+                message: 'Could not load your calendar.',
+                onRetry: () => ref.invalidate(_upcomingEventsProvider),
+              ),
+              data: (events) => _CalendarBody(
+                viewMonth: _viewMonth,
+                selectedDay: _selectedDay,
+                events: events,
+                monthLabel: _monthLabel(),
+                todayLabel: _todayLabel(),
+                onSelectDay: _selectDay,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
+}
+
+class _CalendarBody extends StatelessWidget {
+  const _CalendarBody({
+    required this.viewMonth,
+    required this.selectedDay,
+    required this.events,
+    required this.monthLabel,
+    required this.todayLabel,
+    required this.onSelectDay,
+  });
+
+  final DateTime viewMonth;
+  final int? selectedDay;
+  final List<CalendarEvent> events;
+  final String monthLabel;
+  final String todayLabel;
+  final void Function(int day, bool faded) onSelectDay;
 
   @override
   Widget build(BuildContext context) {
     final today = DateTime.now();
     final isCurrentMonth =
-        today.year == _viewMonth.year && today.month == _viewMonth.month;
-    final firstOfMonth = DateTime(_viewMonth.year, _viewMonth.month, 1);
-    final daysInMonth = DateTime(_viewMonth.year, _viewMonth.month + 1, 0).day;
+        today.year == viewMonth.year && today.month == viewMonth.month;
+    final firstOfMonth = DateTime(viewMonth.year, viewMonth.month, 1);
+    final daysInMonth = DateTime(viewMonth.year, viewMonth.month + 1, 0).day;
     final leading = firstOfMonth.weekday % 7;
-    final prevMonthDays = DateTime(_viewMonth.year, _viewMonth.month, 0).day;
+    final prevMonthDays = DateTime(viewMonth.year, viewMonth.month, 0).day;
     final rows = ((leading + daysInMonth + 6) ~/ 7);
+
+    // Days in the *currently viewed* month that have at least one event.
+    final activityDays = events
+        .where(
+          (e) =>
+              e.start.year == viewMonth.year &&
+              e.start.month == viewMonth.month,
+        )
+        .map((e) => e.start.day)
+        .toSet();
 
     final cells = <_DayCell>[];
     for (var i = 0; i < leading; i++) {
@@ -97,9 +144,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
         _DayCell(
           day: d,
           isToday: isToday,
-          hasActivity: _activityDays.contains(d),
-          isSelected: _selectedDay == d,
-          onTap: () => _selectDay(d, false),
+          hasActivity: activityDays.contains(d),
+          isSelected: selectedDay == d,
+          onTap: () => onSelectDay(d, false),
         ),
       );
     }
@@ -108,109 +155,60 @@ class _CalendarScreenState extends State<CalendarScreen> {
       cells.add(_DayCell(day: nextDay++, faded: true));
     }
 
-    // Filter agenda by selected day
-    final showingAllDay = _selectedDay == null;
-    final hasActivitiesOnDay =
-        _selectedDay != null && _activityDays.contains(_selectedDay);
+    final showingAllDay = selectedDay == null;
+    final dayEvents = showingAllDay
+        ? events
+              .where(
+                (e) =>
+                    e.start.year == today.year &&
+                    e.start.month == today.month &&
+                    e.start.day == today.day,
+              )
+              .toList()
+        : events
+              .where(
+                (e) =>
+                    e.start.year == viewMonth.year &&
+                    e.start.month == viewMonth.month &&
+                    e.start.day == selectedDay,
+              )
+              .toList();
 
-    final dateLabel = _selectedDay != null
-        ? '${_monthLabel()}, $_selectedDay'
-        : _todayLabel();
+    final dateLabel = selectedDay != null
+        ? '$monthLabel, $selectedDay'
+        : todayLabel;
 
-    return Scaffold(
-      backgroundColor: AppColors.surface,
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            _TopNav(onNotificationTap: () => context.push('/notifications')),
-            _MonthNav(
-              label: _monthLabel(),
-              onPrev: () => _shiftMonth(-1),
-              onNext: () => _shiftMonth(1),
+    return Column(
+      children: [
+        _CalendarGrid(cells: cells),
+        Divider(height: 1, color: context.colors.border),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.x5,
+              AppSpacing.x4,
+              AppSpacing.x5,
+              AppSpacing.x4,
             ),
-            _CalendarGrid(cells: cells),
-            const Divider(height: 1, color: AppColors.border),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-                children: [
-                  _ScheduleHeader(
-                    label: dateLabel,
-                    count: hasActivitiesOnDay ? 3 : 0,
+            children: [
+              _ScheduleHeader(label: dateLabel, count: dayEvents.length),
+              const SizedBox(height: AppSpacing.x3),
+              if (dayEvents.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.x8),
+                  child: Center(
+                    child: Text(
+                      'No activities on this day.',
+                      style: AppTypography.bodyMedium(context),
+                    ),
                   ),
-                  const SizedBox(height: 12),
-                  if (hasActivitiesOnDay || showingAllDay) ...[
-                    _ActivityCard(
-                      iconAsset: 'assets/images/discovery/icons/calendar_2.svg',
-                      iconBg: AppColors.primaryLight,
-                      iconColor: AppColors.primary,
-                      title: '5v5 Basketball Run',
-                      time: '10:00 AM',
-                      location: 'Central Park Court',
-                      joined: '8/10',
-                    ),
-                    _ActivityCard(
-                      iconAsset: 'assets/images/discovery/icons/heart.svg',
-                      iconBg: AppColors.successBg,
-                      iconColor: AppColors.success,
-                      title: 'Morning Yoga Session',
-                      time: '7:30 AM',
-                      location: 'Riverside Studio',
-                      joined: '5/12',
-                    ),
-                    _ActivityCard(
-                      iconAsset: 'assets/images/discovery/icons/zap.svg',
-                      iconBg: AppColors.warningBg,
-                      iconColor: AppColors.warning,
-                      title: 'Trail Running',
-                      time: '5:00 PM',
-                      location: 'Mountain Creek Trail',
-                      joined: '4/8',
-                    ),
-                  ] else
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 32),
-                      child: Center(
-                        child: Text(
-                          'No activities on this day.',
-                          style: TextStyle(
-                            color: AppColors.textTertiary,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            const HomeIndicator(),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _TopNav extends StatelessWidget {
-  const _TopNav({required this.onNotificationTap});
-  final VoidCallback onNotificationTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text('Calendar', style: AppTypography.titleScreen),
-          Semantics(
-            button: true,
-            label: 'Notifications',
-            child: NotificationIconButton(onTap: onNotificationTap),
+                )
+              else
+                for (final event in dayEvents) _EventCard(event: event),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -229,19 +227,26 @@ class _MonthNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.x5,
+        AppSpacing.x2,
+        AppSpacing.x5,
+        AppSpacing.x4,
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          _NavBtn(icon: 'chevron-left.svg', onTap: onPrev),
-          Text(
-            label,
-            style: AppTypography.titleMedium.copyWith(
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-            ),
+          _NavBtn(
+            icon: AppIcons.chevronLeft,
+            onTap: onPrev,
+            semanticLabel: 'Previous month',
           ),
-          _NavBtn(icon: 'chevron-right.svg', onTap: onNext),
+          Text(label, style: AppTypography.titleMedium(context)),
+          _NavBtn(
+            icon: AppIcons.chevronRight,
+            onTap: onNext,
+            semanticLabel: 'Next month',
+          ),
         ],
       ),
     );
@@ -249,37 +254,30 @@ class _MonthNav extends StatelessWidget {
 }
 
 class _NavBtn extends StatelessWidget {
-  const _NavBtn({required this.icon, required this.onTap});
+  const _NavBtn({
+    required this.icon,
+    required this.onTap,
+    required this.semanticLabel,
+  });
   final String icon;
   final VoidCallback onTap;
+  final String semanticLabel;
 
   @override
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
+      label: semanticLabel,
+      child: PressableScale(
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.all(AppSpacing.x2),
           decoration: BoxDecoration(
-            color: AppColors.background,
-            borderRadius: BorderRadius.circular(99),
-            border: Border.all(color: AppColors.border),
+            color: context.colors.background,
+            borderRadius: AppRadius.pillR,
+            border: Border.all(color: context.colors.border),
           ),
-          child: SizedBox(
-            width: 14,
-            height: 14,
-            child: SvgPicture.asset(
-              'assets/images/discovery/icons/$icon',
-              width: 14,
-              height: 14,
-              colorFilter: const ColorFilter.mode(
-                AppColors.textPrimary,
-                BlendMode.srcIn,
-              ),
-            ),
-          ),
+          child: AppIcon(icon, size: AppIconSize.sm),
         ),
       ),
     );
@@ -295,7 +293,7 @@ class _CalendarGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x5),
       child: Column(
         children: [
           Row(
@@ -305,25 +303,20 @@ class _CalendarGrid extends StatelessWidget {
                   (l) => SizedBox(
                     width: 40,
                     child: Center(
-                      child: Text(
-                        l,
-                        style: AppTypography.bodyMedium.copyWith(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                      child: Text(l, style: AppTypography.labelField(context)),
                     ),
                   ),
                 )
                 .toList(),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.x3),
           for (var r = 0; r < (cells.length / 7).ceil(); r++) ...[
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: cells.skip(r * 7).take(7).toList(),
             ),
-            if (r < (cells.length / 7).ceil() - 1) const SizedBox(height: 12),
+            if (r < (cells.length / 7).ceil() - 1)
+              const SizedBox(height: AppSpacing.x3),
           ],
         ],
       ),
@@ -352,55 +345,67 @@ class _DayCell extends StatelessWidget {
   Widget build(BuildContext context) {
     final showHighlight = isSelected && !isToday;
     final textColor = faded
-        ? AppColors.textSecondary.withValues(alpha: 0.35)
+        ? context.colors.textSecondary.withValues(alpha: 0.35)
         : (isToday || isSelected)
-        ? Colors.white
-        : AppColors.textPrimary;
+        ? AppColors.textOnPrimary
+        : context.colors.textPrimary;
 
-    return GestureDetector(
-      onTap: faded ? null : onTap,
-      behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        width: 40,
-        height: 40,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            if (isToday || showHighlight)
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: isToday ? AppColors.primary : AppColors.primarySoft,
-                  shape: BoxShape.circle,
-                ),
-              ),
-            Text(
-              '$day',
-              style: TextStyle(
-                fontFamily: AppTypography.fontFamily,
-                fontSize: 14,
-                fontWeight: (isToday || isSelected)
-                    ? FontWeight.w700
-                    : FontWeight.w500,
-                color: isSelected && !isToday
-                    ? AppColors.primaryDarker
-                    : textColor,
-              ),
-            ),
-            if (hasActivity && !isToday && !isSelected)
-              Positioned(
-                bottom: 4,
-                child: Container(
-                  width: 4,
-                  height: 4,
-                  decoration: const BoxDecoration(
-                    color: AppColors.primary,
+    final label = [
+      '$day',
+      if (isToday) '(today)',
+      if (hasActivity) '(has activities)',
+      if (isSelected) '(selected)',
+    ].join(' ');
+
+    return Semantics(
+      button: !faded,
+      label: label,
+      selected: isSelected,
+      excludeSemantics: faded,
+      child: PressableScale(
+        onTap: faded ? null : onTap,
+        child: SizedBox(
+          width: 40,
+          height: 40,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              if (isToday || showHighlight)
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: isToday
+                        ? AppColors.primary
+                        : context.colors.primarySoft,
                     shape: BoxShape.circle,
                   ),
                 ),
+              Text(
+                '$day',
+                style: AppTypography.labelField(context).copyWith(
+                  fontWeight: (isToday || isSelected)
+                      ? FontWeight.w700
+                      : FontWeight.w500,
+                  color: isSelected && !isToday
+                      ? context.colors.primaryOnSurface
+                      : textColor,
+                ),
               ),
-          ],
+              if (hasActivity && !isToday && !isSelected)
+                Positioned(
+                  bottom: 4,
+                  child: Container(
+                    width: 4,
+                    height: 4,
+                    decoration: const BoxDecoration(
+                      color: AppColors.primary,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -417,144 +422,86 @@ class _ScheduleHeader extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          label,
-          style: AppTypography.titleMedium.copyWith(
-            fontSize: 15,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
+        Text(label, style: AppTypography.titleMedium(context)),
         if (count > 0)
           Text(
-            '$count ${count == 1 ? 'Activity' : 'Activities'}',
-            style: const TextStyle(
-              fontFamily: AppTypography.fontFamily,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: AppColors.primaryDarker,
-            ),
+            '$count ${count == 1 ? 'activity' : 'activities'}',
+            style: AppTypography.chipLabel(
+              context,
+            ).copyWith(fontSize: 12, color: context.colors.primaryOnSurface),
           ),
       ],
     );
   }
 }
 
-class _ActivityCard extends StatelessWidget {
-  const _ActivityCard({
-    required this.iconAsset,
-    required this.iconBg,
-    required this.iconColor,
-    required this.title,
-    required this.time,
-    required this.location,
-    required this.joined,
-  });
-
-  final String iconAsset;
-  final Color iconBg;
-  final Color iconColor;
-  final String title;
-  final String time;
-  final String location;
-  final String joined;
+class _EventCard extends StatelessWidget {
+  const _EventCard({required this.event});
+  final CalendarEvent event;
 
   @override
   Widget build(BuildContext context) {
+    final timeFmt = DateFormat('h:mm a');
+
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: AppSpacing.x2 + 2),
       child: Semantics(
         button: true,
-        label: title,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () {},
+        label: event.title,
+        child: PressableScale(
+          onTap: () => context.push('/joined-activity/${event.activityId}'),
           child: Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(AppSpacing.x3),
             decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.border),
+              color: context.colors.surface,
+              borderRadius: BorderRadius.circular(AppRadius.card),
+              border: Border.all(color: context.colors.border),
             ),
             child: Row(
               children: [
                 Container(
                   width: 40,
                   height: 40,
-                  padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: iconBg,
-                    borderRadius: BorderRadius.circular(12),
+                    color: context.colors.primaryLight,
+                    borderRadius: BorderRadius.circular(AppRadius.md),
                   ),
-                  child: SvgPicture.asset(
-                    iconAsset,
-                    width: 20,
-                    height: 20,
-                    colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
+                  alignment: Alignment.center,
+                  child: AppIcon(
+                    AppIcons.calendar2,
+                    size: AppIconSize.lg,
+                    color: context.colors.primaryOnSurface,
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppSpacing.x3),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        title,
-                        style: AppTypography.bodyMedium.copyWith(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.textPrimary,
-                        ),
+                        event.title,
+                        style: AppTypography.labelField(context),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          SizedBox(
-                            width: 11,
-                            height: 11,
-                            child: SvgPicture.asset(
-                              'assets/images/discovery/icons/clock.svg',
-                              width: 11,
-                              height: 11,
-                              colorFilter: const ColorFilter.mode(
-                                AppColors.textSecondary,
-                                BlendMode.srcIn,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 4),
+                          const AppIcon(AppIcons.clock, size: AppIconSize.sm),
+                          const SizedBox(width: AppSpacing.x1),
                           Text(
-                            time,
-                            style: const TextStyle(
-                              fontFamily: AppTypography.fontFamily,
-                              fontSize: 12,
-                              color: AppColors.textSecondary,
-                            ),
+                            timeFmt.format(event.start),
+                            style: AppTypography.caption(context),
                           ),
-                          const SizedBox(width: 12),
-                          SizedBox(
-                            width: 10,
-                            height: 10,
-                            child: SvgPicture.asset(
-                              'assets/images/discovery/icons/map_pin.svg',
-                              width: 10,
-                              height: 10,
-                              colorFilter: const ColorFilter.mode(
-                                AppColors.textSecondary,
-                                BlendMode.srcIn,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 4),
+                          const SizedBox(width: AppSpacing.x2),
+                          const AppIcon(AppIcons.mapPin, size: AppIconSize.sm),
+                          const SizedBox(width: AppSpacing.x1),
                           Expanded(
                             child: Text(
-                              location,
+                              event.location,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontFamily: AppTypography.fontFamily,
-                                fontSize: 12,
-                                color: AppColors.textSecondary,
-                              ),
+                              style: AppTypography.caption(context),
                             ),
                           ),
                         ],
@@ -562,28 +509,7 @@ class _ActivityCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      joined,
-                      style: const TextStyle(
-                        fontFamily: AppTypography.fontFamily,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    const Text(
-                      'joined',
-                      style: TextStyle(
-                        fontFamily: AppTypography.fontFamily,
-                        fontSize: 10,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
+                const AppIcon(AppIcons.chevronRight, size: AppIconSize.sm),
               ],
             ),
           ),

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
@@ -8,9 +7,14 @@ import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/theme/dark_colors.dart';
+import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/app_icon.dart';
+import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/app_tab_bar.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/error_retry.dart';
-import '../../../core/widgets/notification_icon_button.dart';
+import '../../../core/widgets/home_header.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../../activities/domain/activity_model.dart';
 
@@ -44,9 +48,39 @@ String _relativeDateTime(DateTime dt) {
   final target = DateTime(dt.year, dt.month, dt.day);
   final diff = target.difference(today).inDays;
   final time = DateFormat('h:mm a').format(dt);
-  if (diff == 0) return 'Today, $time';
-  if (diff == 1) return 'Tomorrow, $time';
+  if (diff == 0) return 'Today · $time';
+  if (diff == 1) return 'Tomorrow · $time';
   return '${DateFormat('E, MMM d').format(dt)} · $time';
+}
+
+/// Uppercase day badge for the hero overlay: "TODAY" / "TOMORROW" / "SAT".
+String _dayBadge(DateTime dt) {
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final diff = DateTime(dt.year, dt.month, dt.day).difference(today).inDays;
+  if (diff == 0) return 'TODAY';
+  if (diff == 1) return 'TOMORROW';
+  return DateFormat('EEE').format(dt).toUpperCase();
+}
+
+/// "Tomorrow · 4:00 PM - 6:00 PM" — the hero shows the full window, derived
+/// from the model's `endTime` (start + duration).
+String _dateTimeRange(ActivityModel a) {
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final diff = DateTime(
+    a.dateTime.year,
+    a.dateTime.month,
+    a.dateTime.day,
+  ).difference(today).inDays;
+  final day = switch (diff) {
+    0 => 'Today',
+    1 => 'Tomorrow',
+    _ => DateFormat('E, MMM d').format(a.dateTime),
+  };
+  final start = DateFormat('h:mm a').format(a.dateTime);
+  final end = DateFormat('h:mm a').format(a.endTime);
+  return '$day · $start - $end';
 }
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
@@ -61,93 +95,70 @@ class MyActivitiesScreen extends ConsumerStatefulWidget {
 class _MyActivitiesScreenState extends ConsumerState<MyActivitiesScreen> {
   int _tab = 0;
 
-  static const _tabLabels = ['Upcoming', 'Past', 'Hosting'];
+  static const _tabLabels = ['Upcoming', 'Hosting', 'Past'];
 
   @override
   Widget build(BuildContext context) {
     final unreadCount = ref.watch(_unreadNotifCountProvider).valueOrNull ?? 0;
 
-    return Scaffold(
-      // Off-white canvas so the white cards actually stand out — the
-      // previous white-on-white left cards looking like flat boxes glued
-      // together with borders.
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            // Header sits on surface so the title/bell aren't floating on the
-            // off-white; the transition from surface to background happens
-            // right below the tab underline, giving the tab bar a subtle
-            // "chrome vs content" split.
-            Container(
-              color: AppColors.surface,
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.x6,
-                AppSpacing.x2,
-                AppSpacing.x6,
-                0,
+    return AppScaffold(
+      showHomeIndicator: false, // inside ShellRoute — AppShell draws its own.
+      body: Column(
+        children: [
+          HomeHeader(
+            title: 'My Games',
+            subtitle: 'All your games in one place',
+            actions: [
+              HomeHeaderAction(
+                icon: Icons.calendar_today_rounded,
+                semanticLabel: 'Calendar',
+                onTap: () => context.push('/calendar'),
               ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'My Activities',
-                      style: AppTypography.titleScreen,
-                    ),
-                  ),
-                  NotificationIconButton(
-                    hasUnread: unreadCount > 0,
-                    onTap: () => context.push('/notifications'),
-                  ),
-                ],
+              HomeHeaderAction(
+                icon: Icons.notifications_none_rounded,
+                semanticLabel: 'Notifications',
+                onTap: () => context.push('/notifications'),
+                showDot: unreadCount > 0,
               ),
+            ],
+          ),
+          // Shared iOS-style pill control: the elevated active segment reads
+          // clearly without an icon row or a hard divider under the header.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.x5,
+              AppSpacing.x1,
+              AppSpacing.x5,
+              AppSpacing.x2,
             ),
-            Container(
-              color: AppColors.surface,
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.x6,
-                AppSpacing.x2,
-                AppSpacing.x6,
-                0,
-              ),
-              child: Row(
-                children: List.generate(
-                  _tabLabels.length,
-                  (i) => _UnderlineTab(
-                    label: _tabLabels[i],
-                    selected: _tab == i,
-                    onTap: () => setState(() => _tab = i),
-                  ),
-                ),
-              ),
+            child: AppTabBar(
+              labels: _tabLabels,
+              selectedIndex: _tab,
+              onChanged: (i) => setState(() => _tab = i),
             ),
-            // Hairline separator with a soft shadow spilling into the list —
-            // makes the header/tab chrome feel like it sits above the content.
-            Container(
-              height: 1,
-              decoration: const BoxDecoration(
-                color: AppColors.surface,
-                boxShadow: [
-                  BoxShadow(
-                    color: Color(0x0A0F172A),
-                    blurRadius: 8,
-                    offset: Offset(0, 4),
-                  ),
-                ],
-              ),
+          ),
+          Expanded(
+            child: AnimatedSwitcher(
+              duration: AppDurations.fast,
+              child: _buildTab(_tab),
             ),
-            Expanded(child: _buildTab(_tab)),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildTab(int tab) => switch (tab) {
     0 => _ActivityList(
+      key: const ValueKey('upcoming'),
       provider: _joinedProvider,
-      cardBuilder: (a) => _ActivityListCard(
+      // The soonest game is promoted to a full-width hero so the list has a
+      // clear focal point instead of three identical rows.
+      heroBuilder: (a) => _NextGameCard(
+        activity: a,
+        onTap: () => context.push('/joined-activity/${a.id}'),
+      ),
+      cardBuilder: (a) => _GameCard(
         activity: a,
         onTap: () => context.push('/joined-activity/${a.id}'),
       ),
@@ -158,25 +169,10 @@ class _MyActivitiesScreenState extends ConsumerState<MyActivitiesScreen> {
       onEmptyAction: () => context.go('/discovery'),
     ),
     1 => _ActivityList(
-      provider: _pastProvider,
-      cardBuilder: (a) => _ActivityListCard(
-        activity: a,
-        statusLabel: 'COMPLETED',
-        statusBg: AppColors.border,
-        statusFg: AppColors.textSecondary,
-        onTap: () => context.push('/past-activity/${a.id}/review'),
-      ),
-      emptyTitle: 'No past activities',
-      emptySubtitle: 'Your completed activities will appear here.',
-      emptyIcon: Icons.history_rounded,
-    ),
-    _ => _ActivityList(
+      key: const ValueKey('hosting'),
       provider: _hostedProvider,
-      cardBuilder: (a) => _ActivityListCard(
+      cardBuilder: (a) => _GameCard(
         activity: a,
-        statusLabel: 'HOSTING',
-        statusBg: AppColors.primarySoft,
-        statusFg: AppColors.primaryDarker,
         onTap: () => context.push('/manage-activity/${a.id}'),
       ),
       emptyTitle: "You haven't hosted yet",
@@ -185,71 +181,44 @@ class _MyActivitiesScreenState extends ConsumerState<MyActivitiesScreen> {
       emptyActionLabel: 'Create activity',
       onEmptyAction: () => context.push('/create'),
     ),
+    _ => _ActivityList(
+      key: const ValueKey('past'),
+      provider: _pastProvider,
+      cardBuilder: (a) => _GameCard(
+        activity: a,
+        past: true,
+        onTap: () => context.push('/past-activity/${a.id}/review'),
+      ),
+      emptyTitle: 'No past activities',
+      emptySubtitle: 'Your completed activities will appear here.',
+      emptyIcon: Icons.history_rounded,
+    ),
   };
 }
 
-// ─── Underline tab ────────────────────────────────────────────────────────────
-
-class _UnderlineTab extends StatelessWidget {
-  const _UnderlineTab({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          padding: const EdgeInsets.only(bottom: AppSpacing.x3),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: selected ? AppColors.primary : Colors.transparent,
-                width: 2,
-              ),
-            ),
-          ),
-          child: Center(
-            child: Text(
-              label,
-              style: AppTypography.labelField.copyWith(
-                color: selected
-                    ? AppColors.primaryDarker
-                    : AppColors.textSecondary,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Generic list ─────────────────────────────────────────────────────────────
+// ─── Generic list (Upcoming / Hosting / Past) ────────────────────────────────
 
 typedef _CardBuilder = Widget Function(ActivityModel);
 
 class _ActivityList extends ConsumerWidget {
   const _ActivityList({
+    super.key,
     required this.provider,
     required this.cardBuilder,
     required this.emptyTitle,
     required this.emptySubtitle,
     required this.emptyIcon,
+    this.heroBuilder,
     this.emptyActionLabel,
     this.onEmptyAction,
   });
 
   final ProviderListenable<AsyncValue<List<ActivityModel>>> provider;
   final _CardBuilder cardBuilder;
+
+  /// When set, the first item renders with this builder instead of
+  /// [cardBuilder] — used to feature the next upcoming game.
+  final _CardBuilder? heroBuilder;
   final String emptyTitle;
   final String emptySubtitle;
   final IconData emptyIcon;
@@ -260,7 +229,7 @@ class _ActivityList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(provider);
     return async.when(
-      loading: () => const SkeletonList(count: 4),
+      loading: () => const _LoadingList(),
       error: (_, _) => ErrorRetry(
         message: 'Could not load activities.',
         onRetry: () => ref.invalidate(provider as ProviderOrFamily),
@@ -283,11 +252,17 @@ class _ActivityList extends ConsumerWidget {
               AppSpacing.x6,
               AppSpacing.x5,
               AppSpacing.x6,
-              AppSpacing.x6,
+              AppSpacing.x8,
             ),
             itemCount: activities.length,
-            separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.x3),
-            itemBuilder: (_, i) => cardBuilder(activities[i]),
+            separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.x4),
+            itemBuilder: (_, i) {
+              final a = activities[i];
+              final card = i == 0 && heroBuilder != null
+                  ? heroBuilder!(a)
+                  : cardBuilder(a);
+              return _FadeSlideIn(index: i, child: card);
+            },
           ),
         );
       },
@@ -295,135 +270,168 @@ class _ActivityList extends ConsumerWidget {
   }
 }
 
-// ─── Compact list card ────────────────────────────────────────────────────────
-//
-// One card shape reused across all three tabs (Upcoming/Past/Hosting) —
-// thumbnail + sport chip + status pill + title + time/participants meta.
-// Only the status pill's label/color and the tap destination change per tab.
+class _LoadingList extends StatelessWidget {
+  const _LoadingList();
 
-class _ActivityListCard extends StatelessWidget {
-  const _ActivityListCard({
+  @override
+  Widget build(BuildContext context) {
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.x6,
+        AppSpacing.x5,
+        AppSpacing.x6,
+        AppSpacing.x6,
+      ),
+      itemCount: 4,
+      separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.x4),
+      itemBuilder: (_, _) => const ActivityListCardSkeleton(),
+    );
+  }
+}
+
+// ─── Game card ────────────────────────────────────────────────────────────────
+//
+// Horizontal card reused across all tabs: thumbnail + sport pill + status pill
+// + title + date + players, with a chevron affordance. Only the status pill
+// and tap destination change per tab.
+
+class _GameCard extends StatelessWidget {
+  const _GameCard({
     required this.activity,
     required this.onTap,
-    this.statusLabel,
-    this.statusBg,
-    this.statusFg,
+    this.past = false,
   });
 
   final ActivityModel activity;
-  // Status pill is optional: there's no real "confirmed/pending" state in the
-  // data model, so the upcoming tab omits it rather than guess. Past/Hosting
-  // still show one because those labels just reflect which tab the item is
-  // in, not an invented approval state.
-  final String? statusLabel;
-  final Color? statusBg;
-  final Color? statusFg;
+  final VoidCallback onTap;
+  final bool past;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return AppCard(
+      onTap: onTap,
+      radius: AppRadius.lg,
+      padding: const EdgeInsets.all(AppSpacing.x3 + 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppRadius.card),
+            child: activity.coverImageUrl != null
+                ? Image.asset(
+                    activity.coverImageUrl!,
+                    width: 68,
+                    height: 68,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => const _ThumbFallback(),
+                  )
+                : const _ThumbFallback(),
+          ),
+          const SizedBox(width: AppSpacing.x3 + 2),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: _Pill(
+                        label: activity.sportType.toUpperCase(),
+                        bg: c.primarySoft,
+                        fg: c.primaryOnSurface,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.x2),
+                    Text(
+                      past
+                          ? 'Completed'
+                          : '${activity.participantCount}/${activity.capacity} Joined',
+                      style: AppTypography.metaSub(
+                        context,
+                      ).copyWith(fontSize: 12.5, fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.x2),
+                Text(
+                  activity.title,
+                  style: AppTypography.titleMedium(context).copyWith(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    height: 1.2,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: AppSpacing.x2),
+                _MetaRow(
+                  icon: AppIcons.clock,
+                  text: _relativeDateTime(activity.dateTime),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Hero "next game" card ────────────────────────────────────────────────────
+
+/// Full-width featured card for the soonest upcoming game: cover photo with a
+/// countdown badge, then title, venue and player count. Gives the Upcoming
+/// list a focal point rather than a stack of identical rows.
+class _NextGameCard extends StatelessWidget {
+  const _NextGameCard({required this.activity, required this.onTap});
+
+  final ActivityModel activity;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    // Layered: outer DecoratedBox holds the shadow (Material's clipBehavior
-    // would clip the shadow away if we put it inside), Material provides the
-    // rounded ink ripple, inner Container draws the hairline border.
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        boxShadow: AppShadows.card,
-      ),
-      child: Material(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          splashColor: AppColors.primary.withValues(alpha: 0.06),
-          highlightColor: AppColors.primary.withValues(alpha: 0.03),
-          child: Container(
-            padding: const EdgeInsets.all(AppSpacing.x4),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(AppRadius.card),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    final c = context.colors;
+    return AppCard(
+      onTap: onTap,
+      radius: AppRadius.lg,
+      padding: EdgeInsets.zero,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Cover + overlay badges (both sit top-left, as in the reference).
+          AspectRatio(
+            aspectRatio: 16 / 10,
+            child: Stack(
+              fit: StackFit.expand,
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  child: activity.coverImageUrl != null
-                      ? Image.asset(
-                          activity.coverImageUrl!,
-                          width: 70,
-                          height: 70,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => const _ThumbFallback(),
-                        )
-                      : const _ThumbFallback(),
-                ),
-                const SizedBox(width: AppSpacing.x4),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                if (activity.coverImageUrl != null)
+                  Image.asset(
+                    activity.coverImageUrl!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) =>
+                        ColoredBox(color: c.surfaceSubtle),
+                  )
+                else
+                  ColoredBox(color: c.surfaceSubtle),
+                Positioned(
+                  top: AppSpacing.x3 + 2,
+                  left: AppSpacing.x3 + 2,
+                  child: Row(
                     children: [
-                      Row(
-                        children: [
-                          _Pill(
-                            label: activity.sportType.toUpperCase(),
-                            bg: AppColors.primarySoft,
-                            fg: AppColors.primaryDarker,
-                          ),
-                          if (statusLabel != null) ...[
-                            const Spacer(),
-                            _Pill(
-                              label: statusLabel!,
-                              bg: statusBg!,
-                              fg: statusFg!,
-                            ),
-                          ],
-                        ],
+                      _Pill(
+                        label: activity.sportType.toUpperCase(),
+                        bg: AppColors.scrimGradient,
+                        fg: AppColors.textOnPrimary,
+                        large: true,
                       ),
-                      const SizedBox(height: AppSpacing.x2),
-                      Text(
-                        activity.title,
-                        style: AppTypography.labelField.copyWith(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: AppSpacing.x2),
-                      Row(
-                        children: [
-                          SvgPicture.asset(
-                            'assets/images/discovery/icons/clock.svg',
-                            width: 13,
-                            height: 13,
-                            colorFilter: const ColorFilter.mode(
-                              AppColors.textSecondary,
-                              BlendMode.srcIn,
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            _relativeDateTime(activity.dateTime),
-                            style: AppTypography.metaSub,
-                          ),
-                          const SizedBox(width: AppSpacing.x3),
-                          SvgPicture.asset(
-                            'assets/images/discovery/icons/users.svg',
-                            width: 13,
-                            height: 13,
-                            colorFilter: const ColorFilter.mode(
-                              AppColors.textSecondary,
-                              BlendMode.srcIn,
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${activity.participantCount}/${activity.capacity}',
-                            style: AppTypography.metaSub,
-                          ),
-                        ],
+                      const SizedBox(width: AppSpacing.x2),
+                      _Pill(
+                        label: _dayBadge(activity.dateTime),
+                        bg: AppColors.primary,
+                        fg: AppColors.textOnPrimary,
+                        large: true,
                       ),
                     ],
                   ),
@@ -431,8 +439,197 @@ class _ActivityListCard extends StatelessWidget {
               ],
             ),
           ),
-        ),
+          // Details.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.x5,
+              AppSpacing.x4 + 2,
+              AppSpacing.x5,
+              AppSpacing.x4 + 2,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  activity.title,
+                  style: AppTypography.headlineSmall(
+                    context,
+                  ).copyWith(fontSize: 21, height: 1.22),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: AppSpacing.x3),
+                // Primary-tinted icons, per the reference.
+                _MetaRow(
+                  icon: AppIcons.clock,
+                  text: _dateTimeRange(activity),
+                  iconColor: AppColors.primary,
+                  fontSize: 14.5,
+                ),
+                const SizedBox(height: AppSpacing.x2),
+                _MetaRow(
+                  icon: AppIcons.mapPin,
+                  text: activity.location,
+                  iconColor: AppColors.primary,
+                  fontSize: 14.5,
+                ),
+                const SizedBox(height: AppSpacing.x4),
+                Divider(height: 1, color: c.border),
+                const SizedBox(height: AppSpacing.x3 + 2),
+                // Joined count + spots left + progress.
+                Row(
+                  children: [
+                    AppIcon(
+                      AppIcons.users,
+                      size: AppIconSize.md,
+                      color: AppColors.success,
+                    ),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: Text(
+                        '${activity.participantCount} / ${activity.capacity} players joined',
+                        style: AppTypography.labelField(
+                          context,
+                        ).copyWith(fontSize: 14.5, fontWeight: FontWeight.w700),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.x2),
+                    Text(
+                      '${activity.spotsLeft} spots left',
+                      style: AppTypography.labelField(context).copyWith(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w700,
+                        // Darker green than the bar: #22C55E on white is
+                        // ~2.3:1 and fails WCAG AA for text.
+                        color: AppColors.statusSuccessText,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.x3),
+                ClipRRect(
+                  borderRadius: AppRadius.pillR,
+                  child: SizedBox(
+                    height: 7,
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          child: ColoredBox(color: c.surfaceMuted),
+                        ),
+                        FractionallySizedBox(
+                          alignment: Alignment.centerLeft,
+                          widthFactor: activity.capacity > 0
+                              ? (activity.participantCount / activity.capacity)
+                                    .clamp(0.0, 1.0)
+                              : 0,
+                          child: const ColoredBox(color: AppColors.success),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
+    );
+  }
+}
+
+// ─── Entrance motion ──────────────────────────────────────────────────────────
+
+/// Staggered fade + rise for list items. Each item owns a controller whose
+/// duration grows with [index], and reads its animation through an [Interval]
+/// so the delay needs no timers (keeps widget tests deterministic).
+class _FadeSlideIn extends StatefulWidget {
+  const _FadeSlideIn({required this.index, required this.child});
+
+  final int index;
+  final Widget child;
+
+  @override
+  State<_FadeSlideIn> createState() => _FadeSlideInState();
+}
+
+class _FadeSlideInState extends State<_FadeSlideIn>
+    with SingleTickerProviderStateMixin {
+  static const _base = 260;
+  static const _step = 70;
+
+  late final int _delay = widget.index.clamp(0, 6) * _step;
+  late final AnimationController _controller = AnimationController(
+    duration: Duration(milliseconds: _base + _delay),
+    vsync: this,
+  );
+  late final Animation<double> _anim = CurvedAnimation(
+    parent: _controller,
+    curve: Interval(_delay / (_base + _delay), 1.0, curve: Curves.easeOutCubic),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _anim,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, 0.07),
+          end: Offset.zero,
+        ).animate(_anim),
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+class _MetaRow extends StatelessWidget {
+  const _MetaRow({
+    required this.icon,
+    required this.text,
+    this.iconColor,
+    this.fontSize,
+  });
+
+  final String icon;
+  final String text;
+  final Color? iconColor;
+  final double? fontSize;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        AppIcon(
+          icon,
+          size: fontSize == null ? AppIconSize.sm : AppIconSize.md,
+          color: iconColor ?? context.colors.textSecondary,
+        ),
+        SizedBox(width: fontSize == null ? 5 : 7),
+        Flexible(
+          child: Text(
+            text,
+            style: fontSize == null
+                ? AppTypography.metaSub(context)
+                : AppTypography.metaSub(context).copyWith(fontSize: fontSize),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -443,30 +640,52 @@ class _ThumbFallback extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 70,
-      height: 70,
-      color: AppColors.surfaceSubtle,
+      width: 68,
+      height: 68,
+      color: context.colors.surfaceSubtle,
       alignment: Alignment.center,
-      child: const Icon(Icons.sports, size: 28, color: AppColors.textTertiary),
+      child: AppIcon.material(
+        Icons.sports,
+        size: AppIconSize.lg,
+        color: context.colors.textTertiary,
+      ),
     );
   }
 }
 
 class _Pill extends StatelessWidget {
-  const _Pill({required this.label, required this.bg, required this.fg});
+  const _Pill({
+    required this.label,
+    required this.bg,
+    required this.fg,
+    this.large = false,
+  });
+
   final String label;
   final Color bg;
   final Color fg;
 
+  /// Hero overlay badges are chunkier than the in-card sport chips.
+  final bool large;
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(AppRadius.pill),
+      padding: large
+          ? const EdgeInsets.symmetric(horizontal: 13, vertical: 7)
+          : const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+      decoration: BoxDecoration(color: bg, borderRadius: AppRadius.pillR),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: AppTypography.badgeSport(context).copyWith(
+          fontSize: large ? 12 : 10.5,
+          fontWeight: FontWeight.w800,
+          letterSpacing: large ? 0.4 : 0.3,
+          color: fg,
+        ),
       ),
-      child: Text(label, style: AppTypography.badgeSport.copyWith(color: fg)),
     );
   }
 }

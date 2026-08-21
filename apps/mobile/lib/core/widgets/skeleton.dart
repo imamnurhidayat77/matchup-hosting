@@ -1,19 +1,14 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
+import '../theme/dark_colors.dart';
 
 /// A single shimmering skeleton block. Sweeps a soft highlight band
 /// left-to-right across a muted base, the standard "content is loading"
 /// treatment — distinct from a flat pulsing block, which reads as "this is
 /// broken" more than "this is loading" (PRD Section 1.6 / Appendix D.3).
 class SkeletonBox extends StatefulWidget {
-  const SkeletonBox({
-    super.key,
-    this.width,
-    this.height = 16,
-    this.radius = 8,
-  });
+  const SkeletonBox({super.key, this.width, this.height = 16, this.radius = 8});
 
   final double? width;
   final double height;
@@ -51,10 +46,10 @@ class _SkeletonBoxState extends State<SkeletonBox>
             return LinearGradient(
               begin: Alignment(start - 0.5, 0),
               end: Alignment(start + 0.5, 0),
-              colors: const [
-                AppColors.surfaceSubtle,
-                AppColors.surfaceMuted,
-                AppColors.surfaceSubtle,
+              colors: [
+                context.colors.surfaceSubtle,
+                context.colors.surfaceMuted,
+                context.colors.surfaceSubtle,
               ],
             ).createShader(rect);
           },
@@ -62,9 +57,9 @@ class _SkeletonBoxState extends State<SkeletonBox>
             width: widget.width,
             height: widget.height,
             decoration: BoxDecoration(
-              color: AppColors.surfaceSubtle,
+              color: context.colors.surfaceSubtle,
               borderRadius: BorderRadius.circular(widget.radius),
-              border: Border.all(color: AppColors.border),
+              border: Border.all(color: context.colors.border),
             ),
           ),
         );
@@ -81,9 +76,9 @@ class ActivityCardSkeleton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.border),
+        color: context.colors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+        border: Border.all(color: context.colors.border),
       ),
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -166,9 +161,9 @@ class ActivityListCardSkeleton extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.x4),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.colors.surface,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.colors.border),
       ),
       child: const Row(
         crossAxisAlignment: CrossAxisAlignment.start,

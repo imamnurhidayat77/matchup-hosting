@@ -4,6 +4,12 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/theme/dark_colors.dart';
+import '../../../core/widgets/app_button.dart';
+import '../../../core/widgets/app_icon.dart';
+import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/app_snackbar.dart';
+import '../../../core/widgets/app_text_field.dart';
 
 class ReportScreen extends StatefulWidget {
   final String targetType; // 'user' or 'activity'
@@ -20,11 +26,11 @@ class ReportScreen extends StatefulWidget {
 }
 
 class _ReportScreenState extends State<ReportScreen> {
-  final _reasonController = TextEditingController();
+  final _detailsController = TextEditingController();
   String _reportReason = 'Inappropriate content';
   bool _isSubmitting = false;
 
-  final _reasons = [
+  static const _reasons = [
     'Inappropriate content',
     'Spam / Fake activity',
     'Harassment',
@@ -36,195 +42,126 @@ class _ReportScreenState extends State<ReportScreen> {
 
   @override
   void dispose() {
-    _reasonController.dispose();
+    _detailsController.dispose();
     super.dispose();
+  }
+
+  Future<void> _submitReport() async {
+    setState(() => _isSubmitting = true);
+    await Future<void>.delayed(const Duration(seconds: 1));
+    if (!mounted) return;
+
+    setState(() => _isSubmitting = false);
+    AppSnackbar.show(
+      context,
+      message: 'Report submitted.',
+      variant: AppSnackbarVariant.success,
+    );
+    context.pop();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            // ── Header ──────────────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.x5,
-                AppSpacing.x3,
-                AppSpacing.x5,
-                AppSpacing.x2,
-              ),
-              child: Row(
-                children: [
-                  Semantics(
-                    button: true,
-                    label: 'Back',
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => context.pop(),
-                      child: const SizedBox(
-                        width: 40,
-                        height: 44,
-                        child: Icon(
-                          Icons.arrow_back_ios_new_rounded,
-                          size: 18,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: Text(
-                      'Report',
-                      textAlign: TextAlign.center,
-                      style: AppTypography.titleScreen,
-                    ),
-                  ),
-                  const SizedBox(width: 40),
-                ],
-              ),
-            ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.all(24),
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppColors.errorLight,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.flag, color: AppColors.error),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Report ${widget.targetType}',
-                                style: AppTypography.titleLarge.copyWith(
-                                  color: AppColors.error,
-                                ),
-                              ),
-                              Text(
-                                widget.targetName,
-                                style: AppTypography.bodyMedium.copyWith(
-                                  color: AppColors.error,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  Text('Reason', style: AppTypography.titleMedium),
-                  const SizedBox(height: 12),
-                  RadioGroup<String>(
-                    groupValue: _reportReason,
-                    onChanged: (v) => setState(() => _reportReason = v ?? ''),
-                    child: Column(
-                      children: _reasons
-                          .map(
-                            (r) => RadioListTile(
-                              title: Text(r, style: AppTypography.bodyLarge),
-                              value: r,
-                              contentPadding: EdgeInsets.zero,
-                              activeColor: AppColors.primary,
-                            ),
-                          )
-                          .toList(),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _reasonController,
-                    maxLines: 4,
-                    decoration: const InputDecoration(
-                      labelText: 'Additional details (optional)',
-                      hintText: 'Describe the issue...',
-                      alignLabelWithHint: true,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: Column(
-                      children: [
-                        const Icon(
-                          Icons.add_a_photo,
-                          size: 40,
-                          color: AppColors.primary,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Add evidence (optional)',
-                          style: AppTypography.bodyLarge,
-                        ),
-                        const SizedBox(height: 12),
-                        FilledButton.tonal(
-                          onPressed: () {},
-                          child: const Text('Upload Photo'),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: _isSubmitting ? null : _submitReport,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.error,
-                      ),
-                      child: _isSubmitting
-                          ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Text('Submit Report'),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Your report will be reviewed by moderation staff.',
-                    textAlign: TextAlign.center,
-                    style: AppTypography.bodySmall,
-                  ),
-                  const SizedBox(height: 40),
-                ],
-              ),
-            ),
-          ],
+    return AppScaffold.detail(
+      title: 'Report',
+      showHomeIndicator: false, // reached from inside ShellRoute screens.
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.x6,
+          AppSpacing.x2,
+          AppSpacing.x6,
+          AppSpacing.x8,
         ),
+        children: [
+          _TargetBanner(
+            targetType: widget.targetType,
+            targetName: widget.targetName,
+          ),
+          const SizedBox(height: AppSpacing.x8),
+          Text('Reason', style: AppTypography.titleMedium(context)),
+          const SizedBox(height: AppSpacing.x3),
+          RadioGroup<String>(
+            groupValue: _reportReason,
+            onChanged: (v) => setState(() => _reportReason = v ?? ''),
+            child: Column(
+              children: _reasons
+                  .map(
+                    (r) => RadioListTile(
+                      title: Text(r, style: AppTypography.bodyLarge(context)),
+                      value: r,
+                      contentPadding: EdgeInsets.zero,
+                      activeColor: AppColors.primary,
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.x4),
+          AppTextField.form(
+            label: 'ADDITIONAL DETAILS (OPTIONAL)',
+            controller: _detailsController,
+            hint: 'Describe the issue...',
+            maxLines: 4,
+          ),
+          const SizedBox(height: AppSpacing.x6),
+          AppButton.danger(
+            label: _isSubmitting ? 'Submitting...' : 'Submit Report',
+            onPressed: _isSubmitting ? null : _submitReport,
+          ),
+          const SizedBox(height: AppSpacing.x3),
+          Text(
+            'Your report will be reviewed by moderation staff.',
+            textAlign: TextAlign.center,
+            style: AppTypography.bodySmall(context),
+          ),
+        ],
       ),
     );
   }
+}
 
-  void _submitReport() async {
-    setState(() => _isSubmitting = true);
-    await Future.delayed(const Duration(seconds: 1));
+class _TargetBanner extends StatelessWidget {
+  const _TargetBanner({required this.targetType, required this.targetName});
+  final String targetType;
+  final String targetName;
 
-    if (mounted) {
-      setState(() => _isSubmitting = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Report submitted')));
-      context.pop();
-    }
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.x4),
+      decoration: BoxDecoration(
+        color: context.colors.errorLight,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+      ),
+      child: Row(
+        children: [
+          const AppIcon.material(
+            Icons.flag,
+            size: AppIconSize.xl,
+            color: AppColors.error,
+          ),
+          const SizedBox(width: AppSpacing.x3),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Report $targetType',
+                  style: AppTypography.titleLarge(
+                    context,
+                  ).copyWith(color: AppColors.error),
+                ),
+                Text(
+                  targetName,
+                  style: AppTypography.bodyMedium(
+                    context,
+                  ).copyWith(color: AppColors.error),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
