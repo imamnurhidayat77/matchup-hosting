@@ -8,6 +8,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/home_header.dart';
 import '../../../core/widgets/pressable_scale.dart';
+import '../../tour/presentation/tour_anchors.dart';
 import '../domain/activity_model.dart';
 import 'widgets/discovery_actions.dart';
 import 'widgets/swipe_deck.dart';
@@ -168,6 +169,7 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
                 icon: Icons.tune_rounded,
                 semanticLabel: 'Filters',
                 onTap: () => context.push('/filter'),
+                anchorKey: TourAnchors.filterButton,
               ),
               HomeHeaderAction(
                 icon: Icons.notifications_none_rounded,
@@ -189,22 +191,30 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
               // mirrors how the like/dismiss buttons mirror the swipe.
               child: deckExhausted
                   ? DiscoveryEmptyDeck(onRestart: _reset)
-                  : PressableScale(
-                      onTap: _openDetails,
-                      child: SwipeDeck(
-                        // Force a fresh State each time topIndex advances so
-                        // no listener/AnimationController from the previous
-                        // card can interfere with the next swipe.
-                        key: ValueKey(_topIndex),
-                        activities: _activities,
-                        topIndex: _topIndex,
-                        onSwiped: _swipeOut,
+                  // KeyedSubtree carries the tour anchor so SwipeDeck keeps
+                  // its own `ValueKey(_topIndex)` (needed to force a fresh
+                  // State per card — see its comment below) instead of the
+                  // anchor key overwriting it.
+                  : KeyedSubtree(
+                      key: TourAnchors.swipeDeck,
+                      child: PressableScale(
+                        onTap: _openDetails,
+                        child: SwipeDeck(
+                          // Force a fresh State each time topIndex advances
+                          // so no listener/AnimationController from the
+                          // previous card can interfere with the next swipe.
+                          key: ValueKey(_topIndex),
+                          activities: _activities,
+                          topIndex: _topIndex,
+                          onSwiped: _swipeOut,
+                        ),
                       ),
                     ),
             ),
           ),
           if (!deckExhausted)
             Padding(
+              key: TourAnchors.actionRow,
               padding: const EdgeInsets.only(
                 top: AppSpacing.x2,
                 bottom: AppSpacing.x4,

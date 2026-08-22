@@ -39,7 +39,7 @@ class AppTabBar extends StatelessWidget {
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: context.colors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.pill),
+        borderRadius: BorderRadius.circular(AppRadius.input),
         border: Border.all(color: context.colors.border),
       ),
       child: Row(
@@ -85,7 +85,7 @@ class _Tab extends StatelessWidget {
           curve: Curves.easeOutCubic,
           decoration: BoxDecoration(
             color: selected ? AppColors.primary : Colors.transparent,
-            borderRadius: BorderRadius.circular(AppRadius.pill),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
             boxShadow: selected ? AppShadows.card : null,
           ),
           alignment: Alignment.center,

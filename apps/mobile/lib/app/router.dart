@@ -28,6 +28,7 @@ import '../features/activities/presentation/manage_activity_screen.dart';
 import '../features/activities/presentation/match_screen.dart';
 import '../features/preferences/presentation/get_to_know_1_screen.dart';
 import '../features/preferences/presentation/get_to_know_2_screen.dart';
+import '../features/preferences/presentation/get_to_know_3_screen.dart';
 import '../features/preferences/presentation/preferences_screen.dart';
 import '../features/notifications/presentation/notifications_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
@@ -151,6 +152,21 @@ GoRouter buildRouter(Ref ref) {
           return appPage(state, NewPasswordScreen(email: email));
         },
       ),
+      // Post-signup preference flow sits OUTSIDE the shell: the user hasn't
+      // landed in the app proper yet, so showing the tab bar here would let
+      // them skip the flow by tapping a tab.
+      GoRoute(
+        path: '/get-to-know-1',
+        pageBuilder: (_, state) => appPage(state, const GetToKnow1Screen()),
+      ),
+      GoRoute(
+        path: '/get-to-know-2',
+        pageBuilder: (_, state) => appPage(state, const GetToKnow2Screen()),
+      ),
+      GoRoute(
+        path: '/get-to-know-3',
+        pageBuilder: (_, state) => appPage(state, const GetToKnow3Screen()),
+      ),
       // Activity detail sits OUTSIDE the shell: the Figma design (node 43:201)
       // has no bottom navigation on this screen — its footer holds only the home
       // indicator. Note that joined-activity-detail (74:5) DOES keep the tab
@@ -259,14 +275,6 @@ GoRouter buildRouter(Ref ref) {
               final id = state.pathParameters['id'] ?? '1';
               return appPage(state, PastActivityReviewScreen(activityId: id));
             },
-          ),
-          GoRoute(
-            path: '/get-to-know-1',
-            pageBuilder: (_, state) => appPage(state, const GetToKnow1Screen()),
-          ),
-          GoRoute(
-            path: '/get-to-know-2',
-            pageBuilder: (_, state) => appPage(state, const GetToKnow2Screen()),
           ),
           GoRoute(
             path: '/preferences',

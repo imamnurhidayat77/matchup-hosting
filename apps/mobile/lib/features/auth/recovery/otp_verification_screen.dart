@@ -2,18 +2,16 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
-import '../../../core/theme/dark_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/theme/dark_colors.dart';
 import '../../../core/utils/secure_screen.dart';
+import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_snackbar.dart';
-import '../../../core/widgets/pill_buttons.dart';
 import '../../../core/widgets/pressable_scale.dart';
-import '../presentation/widgets/auth_shell.dart';
 
 /// Receives the email address via GoRouter's [GoRouterState.extra].
 class OtpVerificationScreen extends StatefulWidget {
@@ -27,10 +25,8 @@ class OtpVerificationScreen extends StatefulWidget {
 class _OtpVerificationScreenState extends State<OtpVerificationScreen>
     with TickerProviderStateMixin, SecureScreenMixin {
   static const _codeLength = 6;
-  final _controllers = List.generate(
-    _codeLength,
-    (_) => TextEditingController(),
-  );
+
+  final _controllers = List.generate(_codeLength, (_) => TextEditingController());
   final _focusNodes = List.generate(_codeLength, (_) => FocusNode());
 
   Timer? _timer;
@@ -38,15 +34,14 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
   bool _isVerifying = false;
   bool _hasError = false;
 
-  // Shake animation for wrong OTP
-  late final AnimationController _shakeController = AnimationController(
+  late final AnimationController _shakeCtrl = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 400),
+    duration: const Duration(milliseconds: 420),
   );
-  late final Animation<double> _shakeAnimation = Tween<double>(
+  late final Animation<double> _shakeAnim = Tween<double>(
     begin: 0,
     end: 1,
-  ).animate(CurvedAnimation(parent: _shakeController, curve: Curves.elasticIn));
+  ).animate(CurvedAnimation(parent: _shakeCtrl, curve: Curves.elasticIn));
 
   @override
   void initState() {
@@ -57,20 +52,16 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
   @override
   void dispose() {
     _timer?.cancel();
-    _shakeController.dispose();
-    for (final c in _controllers) {
-      c.dispose();
-    }
-    for (final f in _focusNodes) {
-      f.dispose();
-    }
+    _shakeCtrl.dispose();
+    for (final c in _controllers) { c.dispose(); }
+    for (final f in _focusNodes) { f.dispose(); }
     super.dispose();
   }
 
   void _startTimer() {
     _timer?.cancel();
     setState(() => _secondsRemaining = 60);
-    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       setState(() {
         if (_secondsRemaining > 0) _secondsRemaining--;
@@ -89,16 +80,13 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
   Future<void> _verify() async {
     if (_enteredCode.length != _codeLength) return;
     setState(() => _isVerifying = true);
-
-    // TODO: call POST /api/v1/auth/verify-otp  { email, code }
-    // Simulate: code "123456" is always valid in demo mode.
+    // TODO: POST /api/v1/auth/verify-otp { email, code }
     await Future<void>.delayed(const Duration(milliseconds: 700));
     if (!mounted) return;
     setState(() => _isVerifying = false);
 
     if (_enteredCode == '123456') {
       HapticFeedback.mediumImpact();
-      // Pass email forward to new-password screen
       context.push('/new-password', extra: widget.email);
     } else {
       _showError();
@@ -108,13 +96,10 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
   void _showError() {
     HapticFeedback.heavyImpact();
     setState(() => _hasError = true);
-    _shakeController.forward(from: 0).then((_) {
+    _shakeCtrl.forward(from: 0).then((_) {
       if (!mounted) return;
       setState(() => _hasError = false);
-      // Clear all boxes
-      for (final c in _controllers) {
-        c.clear();
-      }
+      for (final c in _controllers) { c.clear(); }
       _focusNodes.first.requestFocus();
     });
     AppSnackbar.show(
@@ -125,7 +110,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
   }
 
   void _onOtpChanged(int index, String value) {
-    // Handle paste: if value has multiple chars, distribute across boxes
+    // Handle paste
     if (value.length > 1) {
       final digits = value.replaceAll(RegExp(r'\D'), '');
       for (var i = 0; i < _codeLength && i < digits.length; i++) {
@@ -140,7 +125,6 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
       setState(() {});
       return;
     }
-
     if (value.isNotEmpty && index < _codeLength - 1) {
       _focusNodes[index + 1].requestFocus();
     } else if (value.isEmpty && index > 0) {
@@ -151,7 +135,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
 
   Future<void> _resend() async {
     if (_secondsRemaining > 0) return;
-    // TODO: call POST /api/v1/auth/forgot-password again
+    // TODO: POST /api/v1/auth/forgot-password again
     _startTimer();
     AppSnackbar.show(
       context,
@@ -164,152 +148,227 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
   Widget build(BuildContext context) {
     final email = widget.email.isNotEmpty ? widget.email : 'your email';
     final canVerify = _enteredCode.length == _codeLength && !_isVerifying;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final safeTop = MediaQuery.of(context).padding.top;
+    final safeBottom = MediaQuery.of(context).padding.bottom;
+    final availableHeight = screenHeight - safeTop - safeBottom;
 
-    return AuthShell(
-      header: AuthHeaderBar(
-        title: 'Verification',
-        onBack: () => Navigator.of(context).maybePop(),
-      ),
-      bottom: Padding(
-        padding: const EdgeInsets.only(top: AppSpacing.x2),
-        child: Semantics(
-          button: true,
-          enabled: _secondsRemaining == 0,
-          label: _secondsRemaining == 0
-              ? 'Resend code'
-              : 'Resend code, available in $_secondsRemaining seconds',
-          child: PressableScale(
-            onTap: _secondsRemaining == 0 ? _resend : null,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  "Didn't receive the code? ",
-                  style: AppTypography.bodyMedium(
-                    context,
-                  ).copyWith(color: context.colors.textSecondary),
-                ),
-                Text(
-                  'Resend',
-                  style: AppTypography.bodyMedium(context).copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: _secondsRemaining == 0
-                        ? context.colors.primaryOnSurface
-                        : context.colors.textTertiary,
-                  ),
-                ),
-              ],
-            ),
+    return AppScaffold(
+      safeAreaTop: true,
+      showHomeIndicator: true,
+      backgroundColor: AppColors.textOnPrimary,
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.x5,
+            AppSpacing.x3,
+            AppSpacing.x5,
+            AppSpacing.x6,
           ),
-        ),
-      ),
-      children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            const SizedBox(height: AppSpacing.x6),
-            AuthIllustration(iconPath: 'assets/images/auth/mail.svg'),
-            const SizedBox(height: AppSpacing.x6),
-            Text(
-              'Check Your Email',
-              textAlign: TextAlign.center,
-              style: AppTypography.headlineSmall(
-                context,
-              ).copyWith(fontSize: 24, fontWeight: FontWeight.w800),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: availableHeight - AppSpacing.x3 - AppSpacing.x6,
             ),
-            const SizedBox(height: AppSpacing.x3),
-            Text.rich(
-              TextSpan(
-                style: AppTypography.bodyReading(
-                  context,
-                ).copyWith(color: context.colors.textSecondary),
+            child: IntrinsicHeight(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const TextSpan(text: 'We sent a 6-digit code to '),
-                  TextSpan(
-                    text: email,
-                    style: AppTypography.bodyReading(context).copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: context.colors.textPrimary,
+                  // Back button
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Semantics(
+                      button: true,
+                      label: 'Back',
+                      child: PressableScale(
+                        onTap: () => Navigator.of(context).maybePop(),
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          alignment: Alignment.center,
+                          child: Icon(
+                            Icons.arrow_back_ios_new_rounded,
+                            size: 20,
+                            color: context.colors.textPrimary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.x4),
+
+                  // Icon
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: const BoxDecoration(
+                      color: AppColors.primarySoft,
+                      shape: BoxShape.circle,
+                    ),
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.mark_email_unread_rounded,
+                      size: 30,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.x4),
+
+                  // Title + subtitle
+                  Text(
+                    'Check Your Email',
+                    style: AppTypography.headingDisplay(context),
+                  ),
+                  const SizedBox(height: AppSpacing.x2),
+                  Text.rich(
+                    TextSpan(
+                      style: AppTypography.bodyFormSecondary(context),
+                      children: [
+                        const TextSpan(text: 'We sent a 6-digit code to '),
+                        TextSpan(
+                          text: email,
+                          style: AppTypography.bodyFormSecondary(context)
+                              .copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: context.colors.textPrimary,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.x6),
+
+                  // OTP boxes — centered
+                  AnimatedBuilder(
+                    animation: _shakeAnim,
+                    builder: (_, child) {
+                      final offset = _shakeCtrl.isAnimating
+                          ? 8 * (0.5 - (_shakeAnim.value - 0.5).abs()) * 2
+                          : 0.0;
+                      return Transform.translate(
+                        offset: Offset(offset, 0),
+                        child: child,
+                      );
+                    },
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: List.generate(_codeLength, (i) => _OtpBox(
+                        controller: _controllers[i],
+                        focusNode: _focusNodes[i],
+                        hasError: _hasError,
+                        onChanged: (v) => _onOtpChanged(i, v),
+                      )),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.x4),
+
+                  // Timer
+                  Center(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.access_time_rounded,
+                          size: 15,
+                          color: _secondsRemaining > 0
+                              ? context.colors.textSecondary
+                              : AppColors.danger,
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          _secondsRemaining > 0
+                              ? 'Resend code in $_timerText'
+                              : 'Code expired',
+                          style: AppTypography.metaSub(context).copyWith(
+                            color: _secondsRemaining > 0
+                                ? context.colors.textSecondary
+                                : AppColors.danger,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.x5),
+
+                  // Verify button
+                  PressableScale(
+                    onTap: canVerify ? _verify : null,
+                    child: Container(
+                      width: double.infinity,
+                      height: 54,
+                      decoration: BoxDecoration(
+                        color: canVerify
+                            ? AppColors.primary
+                            : AppColors.primary.withValues(alpha: 0.4),
+                        borderRadius: BorderRadius.circular(AppRadius.lg),
+                        boxShadow: canVerify ? AppShadows.glowPrimary : null,
+                      ),
+                      alignment: Alignment.center,
+                      child: _isVerifying
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                valueColor: AlwaysStoppedAnimation(
+                                  AppColors.textOnPrimary,
+                                ),
+                              ),
+                            )
+                          : Text(
+                              'Verify',
+                              style: AppTypography.buttonPrimary,
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.x4),
+
+                  // Resend link
+                  Center(
+                    child: Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 4,
+                      children: [
+                        Text(
+                          "Didn't receive the code?",
+                          style: AppTypography.bodyFormSecondary(context),
+                        ),
+                        Semantics(
+                          button: true,
+                          enabled: _secondsRemaining == 0,
+                          label: 'Resend code',
+                          child: PressableScale(
+                            onTap: _secondsRemaining == 0 ? _resend : null,
+                            child: Text(
+                              'Resend',
+                              style: AppTypography.bodyFormSecondary(context)
+                                  .copyWith(
+                                    color: _secondsRemaining == 0
+                                        ? AppColors.primary
+                                        : context.colors.textTertiary,
+                                    fontWeight: FontWeight.w700,
+                                    decoration: _secondsRemaining == 0
+                                        ? TextDecoration.underline
+                                        : null,
+                                    decorationColor: AppColors.primary,
+                                  ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
-              textAlign: TextAlign.center,
             ),
-            const SizedBox(height: AppSpacing.x6),
-
-            // ── OTP boxes with shake animation ─────────────────
-            AnimatedBuilder(
-              animation: _shakeAnimation,
-              builder: (_, child) {
-                final offset = (_shakeController.isAnimating)
-                    ? (8 * (0.5 - (_shakeAnimation.value - 0.5).abs()) * 2)
-                    : 0.0;
-                return Transform.translate(
-                  offset: Offset(offset, 0),
-                  child: child,
-                );
-              },
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(_codeLength, (i) {
-                  return Padding(
-                    padding: EdgeInsets.only(
-                      right: i < _codeLength - 1 ? AppSpacing.x2 : 0,
-                    ),
-                    child: _OtpBox(
-                      controller: _controllers[i],
-                      focusNode: _focusNodes[i],
-                      hasError: _hasError,
-                      onChanged: (v) => _onOtpChanged(i, v),
-                    ),
-                  );
-                }),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.x4),
-
-            // ── Timer ──────────────────────────────────────────
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                SvgPicture.asset(
-                  'assets/images/discovery/icons/clock.svg',
-                  width: 15,
-                  height: 15,
-                  colorFilter: ColorFilter.mode(
-                    context.colors.textSecondary,
-                    BlendMode.srcIn,
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.x2 - 2),
-                Text(
-                  _secondsRemaining > 0
-                      ? 'Resend code in $_timerText'
-                      : 'Code expired',
-                  style: AppTypography.inputLabelSmall(context).copyWith(
-                    color: _secondsRemaining > 0
-                        ? context.colors.textSecondary
-                        : AppColors.danger,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.x6),
-
-            PrimaryPillButton(
-              label: _isVerifying ? 'Verifying…' : 'Verify',
-              onPressed: canVerify ? _verify : null,
-            ),
-            const SizedBox(height: AppSpacing.x6),
-          ],
+          ),
         ),
-      ],
+      ),
     );
   }
 }
 
-// ─── OTP input box ────────────────────────────────────────────────────────────
+// ─── OTP box ──────────────────────────────────────────────────────────────────
 
 class _OtpBox extends StatelessWidget {
   const _OtpBox({
@@ -324,11 +383,15 @@ class _OtpBox extends StatelessWidget {
   final ValueChanged<String> onChanged;
   final bool hasError;
 
+  static const Color _fill = Color(0xFFF9FAFB);
+  static const Color _border = Color(0xFFE5E7EB);
+
   @override
   Widget build(BuildContext context) {
+    final filled = controller.text.isNotEmpty;
     return SizedBox(
       width: 48,
-      height: 56,
+      height: 58,
       child: TextField(
         controller: controller,
         focusNode: focusNode,
@@ -337,7 +400,8 @@ class _OtpBox extends StatelessWidget {
         maxLength: 1,
         keyboardType: TextInputType.number,
         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-        style: AppTypography.headlineSmall(context).copyWith(
+        cursorColor: AppColors.primary,
+        style: AppTypography.headingDisplay(context).copyWith(
           fontSize: 22,
           fontWeight: FontWeight.w800,
           color: hasError ? AppColors.danger : context.colors.textPrimary,
@@ -346,17 +410,28 @@ class _OtpBox extends StatelessWidget {
           counterText: '',
           filled: true,
           fillColor: hasError
-              ? context.colors.errorLight
-              : context.colors.surface,
+              ? AppColors.errorLight
+              : filled
+                  ? AppColors.primarySoft
+                  : _fill,
           contentPadding: EdgeInsets.zero,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(AppRadius.card),
+            borderSide: BorderSide.none,
+          ),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(AppRadius.md),
+            borderRadius: BorderRadius.circular(AppRadius.card),
             borderSide: BorderSide(
-              color: hasError ? AppColors.danger : context.colors.border,
+              color: hasError
+                  ? AppColors.danger
+                  : filled
+                      ? AppColors.primary
+                      : _border,
+              width: filled ? 2 : 1,
             ),
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(AppRadius.md),
+            borderRadius: BorderRadius.circular(AppRadius.card),
             borderSide: BorderSide(
               color: hasError ? AppColors.danger : AppColors.primary,
               width: 2,

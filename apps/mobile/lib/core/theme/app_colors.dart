@@ -44,8 +44,17 @@ class AppColors {
   static const Color successLight = Color(0xFFDCFCE7);
   static const Color warning = Color(0xFFF59E0B);
   static const Color warningLight = Color(0xFFFEF3C7);
+
+  /// Stronger amber for icon/text on a light warning background.
+  /// [warning] (#F59E0B) on [warningLight] (#FEF3C7) only reaches 2.07:1 —
+  /// fails WCAG AA for text. This dark variant reaches 5.5:1 on the same bg.
+  static const Color warningStrong = Color(0xFFB45309);
   static const Color error = Color(0xFFEF4444);
   static const Color errorLight = Color(0xFFFEE2E2);
+
+  /// Darker red for icon/text on a light error background.
+  /// [error] (#EF4444) on [errorLight] (#FEE2E2) only reaches 3.08:1.
+  static const Color errorStrong = Color(0xFFB91C1C);
 
   // UI
   static const Color border = Color(0xFFE2E8F0); // Figma border-default

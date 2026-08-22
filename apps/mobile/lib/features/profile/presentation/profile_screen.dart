@@ -13,6 +13,8 @@ import '../../../core/theme/theme_controller.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_tappable.dart';
 import '../../../core/widgets/skeleton.dart';
+import '../../tour/presentation/tour_controller.dart';
+import '../../tour/presentation/tour_steps.dart';
 import '../domain/user_model.dart';
 
 class ProfileScreen extends ConsumerWidget {
@@ -458,6 +460,18 @@ class _SportPill extends StatelessWidget {
 
 // ─── Options card ─────────────────────────────────────────────────────────────
 
+/// Restarts the first-run tour on demand from Profile, regardless of
+/// whether the user has already seen it — `reset` clears the "seen" flag
+/// first so `start` (which persists it again on completion/skip) behaves
+/// exactly like a fresh first run. Awaiting `reset` before navigating
+/// avoids a race where Discovery could mount and check tour state before
+/// the flag is actually cleared.
+Future<void> _replayTour(BuildContext context, WidgetRef ref) async {
+  await ref.read(tourStoreProvider).reset(kFirstRunTourId);
+  ref.read(tourControllerProvider.notifier).start(kFirstRunTourId, kFirstRunTour);
+  if (context.mounted) context.go('/discovery');
+}
+
 class _OptionsCard extends ConsumerWidget {
   const _OptionsCard({required this.user});
   final UserModel user;
@@ -496,6 +510,14 @@ class _OptionsCard extends ConsumerWidget {
             icon: Icons.notifications_none_rounded,
             label: 'Notification Settings',
             onTap: () => context.push('/notifications'),
+          ),
+          _Divider(),
+          _OptionRow(
+            icon: Icons.help_outline_rounded,
+            label: 'Replay tour',
+            onTap: () {
+              _replayTour(context, ref);
+            },
           ),
           _Divider(),
 
@@ -792,31 +814,127 @@ class _LogoutRow extends ConsumerWidget {
   }
 
   Future<void> _confirmLogout(BuildContext context, WidgetRef ref) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showModalBottomSheet<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Log Out'),
-        content: const Text('Are you sure you want to log out?'),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.card),
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => const _LogoutSheet(),
+    );
+    if (confirmed == true && context.mounted) {
+      await ref.read(authStateProvider.notifier).signOut();
+      if (context.mounted) context.go('/welcome');
+    }
+  }
+}
+
+// ─── Logout confirmation bottom sheet ────────────────────────────────────────
+
+class _LogoutSheet extends StatelessWidget {
+  const _LogoutSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPad = MediaQuery.of(context).padding.bottom;
+    return Container(
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(AppRadius.xl),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.x5,
+        AppSpacing.x4,
+        AppSpacing.x5,
+        bottomPad + AppSpacing.x4,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Handle
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: context.colors.border,
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+            ),
           ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(
-              'Log Out',
-              style: TextStyle(color: AppColors.dangerAccent),
+          const SizedBox(height: AppSpacing.x4),
+
+          // Icon
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: AppColors.errorLight,
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: const Icon(
+              Icons.logout_rounded,
+              size: 26,
+              color: AppColors.dangerAccent,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.x3),
+
+          // Title
+          Text(
+            'Log Out',
+            style: AppTypography.titleSheet(context).copyWith(
+              color: AppColors.dangerAccent,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.x2),
+
+          // Body
+          Text(
+            'Are you sure you want to log out of your MatchUp account?',
+            textAlign: TextAlign.center,
+            style: AppTypography.bodyFormSecondary(context),
+          ),
+          const SizedBox(height: AppSpacing.x5),
+
+          // Log Out button
+          SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.dangerAccent,
+                foregroundColor: AppColors.textOnPrimary,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                ),
+              ),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text('Log Out', style: AppTypography.buttonPrimary),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.x3),
+
+          // Cancel button
+          SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: context.colors.textPrimary,
+                side: BorderSide(color: context.colors.border),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                ),
+              ),
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(
+                'Cancel',
+                style: AppTypography.labelField(context),
+              ),
             ),
           ),
         ],
       ),
     );
-    if (confirmed == true && context.mounted) {
-      await ref.read(authStateProvider.notifier).signOut();
-    }
   }
 }

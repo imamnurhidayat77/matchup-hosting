@@ -23,7 +23,7 @@ class DarkPalette {
   /// `ColorScheme.primaryContainer`, the selected nav-item indicator, and
   /// the selected chip fill. One value, three Material slots, deliberately
   /// consistent rather than three near-duplicates.
-  static const primaryContainer = Color(0xFF2748B8);
+  static const primaryContainer = Color(0xFF1E3A8A);
 
   /// Dark-mode container for the accent (orange) colour.
   static const secondaryContainer = Color(0xFF7C2D12);

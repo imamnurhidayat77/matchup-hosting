@@ -8,8 +8,6 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/widgets/app_scaffold.dart';
-import '../../../core/widgets/app_tappable.dart';
-import '../../../core/widgets/pill_buttons.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import 'get_to_know_1_screen.dart' show OnboardingProgressHeader;
 
@@ -21,154 +19,221 @@ class GetToKnow2Screen extends ConsumerStatefulWidget {
 }
 
 class _GetToKnow2ScreenState extends ConsumerState<GetToKnow2Screen> {
-  // ── Sport selection (name → skill level label) ───────────────────────────
+  /// Selected sports mapped to their skill level.
   final Map<String, String> _sports = {};
 
   static const _sportOptions = [
-    ('Basketball', Icons.sports_basketball_rounded),
-    ('Tennis', Icons.sports_tennis_rounded),
-    ('Soccer', Icons.sports_soccer_rounded),
-    ('Running', Icons.directions_run_rounded),
-    ('Volleyball', Icons.sports_volleyball_rounded),
-    ('Cycling', Icons.directions_bike_rounded),
-    ('Fitness', Icons.fitness_center_rounded),
-    ('Golf', Icons.sports_golf_rounded),
-    ('Swimming', Icons.pool_rounded),
-    ('Badminton', Icons.sports_handball_rounded),
+    'Basketball',
+    'Tennis',
+    'Soccer',
+    'Running',
+    'Volleyball',
+    'Cycling',
+    'Fitness',
+    'Golf',
+    'Swimming',
+    'Badminton',
+    'Squash',
+    'Yoga',
   ];
 
   static const _levels = ['Beginner', 'Intermediate', 'Advanced'];
 
-  // ── Distance preference ───────────────────────────────────────────────────
   double _distanceKm = 5;
 
   void _onNext() {
-    // Persist to shared providers so preferences_screen & discovery read them
     ref.read(sportPreferencesProvider.notifier).setAll(_sports);
     ref.read(distanceFilterProvider.notifier).state = _distanceKm;
-    context.push('/preferences');
+    context.push('/get-to-know-3');
   }
 
-  void _toggleSport(String name) {
-    setState(() {
-      if (_sports.containsKey(name)) {
-        _sports.remove(name);
-      } else {
-        _sports[name] = 'Intermediate'; // default level
-      }
-    });
+  /// Tapping a chip: an unselected sport asks for a skill level before it is
+  /// added (so nothing is silently defaulted); a selected one is removed.
+  Future<void> _onChipTap(String name) async {
+    if (_sports.containsKey(name)) {
+      setState(() => _sports.remove(name));
+      return;
+    }
+    final picked = await _showLevelSheet(name, null);
+    if (picked != null) setState(() => _sports[name] = picked);
   }
 
-  void _setLevel(String name, String level) {
-    setState(() => _sports[name] = level);
+  /// Re-opens the picker for an already-selected sport.
+  Future<void> _onLevelTap(String name, String current) async {
+    final picked = await _showLevelSheet(name, current);
+    if (picked != null) setState(() => _sports[name] = picked);
+  }
+
+  Future<String?> _showLevelSheet(String sport, String? current) {
+    return showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) =>
+          _LevelSheet(sport: sport, current: current, levels: _levels),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final bottomPad = MediaQuery.of(context).padding.bottom;
+
     return AppScaffold(
-      showHomeIndicator: false, // inside ShellRoute — AppShell draws its own.
+      // Outside ShellRoute (post-signup flow, no tab bar) — draws its own.
+      showHomeIndicator: true,
+      backgroundColor: AppColors.textOnPrimary,
       body: Column(
         children: [
           OnboardingProgressHeader(step: 2, total: 3),
+
+          // ── Scrollable: title + sport grid ─────────────────────────
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(
-                AppSpacing.x6,
+                AppSpacing.x5,
                 AppSpacing.x4,
-                AppSpacing.x6,
-                AppSpacing.x4,
+                AppSpacing.x5,
+                AppSpacing.x5,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     'Which sports do you play?',
-                    style: AppTypography.titleScreen(context),
+                    style: AppTypography.titleScreen(context).copyWith(
+                      fontSize: 29,
+                      fontWeight: FontWeight.w800,
+                      height: 1.15,
+                    ),
                   ),
-                  const SizedBox(height: AppSpacing.x1),
+                  const SizedBox(height: AppSpacing.x2),
                   Text(
-                    'Pick any — then set your skill level.',
-                    style: AppTypography.bodyMedium(
-                      context,
-                    ).copyWith(color: context.colors.textSecondary),
+                    'Pick any - then set your skill level.',
+                    style: AppTypography.bodyMedium(context).copyWith(
+                      color: context.colors.textSecondary,
+                    ),
                   ),
-                  const SizedBox(height: AppSpacing.x5),
+                  const SizedBox(height: AppSpacing.x4),
 
-                  // ── Sport grid ─────────────────────────────────────
+                  // Sport grid — 3 columns of oval chips
                   GridView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     gridDelegate:
                         const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
-                          crossAxisSpacing: AppSpacing.x3,
-                          mainAxisSpacing: AppSpacing.x3,
-                          childAspectRatio: 0.9,
-                        ),
+                      crossAxisCount: 3,
+                      crossAxisSpacing: AppSpacing.x3,
+                      mainAxisSpacing: AppSpacing.x3,
+                      childAspectRatio: 1.45,
+                    ),
                     itemCount: _sportOptions.length,
                     itemBuilder: (_, i) {
-                      final (name, icon) = _sportOptions[i];
+                      final name = _sportOptions[i];
                       final level = _sports[name];
-                      final selected = level != null;
                       return _SportChip(
-                        icon: icon,
                         name: name,
                         level: level,
-                        selected: selected,
-                        onTap: () => _toggleSport(name),
-                        onLevelTap: selected
-                            ? () => _showLevelSheet(context, name, level)
+                        onTap: () => _onChipTap(name),
+                        onLevelTap: level != null
+                            ? () => _onLevelTap(name, level)
                             : null,
                       );
                     },
                   ),
-                  const SizedBox(height: AppSpacing.x6),
-
-                  // ── Distance ───────────────────────────────────────
-                  Row(
-                    children: [
-                      Text(
-                        'Discovery distance',
-                        style: AppTypography.labelField(context),
-                      ),
-                      const Spacer(),
-                      Text(
-                        '${_distanceKm.round()} km',
-                        style: AppTypography.chipLabel(
-                          context,
-                        ).copyWith(color: context.colors.primaryOnSurface),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.x2),
-                  SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      trackHeight: 4,
-                      activeTrackColor: AppColors.primary,
-                      inactiveTrackColor: context.colors.border,
-                      thumbColor: AppColors.primary,
-                      overlayColor: AppColors.primary.withValues(alpha: 0.12),
-                      thumbShape: const RoundSliderThumbShape(
-                        enabledThumbRadius: 9,
-                      ),
-                    ),
-                    child: Slider(
-                      value: _distanceKm,
-                      min: 1,
-                      max: 50,
-                      divisions: 49,
-                      onChanged: (v) => setState(() => _distanceKm = v),
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.x6),
-
-                  PrimaryPillButton(
-                    label: _sports.isEmpty
-                        ? 'Skip for now'
-                        : 'Next  (${_sports.length} selected)',
-                    onPressed: _onNext,
-                  ),
                 ],
+              ),
+            ),
+          ),
+
+          // ── Discovery distance ─────────────────────────────────────
+          Container(
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(color: context.colors.border),
+              ),
+            ),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.x5,
+              AppSpacing.x4,
+              AppSpacing.x5,
+              AppSpacing.x3,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      'Discovery distance',
+                      style: AppTypography.labelField(context).copyWith(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '${_distanceKm.round()} km',
+                      style: AppTypography.labelField(context).copyWith(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ],
+                ),
+                SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 4,
+                    activeTrackColor: AppColors.primary,
+                    inactiveTrackColor: context.colors.border,
+                    thumbColor: AppColors.primary,
+                    overlayColor: AppColors.primary.withValues(alpha: 0.12),
+                    thumbShape: const RoundSliderThumbShape(
+                      enabledThumbRadius: 9,
+                    ),
+                    trackShape: const RoundedRectSliderTrackShape(),
+                  ),
+                  child: Slider(
+                    value: _distanceKm,
+                    min: 1,
+                    max: 50,
+                    divisions: 49,
+                    onChanged: (v) => setState(() => _distanceKm = v),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // ── Next button ────────────────────────────────────────────
+          Container(
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(color: context.colors.border),
+              ),
+            ),
+            padding: EdgeInsets.fromLTRB(
+              AppSpacing.x5,
+              AppSpacing.x4,
+              AppSpacing.x5,
+              bottomPad + AppSpacing.x3,
+            ),
+            child: PressableScale(
+              onTap: _onNext,
+              child: Container(
+                width: double.infinity,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                  boxShadow: AppShadows.glowPrimary,
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  _sports.isEmpty
+                      ? 'Skip for now'
+                      : 'Next (${_sports.length} selected)',
+                  style: AppTypography.buttonPrimary,
+                ),
               ),
             ),
           ),
@@ -176,126 +241,98 @@ class _GetToKnow2ScreenState extends ConsumerState<GetToKnow2Screen> {
       ),
     );
   }
-
-  Future<void> _showLevelSheet(
-    BuildContext context,
-    String sport,
-    String current,
-  ) async {
-    final picked = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) =>
-          _LevelSheet(sport: sport, current: current, levels: _levels),
-    );
-    if (picked != null) _setLevel(sport, picked);
-  }
 }
 
-// ─── Sport chip ───────────────────────────────────────────────────────────────
+// ─── Sport chip — oval, no icon ───────────────────────────────────────────────
 
 class _SportChip extends StatelessWidget {
   const _SportChip({
-    required this.icon,
     required this.name,
     required this.level,
-    required this.selected,
     required this.onTap,
     this.onLevelTap,
   });
 
-  final IconData icon;
   final String name;
   final String? level;
-  final bool selected;
   final VoidCallback onTap;
   final VoidCallback? onLevelTap;
 
+  static const Color _unselectedFill = Color(0xFFF1F5F9);
+  static const Color _unselectedBorder = Color(0xFFE5E7EB);
+
   @override
   Widget build(BuildContext context) {
-    return AppTappable(
-      semanticLabel: selected ? '$name, $level' : '$name, not selected',
-      minSize: 0,
-      borderRadius: AppRadius.lg,
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: AppDurations.fast,
-        curve: Curves.easeOut,
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.x2,
-          vertical: AppSpacing.x3,
-        ),
-        decoration: BoxDecoration(
-          color: selected ? context.colors.primarySoft : context.colors.surface,
-          borderRadius: AppRadius.lgR,
-          border: Border.all(
-            color: selected ? AppColors.primary : context.colors.border,
-            width: selected ? 1.5 : 1,
+    final selected = level != null;
+
+    // PressableScale (not AppTappable) because AppTappable wraps its child in
+    // a Stack, which lets the container shrink to its content instead of
+    // filling the grid cell — the chip must stretch edge-to-edge.
+    return Semantics(
+      button: true,
+      label: selected ? '$name, $level' : '$name, not selected',
+      child: PressableScale(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: AppDurations.fast,
+          curve: Curves.easeOut,
+          decoration: BoxDecoration(
+            color: selected ? AppColors.primarySoft : _unselectedFill,
+            // Radius just under half the cell height reads as a soft oval.
+            borderRadius: BorderRadius.circular(52),
+            border: Border.all(
+              color: selected ? AppColors.primary : _unselectedBorder,
+              width: selected ? 2 : 1,
+            ),
           ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: selected
-                    ? AppColors.primary
-                    : context.colors.surfaceSubtle,
-                borderRadius: AppRadius.mdR,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                name,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.labelField(context).copyWith(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: selected
+                      ? AppColors.primary
+                      : context.colors.textPrimary,
+                ),
               ),
-              child: Icon(
-                icon,
-                size: 22,
-                color: selected
-                    ? AppColors.textOnPrimary
-                    : context.colors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.x1 + 2),
-            Text(
-              name,
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTypography.chipLabel(context).copyWith(
-                color: selected
-                    ? context.colors.primaryOnSurface
-                    : context.colors.textLabel,
-              ),
-            ),
-            const SizedBox(height: 3),
-            if (selected && level != null)
-              PressableScale(
-                onTap: onLevelTap,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      level!.substring(0, 3), // abbreviate
-                      style: AppTypography.caption(context).copyWith(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
+              const SizedBox(height: 3),
+              if (selected)
+                PressableScale(
+                  onTap: onLevelTap,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        level!.substring(0, 3),
+                        style: AppTypography.caption(context).copyWith(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                      const Icon(
+                        Icons.expand_more_rounded,
+                        size: 15,
                         color: AppColors.primary,
                       ),
-                    ),
-                    const Icon(
-                      Icons.expand_more_rounded,
-                      size: 12,
-                      color: AppColors.primary,
-                    ),
-                  ],
+                    ],
+                  ),
+                )
+              else
+                Icon(
+                  Icons.add_rounded,
+                  size: 16,
+                  color: context.colors.textSecondary,
                 ),
-              )
-            else
-              Icon(
-                Icons.add_rounded,
-                size: 14,
-                color: context.colors.textTertiary,
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -312,7 +349,11 @@ class _LevelSheet extends StatelessWidget {
   });
 
   final String sport;
-  final String current;
+
+  /// `null` when the sport is being added for the first time — nothing is
+  /// pre-selected, so the user has to make a deliberate choice.
+  final String? current;
+
   final List<String> levels;
 
   @override
@@ -327,9 +368,9 @@ class _LevelSheet extends StatelessWidget {
           ),
         ),
         padding: const EdgeInsets.fromLTRB(
-          AppSpacing.x6,
+          AppSpacing.x5,
           AppSpacing.x3,
-          AppSpacing.x6,
+          AppSpacing.x5,
           AppSpacing.x5,
         ),
         child: Column(
@@ -344,29 +385,32 @@ class _LevelSheet extends StatelessWidget {
               ),
             ),
             const SizedBox(height: AppSpacing.x4),
+            Text(sport, style: AppTypography.titleSheet(context)),
+            const SizedBox(height: 4),
             Text(
-              '$sport — Skill level',
-              style: AppTypography.titleSheet(context),
+              current == null
+                  ? 'How would you rate your skill level?'
+                  : 'Update your skill level',
+              style: AppTypography.bodyFormSecondary(context),
             ),
             const SizedBox(height: AppSpacing.x4),
-            ...levels.map(
-              (l) => PressableScale(
+            ...levels.map((l) {
+              final isCurrent = l == current;
+              return PressableScale(
                 onTap: () => Navigator.of(context).pop(l),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.x4,
-                    vertical: AppSpacing.x4,
-                  ),
+                  padding: const EdgeInsets.all(AppSpacing.x4),
                   margin: const EdgeInsets.only(bottom: AppSpacing.x2),
                   decoration: BoxDecoration(
-                    color: l == current
-                        ? context.colors.primarySoft
-                        : context.colors.surfaceSubtle,
-                    borderRadius: AppRadius.mdR,
+                    color: isCurrent
+                        ? AppColors.primarySoft
+                        : context.colors.surfaceMuted,
+                    borderRadius: BorderRadius.circular(AppRadius.card),
                     border: Border.all(
-                      color: l == current
+                      color: isCurrent
                           ? AppColors.primary
                           : context.colors.border,
+                      width: isCurrent ? 1.5 : 1,
                     ),
                   ),
                   child: Row(
@@ -376,11 +420,13 @@ class _LevelSheet extends StatelessWidget {
                           l,
                           style: AppTypography.bodyMedium(context).copyWith(
                             fontWeight: FontWeight.w600,
-                            color: context.colors.textPrimary,
+                            color: isCurrent
+                                ? AppColors.primary
+                                : context.colors.textPrimary,
                           ),
                         ),
                       ),
-                      if (l == current)
+                      if (isCurrent)
                         const Icon(
                           Icons.check_rounded,
                           size: 18,
@@ -389,8 +435,8 @@ class _LevelSheet extends StatelessWidget {
                     ],
                   ),
                 ),
-              ),
-            ),
+              );
+            }),
           ],
         ),
       ),

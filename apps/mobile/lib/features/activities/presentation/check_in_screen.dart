@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/providers/repository_providers.dart';
@@ -9,48 +8,61 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/app_scaffold.dart';
-import '../../../core/widgets/asset_image.dart';
+import '../../../core/widgets/app_tappable.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../../discovery/domain/activity_model.dart';
 
+// ─── Provider ─────────────────────────────────────────────────────────────────
+
 final _checkInActivityProvider = FutureProvider.autoDispose
     .family<ActivityModel, String>((ref, activityId) async {
-      final activity = await ref
-          .watch(activityRepositoryProvider)
-          .byId(activityId);
-      if (activity == null) throw StateError('Activity not found');
-      return activity;
-    });
+  final activity =
+      await ref.watch(activityRepositoryProvider).byId(activityId);
+  if (activity == null) throw StateError('Activity not found');
+  return activity;
+});
 
-/// Check-In Screen (spec 5.12)
-///
-/// Allows location-based attendance check-in for a joined activity.
-/// Shows the activity title, location, current check-in status, and a
-/// location-permission prompt if needed.
+// ─── Status enum ─────────────────────────────────────────────────────────────
+
+enum _CheckInStatus { notCheckedIn, locating, checkedIn, locationDenied }
+
+// ─── Screen ──────────────────────────────────────────────────────────────────
+
 class CheckInScreen extends ConsumerStatefulWidget {
-  final String activityId;
-
   const CheckInScreen({super.key, required this.activityId});
+  final String activityId;
 
   @override
   ConsumerState<CheckInScreen> createState() => _CheckInScreenState();
 }
 
-enum _CheckInStatus { notCheckedIn, locating, checkedIn, locationDenied }
-
 class _CheckInScreenState extends ConsumerState<CheckInScreen> {
   _CheckInStatus _status = _CheckInStatus.notCheckedIn;
+
+  Future<void> _onCheckIn() async {
+    setState(() => _status = _CheckInStatus.locating);
+    await Future<void>.delayed(const Duration(milliseconds: 900));
+    if (!mounted) return;
+    setState(() => _status = _CheckInStatus.checkedIn);
+  }
+
+  Future<void> _onRefresh() async {
+    setState(() => _status = _CheckInStatus.locating);
+    await Future<void>.delayed(const Duration(milliseconds: 900));
+    if (!mounted) return;
+    setState(() => _status = _CheckInStatus.checkedIn);
+  }
 
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(_checkInActivityProvider(widget.activityId));
 
-    return AppScaffold.detail(
-      title: 'Check-In',
-      showHomeIndicator: false, // reached from inside ShellRoute screens.
-      backgroundColor: context.colors.surface,
+    return AppScaffold(
+      safeAreaTop: false,
+      showHomeIndicator: false,
+      backgroundColor: context.colors.background,
       body: async.when(
         loading: () => const SkeletonList(count: 3),
         error: (_, _) => ErrorRetry(
@@ -58,91 +70,174 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
           onRetry: () =>
               ref.invalidate(_checkInActivityProvider(widget.activityId)),
         ),
-        data: (activity) => _CheckInBody(
+        data: (activity) => _Body(
           activity: activity,
           status: _status,
           onCheckIn: _onCheckIn,
-          onRetry: _onRetry,
+          onRefresh: _onRefresh,
         ),
       ),
     );
   }
-
-  Future<void> _onCheckIn() async {
-    // Mock location detection flow. A real implementation would request
-    // location permissions, fetch the device position, and compare it to the
-    // venue coordinates.
-    setState(() => _status = _CheckInStatus.locating);
-    await Future<void>.delayed(const Duration(milliseconds: 800));
-    if (!mounted) return;
-    // For the demo we assume the user is on-site.
-    setState(() => _status = _CheckInStatus.checkedIn);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Check-in successful! You are at the venue.'),
-          duration: Duration(seconds: 2),
-        ),
-      );
-    }
-  }
-
-  Future<void> _onRetry() async {
-    setState(() => _status = _CheckInStatus.locating);
-    await Future<void>.delayed(const Duration(milliseconds: 800));
-    if (!mounted) return;
-    // On retry we simulate a successful detection.
-    setState(() => _status = _CheckInStatus.checkedIn);
-  }
 }
 
-class _CheckInBody extends StatelessWidget {
-  const _CheckInBody({
+// ─── Body ─────────────────────────────────────────────────────────────────────
+
+class _Body extends StatelessWidget {
+  const _Body({
     required this.activity,
     required this.status,
     required this.onCheckIn,
-    required this.onRetry,
+    required this.onRefresh,
   });
 
   final ActivityModel activity;
   final _CheckInStatus status;
   final Future<void> Function() onCheckIn;
-  final Future<void> Function() onRetry;
+  final Future<void> Function() onRefresh;
+
+  static const double _heroHeight = 280;
+  static const double _overlapAmount = 44;
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.only(bottom: AppSpacing.x6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _Hero(activity: activity),
-          const SizedBox(height: AppSpacing.x5),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x5),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _ActivityInfo(activity: activity),
-                const SizedBox(height: AppSpacing.x5),
-                _StatusCard(status: status),
-                const SizedBox(height: AppSpacing.x4),
-                if (status == _CheckInStatus.locationDenied) ...[
-                  const _PermissionPrompt(),
-                  const SizedBox(height: AppSpacing.x4),
-                ],
-                _PrimaryAction(status: status, onCheckIn: onCheckIn),
-                const SizedBox(height: AppSpacing.x3),
-                if (status != _CheckInStatus.checkedIn)
-                  _SecondaryAction(status: status, onRetry: onRetry),
-              ],
-            ),
+    return Column(
+      children: [
+        Expanded(
+          child: Stack(
+            children: [
+              // ── Hero ──────────────────────────────────────────────────
+              SizedBox(
+                height: _heroHeight,
+                width: double.infinity,
+                child: _Hero(activity: activity),
+              ),
+
+              // ── White card ────────────────────────────────────────────
+              Positioned(
+                top: _heroHeight - _overlapAmount,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: SingleChildScrollView(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: context.colors.surface,
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(AppRadius.xl),
+                      ),
+                      boxShadow: AppShadows.sheet,
+                    ),
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.x5,
+                      AppSpacing.x5,
+                      AppSpacing.x5,
+                      AppSpacing.x6,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Title
+                        Text(
+                          activity.title,
+                          style: AppTypography.headingDisplay(context),
+                        ),
+                        const SizedBox(height: AppSpacing.x2),
+
+                        // Time — blue with clock icon
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.access_time_rounded,
+                              size: 16,
+                              color: context.colors.primaryOnSurface,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              _formatTime(activity.dateTime),
+                              style: AppTypography.labelField(context).copyWith(
+                                color: context.colors.primaryOnSurface,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: AppSpacing.x5),
+
+                        // Activity details section
+                        Text(
+                          'Activity Details',
+                          style: AppTypography.titleMedium(context),
+                        ),
+                        const SizedBox(height: AppSpacing.x3),
+                        _DetailsCard(activity: activity),
+                        const SizedBox(height: AppSpacing.x4),
+
+                        // Status panel
+                        _StatusPanel(status: status),
+                        const SizedBox(height: AppSpacing.x4),
+
+                        // Check In button
+                        _CheckInButton(
+                          status: status,
+                          onCheckIn: onCheckIn,
+                        ),
+                        const SizedBox(height: AppSpacing.x3),
+
+                        // Refresh my location link
+                        if (status != _CheckInStatus.checkedIn)
+                          Center(
+                            child: AppTappable(
+                              semanticLabel: 'Refresh my location',
+                              feedback: AppTapFeedback.scale,
+                              onTap: onRefresh,
+                              minSize: 44,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.refresh_rounded,
+                                    size: 16,
+                                    color: context.colors.primaryOnSurface,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'Refresh my location',
+                                    style: AppTypography.labelField(
+                                      context,
+                                    ).copyWith(
+                                      color: context.colors.primaryOnSurface,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
+
+  String _formatTime(DateTime dt) {
+    final now = DateTime.now();
+    final isToday = dt.year == now.year &&
+        dt.month == now.month &&
+        dt.day == now.day;
+    final prefix = isToday ? 'Today' : DateFormat('EEE, MMM d').format(dt);
+    final time = DateFormat('h:mm a').format(dt);
+    return '$prefix, $time';
+  }
 }
+
+// ─── Hero ─────────────────────────────────────────────────────────────────────
 
 class _Hero extends StatelessWidget {
   const _Hero({required this.activity});
@@ -150,223 +245,292 @@ class _Hero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 160,
-      width: double.infinity,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          AssetImageWithFallback(
-            assetPath:
-                activity.coverImageUrl ??
-                'assets/images/discovery/covers/basketball_full.png',
-            width: double.infinity,
-            height: 160,
-            fit: BoxFit.cover,
-            semanticLabel: 'Activity cover',
-          ),
-          Container(color: context.colors.shadow),
-          Positioned(
-            left: AppSpacing.x5,
-            bottom: AppSpacing.x4,
-            right: AppSpacing.x5,
-            child: Text(
-              activity.title,
-              style: AppTypography.headlineSmall(
-                context,
-              ).copyWith(color: context.colors.textOnPrimary),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ActivityInfo extends StatelessWidget {
-  const _ActivityInfo({required this.activity});
-  final ActivityModel activity;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheduleFmt = DateFormat('EEE, MMM d • h:mm a');
-    final timeRangeFmt = DateFormat('h:mm a');
-    final schedule =
-        '${scheduleFmt.format(activity.dateTime)} - '
-        '${timeRangeFmt.format(activity.endTime)}';
-
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.x4),
-      decoration: BoxDecoration(
-        color: context.colors.surfaceSubtle,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: context.colors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _InfoRow(
-            icon: 'assets/images/discovery/icons/calendar.svg',
-            label: 'Schedule',
-            value: schedule,
-          ),
-          const SizedBox(height: AppSpacing.x3 + 2),
-          _InfoRow(
-            icon: 'assets/images/discovery/icons/map_pin.svg',
-            label: 'Location',
-            value: activity.location,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoRow extends StatelessWidget {
-  const _InfoRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-  final String icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Stack(
+      fit: StackFit.expand,
       children: [
-        Container(
-          width: 32,
-          height: 32,
+        // Cover image
+        activity.coverImageUrl != null
+            ? Image.asset(
+                activity.coverImageUrl!,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => _placeholder(),
+              )
+            : _placeholder(),
+
+        // Bottom gradient scrim
+        const DecoratedBox(
           decoration: BoxDecoration(
-            color: context.colors.primaryLight,
-            shape: BoxShape.circle,
-          ),
-          alignment: Alignment.center,
-          child: SvgPicture.asset(
-            icon,
-            width: 16,
-            height: 16,
-            colorFilter: ColorFilter.mode(
-              context.colors.primaryOnSurface,
-              BlendMode.srcIn,
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [AppColors.scrimTransparent, AppColors.scrimGradient],
+              stops: [0.4, 1.0],
             ),
           ),
         ),
-        const SizedBox(width: AppSpacing.x3),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: AppTypography.caption(
-                  context,
-                ).copyWith(fontWeight: FontWeight.w700),
+
+        // Back + share buttons + centered "Check-In" title
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.x5,
+                vertical: AppSpacing.x2,
               ),
-              const SizedBox(height: 2),
-              Text(value, style: AppTypography.labelField(context)),
+              child: Row(
+                children: [
+                  _HeroBtn(
+                    icon: Icons.arrow_back_ios_new_rounded,
+                    label: 'Back',
+                    onTap: () => Navigator.of(context).maybePop(),
+                  ),
+                  Expanded(
+                    child: Center(
+                      child: Text(
+                        'Check-In',
+                        style: AppTypography.titleSheet(context).copyWith(
+                          color: AppColors.textOnPrimary,
+                        ),
+                      ),
+                    ),
+                  ),
+                  _HeroBtn(
+                    icon: Icons.ios_share_rounded,
+                    label: 'Share',
+                    onTap: () {},
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+
+        // Sport + distance badges — bottom
+        Positioned(
+          left: AppSpacing.x5,
+          bottom: AppSpacing.x4 + 40,
+          child: Row(
+            children: [
+              // Sport — white pill
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.textOnPrimary,
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                ),
+                child: Text(
+                  activity.sportType.toUpperCase(),
+                  style: AppTypography.chipLabel(context).copyWith(
+                    color: AppColors.textPrimary,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.x2),
+              // Distance — green pill
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.success,
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.location_on_rounded,
+                      size: 12,
+                      color: AppColors.textOnPrimary,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${activity.distanceKm.toStringAsFixed(1)} KM AWAY',
+                      style: AppTypography.chipLabel(context).copyWith(
+                        color: AppColors.textOnPrimary,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
       ],
     );
   }
+
+  Widget _placeholder() => Container(
+    decoration: const BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [AppColors.primary, AppColors.primaryDark],
+      ),
+    ),
+    child: Center(
+      child: Icon(
+        Icons.sports,
+        size: 64,
+        color: AppColors.textOnPrimary.withValues(alpha: 0.38),
+      ),
+    ),
+  );
 }
 
-class _StatusCard extends StatelessWidget {
-  const _StatusCard({required this.status});
-  final _CheckInStatus status;
+class _HeroBtn extends StatelessWidget {
+  const _HeroBtn({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    switch (status) {
-      case _CheckInStatus.notCheckedIn:
-        return _StatusBadge(
-          bg: context.colors.warningBg,
-          fg: AppColors.warning,
-          icon: Icons.access_time_rounded,
-          label: 'Not checked in yet',
-          description:
-              'Arrive at the location and tap "Check In" to confirm '
-              'your attendance.',
-        );
-      case _CheckInStatus.locating:
-        return _StatusBadge(
-          bg: context.colors.primaryLight,
-          fg: context.colors.primaryOnSurface,
-          icon: Icons.my_location_rounded,
-          label: 'Detecting your location…',
-          description: 'We are verifying that you are at the activity venue.',
-        );
-      case _CheckInStatus.checkedIn:
-        return _StatusBadge(
-          bg: context.colors.statusSuccessBg,
-          fg: AppColors.avatarSecondary,
-          icon: Icons.check_circle_rounded,
-          label: 'Checked in',
-          description: 'Your attendance has been confirmed. Enjoy the game!',
-        );
-      case _CheckInStatus.locationDenied:
-        return _StatusBadge(
-          bg: context.colors.warningBg,
-          fg: AppColors.warning,
-          icon: Icons.location_off_rounded,
-          label: 'Location permission needed',
-          description:
-              'Enable location access so we can verify your attendance.',
-        );
-    }
+    return Semantics(
+      button: true,
+      label: label,
+      child: PressableScale(
+        onTap: onTap,
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: Center(
+            child: Container(
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AppColors.scrimControl,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+              ),
+              child: Icon(icon, size: 18, color: AppColors.textOnPrimary),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
-class _StatusBadge extends StatelessWidget {
-  const _StatusBadge({
-    required this.bg,
-    required this.fg,
-    required this.icon,
-    required this.label,
-    required this.description,
-  });
+// ─── Details card ─────────────────────────────────────────────────────────────
 
-  final Color bg;
-  final Color fg;
-  final IconData icon;
-  final String label;
-  final String description;
+class _DetailsCard extends StatelessWidget {
+  const _DetailsCard({required this.activity});
+  final ActivityModel activity;
 
   @override
   Widget build(BuildContext context) {
+    final dateStr = DateFormat('EEE, MMM d').format(activity.dateTime);
+    final startStr = DateFormat('h:mm a').format(activity.dateTime);
+    final endStr = DateFormat('h:mm a').format(activity.endTime);
+    final address =
+        activity.addressLine ??
+        '${activity.distanceKm.toStringAsFixed(1)} km away';
+
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.x4),
       decoration: BoxDecoration(
-        color: bg,
+        color: context.colors.surface,
         borderRadius: BorderRadius.circular(AppRadius.card),
+        border: Border.all(color: context.colors.border),
+        boxShadow: AppShadows.card,
+      ),
+      child: Column(
+        children: [
+          _DetailRow(
+            iconBg: AppColors.primarySoft,
+            icon: Icons.bolt_rounded,
+            iconColor: AppColors.primary,
+            title: '${activity.skillLevel.toUpperCase()} LEVEL',
+            subtitle: activity.description.isNotEmpty
+                ? activity.description.split('.').first
+                : 'Join us for a great game',
+          ),
+          Divider(height: 1, color: context.colors.border, indent: 60),
+          _DetailRow(
+            iconBg: AppColors.primarySoft,
+            icon: Icons.access_time_rounded,
+            iconColor: AppColors.primary,
+            title: '$dateStr · $startStr – $endStr',
+            subtitle: 'Arrive 10m early to warm up',
+          ),
+          Divider(height: 1, color: context.colors.border, indent: 60),
+          _DetailRow(
+            iconBg: AppColors.primarySoft,
+            icon: Icons.place_outlined,
+            iconColor: AppColors.primary,
+            title: activity.location,
+            subtitle: address,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  const _DetailRow({
+    required this.iconBg,
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+  });
+  final Color iconBg;
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.x4,
+        vertical: AppSpacing.x3,
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: fg, size: 24),
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: iconBg,
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: Icon(icon, size: 18, color: iconColor),
+          ),
           const SizedBox(width: AppSpacing.x3),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  label,
-                  style: AppTypography.labelField(
-                    context,
-                  ).copyWith(color: fg, fontSize: 15),
+                  title,
+                  style: AppTypography.labelField(context),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: AppSpacing.x1),
+                const SizedBox(height: 2),
                 Text(
-                  description,
-                  style: AppTypography.bodyReading(
-                    context,
-                  ).copyWith(color: fg, fontSize: 13),
+                  subtitle,
+                  style: AppTypography.metaSub(context),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
@@ -377,35 +541,87 @@ class _StatusBadge extends StatelessWidget {
   }
 }
 
-class _PermissionPrompt extends StatelessWidget {
-  const _PermissionPrompt();
+// ─── Status panel ─────────────────────────────────────────────────────────────
+
+class _StatusPanel extends StatelessWidget {
+  const _StatusPanel({required this.status});
+  final _CheckInStatus status;
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    /// Accent resolution per (status, theme):
+    ///  - warning on a light bg fails AA (2.07:1) → use [warningStrong].
+    ///  - statusSuccessText (#04694A dark green) on the dark status bg
+    ///    fails AA (2.18:1) → swap to the theme's [textPrimary] in dark.
+    ///  - warning / primarySoft already pass on dark, so they stay as-is.
+    final (Color bg, Color accent, IconData icon, String title, String body) =
+        switch (status) {
+      _CheckInStatus.notCheckedIn => (
+          isDark ? context.colors.warningBg : AppColors.warningBg,
+          isDark ? AppColors.warning : AppColors.warningStrong,
+          Icons.access_time_rounded,
+          'Not checked in yet',
+          'Arrive at the location and tap "Check In" below to confirm your attendance.',
+        ),
+      _CheckInStatus.locating => (
+          AppColors.primarySoft,
+          AppColors.primary,
+          Icons.my_location_rounded,
+          'Detecting your location…',
+          'We are verifying that you are at the activity venue.',
+        ),
+      _CheckInStatus.checkedIn => (
+          context.colors.statusSuccessBg,
+          isDark ? context.colors.textPrimary : AppColors.statusSuccessText,
+          Icons.check_circle_rounded,
+          'Checked in!',
+          'Your attendance has been confirmed. Enjoy the game!',
+        ),
+      _CheckInStatus.locationDenied => (
+          isDark ? context.colors.warningBg : AppColors.warningBg,
+          isDark ? AppColors.warning : AppColors.warningStrong,
+          Icons.location_off_rounded,
+          'Location permission needed',
+          'Enable location access so we can verify your attendance.',
+        ),
+    };
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.x4),
       decoration: BoxDecoration(
-        color: context.colors.surfaceSubtle,
+        color: bg,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: context.colors.border),
+        border: Border.all(color: accent.withValues(alpha: 0.25)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.privacy_tip_outlined,
-            color: context.colors.primaryOnSurface,
-            size: 20,
-          ),
-          const SizedBox(width: AppSpacing.x2 + 2),
+          Icon(icon, color: accent, size: 22),
+          const SizedBox(width: AppSpacing.x3),
           Expanded(
-            child: Text(
-              'MatchUp uses your location only to confirm you are at the venue. '
-              'You can revoke this at any time in your device settings.',
-              style: AppTypography.bodySmall(
-                context,
-              ).copyWith(color: context.colors.textSecondary),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: AppTypography.labelField(context).copyWith(
+                    color: accent,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  body,
+                  style: AppTypography.metaSub(context).copyWith(
+                    color: accent,
+                    fontSize: 13,
+                    height: 1.4,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -414,94 +630,58 @@ class _PermissionPrompt extends StatelessWidget {
   }
 }
 
-class _PrimaryAction extends StatelessWidget {
-  const _PrimaryAction({required this.status, required this.onCheckIn});
+// ─── Check In button ──────────────────────────────────────────────────────────
+
+class _CheckInButton extends StatelessWidget {
+  const _CheckInButton({required this.status, required this.onCheckIn});
   final _CheckInStatus status;
   final Future<void> Function() onCheckIn;
 
   @override
   Widget build(BuildContext context) {
-    final bool isCheckingIn = status == _CheckInStatus.locating;
-    final bool isDone = status == _CheckInStatus.checkedIn;
-
-    final label = isDone
-        ? 'Checked In'
-        : (isCheckingIn ? 'Locating…' : 'Check In');
-    final bg = isDone
-        ? AppColors.avatarSecondary
-        : context.colors.primaryOnSurface;
+    final isLocating = status == _CheckInStatus.locating;
+    final isDone = status == _CheckInStatus.checkedIn;
 
     return PressableScale(
-      onTap: isCheckingIn || isDone ? null : onCheckIn,
+      onTap: (isLocating || isDone) ? null : onCheckIn,
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.x3 + 2),
+        height: 56,
         decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(AppRadius.input),
+          color: isDone
+              ? AppColors.statusSuccessText
+              : AppColors.primary,
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          boxShadow: isDone ? null : AppShadows.glowPrimary,
         ),
         alignment: Alignment.center,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (isCheckingIn)
-              SizedBox(
-                width: 16,
-                height: 16,
+        child: isLocating
+            ? const SizedBox(
+                width: 22,
+                height: 22,
                 child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: context.colors.textOnPrimary,
+                  strokeWidth: 2.5,
+                  valueColor:
+                      AlwaysStoppedAnimation(AppColors.textOnPrimary),
                 ),
               )
-            else
-              Icon(
-                isDone ? Icons.check_rounded : Icons.location_on_rounded,
-                color: context.colors.textOnPrimary,
-                size: 18,
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    isDone
+                        ? Icons.check_circle_outline_rounded
+                        : Icons.location_on_rounded,
+                    size: 20,
+                    color: AppColors.textOnPrimary,
+                  ),
+                  const SizedBox(width: AppSpacing.x2),
+                  Text(
+                    isDone ? 'Checked In' : 'Check In',
+                    style: AppTypography.buttonPrimary,
+                  ),
+                ],
               ),
-            const SizedBox(width: AppSpacing.x2),
-            Text(
-              label,
-              style: AppTypography.labelField(
-                context,
-              ).copyWith(color: context.colors.textOnPrimary, fontSize: 15),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SecondaryAction extends StatelessWidget {
-  const _SecondaryAction({required this.status, required this.onRetry});
-  final _CheckInStatus status;
-  final Future<void> Function() onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    final showRetry =
-        status == _CheckInStatus.locationDenied ||
-        status == _CheckInStatus.notCheckedIn;
-
-    if (!showRetry) {
-      return const SizedBox.shrink();
-    }
-
-    return Center(
-      child: PressableScale(
-        onTap: onRetry,
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.x3),
-          child: Text(
-            status == _CheckInStatus.locationDenied
-                ? 'Retry location detection'
-                : 'Refresh my location',
-            style: AppTypography.chipLabel(
-              context,
-            ).copyWith(color: context.colors.primaryOnSurface),
-          ),
-        ),
       ),
     );
   }

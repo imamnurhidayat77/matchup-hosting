@@ -13,6 +13,7 @@ class HomeHeaderAction {
     required this.semanticLabel,
     required this.onTap,
     this.showDot = false,
+    this.anchorKey,
   });
 
   final IconData icon;
@@ -21,6 +22,12 @@ class HomeHeaderAction {
 
   /// Shows the small red unread dot on the top-right of the button.
   final bool showDot;
+
+  /// Optional key applied to this action's tappable container — lets a
+  /// coach-mark tour (see `features/tour`) spotlight a specific header
+  /// action (e.g. the Discover screen's filter button) without HomeHeader
+  /// needing to know anything about tours.
+  final Key? anchorKey;
 }
 
 /// The shared top-level tab header: a large title + subtitle on the left and
@@ -94,6 +101,7 @@ class _HeaderCircle extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     return AppTappable(
+      key: action.anchorKey,
       semanticLabel: action.semanticLabel,
       feedback: AppTapFeedback.scale,
       onTap: action.onTap,

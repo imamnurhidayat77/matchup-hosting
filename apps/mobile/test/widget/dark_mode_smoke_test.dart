@@ -27,6 +27,9 @@ import 'package:matchup_mobile/features/notifications/domain/app_notification.da
 import 'package:matchup_mobile/features/profile/data/user_repository.dart';
 import 'package:matchup_mobile/features/profile/domain/user_model.dart';
 import 'package:matchup_mobile/features/profile/presentation/profile_screen.dart';
+import 'package:matchup_mobile/features/tour/presentation/tour_controller.dart';
+import 'package:matchup_mobile/features/tour/presentation/tour_host.dart';
+import 'package:matchup_mobile/features/tour/presentation/tour_steps.dart';
 
 class _MockActivityRepository extends Mock implements ActivityRepository {}
 
@@ -227,5 +230,74 @@ void main() {
       // Waits for ProfileScreen's count-up animation to finish.
       await tester.pump(const Duration(milliseconds: 950));
     });
+
+    testWidgets(
+      'first-run tour spotlight + callout render without exceptions under '
+      'dark theme',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(390, 844));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        final activityRepo = _MockActivityRepository();
+        final notifRepo = _MockNotificationRepository();
+        when(
+          () => activityRepo.feed(
+            limit: any(named: 'limit'),
+            offset: any(named: 'offset'),
+          ),
+        ).thenAnswer((_) async => [_activityFixture()]);
+        when(
+          () => notifRepo.all(),
+        ).thenAnswer((_) async => const <AppNotification>[]);
+
+        // TourHost only exists inside AppShell in production; wrap it here
+        // explicitly since this test pumps DiscoveryScreen standalone
+        // (matching the plain-DiscoveryScreen test above) rather than
+        // going through the full ShellRoute.
+        final router = GoRouter(
+          initialLocation: '/discovery',
+          routes: [
+            GoRoute(
+              path: '/discovery',
+              builder: (_, _) => TourHost(
+                location: '/discovery',
+                child: const DiscoveryScreen(),
+              ),
+            ),
+          ],
+        );
+        final container = ProviderContainer(
+          overrides: [
+            activityRepositoryProvider.overrideWithValue(activityRepo),
+            notificationRepositoryProvider.overrideWithValue(notifRepo),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        await expectNoRenderExceptions(
+          tester,
+          UncontrolledProviderScope(
+            container: container,
+            child: MaterialApp.router(
+              theme: _darkThemeForTest(),
+              routerConfig: router,
+            ),
+          ),
+        );
+
+        // Drive through the centered welcome step (no anchor) into an
+        // anchored step (swipe deck) — covers both SpotlightOverlay
+        // branches (holeRect null vs non-null) under dark theme in one go.
+        container
+            .read(tourControllerProvider.notifier)
+            .start(kFirstRunTourId, kFirstRunTour);
+        await tester.pumpAndSettle();
+        expect(find.text('Welcome to MatchUp'), findsOneWidget);
+
+        await tester.tap(find.text('Next'));
+        await tester.pumpAndSettle();
+        expect(find.text('Swipe to find games'), findsOneWidget);
+      },
+    );
   });
 }

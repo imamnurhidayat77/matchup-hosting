@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:matchup_mobile/features/preferences/presentation/get_to_know_1_screen.dart';
 import 'package:matchup_mobile/features/preferences/presentation/get_to_know_2_screen.dart';
+import 'package:matchup_mobile/features/preferences/presentation/get_to_know_3_screen.dart';
 
 void main() {
   Future<void> pumpRouter(WidgetTester tester) async {
@@ -20,8 +21,12 @@ void main() {
           builder: (_, _) => const GetToKnow2Screen(),
         ),
         GoRoute(
-          path: '/preferences',
-          builder: (_, _) => const Scaffold(body: Text('Preferences')),
+          path: '/get-to-know-3',
+          builder: (_, _) => const GetToKnow3Screen(),
+        ),
+        GoRoute(
+          path: '/discovery',
+          builder: (_, _) => const Scaffold(body: Text('Discovery')),
         ),
       ],
     );
@@ -60,14 +65,36 @@ void main() {
 
         expect(find.text('Skip for now'), findsOneWidget);
 
+        // Tapping a chip opens the skill-level sheet; the sport is only
+        // added once a level is chosen.
         await tester.tap(find.text('Basketball'));
         await tester.pumpAndSettle();
+        await tester.tap(find.text('Intermediate'));
+        await tester.pumpAndSettle();
 
-        expect(find.text('Next  (1 selected)'), findsOneWidget);
+        expect(find.text('Next (1 selected)'), findsOneWidget);
       },
     );
 
-    testWidgets('should navigate to preferences when the CTA is tapped', (
+    testWidgets(
+      'should not add the sport when the skill-level sheet is dismissed',
+      (tester) async {
+        await pumpRouter(tester);
+        await tester.tap(find.text('Next'));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Basketball'));
+        await tester.pumpAndSettle();
+
+        // Dismiss the sheet without choosing a level.
+        Navigator.of(tester.element(find.text('Beginner'))).pop();
+        await tester.pumpAndSettle();
+
+        expect(find.text('Skip for now'), findsOneWidget);
+      },
+    );
+
+    testWidgets('should navigate to step 3 when the CTA is tapped', (
       tester,
     ) async {
       await pumpRouter(tester);
@@ -82,7 +109,39 @@ void main() {
       await tester.tap(find.text('Skip for now'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Preferences'), findsOneWidget);
+      expect(find.text('Give us some final details'), findsOneWidget);
+    });
+  });
+
+  group('GetToKnow3Screen', () {
+    testWidgets('should show height, weight and date-of-birth controls', (
+      tester,
+    ) async {
+      await pumpRouter(tester);
+      await tester.tap(find.text('Next'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Skip for now'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Height'), findsOneWidget);
+      expect(find.text('Select Weight'), findsOneWidget);
+      expect(find.text('Date of Birth'), findsOneWidget);
+      expect(find.text('3/3'), findsOneWidget);
+    });
+
+    testWidgets('should increment the weight when + is tapped', (tester) async {
+      await pumpRouter(tester);
+      await tester.tap(find.text('Next'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Skip for now'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('73'), findsOneWidget);
+
+      await tester.tap(find.bySemanticsLabel('Increase weight'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('74'), findsWidgets);
     });
   });
 }

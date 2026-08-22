@@ -124,7 +124,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(AppRadius.xl),
                             child: Image.asset(
-                              'assets/images/splash/logo.png',
+                              'assets/images/splash/logo-badge.png',
                               fit: BoxFit.cover,
                               semanticLabel: 'MatchUp logo',
                             ),

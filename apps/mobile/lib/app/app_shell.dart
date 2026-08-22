@@ -5,6 +5,8 @@ import '../core/theme/app_typography.dart';
 import '../core/theme/dark_colors.dart';
 import '../core/widgets/home_indicator.dart';
 import '../core/widgets/pressable_scale.dart';
+import '../features/tour/presentation/tour_anchors.dart';
+import '../features/tour/presentation/tour_host.dart';
 
 class AppShell extends StatelessWidget {
   const AppShell({super.key, required this.child});
@@ -25,24 +27,28 @@ class AppShell extends StatelessWidget {
     _NavTab(
       label: 'My Games',
       route: '/activities',
+      tourKey: TourAnchors.tabMyGames,
       iconBuilder: (color, onColor, size, selected) =>
           _NavIcon(size: size, painter: _FieldPainter(color)),
     ),
     _NavTab(
       label: 'Create',
       route: '/create',
+      tourKey: TourAnchors.tabCreate,
       iconBuilder: (color, onColor, size, selected) =>
           _NavIcon(size: size, painter: _PlusCirclePainter(color)),
     ),
     _NavTab(
       label: 'Chat',
       route: '/messages',
+      tourKey: TourAnchors.tabChat,
       iconBuilder: (color, onColor, size, selected) =>
           _NavIcon(size: size, painter: _MessagePainter(color)),
     ),
     _NavTab(
       label: 'Profile',
       route: '/profile',
+      tourKey: TourAnchors.tabProfile,
       iconBuilder: (color, onColor, size, selected) =>
           _NavIcon(size: size, painter: _UserPainter(color)),
     ),
@@ -65,7 +71,15 @@ class AppShell extends StatelessWidget {
     final index = _indexFor(location);
 
     return Scaffold(
-      body: child,
+      // TourHost inserts its spotlight into the Navigator-level Overlay
+      // (via Overlay.of(context)), which always paints above the entire
+      // routed screen — body AND bottomNavigationBar — regardless of where
+      // in this tree TourHost itself sits. It's nested inside `body` purely
+      // so it has a BuildContext to call Overlay.of() from; that placement
+      // does not restrict the resulting OverlayEntry to body's bounds,
+      // which is what lets a step spotlight a tab-bar item even though the
+      // tab bar lives outside `body`.
+      body: TourHost(location: location, child: child),
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -136,6 +150,7 @@ class _NavItem extends StatelessWidget {
       child: PressableScale(
         onTap: onTap,
         child: SizedBox(
+          key: tab.tourKey,
           width: 64,
           height: 52,
           child: Column(
@@ -171,6 +186,7 @@ class _NavTab {
     required this.label,
     required this.route,
     required this.iconBuilder,
+    this.tourKey,
   });
 
   final String label;
@@ -181,6 +197,11 @@ class _NavTab {
   /// the filled disc), the pixel size, and whether the tab is selected.
   final Widget Function(Color color, Color onColor, double size, bool selected)
   iconBuilder;
+
+  /// Registered [TourAnchors] key this tab should be spotlighted with,
+  /// or `null` for tabs no tour step targets (Discover is always visible on
+  /// its own screen, so it never needs a tab-bar spotlight).
+  final Key? tourKey;
 }
 
 // ─── Custom nav glyphs ─────────────────────────────────────────────────────

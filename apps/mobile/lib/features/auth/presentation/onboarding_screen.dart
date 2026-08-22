@@ -5,9 +5,43 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
-import '../../../core/widgets/home_indicator.dart';
-import '../../../core/widgets/pill_buttons.dart';
 import '../../../core/widgets/pressable_scale.dart';
+
+// ─── Page data ────────────────────────────────────────────────────────────────
+
+class _OnboardingPage {
+  const _OnboardingPage({
+    required this.illustration,
+    required this.heading,
+    required this.description,
+  });
+  final String illustration;
+  final String heading;
+  final String description;
+}
+
+const _kPages = [
+  _OnboardingPage(
+    illustration: 'assets/images/onboarding/onb_1.png',
+    heading: 'Discover Sports Activities Near You',
+    description:
+        'Find matches happening in your local neighborhood instantly. From friendly basketball runs to weekend tennis singles.',
+  ),
+  _OnboardingPage(
+    illustration: 'assets/images/onboarding/onb_2.png',
+    heading: 'Swipe to Match With Activities',
+    description:
+        'Find matches that perfectly fit your pace, schedule, and skill level. Simply swipe to browse sports groups.',
+  ),
+  _OnboardingPage(
+    illustration: 'assets/images/onboarding/onb_3.png',
+    heading: 'Join, Chat, and Play Together',
+    description:
+        'Coordination made simple. Live-chat with teammates, lock down the location, and let the games begin.',
+  ),
+];
+
+// ─── Screen ──────────────────────────────────────────────────────────────────
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -19,27 +53,6 @@ class OnboardingScreen extends StatefulWidget {
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final _pageController = PageController();
   int _currentPage = 0;
-
-  static const List<_OnboardingPage> _pages = [
-    _OnboardingPage(
-      illustration: 'assets/images/onboarding/onb_1.png',
-      heading: 'Discover Sports Activities Near You',
-      description:
-          'Find matches happening in your local neighborhood instantly. From friendly basketball runs to weekend tennis singles.',
-    ),
-    _OnboardingPage(
-      illustration: 'assets/images/onboarding/onb_2.png',
-      heading: 'Swipe to Match With Activities',
-      description:
-          'Find matches that perfectly fit your pace, schedule, and skill level. Simply swipe to browse sports groups.',
-    ),
-    _OnboardingPage(
-      illustration: 'assets/images/onboarding/onb_3.png',
-      heading: 'Join, Chat, and Play Together',
-      description:
-          'Coordination made simple. Live-chat with teammates, lock down the location, and let the games begin.',
-    ),
-  ];
 
   @override
   void initState() {
@@ -53,100 +66,160 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  void _next() {
-    if (_currentPage < _pages.length - 1) {
-      _pageController.nextPage(
-        duration: AppDurations.emphasized,
-        curve: Curves.easeInOut,
-      );
-    } else {
-      context.go('/welcome');
-    }
-  }
-
   @override
   void dispose() {
     _pageController.dispose();
     super.dispose();
   }
 
+  void _next() {
+    if (_currentPage < _kPages.length - 1) {
+      _pageController.nextPage(
+        duration: AppDurations.emphasized,
+        curve: Curves.easeInOut,
+      );
+    } else {
+      context.go('/get-to-know-1');
+    }
+  }
+
+  void _skip() => context.go('/get-to-know-1');
+
   @override
   Widget build(BuildContext context) {
-    // Deliberate deviation from AuthShell (PRD 2.1 principle 1): this screen
-    // is full-bleed edge-to-edge illustration with content overlaid on top,
-    // structurally incompatible with AuthShell's SafeArea + scroll body.
+    final bottomPad = MediaQuery.of(context).padding.bottom;
+
     return Scaffold(
+      backgroundColor: Colors.black,
       body: Stack(
+        fit: StackFit.expand,
         children: [
+          // ── Full-bleed paged images ────────────────────────────────
           PageView.builder(
             controller: _pageController,
-            itemCount: _pages.length,
+            itemCount: _kPages.length,
             onPageChanged: (i) => setState(() => _currentPage = i),
-            itemBuilder: (context, index) {
-              return _OnboardingPageView(page: _pages[index]);
-            },
+            itemBuilder: (_, i) => _PageImage(page: _kPages[i]),
           ),
-          // Bottom content layer (heading + description + controls + indicator)
+
+          // ── Top bar: MatchUp + SKIP ────────────────────────────────
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.x5,
+                  vertical: AppSpacing.x3,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Logo badge image
+                    Image.asset(
+                      'assets/images/splash/logo-badge.png',
+                      width: 36,
+                      height: 36,
+                    ),
+                    // SKIP badge
+                    Semantics(
+                      button: true,
+                      label: 'Skip onboarding',
+                      child: PressableScale(
+                        onTap: _skip,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.15),
+                            borderRadius:
+                                BorderRadius.circular(AppRadius.pill),
+                          ),
+                          child: Text(
+                            'SKIP',
+                            style: AppTypography.chipLabel(context).copyWith(
+                              color: AppColors.textOnPrimary,
+                              fontSize: 12,
+                              letterSpacing: 0.8,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // ── Bottom overlay: dots + heading + desc + button + link ──
           Positioned(
             left: 0,
             right: 0,
             bottom: 0,
-            child: SafeArea(
-              top: true,
+            child: Container(
+              padding: EdgeInsets.fromLTRB(
+                AppSpacing.x5,
+                AppSpacing.x6,
+                AppSpacing.x5,
+                bottomPad + AppSpacing.x4,
+              ),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                  stops: [0.0, 0.55, 1.0],
+                  colors: [
+                    Color(0xE6000000),
+                    Color(0x99000000),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const SizedBox(height: AppSpacing.x6),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.x8,
+                  // Dots — left-aligned
+                  _Dots(
+                    current: _currentPage,
+                    total: _kPages.length,
+                  ),
+                  const SizedBox(height: AppSpacing.x4),
+
+                  // Heading — animated switch per page
+                  AnimatedSwitcher(
+                    duration: AppDurations.base,
+                    transitionBuilder: (child, anim) => FadeTransition(
+                      opacity: anim,
+                      child: child,
                     ),
-                    child: AnimatedSwitcher(
-                      duration: AppDurations.base,
-                      child: _Content(
-                        key: ValueKey(_currentPage),
-                        heading: _pages[_currentPage].heading,
-                        description: _pages[_currentPage].description,
-                      ),
+                    child: _PageContent(
+                      key: ValueKey(_currentPage),
+                      heading: _kPages[_currentPage].heading,
+                      description: _kPages[_currentPage].description,
                     ),
                   ),
                   const SizedBox(height: AppSpacing.x5),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.x8,
-                    ),
-                    child: _Pagination(
-                      currentPage: _currentPage,
-                      totalPages: _pages.length,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.x4),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.x8,
-                    ),
-                    child: PrimaryPill(
-                      label: _currentPage < _pages.length - 1
-                          ? 'Next'
-                          : 'Get Started',
-                      onPressed: _next,
-                      icon: 'assets/images/auth/arrow_right.svg',
-                    ),
+
+                  // Button — Next / Get Started
+                  _NextButton(
+                    label: _currentPage < _kPages.length - 1
+                        ? 'Next'
+                        : 'Get Started',
+                    onTap: _next,
                   ),
                   const SizedBox(height: AppSpacing.x3),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.x8,
-                    ),
-                    child: Center(
-                      child: _SignInPrompt(onTap: () => context.go('/login')),
-                    ),
-                  ),
-                  const HomeIndicator(
-                    color: AppColors.textOnPrimary,
-                    padding: EdgeInsets.only(
-                      top: AppSpacing.x2,
-                      bottom: AppSpacing.x2,
+
+                  // Sign in prompt
+                  Center(
+                    child: _SignInPrompt(
+                      onTap: () => context.go('/login'),
                     ),
                   ),
                 ],
@@ -159,9 +232,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 }
 
-class _OnboardingPageView extends StatelessWidget {
-  const _OnboardingPageView({required this.page});
+// ─── Page image with scrim ────────────────────────────────────────────────────
 
+class _PageImage extends StatelessWidget {
+  const _PageImage({required this.page});
   final _OnboardingPage page;
 
   @override
@@ -169,77 +243,43 @@ class _OnboardingPageView extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        Positioned.fill(
-          child: Image.asset(page.illustration, fit: BoxFit.cover),
+        Image.asset(
+          page.illustration,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => const ColoredBox(color: Colors.black54),
         ),
-        // Dark scrim 65% per Figma
-        const Positioned.fill(
-          child: ColoredBox(color: AppColors.scrimIllustration),
-        ),
-        // Diagonal gradient overlay (top-left dark → bottom-right transparent)
-        const Positioned.fill(
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                stops: [0.0, 0.33, 0.67, 1.0],
-                colors: [
-                  AppColors.scrimGradient,
-                  AppColors.scrimGradient,
-                  AppColors.scrimTransparent,
-                  AppColors.scrimTransparent,
-                ],
-              ),
-            ),
-          ),
-        ),
+        // Subtle overall dark tint so white text pops everywhere
+        const ColoredBox(color: Color(0x55000000)),
       ],
     );
   }
 }
 
-class _Content extends StatelessWidget {
-  const _Content({super.key, required this.heading, required this.description});
+// ─── Dots ─────────────────────────────────────────────────────────────────────
 
-  final String heading;
-  final String description;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(heading, style: AppTypography.headingOnboarding),
-        const SizedBox(height: AppSpacing.x4),
-        Text(description, style: AppTypography.bodyOnboarding),
-      ],
-    );
-  }
-}
-
-class _Pagination extends StatelessWidget {
-  const _Pagination({required this.currentPage, required this.totalPages});
-
-  final int currentPage;
-  final int totalPages;
+class _Dots extends StatelessWidget {
+  const _Dots({required this.current, required this.total});
+  final int current;
+  final int total;
 
   @override
   Widget build(BuildContext context) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(totalPages, (i) {
-        final isActive = i == currentPage;
+      mainAxisAlignment: MainAxisAlignment.start,
+      children: List.generate(total, (i) {
+        final active = i == current;
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x1),
+          padding: const EdgeInsets.only(right: AppSpacing.x2),
           child: AnimatedContainer(
             duration: AppDurations.base,
             curve: Curves.easeInOut,
-            width: isActive ? 24 : 8,
+            width: active ? 28 : 8,
             height: 8,
             decoration: BoxDecoration(
-              color: isActive ? AppColors.primary : AppColors.textOnPrimary,
-              borderRadius: AppRadius.pillR,
+              color: active
+                  ? AppColors.primary // Blue active dot
+                  : Colors.white.withValues(alpha: 0.40),
+              borderRadius: BorderRadius.circular(AppRadius.pill),
             ),
           ),
         );
@@ -248,20 +288,111 @@ class _Pagination extends StatelessWidget {
   }
 }
 
+// ─── Page content ─────────────────────────────────────────────────────────────
+
+class _PageContent extends StatelessWidget {
+  const _PageContent({
+    super.key,
+    required this.heading,
+    required this.description,
+  });
+  final String heading;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          heading,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 30,
+            fontWeight: FontWeight.w800,
+            height: 1.2,
+            letterSpacing: -0.3,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.x3),
+        Text(
+          description,
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.75),
+            fontSize: 14.5,
+            fontWeight: FontWeight.w400,
+            height: 1.55,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── Next / Get Started button ────────────────────────────────────────────────
+
+class _NextButton extends StatelessWidget {
+  const _NextButton({required this.label, required this.onTap});
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: label,
+      child: PressableScale(
+        onTap: onTap,
+        child: Container(
+          width: double.infinity,
+          height: 54,
+          decoration: BoxDecoration(
+            color: AppColors.primary,
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.1,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.x2),
+              const Icon(
+                Icons.arrow_forward_rounded,
+                color: Colors.white,
+                size: 18,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Sign-in prompt ───────────────────────────────────────────────────────────
+
 class _SignInPrompt extends StatelessWidget {
   const _SignInPrompt({required this.onTap});
-
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Wrap(
       crossAxisAlignment: WrapCrossAlignment.center,
-      spacing: AppSpacing.x1,
+      spacing: 4,
       children: [
         Text(
           'Already have an account?',
-          style: AppTypography.bodyOnboarding.copyWith(
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.75),
+            fontSize: 14,
             fontWeight: FontWeight.w400,
           ),
         ),
@@ -270,10 +401,14 @@ class _SignInPrompt extends StatelessWidget {
           label: 'Sign in',
           child: PressableScale(
             onTap: onTap,
-            child: Text(
+            child: const Text(
               'Sign In',
-              style: AppTypography.bodyOnboarding.copyWith(
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 14,
                 fontWeight: FontWeight.w700,
+                decoration: TextDecoration.underline,
+                decorationColor: Colors.white,
               ),
             ),
           ),
@@ -281,16 +416,4 @@ class _SignInPrompt extends StatelessWidget {
       ],
     );
   }
-}
-
-class _OnboardingPage {
-  const _OnboardingPage({
-    required this.illustration,
-    required this.heading,
-    required this.description,
-  });
-
-  final String illustration;
-  final String heading;
-  final String description;
 }

@@ -35,7 +35,8 @@ class _GetToKnow1ScreenState extends ConsumerState<GetToKnow1Screen> {
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
-      showHomeIndicator: false, // inside ShellRoute — AppShell draws its own.
+      // Outside ShellRoute (post-signup flow, no tab bar) — draws its own.
+      showHomeIndicator: true,
       body: Column(
         children: [
           OnboardingProgressHeader(step: 1, total: 3),
@@ -80,7 +81,7 @@ class _GetToKnow1ScreenState extends ConsumerState<GetToKnow1Screen> {
                     label: 'Next',
                     onPressed: () => context.push('/get-to-know-2'),
                   ),
-                  const SizedBox(height: AppSpacing.x2),
+                  const SizedBox(height: AppSpacing.x5),
                 ],
               ),
             ),
@@ -109,9 +110,9 @@ class OnboardingProgressHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-        AppSpacing.x6,
+        AppSpacing.x5,
         AppSpacing.x3,
-        AppSpacing.x6,
+        AppSpacing.x5,
         AppSpacing.x2,
       ),
       child: Column(
@@ -146,23 +147,34 @@ class OnboardingProgressHeader extends StatelessWidget {
                   ),
                 ),
               ),
-              Text(
-                '$step/$total',
-                style: AppTypography.caption(context).copyWith(
-                  color: context.colors.textSecondary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 12,
+              // Step counter — grey pill badge, as in the mock.
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: context.colors.surfaceMuted,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                ),
+                child: Text(
+                  '$step/$total',
+                  style: AppTypography.caption(context).copyWith(
+                    color: context.colors.textSecondary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.x2),
+          const SizedBox(height: AppSpacing.x3),
           // Step progress bar
           ClipRRect(
             borderRadius: AppRadius.pillR,
             child: LinearProgressIndicator(
               value: step / total,
-              minHeight: 4,
+              minHeight: 6,
               backgroundColor: context.colors.border,
               valueColor: const AlwaysStoppedAnimation(AppColors.primary),
             ),
