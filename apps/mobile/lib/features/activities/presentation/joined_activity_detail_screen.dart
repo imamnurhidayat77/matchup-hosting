@@ -7,6 +7,7 @@ import '../../../core/providers/repository_providers.dart';
 import '../../../core/services/calendar_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/app_dialog.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/app_avatar.dart';
@@ -43,28 +44,12 @@ class JoinedActivityDetailScreen extends ConsumerWidget {
   final String activityId;
 
   Future<void> _confirmLeave(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.card),
-        ),
-        title: const Text('Leave Activity?'),
-        content: const Text(
-          'Are you sure you want to leave? You can re-join later if spots are available.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            style: TextButton.styleFrom(foregroundColor: context.colors.errorText),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Leave'),
-          ),
-        ],
-      ),
+    final confirmed = await AppDialog.confirm(
+      context,
+      title: 'Leave Activity?',
+      body: 'Are you sure you want to leave? You can re-join later if spots are available.',
+      confirmLabel: 'Leave',
+      destructive: true,
     );
     if (confirmed != true || !context.mounted) return;
     AppSnackbar.show(

@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/app_dialog.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/app_avatar.dart';
@@ -42,28 +43,13 @@ class ManageActivityScreen extends ConsumerWidget {
   final String activityId;
 
   Future<void> _confirmCancel(BuildContext context, WidgetRef ref) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.card),
-        ),
-        title: const Text('Cancel Activity?'),
-        content: const Text(
-          'This will permanently cancel the activity and notify all participants. This cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Keep it'),
-          ),
-          TextButton(
-            style: TextButton.styleFrom(foregroundColor: context.colors.errorText),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Cancel Activity'),
-          ),
-        ],
-      ),
+    final confirmed = await AppDialog.confirm(
+      context,
+      title: 'Cancel Activity?',
+      body: 'This will permanently cancel the activity and notify all participants. This cannot be undone.',
+      confirmLabel: 'Cancel Activity',
+      cancelLabel: 'Keep it',
+      destructive: true,
     );
     if (confirmed != true) return;
     await ref.read(activityRepositoryProvider).cancel(activityId);
