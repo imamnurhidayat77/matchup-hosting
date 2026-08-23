@@ -155,7 +155,7 @@ class _SkillDistributionBars extends StatelessWidget {
                 child: Container(
                   height: 6,
                   decoration: BoxDecoration(
-                    color: s.color,
+                    color: s.color(context),
                     // Pill radius on a 6px-tall bar renders identically to a
                     // small fixed radius — capsule shape either way, but
                     // this stays a named token instead of a literal.

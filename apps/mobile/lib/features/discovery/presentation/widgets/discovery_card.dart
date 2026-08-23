@@ -187,7 +187,7 @@ class _CardInfo extends StatelessWidget {
               _InfoChip(
                 icon: AppIcons.zap,
                 label: activity.skillLevel.toUpperCase(),
-                iconColor: AppColors.primary,
+                iconColor: c.primaryOnSurface,
               ),
               _InfoChip(
                 icon: AppIcons.clock,
@@ -343,11 +343,11 @@ class _StatusChip extends StatelessWidget {
     final (Color bg, Color fg, String label) = switch (status) {
       ActivityStatus.available => (
         c.successBg,
-        AppColors.statusSuccessText,
+        c.successText,
         'Open',
       ),
-      ActivityStatus.almostFull => (c.warningBg, AppColors.warning, 'Few left'),
-      ActivityStatus.full => (c.errorLight, AppColors.danger, 'Full'),
+      ActivityStatus.almostFull => (c.warningBg, c.warningText, 'Few left'),
+      ActivityStatus.full => (c.errorLight, c.errorText, 'Full'),
       ActivityStatus.joined => (c.primarySoft, c.primaryOnSurface, 'Joined'),
       ActivityStatus.hosted => (c.primarySoft, c.primaryOnSurface, 'Hosting'),
       ActivityStatus.past => (c.surfaceMuted, c.textSecondary, 'Past'),

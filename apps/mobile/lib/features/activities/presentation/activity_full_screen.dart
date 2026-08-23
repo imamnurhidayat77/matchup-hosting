@@ -119,7 +119,7 @@ class _TopHeader extends StatelessWidget {
               'ACTIVITY FULL',
               style: AppTypography.chipLabel(
                 context,
-              ).copyWith(fontSize: 11, color: AppColors.warning),
+              ).copyWith(fontSize: 11, color: context.colors.warningText),
             ),
           ),
           const SizedBox(height: AppSpacing.x2),
@@ -247,7 +247,7 @@ class _ActivityCard extends StatelessWidget {
                                         Container(color: context.colors.border),
                                         Container(
                                           width: double.infinity,
-                                          color: AppColors.danger,
+                                          color: context.colors.errorText,
                                         ),
                                       ],
                                     ),
@@ -269,7 +269,7 @@ class _ActivityCard extends StatelessWidget {
                               'Full',
                               style: AppTypography.chipLabel(
                                 context,
-                              ).copyWith(fontSize: 11, color: AppColors.danger),
+                              ).copyWith(fontSize: 11, color: context.colors.errorText),
                             ),
                           ),
                         ],
@@ -499,17 +499,17 @@ class _WaitingListNotice extends StatelessWidget {
         children: [
           Row(
             children: [
-              const AppIcon(
+              AppIcon(
                 AppIcons.alertCircle,
                 size: AppIconSize.md,
-                color: AppColors.warning,
+                color: context.colors.warningText,
               ),
               const SizedBox(width: AppSpacing.x2),
               Text(
                 'Waiting list is open',
                 style: AppTypography.labelField(
                   context,
-                ).copyWith(color: AppColors.warning),
+                ).copyWith(color: context.colors.warningText),
               ),
             ],
           ),

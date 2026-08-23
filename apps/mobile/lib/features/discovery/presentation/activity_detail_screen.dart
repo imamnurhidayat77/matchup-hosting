@@ -17,6 +17,7 @@ import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../../activities/domain/activity_model.dart';
+import '../../report/presentation/report_activity_sheet.dart';
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
@@ -243,7 +244,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                       const SizedBox(height: AppSpacing.x5),
                       _ParticipantsSection(activity: a),
                       const SizedBox(height: AppSpacing.x5),
-                      _ReportButton(activityId: widget.activityId),
+                      _ReportButton(activity: widget.activity),
                     ],
                   ),
                 ),
@@ -503,13 +504,13 @@ class _HostCard extends StatelessWidget {
               Icon(
                 Icons.star_rounded,
                 size: 16,
-                color: AppColors.success,
+                color: context.colors.successText,
               ),
               const SizedBox(width: 4),
               Text(
                 hostRating.toStringAsFixed(1),
                 style: AppTypography.labelField(context).copyWith(
-                  color: AppColors.success,
+                  color: context.colors.successText,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -734,13 +735,16 @@ class _Ring extends StatelessWidget {
 // ─── Report button ────────────────────────────────────────────────────────────
 
 class _ReportButton extends StatelessWidget {
-  const _ReportButton({required this.activityId});
-  final String activityId;
+  const _ReportButton({required this.activity});
+  final ActivityModel activity;
 
   @override
   Widget build(BuildContext context) {
     return PressableScale(
-      onTap: () => context.push('/report/activity/$activityId'),
+      onTap: () => ReportActivitySheet.show(
+        context,
+        activityTitle: activity.title,
+      ),
       child: Container(
         height: 44,
         decoration: BoxDecoration(
@@ -754,14 +758,14 @@ class _ReportButton extends StatelessWidget {
             AppIcon(
               AppIcons.alertCircle,
               size: AppIconSize.lg,
-              color: AppColors.danger,
+              color: context.colors.errorText,
             ),
             const SizedBox(width: 8),
             Text(
               'Report Activity',
               style: AppTypography.labelField(
                 context,
-              ).copyWith(color: AppColors.danger),
+              ).copyWith(color: context.colors.errorText),
             ),
           ],
         ),

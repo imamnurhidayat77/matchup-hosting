@@ -108,7 +108,7 @@ class AppButton extends StatelessWidget {
     AppButtonVariant.primary => AppColors.textOnPrimary,
     AppButtonVariant.secondary => context.colors.textPrimary,
     AppButtonVariant.ghost => AppColors.primary,
-    AppButtonVariant.danger => AppColors.danger,
+    AppButtonVariant.danger => context.colors.errorText,
   };
 
   BorderSide _border(BuildContext context) => switch (variant) {

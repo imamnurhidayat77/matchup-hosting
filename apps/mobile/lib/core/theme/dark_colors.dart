@@ -96,6 +96,9 @@ class AppColorTokens extends ThemeExtension<AppColorTokens> {
     required this.warningLight,
     required this.accentLight,
     required this.avatarNeutral,
+    required this.successText,
+    required this.warningText,
+    required this.errorText,
   });
 
   final Color background;
@@ -132,6 +135,21 @@ class AppColorTokens extends ThemeExtension<AppColorTokens> {
   final Color accentLight;
   final Color avatarNeutral;
 
+  /// Theme-aware text/icon colour for "success" semantic surfaces.
+  /// Light: dark green (#04694A — 5.93:1 on light bg).
+  /// Dark:  light green (#4ADE80 — 9.06:1 on dark statusSuccessBg).
+  final Color successText;
+
+  /// Theme-aware text/icon colour for "warning" semantic surfaces.
+  /// Light: dark amber (#B45309 — 4.84:1 on warningBg).
+  /// Dark:  bright amber (#FCD34D — 9.60:1 on dark warningBg).
+  final Color warningText;
+
+  /// Theme-aware text/icon colour for "error" / "danger" semantic surfaces.
+  /// Light: dark red (#B91C1C — 5.94:1 on errorLight).
+  /// Dark:  light red (#FCA5A5 — 5.49:1 on dark errorLight).
+  final Color errorText;
+
   static const light = AppColorTokens(
     background: Color(0xFFF5F7FA),
     surface: Color(0xFFFFFFFF),
@@ -161,6 +179,9 @@ class AppColorTokens extends ThemeExtension<AppColorTokens> {
     warningLight: Color(0xFFFEF3C7),
     accentLight: Color(0xFFFFE5D0),
     avatarNeutral: Color(0xFFE2E8F0),
+    successText: Color(0xFF04694A),
+    warningText: Color(0xFFB45309),
+    errorText: Color(0xFFB91C1C),
   );
 
   static const dark = AppColorTokens(
@@ -192,6 +213,9 @@ class AppColorTokens extends ThemeExtension<AppColorTokens> {
     warningLight: DarkPalette.warningLight,
     accentLight: DarkPalette.accentLight,
     avatarNeutral: DarkPalette.avatarNeutral,
+    successText: Color(0xFF4ADE80),
+    warningText: Color(0xFFFCD34D),
+    errorText: Color(0xFFFCA5A5),
   );
 
   @override
@@ -224,6 +248,9 @@ class AppColorTokens extends ThemeExtension<AppColorTokens> {
     Color? warningLight,
     Color? accentLight,
     Color? avatarNeutral,
+    Color? successText,
+    Color? warningText,
+    Color? errorText,
   }) {
     return AppColorTokens(
       background: background ?? this.background,
@@ -254,6 +281,9 @@ class AppColorTokens extends ThemeExtension<AppColorTokens> {
       warningLight: warningLight ?? this.warningLight,
       accentLight: accentLight ?? this.accentLight,
       avatarNeutral: avatarNeutral ?? this.avatarNeutral,
+      successText: successText ?? this.successText,
+      warningText: warningText ?? this.warningText,
+      errorText: errorText ?? this.errorText,
     );
   }
 
@@ -293,6 +323,9 @@ class AppColorTokens extends ThemeExtension<AppColorTokens> {
       warningLight: Color.lerp(warningLight, other.warningLight, t)!,
       accentLight: Color.lerp(accentLight, other.accentLight, t)!,
       avatarNeutral: Color.lerp(avatarNeutral, other.avatarNeutral, t)!,
+      successText: Color.lerp(successText, other.successText, t)!,
+      warningText: Color.lerp(warningText, other.warningText, t)!,
+      errorText: Color.lerp(errorText, other.errorText, t)!,
     );
   }
 }

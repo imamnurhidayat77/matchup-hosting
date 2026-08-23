@@ -152,16 +152,16 @@ class _MatchBody extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                const Icon(Icons.star_border_rounded,
-                    size: 32, color: AppColors.warning),
+                Icon(Icons.star_border_rounded,
+                    size: 32, color: context.colors.warningText),
                 const SizedBox(width: AppSpacing.x2),
                 Text(
                   "It's a Match!",
                   style: AppTypography.headlineLarge(context),
                 ),
                 const SizedBox(width: AppSpacing.x2),
-                const Icon(Icons.star_border_rounded,
-                    size: 32, color: AppColors.warning),
+                Icon(Icons.star_border_rounded,
+                    size: 32, color: context.colors.warningText),
               ],
             ),
             const SizedBox(height: AppSpacing.x2),
@@ -336,7 +336,7 @@ class _ActivityCard extends StatelessWidget {
                       child: Text(
                         'Matched',
                         style: AppTypography.chipLabel(context).copyWith(
-                          color: AppColors.statusSuccessText,
+                          color: context.colors.successText,
                           fontSize: 12,
                         ),
                       ),
@@ -475,11 +475,13 @@ class _MetaChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: isBlue ? AppColors.primarySoft : context.colors.surfaceMuted,
+        color: isBlue
+            ? context.colors.primarySoft
+            : context.colors.surfaceMuted,
         borderRadius: BorderRadius.circular(AppRadius.pill),
         border: Border.all(
           color: isBlue
-              ? AppColors.primary.withValues(alpha: 0.3)
+              ? context.colors.primaryOnSurface.withValues(alpha: 0.3)
               : context.colors.border,
         ),
       ),
@@ -592,8 +594,8 @@ class _ConfettiParticle {
 const _kConfettiColors = [
   AppColors.primary,
   AppColors.primaryLight,
-  AppColors.warning,
-  AppColors.statusSuccessBg,
+  AppColors.warning, // Decorative confetti — readability delegated to bg contrast.
+  AppColors.statusSuccessBg, // Same — celebration particle, no text.
   AppColors.accent,
 ];
 

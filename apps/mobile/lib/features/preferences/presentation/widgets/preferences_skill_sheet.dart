@@ -128,7 +128,7 @@ class _PreferencesSkillSheetState extends State<PreferencesSkillSheet> {
                             'Remove',
                             style: AppTypography.labelField(
                               context,
-                            ).copyWith(color: AppColors.danger),
+                            ).copyWith(color: context.colors.errorText),
                           ),
                         ),
                       ),

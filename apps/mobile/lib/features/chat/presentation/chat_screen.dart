@@ -1,19 +1,26 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/providers/repository_providers.dart';
+import '../../../core/services/location_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/widgets/app_avatar.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../domain/chat_message.dart';
+import 'chat_attachment_sheet.dart';
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
@@ -81,6 +88,72 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     });
   }
 
+  Future<void> _openAttachmentSheet() async {
+    final choice = await ChatAttachmentSheet.show(context);
+    if (choice == null || !mounted) return;
+    switch (choice) {
+      case ChatAttachmentChoice.photo:
+        await _pickAndSendImage();
+      case ChatAttachmentChoice.location:
+        await _shareLocation();
+    }
+  }
+
+  Future<void> _pickAndSendImage() async {
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1600,
+      imageQuality: 85,
+    );
+    if (picked == null || !mounted) return;
+    HapticFeedback.lightImpact();
+    try {
+      await ref
+          .read(chatRepositoryProvider)
+          .sendImage(activityId: _id, imagePath: picked.path);
+      ref.invalidate(_messagesProvider(_id));
+      _scrollToBottom();
+    } catch (_) {
+      if (!mounted) return;
+      AppSnackbar.show(
+        context,
+        message: 'Could not send photo.',
+        variant: AppSnackbarVariant.error,
+      );
+    }
+  }
+
+  Future<void> _shareLocation() async {
+    final position = await LocationService.instance.getCurrentLocation();
+    if (!mounted) return;
+    if (position == null) {
+      AppSnackbar.show(
+        context,
+        message: 'Could not access your location. Check location '
+            'permissions and try again.',
+        variant: AppSnackbarVariant.error,
+      );
+      return;
+    }
+    HapticFeedback.lightImpact();
+    try {
+      await ref.read(chatRepositoryProvider).sendLocation(
+        activityId: _id,
+        latitude: position.latitude,
+        longitude: position.longitude,
+      );
+      ref.invalidate(_messagesProvider(_id));
+      _scrollToBottom();
+    } catch (_) {
+      if (!mounted) return;
+      AppSnackbar.show(
+        context,
+        message: 'Could not share your location.',
+        variant: AppSnackbarVariant.error,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
@@ -101,6 +174,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             focusNode: _focusNode,
             hasText: _hasText,
             onSend: _send,
+            onAttach: _openAttachmentSheet,
           ),
         ],
       ),
@@ -500,10 +574,12 @@ class _Bubble extends StatelessWidget {
               Flexible(
                 child: Container(
                   constraints: BoxConstraints(maxWidth: maxW),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.x4,
-                    vertical: AppSpacing.x3,
-                  ),
+                  padding: msg.isImage
+                      ? const EdgeInsets.all(4)
+                      : const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.x4,
+                          vertical: AppSpacing.x3,
+                        ),
                   decoration: BoxDecoration(
                     color: isMine
                         ? AppColors.primary
@@ -520,14 +596,7 @@ class _Bubble extends StatelessWidget {
                     ),
                     boxShadow: isMine ? null : AppShadows.card,
                   ),
-                  child: Text(
-                    msg.text,
-                    style: AppTypography.bodyReading(context).copyWith(
-                      color: isMine
-                          ? AppColors.textOnPrimary
-                          : context.colors.textPrimary,
-                    ),
-                  ),
+                  child: _BubbleContent(msg: msg, isMine: isMine),
                 ),
               ),
             ],
@@ -555,6 +624,96 @@ class _Bubble extends StatelessWidget {
   }
 }
 
+// ─── Bubble content (text / image / location) ─────────────────────────────────
+
+/// Renders the payload inside a chat bubble — plain text by default, or a
+/// photo/location attachment when the message carries one (see
+/// [ChatMessage.isImage] / [ChatMessage.isLocation]).
+class _BubbleContent extends StatelessWidget {
+  const _BubbleContent({required this.msg, required this.isMine});
+  final ChatMessage msg;
+  final bool isMine;
+
+  @override
+  Widget build(BuildContext context) {
+    if (msg.isImage) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: Image.file(
+          File(msg.imagePath!),
+          width: 200,
+          height: 200,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => Container(
+            width: 200,
+            height: 200,
+            color: context.colors.surfaceMuted,
+            alignment: Alignment.center,
+            child: Icon(
+              Icons.broken_image_outlined,
+              color: context.colors.textTertiary,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (msg.isLocation) {
+      return _LocationBubble(msg: msg, isMine: isMine);
+    }
+
+    return Text(
+      msg.text,
+      style: AppTypography.bodyReading(context).copyWith(
+        color: isMine ? AppColors.textOnPrimary : context.colors.textPrimary,
+      ),
+    );
+  }
+}
+
+class _LocationBubble extends StatelessWidget {
+  const _LocationBubble({required this.msg, required this.isMine});
+  final ChatMessage msg;
+  final bool isMine;
+
+  Future<void> _open() async {
+    final uri = Uri.parse(
+      'https://www.google.com/maps/search/?api=1&query=${msg.latitude},${msg.longitude}',
+    );
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = isMine ? AppColors.textOnPrimary : context.colors.textPrimary;
+    return PressableScale(
+      onTap: _open,
+      child: SizedBox(
+        width: 180,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.location_on_rounded, color: fg, size: 28),
+            const SizedBox(height: AppSpacing.x2),
+            Text(
+              'My Location',
+              style: AppTypography.labelField(context).copyWith(color: fg),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              'Tap to open in Maps',
+              style: AppTypography.metaSub(context).copyWith(
+                color: fg.withValues(alpha: 0.75),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // ─── Input bar ────────────────────────────────────────────────────────────────
 
 class _InputBar extends StatelessWidget {
@@ -563,11 +722,13 @@ class _InputBar extends StatelessWidget {
     required this.focusNode,
     required this.hasText,
     required this.onSend,
+    required this.onAttach,
   });
   final TextEditingController controller;
   final FocusNode focusNode;
   final bool hasText;
   final VoidCallback onSend;
+  final VoidCallback onAttach;
 
   @override
   Widget build(BuildContext context) {
@@ -590,7 +751,7 @@ class _InputBar extends StatelessWidget {
             button: true,
             label: 'Attach',
             child: PressableScale(
-              onTap: () {},
+              onTap: onAttach,
               child: Container(
                 width: 44,
                 height: 44,

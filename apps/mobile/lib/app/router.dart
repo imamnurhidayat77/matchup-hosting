@@ -34,7 +34,6 @@ import '../features/notifications/presentation/notifications_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
 import '../features/profile/presentation/edit_profile_screen.dart';
 import '../features/profile/presentation/player_profile_screen.dart';
-import '../features/report/presentation/report_screen.dart';
 import '../features/chat/presentation/chat_screen.dart';
 import '../features/chat/presentation/messages_screen.dart';
 import 'app_shell.dart';
@@ -74,9 +73,13 @@ class _AuthListenable extends ChangeNotifier {
 // Usage: replace `builder: (_, state) => Screen()` with
 // `pageBuilder: (_, state) => appPage(state, const Screen())` on any route
 // that should feel like a "push" rather than an instant swap.
-CustomTransitionPage<void> appPage(GoRouterState state, Widget child) {
+CustomTransitionPage<void> appPage(
+  GoRouterState state,
+  Widget child, {
+  LocalKey? key,
+}) {
   return CustomTransitionPage<void>(
-    key: state.pageKey,
+    key: key ?? state.pageKey,
     child: child,
     transitionDuration: AppDurations.base,
     reverseTransitionDuration: AppDurations.base,
@@ -142,14 +145,22 @@ GoRouter buildRouter(Ref ref) {
         path: '/otp-verification',
         pageBuilder: (_, state) {
           final email = state.extra as String? ?? '';
-          return appPage(state, OtpVerificationScreen(email: email));
+          return appPage(
+            state,
+            OtpVerificationScreen(email: email),
+            key: ValueKey('otp-$email'),
+          );
         },
       ),
       GoRoute(
         path: '/new-password',
         pageBuilder: (_, state) {
           final email = state.extra as String? ?? '';
-          return appPage(state, NewPasswordScreen(email: email));
+          return appPage(
+            state,
+            NewPasswordScreen(email: email),
+            key: ValueKey('new-password-$email'),
+          );
         },
       ),
       // Post-signup preference flow sits OUTSIDE the shell: the user hasn't
@@ -180,7 +191,11 @@ GoRouter buildRouter(Ref ref) {
         path: '/activity/:id',
         pageBuilder: (_, state) {
           final id = state.pathParameters['id'] ?? '1';
-          return appPage(state, ActivityDetailScreen(activityId: id));
+          return appPage(
+            state,
+            ActivityDetailScreen(activityId: id),
+            key: ValueKey('activity-$id'),
+          );
         },
       ),
       ShellRoute(
@@ -241,21 +256,33 @@ GoRouter buildRouter(Ref ref) {
             path: '/activity/:id/participants',
             pageBuilder: (_, state) {
               final id = state.pathParameters['id'] ?? '1';
-              return appPage(state, ActivityParticipantsScreen(activityId: id));
+              return appPage(
+                state,
+                ActivityParticipantsScreen(activityId: id),
+                key: ValueKey('activity-participants-$id'),
+              );
             },
           ),
           GoRoute(
             path: '/activity/:id/full',
             pageBuilder: (_, state) {
               final id = state.pathParameters['id'] ?? '1';
-              return appPage(state, ActivityFullScreen(activityId: id));
+              return appPage(
+                state,
+                ActivityFullScreen(activityId: id),
+                key: ValueKey('activity-full-$id'),
+              );
             },
           ),
           GoRoute(
             path: '/manage-activity/:id',
             pageBuilder: (_, state) {
               final id = state.pathParameters['id'] ?? '1';
-              return appPage(state, ManageActivityScreen(activityId: id));
+              return appPage(
+                state,
+                ManageActivityScreen(activityId: id),
+                key: ValueKey('manage-activity-$id'),
+              );
             },
           ),
           // '/joined-activities' removed (PRD Section 3 / Appendix E.2):
@@ -266,14 +293,22 @@ GoRouter buildRouter(Ref ref) {
             path: '/joined-activity/:id',
             pageBuilder: (_, state) {
               final id = state.pathParameters['id'] ?? '1';
-              return appPage(state, JoinedActivityDetailScreen(activityId: id));
+              return appPage(
+                state,
+                JoinedActivityDetailScreen(activityId: id),
+                key: ValueKey('joined-activity-$id'),
+              );
             },
           ),
           GoRoute(
             path: '/past-activity/:id/review',
             pageBuilder: (_, state) {
               final id = state.pathParameters['id'] ?? '1';
-              return appPage(state, PastActivityReviewScreen(activityId: id));
+              return appPage(
+                state,
+                PastActivityReviewScreen(activityId: id),
+                key: ValueKey('past-activity-review-$id'),
+              );
             },
           ),
           GoRoute(
@@ -285,29 +320,30 @@ GoRouter buildRouter(Ref ref) {
             path: '/filter',
             pageBuilder: (_, state) => appPage(state, const FilterScreen()),
           ),
-          GoRoute(
-            path: '/report/:type/:name',
-            pageBuilder: (_, state) {
-              final type = state.pathParameters['type'] ?? 'user';
-              final name = state.pathParameters['name'] ?? 'Unknown';
-              return appPage(
-                state,
-                ReportScreen(targetType: type, targetName: name),
-              );
-            },
-          ),
+          // /report/:type/:name removed — replaced by `ReportActivitySheet`
+          // shown via showModalBottomSheet. The route form crashed with
+          // '!keyReservation.contains(key)' on double-tap/race; modal sheets
+          // sidestep that because they live in an Overlay, not a Page.
           GoRoute(
             path: '/chat/:title',
             pageBuilder: (_, state) {
               final title = state.pathParameters['title'] ?? 'Chat';
-              return appPage(state, ChatScreen(activityTitle: title));
+              return appPage(
+                state,
+                ChatScreen(activityTitle: title),
+                key: ValueKey('chat-$title'),
+              );
             },
           ),
           GoRoute(
             path: '/check-in/:id',
             pageBuilder: (_, state) {
               final id = state.pathParameters['id'] ?? '1';
-              return appPage(state, CheckInScreen(activityId: id));
+              return appPage(
+                state,
+                CheckInScreen(activityId: id),
+                key: ValueKey('check-in-$id'),
+              );
             },
           ),
           GoRoute(
@@ -323,7 +359,11 @@ GoRouter buildRouter(Ref ref) {
             path: '/player-profile/:name',
             pageBuilder: (_, state) {
               final name = state.pathParameters['name'] ?? 'Player';
-              return appPage(state, PlayerProfileScreen(playerName: name));
+              return appPage(
+                state,
+                PlayerProfileScreen(playerName: name),
+                key: ValueKey('player-profile-$name'),
+              );
             },
           ),
         ],

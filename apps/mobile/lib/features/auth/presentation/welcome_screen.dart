@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/theme/dark_colors.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/pressable_scale.dart';
 
@@ -28,7 +29,7 @@ class WelcomeScreen extends StatelessWidget {
     final collageHeight = size.height * 0.44;
 
     return Scaffold(
-      backgroundColor: AppColors.textOnPrimary,
+      backgroundColor: context.colors.background,
       body: Padding(
         padding: EdgeInsets.fromLTRB(
           AppSpacing.x4,
@@ -86,8 +87,8 @@ class WelcomeScreen extends StatelessWidget {
             _PillButton(
               label: 'Sign up with Google',
               onTap: () => _showComingSoon(context),
-              bgColor: AppColors.textOnPrimary,
-              textColor: const Color(0xFF1F2937),
+              bgColor: context.colors.surface,
+              textColor: context.colors.textPrimary,
               icon: Icons.circle_outlined,
               outlined: true,
             ),
@@ -112,9 +113,9 @@ class WelcomeScreen extends StatelessWidget {
                         'Sign In',
                         style: AppTypography.bodyFormSecondary(context)
                             .copyWith(
-                              color: AppColors.primary,
+                              color: context.colors.primaryOnSurface,
                               decoration: TextDecoration.underline,
-                              decorationColor: AppColors.primary,
+                              decorationColor: context.colors.primaryOnSurface,
                             ),
                       ),
                     ),
@@ -285,7 +286,7 @@ class _PillButton extends StatelessWidget {
             color: bgColor,
             borderRadius: BorderRadius.circular(AppRadius.pill),
             border: outlined
-                ? Border.all(color: const Color(0xFFE5E7EB), width: 1.5)
+                ? Border.all(color: context.colors.border, width: 1.5)
                 : null,
           ),
           alignment: Alignment.center,

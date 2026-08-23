@@ -156,7 +156,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
     return AppScaffold(
       safeAreaTop: true,
       showHomeIndicator: true,
-      backgroundColor: AppColors.textOnPrimary,
+      backgroundColor: context.colors.background,
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(
@@ -201,15 +201,15 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
                   Container(
                     width: 64,
                     height: 64,
-                    decoration: const BoxDecoration(
-                      color: AppColors.primarySoft,
+                    decoration: BoxDecoration(
+                      color: context.colors.primarySoft,
                       shape: BoxShape.circle,
                     ),
                     alignment: Alignment.center,
-                    child: const Icon(
+                    child: Icon(
                       Icons.mark_email_unread_rounded,
                       size: 30,
-                      color: AppColors.primary,
+                      color: context.colors.primaryOnSurface,
                     ),
                   ),
                   const SizedBox(height: AppSpacing.x4),
@@ -272,7 +272,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
                           size: 15,
                           color: _secondsRemaining > 0
                               ? context.colors.textSecondary
-                              : AppColors.danger,
+                              : context.colors.errorText,
                         ),
                         const SizedBox(width: 5),
                         Text(
@@ -282,7 +282,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
                           style: AppTypography.metaSub(context).copyWith(
                             color: _secondsRemaining > 0
                                 ? context.colors.textSecondary
-                                : AppColors.danger,
+                                : context.colors.errorText,
                           ),
                         ),
                       ],
@@ -383,9 +383,6 @@ class _OtpBox extends StatelessWidget {
   final ValueChanged<String> onChanged;
   final bool hasError;
 
-  static const Color _fill = Color(0xFFF9FAFB);
-  static const Color _border = Color(0xFFE5E7EB);
-
   @override
   Widget build(BuildContext context) {
     final filled = controller.text.isNotEmpty;
@@ -404,16 +401,16 @@ class _OtpBox extends StatelessWidget {
         style: AppTypography.headingDisplay(context).copyWith(
           fontSize: 22,
           fontWeight: FontWeight.w800,
-          color: hasError ? AppColors.danger : context.colors.textPrimary,
+          color: hasError ? context.colors.errorText : context.colors.textPrimary,
         ),
         decoration: InputDecoration(
           counterText: '',
           filled: true,
           fillColor: hasError
-              ? AppColors.errorLight
+              ? context.colors.errorLight
               : filled
-                  ? AppColors.primarySoft
-                  : _fill,
+                  ? context.colors.primarySoft
+                  : context.colors.surfaceMuted,
           contentPadding: EdgeInsets.zero,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(AppRadius.card),
@@ -423,17 +420,17 @@ class _OtpBox extends StatelessWidget {
             borderRadius: BorderRadius.circular(AppRadius.card),
             borderSide: BorderSide(
               color: hasError
-                  ? AppColors.danger
+                  ? context.colors.errorText
                   : filled
                       ? AppColors.primary
-                      : _border,
+                      : context.colors.border,
               width: filled ? 2 : 1,
             ),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(AppRadius.card),
             borderSide: BorderSide(
-              color: hasError ? AppColors.danger : AppColors.primary,
+              color: hasError ? context.colors.errorText : AppColors.primary,
               width: 2,
             ),
           ),

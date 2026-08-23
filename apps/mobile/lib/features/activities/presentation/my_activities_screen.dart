@@ -322,7 +322,7 @@ class _FeaturedCard extends StatelessWidget {
                                 '${activity.spotsLeft} spots left',
                                 style: AppTypography.labelField(context)
                                     .copyWith(
-                                      color: AppColors.statusSuccessText,
+                                      color: context.colors.successText,
                                       fontSize: 14,
                                     ),
                               ),
@@ -531,7 +531,7 @@ class _SportBadge extends StatelessWidget {
         vertical: small ? 3 : 4,
       ),
       decoration: BoxDecoration(
-        color: AppColors.primarySoft,
+        color: context.colors.primarySoft,
         borderRadius: BorderRadius.circular(AppRadius.xs),
       ),
       child: Text(
@@ -557,13 +557,15 @@ class _DayBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: isToday ? AppColors.errorLight : AppColors.primarySoft,
+        color: isToday
+            ? context.colors.errorLight
+            : context.colors.primarySoft,
         borderRadius: BorderRadius.circular(AppRadius.xs),
       ),
       child: Text(
         label,
         style: AppTypography.chipLabel(context).copyWith(
-          color: isToday ? AppColors.danger : context.colors.primaryOnSurface,
+          color: isToday ? context.colors.errorText : context.colors.primaryOnSurface,
           fontSize: 11,
           fontWeight: FontWeight.w700,
         ),

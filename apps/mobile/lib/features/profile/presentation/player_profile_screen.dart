@@ -9,12 +9,12 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/widgets/app_button.dart';
-import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_icon.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
+import '../../report/presentation/report_user_sheet.dart';
 import '../domain/user_model.dart';
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
@@ -59,10 +59,9 @@ class _ProfileContent extends StatelessWidget {
   const _ProfileContent({required this.user});
   final UserModel user;
 
-  static const double _heroHeight = 160;
-  static const double _avatarSize = 88;
-  // How far the avatar hangs below the hero edge.
-  static const double _avatarOverlap = _avatarSize / 2;
+  static const double _avatarSize = 110;
+  static const double _avatarRingWidth = 3;
+  static const double _avatarRingGap = 4;
 
   @override
   Widget build(BuildContext context) {
@@ -73,159 +72,156 @@ class _ProfileContent extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Hero + avatar overlap ────────────────────────────────
-                SizedBox(
-                  height: _heroHeight + _avatarOverlap,
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      // Blue gradient cover
-                      Container(
-                        height: _heroHeight,
-                        decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              AppColors.primaryDarker,
-                              AppColors.primary,
-                            ],
-                          ),
-                        ),
-                      ),
-
-                      // Back button
-                      Positioned(
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        child: SafeArea(
-                          bottom: false,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppSpacing.x4,
-                              vertical: AppSpacing.x1,
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                _CircleBtn(
-                                  icon: Icons.arrow_back_ios_new_rounded,
-                                  onTap: () => context.pop(),
-                                  label: 'Back',
-                                ),
-                                _CircleBtn(
-                                  icon: Icons.more_horiz_rounded,
-                                  onTap: () {},
-                                  label: 'More options',
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      // Avatar
-                      Positioned(
-                        left: AppSpacing.x6,
-                        bottom: 0,
-                        child: Container(
-                          width: _avatarSize,
-                          height: _avatarSize,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: context.colors.primaryLight,
-                            border: Border.all(
-                              color: context.colors.surface,
-                              width: 4,
-                            ),
-                          ),
-                          clipBehavior: Clip.antiAlias,
-                          child: user.avatarAsset != null
-                              ? Image.asset(
-                                  user.avatarAsset!,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, _, _) =>
-                                      _AvatarFallback(name: user.displayName),
-                                )
-                              : _AvatarFallback(name: user.displayName),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // ── Name + location ──────────────────────────────────────
+                // ── Top bar: back + more ─────────────────────────────────
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.x6,
-                    AppSpacing.x4,
-                    AppSpacing.x6,
-                    0,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.x4,
+                    vertical: AppSpacing.x1,
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        user.displayName,
-                        style: AppTypography.titleScreen(context),
+                      _CircleBtn(
+                        icon: Icons.arrow_back_ios_new_rounded,
+                        onTap: () => context.pop(),
+                        label: 'Back',
                       ),
-                      if (user.location != null || (user.rating ?? 0) > 0) ...[
-                        const SizedBox(height: AppSpacing.x1),
-                        Row(
-                          children: [
-                            if ((user.rating ?? 0) > 0) ...[
-                              AppIcon(
-                                AppIcons.star,
-                                size: AppIconSize.sm,
-                                color: AppColors.warning,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                user.rating!.toStringAsFixed(1),
-                                style: AppTypography.countAccent(context)
-                                    .copyWith(
-                                      color: context.colors.textPrimary,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                              ),
-                            ],
-                            if ((user.rating ?? 0) > 0 && user.location != null)
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                ),
-                                child: Text(
-                                  '·',
-                                  style: AppTypography.metaSub(context),
-                                ),
-                              ),
-                            if (user.location != null)
-                              Flexible(
-                                child: Text(
-                                  user.location!,
-                                  style: AppTypography.metaSub(context),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ],
+                      _CircleBtn(
+                        icon: Icons.more_horiz_rounded,
+                        onTap: () {},
+                        label: 'More options',
+                      ),
                     ],
                   ),
                 ),
-                const SizedBox(height: AppSpacing.x5),
 
-                // ── Stats row ────────────────────────────────────────────
+                // ── Avatar ────────────────────────────────────────────────
+                Center(
+                  child: Container(
+                    width:
+                        _avatarSize +
+                        2 * (_avatarRingWidth + _avatarRingGap),
+                    height:
+                        _avatarSize +
+                        2 * (_avatarRingWidth + _avatarRingGap),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: context.colors.primaryOnSurface,
+                        width: _avatarRingWidth,
+                      ),
+                    ),
+                    padding: const EdgeInsets.all(_avatarRingGap),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: context.colors.primaryLight,
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: user.avatarAsset != null
+                          ? Image.asset(
+                              user.avatarAsset!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) =>
+                                  _AvatarFallback(name: user.displayName),
+                            )
+                          : _AvatarFallback(name: user.displayName),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.x4),
+
+                // ── Name ──────────────────────────────────────────────────
                 Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.x6,
                   ),
-                  child: _StatsRow(
-                    activities: user.activitiesCount,
-                    rating: user.rating ?? 0,
-                    hosted: user.hostedCount,
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: Text(
+                      user.displayName.toUpperCase(),
+                      textAlign: TextAlign.center,
+                      style: AppTypography.titleScreen(context).copyWith(
+                        fontSize: 24,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                ),
+
+                // ── Location ──────────────────────────────────────────────
+                if (user.location != null) ...[
+                  const SizedBox(height: AppSpacing.x1),
+                  Center(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AppIcon(
+                          AppIcons.mapPin,
+                          size: AppIconSize.sm,
+                          color: context.colors.textSecondary,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          user.location!,
+                          style: AppTypography.metaSub(context),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: AppSpacing.x5),
+
+                // ── Stat cards ────────────────────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.x6,
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _StatCard(
+                          valueWidget: Text(
+                            '${user.activitiesCount}',
+                            style: _StatCard.valueStyle(context),
+                          ),
+                          label: 'Activities',
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.x3),
+                      Expanded(
+                        child: _StatCard(
+                          valueWidget: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              AppIcon(
+                                AppIcons.star,
+                                size: AppIconSize.sm,
+                                color: context.colors.warningText,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                (user.rating ?? 0) > 0
+                                    ? user.rating!.toStringAsFixed(1)
+                                    : '—',
+                                style: _StatCard.valueStyle(context),
+                              ),
+                            ],
+                          ),
+                          label: 'Rating',
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.x3),
+                      Expanded(
+                        child: _StatCard(
+                          valueWidget: Text(
+                            '${user.hostedCount}',
+                            style: _StatCard.valueStyle(context),
+                          ),
+                          label: 'Hosted',
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: AppSpacing.x5),
@@ -236,17 +232,30 @@ class _ProfileContent extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.x6,
                     ),
-                    child: _Card(
-                      title: 'About',
-                      child: Text(
-                        user.bio!,
-                        style: AppTypography.bodyReading(
-                          context,
-                        ).copyWith(color: context.colors.textSecondary),
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Bio', style: AppTypography.titleMedium(context)),
+                        const SizedBox(height: AppSpacing.x3),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(AppSpacing.x4),
+                          decoration: BoxDecoration(
+                            color: context.colors.card,
+                            borderRadius: AppRadius.cardR,
+                            border: Border.all(color: context.colors.border),
+                          ),
+                          child: Text(
+                            user.bio!,
+                            style: AppTypography.bodyReading(
+                              context,
+                            ).copyWith(color: context.colors.textSecondary),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: AppSpacing.x4),
+                  const SizedBox(height: AppSpacing.x5),
                 ],
 
                 // ── Sports ───────────────────────────────────────────────
@@ -255,20 +264,30 @@ class _ProfileContent extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.x6,
                     ),
-                    child: _Card(
-                      title: 'Sports',
-                      child: Wrap(
-                        spacing: AppSpacing.x2,
-                        runSpacing: AppSpacing.x2,
-                        children: user.sports
-                            .map(
-                              (s) => _SportChip(sport: s.sport, level: s.level),
-                            )
-                            .toList(),
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'My Sports',
+                          style: AppTypography.titleMedium(context),
+                        ),
+                        const SizedBox(height: AppSpacing.x3),
+                        Wrap(
+                          spacing: AppSpacing.x2,
+                          runSpacing: AppSpacing.x2,
+                          children: [
+                            for (var i = 0; i < user.sports.length; i++)
+                              _SportChip(
+                                sport: user.sports[i].sport,
+                                level: user.sports[i].level,
+                                isPrimary: i == 0,
+                              ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: AppSpacing.x5),
+                  const SizedBox(height: AppSpacing.x6),
                 ],
 
                 // ── Action buttons ───────────────────────────────────────
@@ -276,26 +295,29 @@ class _ProfileContent extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.x6,
                   ),
-                  child: Row(
+                  child: Column(
                     children: [
-                      Expanded(
-                        child: AppButton.secondary(
-                          label: 'Message',
-                          leading: Icon(
-                            Icons.chat_bubble_outline_rounded,
-                            size: 18,
-                            color: context.colors.textPrimary,
-                          ),
-                          onPressed: () =>
-                              context.push('/chat/${user.displayName}'),
+                      AppButton(
+                        label: 'Send Message',
+                        leading: const Icon(
+                          Icons.chat_bubble_outline_rounded,
+                          size: 18,
+                          color: AppColors.textOnPrimary,
                         ),
+                        onPressed: () =>
+                            context.push('/chat/${user.displayName}'),
                       ),
-                      const SizedBox(width: AppSpacing.x3),
-                      Expanded(
-                        child: AppButton.danger(
-                          label: 'Report',
-                          onPressed: () =>
-                              context.push('/report/user/${user.displayName}'),
+                      const SizedBox(height: AppSpacing.x3),
+                      AppButton.secondary(
+                        label: 'Report Profile',
+                        leading: Icon(
+                          Icons.flag_outlined,
+                          size: 18,
+                          color: context.colors.textPrimary,
+                        ),
+                        onPressed: () => ReportUserSheet.show(
+                          context,
+                          userName: user.displayName,
                         ),
                       ),
                     ],
@@ -341,11 +363,13 @@ class _CircleBtn extends StatelessWidget {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: context.colors.scrimControl,
+                color: context.colors.surface,
                 shape: BoxShape.circle,
+                border: Border.all(color: context.colors.border),
+                boxShadow: AppShadows.card,
               ),
               alignment: Alignment.center,
-              child: Icon(icon, size: 18, color: AppColors.textOnPrimary),
+              child: Icon(icon, size: 18, color: context.colors.textPrimary),
             ),
           ),
         ),
@@ -367,100 +391,70 @@ class _AvatarFallback extends StatelessWidget {
         name.isNotEmpty ? name[0].toUpperCase() : '?',
         style: AppTypography.titleScreen(
           context,
-        ).copyWith(color: AppColors.primary, fontSize: 32),
+        ).copyWith(color: context.colors.primaryOnSurface, fontSize: 32),
       ),
     );
   }
 }
 
-class _StatsRow extends StatelessWidget {
-  const _StatsRow({
-    required this.activities,
-    required this.rating,
-    required this.hosted,
-  });
-  final int activities;
-  final double rating;
-  final int hosted;
+class _StatCard extends StatelessWidget {
+  const _StatCard({required this.valueWidget, required this.label});
+  final Widget valueWidget;
+  final String label;
+
+  static TextStyle valueStyle(BuildContext context) =>
+      AppTypography.titleScreen(
+        context,
+      ).copyWith(fontSize: 18, color: context.colors.textPrimary);
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.x4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        vertical: AppSpacing.x3,
+        horizontal: AppSpacing.x2,
+      ),
+      decoration: BoxDecoration(
+        color: context.colors.card,
+        borderRadius: AppRadius.cardR,
+        border: Border.all(color: context.colors.border),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          _StatItem(value: '$activities', label: 'Activities'),
-          Container(width: 1, height: 36, color: context.colors.border),
-          _StatItem(
-            value: rating > 0 ? rating.toStringAsFixed(1) : '—',
-            label: 'Rating',
+          valueWidget,
+          const SizedBox(height: 4),
+          Text(
+            label.toUpperCase(),
+            textAlign: TextAlign.center,
+            style: AppTypography.metaSub(context).copyWith(
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.5,
+              fontSize: 10,
+            ),
           ),
-          Container(width: 1, height: 36, color: context.colors.border),
-          _StatItem(value: '$hosted', label: 'Hosted'),
         ],
       ),
     );
   }
 }
 
-class _StatItem extends StatelessWidget {
-  const _StatItem({required this.value, required this.label});
-  final String value;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text(
-          value,
-          style: AppTypography.titleScreen(
-            context,
-          ).copyWith(color: context.colors.primaryOnSurface, fontSize: 20),
-        ),
-        const SizedBox(height: 2),
-        Text(label, style: AppTypography.metaSub(context)),
-      ],
-    );
-  }
-}
-
-class _Card extends StatelessWidget {
-  const _Card({required this.title, required this.child});
-  final String title;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      padding: const EdgeInsets.all(AppSpacing.x4),
-      child: SizedBox(
-        width: double.infinity,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: AppTypography.labelField(context)),
-            const SizedBox(height: AppSpacing.x3),
-            child,
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _SportChip extends StatelessWidget {
-  const _SportChip({required this.sport, required this.level});
+  const _SportChip({
+    required this.sport,
+    required this.level,
+    required this.isPrimary,
+  });
   final String sport;
   final String level;
+  final bool isPrimary;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
       decoration: BoxDecoration(
-        color: context.colors.surfaceSubtle,
+        color: context.colors.surface,
         borderRadius: BorderRadius.circular(AppRadius.pill),
         border: Border.all(color: context.colors.border),
       ),
@@ -477,14 +471,19 @@ class _SportChip extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
-              color: context.colors.primarySoft,
+              color: isPrimary
+                  ? context.colors.primarySoft
+                  : context.colors.surfaceMuted,
               borderRadius: BorderRadius.circular(AppRadius.pill),
             ),
             child: Text(
-              level,
-              style: AppTypography.chipLabel(
-                context,
-              ).copyWith(color: context.colors.primaryOnSurface),
+              level.toUpperCase(),
+              style: AppTypography.chipLabel(context).copyWith(
+                color: isPrimary
+                    ? context.colors.primaryOnSurface
+                    : context.colors.textSecondary,
+                fontSize: 10,
+              ),
             ),
           ),
         ],

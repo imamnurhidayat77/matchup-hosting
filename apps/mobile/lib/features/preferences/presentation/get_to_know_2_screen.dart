@@ -80,7 +80,7 @@ class _GetToKnow2ScreenState extends ConsumerState<GetToKnow2Screen> {
     return AppScaffold(
       // Outside ShellRoute (post-signup flow, no tab bar) — draws its own.
       showHomeIndicator: true,
-      backgroundColor: AppColors.textOnPrimary,
+      backgroundColor: context.colors.surface,
       body: Column(
         children: [
           OnboardingProgressHeader(step: 2, total: 3),
@@ -277,11 +277,13 @@ class _SportChip extends StatelessWidget {
           duration: AppDurations.fast,
           curve: Curves.easeOut,
           decoration: BoxDecoration(
-            color: selected ? AppColors.primarySoft : _unselectedFill,
+            color: selected ? context.colors.primarySoft : _unselectedFill,
             // Radius just under half the cell height reads as a soft oval.
             borderRadius: BorderRadius.circular(52),
             border: Border.all(
-              color: selected ? AppColors.primary : _unselectedBorder,
+              color: selected
+                  ? context.colors.primaryOnSurface
+                  : _unselectedBorder,
               width: selected ? 2 : 1,
             ),
           ),
@@ -297,7 +299,7 @@ class _SportChip extends StatelessWidget {
                   fontSize: 15,
                   fontWeight: FontWeight.w800,
                   color: selected
-                      ? AppColors.primary
+                      ? context.colors.primaryOnSurface
                       : context.colors.textPrimary,
                 ),
               ),
@@ -314,13 +316,13 @@ class _SportChip extends StatelessWidget {
                         style: AppTypography.caption(context).copyWith(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
-                          color: AppColors.primary,
+                          color: context.colors.primaryOnSurface,
                         ),
                       ),
-                      const Icon(
+                      Icon(
                         Icons.expand_more_rounded,
                         size: 15,
-                        color: AppColors.primary,
+                        color: context.colors.primaryOnSurface,
                       ),
                     ],
                   ),
@@ -403,12 +405,12 @@ class _LevelSheet extends StatelessWidget {
                   margin: const EdgeInsets.only(bottom: AppSpacing.x2),
                   decoration: BoxDecoration(
                     color: isCurrent
-                        ? AppColors.primarySoft
+                        ? context.colors.primarySoft
                         : context.colors.surfaceMuted,
                     borderRadius: BorderRadius.circular(AppRadius.card),
                     border: Border.all(
                       color: isCurrent
-                          ? AppColors.primary
+                          ? context.colors.primaryOnSurface
                           : context.colors.border,
                       width: isCurrent ? 1.5 : 1,
                     ),
@@ -421,16 +423,16 @@ class _LevelSheet extends StatelessWidget {
                           style: AppTypography.bodyMedium(context).copyWith(
                             fontWeight: FontWeight.w600,
                             color: isCurrent
-                                ? AppColors.primary
+                                ? context.colors.primaryOnSurface
                                 : context.colors.textPrimary,
                           ),
                         ),
                       ),
                       if (isCurrent)
-                        const Icon(
+                        Icon(
                           Icons.check_rounded,
                           size: 18,
-                          color: AppColors.primary,
+                          color: context.colors.primaryOnSurface,
                         ),
                     ],
                   ),

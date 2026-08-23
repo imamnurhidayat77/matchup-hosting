@@ -196,7 +196,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             child: const Text('Keep editing'),
           ),
           TextButton(
-            style: TextButton.styleFrom(foregroundColor: AppColors.danger),
+            style: TextButton.styleFrom(foregroundColor: context.colors.errorText),
             onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text('Discard'),
           ),
@@ -418,21 +418,21 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                 vertical: 5,
                               ),
                               decoration: BoxDecoration(
-                                color: AppColors.primarySoft,
+                                color: context.colors.primarySoft,
                                 borderRadius:
                                     BorderRadius.circular(AppRadius.pill),
                                 border: Border.all(
-                                  color: AppColors.primary
+                                  color: context.colors.primaryOnSurface
                                       .withValues(alpha: 0.4),
                                 ),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const Icon(
+                                  Icon(
                                     Icons.add_rounded,
                                     size: 14,
-                                    color: AppColors.primary,
+                                    color: context.colors.primaryOnSurface,
                                   ),
                                   const SizedBox(width: 4),
                                   Text(
@@ -440,7 +440,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                     style:
                                         AppTypography.chipLabel(context)
                                             .copyWith(
-                                      color: AppColors.primary,
+                                      color: context.colors.primaryOnSurface,
                                       fontSize: 12,
                                     ),
                                   ),
@@ -653,7 +653,10 @@ class _AvatarBlock extends StatelessWidget {
               height: 96,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(color: AppColors.primary, width: 3),
+                border: Border.all(
+                  color: context.colors.primaryOnSurface,
+                  width: 3,
+                ),
               ),
               child: Padding(
                 padding: const EdgeInsets.all(2),
@@ -661,11 +664,11 @@ class _AvatarBlock extends StatelessWidget {
                   child: user.avatarAsset != null
                       ? Image.asset(user.avatarAsset!, fit: BoxFit.cover)
                       : Container(
-                          color: AppColors.primarySoft,
-                          child: const Icon(
+                          color: context.colors.primarySoft,
+                          child: Icon(
                             Icons.person,
                             size: 48,
-                            color: AppColors.primary,
+                            color: context.colors.primaryOnSurface,
                           ),
                         ),
                 ),
@@ -698,7 +701,7 @@ class _AvatarBlock extends StatelessWidget {
         Text(
           'Change Photo',
           style: AppTypography.chipLabel(context).copyWith(
-            color: AppColors.primary,
+            color: context.colors.primaryOnSurface,
           ),
         ),
       ],

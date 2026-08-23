@@ -26,6 +26,13 @@ class DiscoveryEmptyDeck extends StatelessWidget {
   }
 }
 
+/// Which theme-aware foreground colour an unfilled [DiscoveryAction] uses —
+/// factory constructors run before a [BuildContext] exists, so the actual
+/// [Color] is resolved in [DiscoveryAction.build] instead of being baked in
+/// at construction time (that's what let the "Details" button's icon
+/// silently hardcode `AppColors.primary`, invisible on a dark card).
+enum _ActionTone { reject, info }
+
 /// Tinder-style floating action below the swipe deck: a circular button with
 /// a caption beneath it. Three presets — [DiscoveryAction.reject] (white
 /// circle, red X, "Not now"), [DiscoveryAction.info] (white circle, blue
@@ -39,8 +46,12 @@ class DiscoveryAction extends StatelessWidget {
     required this.onTap,
     required this.size,
     required this.filled,
-    this.iconColor,
-  });
+    // `this._tone` would force the callsite parameter name to also be
+    // `_tone` (private), which the named-arg-at-callsite check then
+    // rejects — the public `tone` name is required for
+    // `DiscoveryAction.info(tone: ...)` below to compile.
+    _ActionTone tone = _ActionTone.reject,
+  }) : _tone = tone; // ignore: prefer_initializing_formals
 
   factory DiscoveryAction.reject({required VoidCallback onTap}) =>
       DiscoveryAction._(
@@ -58,7 +69,7 @@ class DiscoveryAction extends StatelessWidget {
         onTap: onTap,
         size: 54,
         filled: false,
-        iconColor: AppColors.primary,
+        tone: _ActionTone.info,
       );
 
   factory DiscoveryAction.join({required VoidCallback onTap}) =>
@@ -75,11 +86,17 @@ class DiscoveryAction extends StatelessWidget {
   final VoidCallback onTap;
   final double size;
   final bool filled;
-  final Color? iconColor;
+  final _ActionTone _tone;
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    final iconColor = filled
+        ? AppColors.textOnPrimary
+        : switch (_tone) {
+            _ActionTone.info => c.primaryOnSurface,
+            _ActionTone.reject => c.errorText,
+          };
     return AppTappable(
       semanticLabel: label,
       feedback: AppTapFeedback.scale,
@@ -106,8 +123,7 @@ class DiscoveryAction extends StatelessWidget {
         child: Icon(
           icon,
           size: filled ? 30 : (size >= 62 ? 26 : 22),
-          color: iconColor ??
-              (filled ? AppColors.textOnPrimary : AppColors.danger),
+          color: iconColor,
         ),
       ),
     );

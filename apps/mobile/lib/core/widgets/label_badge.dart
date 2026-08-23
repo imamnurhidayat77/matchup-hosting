@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import '../theme/dark_colors.dart';
@@ -76,7 +75,7 @@ class StatusBadge extends StatelessWidget {
         label,
         style: AppTypography.bodySmall(context).copyWith(
           color: isChecked
-              ? AppColors.statusSuccessText
+              ? context.colors.successText
               : context.colors.textSecondary,
           fontSize: 11,
           fontWeight: FontWeight.w700,

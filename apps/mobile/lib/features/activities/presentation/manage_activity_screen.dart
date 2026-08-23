@@ -58,7 +58,7 @@ class ManageActivityScreen extends ConsumerWidget {
             child: const Text('Keep it'),
           ),
           TextButton(
-            style: TextButton.styleFrom(foregroundColor: AppColors.danger),
+            style: TextButton.styleFrom(foregroundColor: context.colors.errorText),
             onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text('Cancel Activity'),
           ),
@@ -173,7 +173,7 @@ class _ManageBody extends StatelessWidget {
                             ? context.colors.errorLight
                             : context.colors.statusSuccessBg,
                         foreground: activity.status == ActivityStatus.past
-                            ? AppColors.danger
+                            ? context.colors.errorText
                             : AppColors.avatarSecondary,
                       ),
                     ],
@@ -293,8 +293,8 @@ class _Hero extends StatelessWidget {
               const SizedBox(width: AppSpacing.x2),
               _PillBadge(
                 label: '👑  HOST',
-                bgColor: AppColors.warning,
-                textColor: AppColors.textOnPrimary,
+                bgColor: context.colors.warningBg,
+                textColor: context.colors.warningText,
               ),
             ],
           ),
@@ -416,8 +416,8 @@ class _CapacityCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.people_outline_rounded,
-                      size: 18, color: AppColors.primary),
+                  Icon(Icons.people_outline_rounded,
+                      size: 18, color: context.colors.primaryOnSurface),
                   const SizedBox(width: 6),
                   Text(
                     '$joined joined',
@@ -560,8 +560,8 @@ class _QuickActions extends StatelessWidget {
               child: _ActionBtn(
                 icon: Icons.edit_outlined,
                 label: 'Edit',
-                iconColor: AppColors.primary,
-                bgColor: AppColors.primarySoft,
+                iconColor: context.colors.primaryOnSurface,
+                bgColor: context.colors.primarySoft,
                 onTap: () => _showEditSheet(context),
               ),
             ),
@@ -578,8 +578,8 @@ class _QuickActions extends StatelessWidget {
               child: _ActionBtn(
                 icon: Icons.campaign_outlined,
                 label: 'Announce',
-                iconColor: AppColors.warning,
-                bgColor: AppColors.warningBg,
+                iconColor: context.colors.warningText,
+                bgColor: context.colors.warningBg,
                 onTap: () => _showAnnounceSheet(context),
               ),
             ),
@@ -851,13 +851,13 @@ class _ShareSheet extends StatelessWidget {
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.primarySoft,
+                      color: context.colors.primarySoft,
                       borderRadius: BorderRadius.circular(AppRadius.pill),
                     ),
                     child: Text(
                       'Copy',
                       style: AppTypography.chipLabel(context).copyWith(
-                        color: AppColors.primary,
+                        color: context.colors.primaryOnSurface,
                         fontSize: 12,
                       ),
                     ),
@@ -874,24 +874,24 @@ class _ShareSheet extends StatelessWidget {
               _ShareOption(
                 icon: Icons.message_rounded,
                 label: 'Message',
-                color: AppColors.success,
-                bgColor: AppColors.statusSuccessBg,
+                color: context.colors.successText,
+                bgColor: context.colors.statusSuccessBg,
                 onTap: () => Navigator.of(context).pop(),
               ),
               const SizedBox(width: AppSpacing.x3),
               _ShareOption(
                 icon: Icons.link_rounded,
                 label: 'Copy link',
-                color: AppColors.primary,
-                bgColor: AppColors.primarySoft,
+                color: context.colors.primaryOnSurface,
+                bgColor: context.colors.primarySoft,
                 onTap: () => Navigator.of(context).pop(),
               ),
               const SizedBox(width: AppSpacing.x3),
               _ShareOption(
                 icon: Icons.ios_share_rounded,
                 label: 'More',
-                color: AppColors.textPrimary,
-                bgColor: AppColors.surfaceSubtle,
+                color: context.colors.textPrimary,
+                bgColor: context.colors.surfaceSubtle,
                 onTap: () => Navigator.of(context).pop(),
               ),
             ],
@@ -1004,14 +1004,14 @@ class _AnnounceSheetState extends State<_AnnounceSheet> {
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(
-                    color: AppColors.warningBg,
+                    color: context.colors.warningBg,
                     borderRadius: BorderRadius.circular(AppRadius.sm),
                   ),
                   alignment: Alignment.center,
-                  child: const Icon(
+                  child: Icon(
                     Icons.campaign_outlined,
                     size: 20,
-                    color: AppColors.warning,
+                    color: context.colors.warningText,
                   ),
                 ),
                 const SizedBox(width: AppSpacing.x3),
@@ -1392,18 +1392,18 @@ class _CancelButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: context.colors.surface,
           borderRadius: BorderRadius.circular(AppRadius.pill),
-          border: Border.all(color: AppColors.danger, width: 1.5),
+          border: Border.all(color: context.colors.errorText, width: 1.5),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.delete_outline_rounded,
-                size: 18, color: AppColors.danger),
+            Icon(Icons.delete_outline_rounded,
+                size: 18, color: context.colors.errorText),
             const SizedBox(width: AppSpacing.x2),
             Text(
               'Cancel Activity',
               style: AppTypography.labelField(context).copyWith(
-                color: AppColors.danger,
+                color: context.colors.errorText,
                 fontSize: 15,
               ),
             ),

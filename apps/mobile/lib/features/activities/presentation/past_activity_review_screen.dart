@@ -372,7 +372,7 @@ class _RateActivitySection extends StatelessWidget {
                     filled ? Icons.star_rounded : Icons.star_border_rounded,
                     size: 36,
                     color: filled
-                        ? AppColors.warning
+                        ? context.colors.warningText
                         : context.colors.textTertiary,
                   ),
                 ),
@@ -542,7 +542,7 @@ class _ParticipantRow extends StatelessWidget {
                   child: Icon(
                     filled ? Icons.star_rounded : Icons.star_border_rounded,
                     size: 22,
-                    color: filled ? AppColors.warning : context.colors.textTertiary,
+                    color: filled ? context.colors.warningText : context.colors.textTertiary,
                   ),
                 ),
               );

@@ -93,7 +93,7 @@ class ProfileScreen extends ConsumerWidget {
                               width: 9,
                               height: 9,
                               decoration: BoxDecoration(
-                                color: AppColors.danger,
+                                color: context.colors.errorText,
                                 shape: BoxShape.circle,
                                 border: Border.all(
                                   color: context.colors.surface,
@@ -195,7 +195,7 @@ class _AvatarCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: AppColors.primary,
+                      color: context.colors.primaryOnSurface,
                       width: 3,
                     ),
                   ),
@@ -208,11 +208,11 @@ class _AvatarCard extends StatelessWidget {
                               fit: BoxFit.cover,
                             )
                           : Container(
-                              color: AppColors.primarySoft,
-                              child: const Icon(
+                              color: context.colors.primarySoft,
+                              child: Icon(
                                 Icons.person,
                                 size: 52,
-                                color: AppColors.primary,
+                                color: context.colors.primaryOnSurface,
                               ),
                             ),
                     ),
@@ -260,7 +260,7 @@ class _AvatarCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
 
-          // @username — blue
+          // @username — theme-aware brand blue.
           Text(
             username,
             style: AppTypography.bodyMedium(context).copyWith(
@@ -286,10 +286,10 @@ class _StatsRow extends StatelessWidget {
       children: [
         Expanded(
           child: _StatCard(
-            iconWidget: const Icon(
+            iconWidget: Icon(
               Icons.people_outline_rounded,
               size: 22,
-              color: AppColors.primary,
+              color: context.colors.primaryOnSurface,
             ),
             value: '${user.activitiesCount}',
             label: 'Joined',
@@ -301,7 +301,7 @@ class _StatsRow extends StatelessWidget {
             iconWidget: Icon(
               Icons.emoji_events_outlined,
               size: 22,
-              color: AppColors.success,
+              color: context.colors.successText,
             ),
             value: '${user.hostedCount}',
             label: 'Hosted',
@@ -313,7 +313,7 @@ class _StatsRow extends StatelessWidget {
             iconWidget: Icon(
               Icons.star_border_rounded,
               size: 22,
-              color: AppColors.warning,
+              color: context.colors.warningText,
             ),
             value: user.rating != null && user.rating! > 0
                 ? user.rating!.toStringAsFixed(1)
@@ -432,10 +432,10 @@ class _SportPill extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(
+          Icon(
             Icons.emoji_events_outlined,
             size: 14,
-            color: AppColors.primary,
+            color: context.colors.primaryOnSurface,
           ),
           const SizedBox(width: 6),
           Text(
@@ -734,7 +734,7 @@ class _ModeOption extends StatelessWidget {
               _icon,
               size: 20,
               color: selected
-                  ? AppColors.primary
+                  ? context.colors.primaryOnSurface
                   : context.colors.textSecondary,
             ),
             const SizedBox(width: AppSpacing.x3),
@@ -752,10 +752,10 @@ class _ModeOption extends StatelessWidget {
               ),
             ),
             if (selected)
-              const Icon(
+              Icon(
                 Icons.check_rounded,
                 size: 18,
-                color: AppColors.primary,
+                color: context.colors.primaryOnSurface,
               ),
           ],
         ),
@@ -784,7 +784,7 @@ class _LogoutRow extends ConsumerWidget {
               width: 32,
               height: 32,
               decoration: BoxDecoration(
-                color: AppColors.errorLight,
+                color: context.colors.errorLight,
                 borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
               alignment: Alignment.center,
@@ -866,7 +866,7 @@ class _LogoutSheet extends StatelessWidget {
             width: 56,
             height: 56,
             decoration: BoxDecoration(
-              color: AppColors.errorLight,
+              color: context.colors.errorLight,
               shape: BoxShape.circle,
             ),
             alignment: Alignment.center,

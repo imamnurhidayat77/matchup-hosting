@@ -59,7 +59,7 @@ class JoinedActivityDetailScreen extends ConsumerWidget {
             child: const Text('Cancel'),
           ),
           TextButton(
-            style: TextButton.styleFrom(foregroundColor: AppColors.danger),
+            style: TextButton.styleFrom(foregroundColor: context.colors.errorText),
             onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text('Leave'),
           ),
@@ -200,7 +200,7 @@ class _DetailBody extends StatelessWidget {
                           'Leave Activity',
                           style: AppTypography.labelField(
                             context,
-                          ).copyWith(color: AppColors.danger),
+                          ).copyWith(color: context.colors.errorText),
                         ),
                       ),
                     ),
@@ -493,13 +493,13 @@ class _HostCard extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: AppColors.primarySoft,
+                  color: context.colors.primarySoft,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.message_rounded,
                   size: 16,
-                  color: AppColors.primary,
+                  color: context.colors.primaryOnSurface,
                 ),
               ),
             ),
@@ -508,16 +508,16 @@ class _HostCard extends StatelessWidget {
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(
+                Icon(
                   Icons.star_rounded,
                   size: 16,
-                  color: AppColors.success,
+                  color: context.colors.successText,
                 ),
                 const SizedBox(width: 4),
                 Text(
                   hostRating.toStringAsFixed(1),
                   style: AppTypography.labelField(context).copyWith(
-                    color: AppColors.success,
+                    color: context.colors.successText,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -768,25 +768,26 @@ class _ChatSection extends StatelessWidget {
                     horizontal: AppSpacing.x4,
                   ),
                   decoration: BoxDecoration(
-                    color: AppColors.primarySoft,
+                    color: context.colors.primarySoft,
                     borderRadius: BorderRadius.circular(AppRadius.card),
                     border: Border.all(
-                      color: AppColors.primary.withValues(alpha: 0.3),
+                      color: context.colors.primaryOnSurface
+                          .withValues(alpha: 0.3),
                     ),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.forum_outlined,
                         size: 18,
-                        color: AppColors.primary,
+                        color: context.colors.primaryOnSurface,
                       ),
                       const SizedBox(width: AppSpacing.x2),
                       Text(
                         'Open Group Chat',
                         style: AppTypography.labelField(context).copyWith(
-                          color: AppColors.primary,
+                          color: context.colors.primaryOnSurface,
                         ),
                       ),
                     ],

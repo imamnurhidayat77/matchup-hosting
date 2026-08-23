@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import '../theme/dark_colors.dart';
@@ -130,7 +129,7 @@ class _HeaderCircle extends StatelessWidget {
                   width: 9,
                   height: 9,
                   decoration: BoxDecoration(
-                    color: AppColors.danger,
+                    color: c.errorText,
                     shape: BoxShape.circle,
                     border: Border.all(color: c.surface, width: 1.5),
                   ),

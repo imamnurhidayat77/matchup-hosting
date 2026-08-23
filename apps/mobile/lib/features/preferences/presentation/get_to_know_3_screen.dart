@@ -106,7 +106,7 @@ class _GetToKnow3ScreenState extends ConsumerState<GetToKnow3Screen> {
 
     return AppScaffold(
       showHomeIndicator: true,
-      backgroundColor: AppColors.textOnPrimary,
+      backgroundColor: context.colors.surface,
       body: Column(
         children: [
           OnboardingProgressHeader(step: 3, total: 3),
@@ -397,7 +397,7 @@ class _WeightTick extends StatelessWidget {
           vertical: AppSpacing.x2,
         ),
         decoration: BoxDecoration(
-          color: AppColors.primarySoft,
+          color: context.colors.primarySoft,
           borderRadius: BorderRadius.circular(AppRadius.sm),
         ),
         child: Text(
@@ -405,7 +405,7 @@ class _WeightTick extends StatelessWidget {
           style: AppTypography.titleScreen(context).copyWith(
             fontSize: 24,
             fontWeight: FontWeight.w800,
-            color: AppColors.primary,
+            color: context.colors.primaryOnSurface,
           ),
         ),
       );
@@ -442,7 +442,9 @@ class _StepButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tint = emphasised ? AppColors.primary : context.colors.textSecondary;
+    final tint = emphasised
+        ? context.colors.primaryOnSurface
+        : context.colors.textSecondary;
     return Semantics(
       button: true,
       label: semanticLabel,
@@ -457,7 +459,9 @@ class _StepButton extends StatelessWidget {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               border: Border.all(
-                color: emphasised ? AppColors.primary : _fieldBorder,
+                color: emphasised
+                    ? context.colors.primaryOnSurface
+                    : _fieldBorder,
               ),
             ),
             alignment: Alignment.center,
@@ -660,7 +664,7 @@ class _WheelState extends State<_Wheel> {
                   fontSize: selected ? 19 : 16,
                   fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
                   color: selected
-                      ? AppColors.primary
+                      ? context.colors.primaryOnSurface
                       : context.colors.textTertiary,
                 ),
               ),

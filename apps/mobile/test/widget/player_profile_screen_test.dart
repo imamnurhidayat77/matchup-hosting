@@ -63,11 +63,11 @@ void main() {
 
       await pumpScreen(tester);
 
-      expect(find.text('James Wilson'), findsOneWidget);
+      expect(find.text('JAMES WILSON'), findsOneWidget);
       expect(find.text('24'), findsOneWidget);
       expect(find.text('8'), findsOneWidget);
-      expect(find.text('Message'), findsOneWidget);
-      expect(find.text('Report'), findsOneWidget);
+      expect(find.text('Send Message'), findsOneWidget);
+      expect(find.text('Report Profile'), findsOneWidget);
     });
 
     testWidgets('should show a not-found message when the player is null', (
@@ -84,7 +84,7 @@ void main() {
       );
       await pumpScreen(tester);
 
-      await tester.tap(find.text('Message'));
+      await tester.tap(find.text('Send Message'));
       await tester.pumpAndSettle();
       expect(find.text('Chat'), findsOneWidget);
     });

@@ -44,9 +44,10 @@ class TourCalloutCard extends StatelessWidget {
         constraints: const BoxConstraints(maxWidth: 320),
         padding: const EdgeInsets.all(AppSpacing.x4),
         decoration: BoxDecoration(
-          color: context.colors.surface,
+          color: context.colors.card,
           borderRadius: BorderRadius.circular(AppRadius.card),
           boxShadow: AppShadows.floating,
+          border: Border.all(color: context.colors.border),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,

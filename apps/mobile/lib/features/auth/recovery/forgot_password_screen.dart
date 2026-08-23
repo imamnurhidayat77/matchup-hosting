@@ -57,7 +57,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
     return AppScaffold(
       safeAreaTop: true,
       showHomeIndicator: true,
-      backgroundColor: AppColors.textOnPrimary,
+      backgroundColor: context.colors.background,
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(
@@ -105,14 +105,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                       width: 64,
                       height: 64,
                       decoration: BoxDecoration(
-                        color: AppColors.primarySoft,
+                        color: context.colors.primarySoft,
                         shape: BoxShape.circle,
                       ),
                       alignment: Alignment.center,
-                      child: const Icon(
+                      child: Icon(
                         Icons.lock_reset_rounded,
                         size: 30,
-                        color: AppColors.primary,
+                        color: context.colors.primaryOnSurface,
                       ),
                     ),
                     const SizedBox(height: AppSpacing.x4),
@@ -192,10 +192,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                                 'Sign In',
                                 style: AppTypography.bodyFormSecondary(context)
                                     .copyWith(
-                                      color: AppColors.primary,
+                                      color: context.colors.primaryOnSurface,
                                       fontWeight: FontWeight.w700,
                                       decoration: TextDecoration.underline,
-                                      decorationColor: AppColors.primary,
+                                      decorationColor: context.colors.primaryOnSurface,
                                     ),
                               ),
                             ),
@@ -235,10 +235,6 @@ class _AuthTextField extends StatelessWidget {
   final String? Function(String?)? validator;
   final ValueChanged<String>? onSubmitted;
 
-  static const Color _fill = Color(0xFFF9FAFB);
-  static const Color _border = Color(0xFFE5E7EB);
-  static const Color _placeholder = Color(0xFF6B7280);
-
   @override
   Widget build(BuildContext context) {
     return TextFormField(
@@ -253,27 +249,27 @@ class _AuthTextField extends StatelessWidget {
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: AppTypography.bodyReading(context).copyWith(
-          color: _placeholder,
+          color: context.colors.textTertiary,
           fontSize: 15,
         ),
         prefixIcon: Padding(
           padding: const EdgeInsets.only(left: AppSpacing.x3),
-          child: Icon(icon, size: 18, color: _placeholder),
+          child: Icon(icon, size: 18, color: context.colors.textTertiary),
         ),
         prefixIconConstraints: const BoxConstraints(minWidth: 48),
         filled: true,
-        fillColor: _fill,
+        fillColor: context.colors.surfaceMuted,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.x4,
           vertical: AppSpacing.x3 + 2,
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.card),
-          borderSide: const BorderSide(color: _border, width: 1),
+          borderSide: BorderSide(color: context.colors.border, width: 1),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.card),
-          borderSide: const BorderSide(color: _border, width: 1),
+          borderSide: BorderSide(color: context.colors.border, width: 1),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.card),
@@ -281,11 +277,11 @@ class _AuthTextField extends StatelessWidget {
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.card),
-          borderSide: const BorderSide(color: AppColors.danger, width: 1),
+          borderSide: BorderSide(color: context.colors.errorText, width: 1),
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.card),
-          borderSide: const BorderSide(color: AppColors.danger, width: 2),
+          borderSide: BorderSide(color: context.colors.errorText, width: 2),
         ),
       ),
     );

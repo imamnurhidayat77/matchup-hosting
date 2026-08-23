@@ -1,3 +1,5 @@
+import 'package:dio/dio.dart';
+
 import '../../../core/network/api_client.dart';
 import '../domain/chat_message.dart';
 import 'chat_repository.dart';
@@ -63,6 +65,44 @@ class DummyChatRepository implements ChatRepository {
       text: text,
       sentAt: DateTime.now(),
       isMine: true,
+    );
+    _byActivity.putIfAbsent(activityId, () => _seed(activityId)).add(msg);
+    return msg;
+  }
+
+  @override
+  Future<ChatMessage> sendImage({
+    required String activityId,
+    required String imagePath,
+  }) async {
+    final msg = ChatMessage(
+      id: '$activityId-${DateTime.now().millisecondsSinceEpoch}',
+      senderId: 'me',
+      senderName: 'You',
+      text: '',
+      sentAt: DateTime.now(),
+      isMine: true,
+      imagePath: imagePath,
+    );
+    _byActivity.putIfAbsent(activityId, () => _seed(activityId)).add(msg);
+    return msg;
+  }
+
+  @override
+  Future<ChatMessage> sendLocation({
+    required String activityId,
+    required double latitude,
+    required double longitude,
+  }) async {
+    final msg = ChatMessage(
+      id: '$activityId-${DateTime.now().millisecondsSinceEpoch}',
+      senderId: 'me',
+      senderName: 'You',
+      text: '',
+      sentAt: DateTime.now(),
+      isMine: true,
+      latitude: latitude,
+      longitude: longitude,
     );
     _byActivity.putIfAbsent(activityId, () => _seed(activityId)).add(msg);
     return msg;
@@ -142,6 +182,46 @@ class RemoteChatRepository implements ChatRepository {
   }
 
   @override
+  Future<ChatMessage> sendImage({
+    required String activityId,
+    required String imagePath,
+  }) async {
+    try {
+      final formData = FormData.fromMap({
+        'image': await MultipartFile.fromFile(imagePath),
+      });
+      final res = await _client.dio.post(
+        '/api/v1/activities/$activityId/messages/image',
+        data: formData,
+      );
+      return _parse(res.data as Map<String, dynamic>);
+    } catch (_) {
+      return _fallback.sendImage(activityId: activityId, imagePath: imagePath);
+    }
+  }
+
+  @override
+  Future<ChatMessage> sendLocation({
+    required String activityId,
+    required double latitude,
+    required double longitude,
+  }) async {
+    try {
+      final res = await _client.dio.post(
+        '/api/v1/activities/$activityId/messages/location',
+        data: {'latitude': latitude, 'longitude': longitude},
+      );
+      return _parse(res.data as Map<String, dynamic>);
+    } catch (_) {
+      return _fallback.sendLocation(
+        activityId: activityId,
+        latitude: latitude,
+        longitude: longitude,
+      );
+    }
+  }
+
+  @override
   Future<List<ChatConversation>> conversations() async {
     try {
       final res = await _client.dio.get('/api/v1/conversations');
@@ -173,5 +253,8 @@ class RemoteChatRepository implements ChatRepository {
     sentAt:
         DateTime.tryParse(json['sent_at'] as String? ?? '') ?? DateTime.now(),
     isMine: json['is_mine'] as bool? ?? false,
+    imagePath: json['image_path'] as String?,
+    latitude: (json['latitude'] as num?)?.toDouble(),
+    longitude: (json['longitude'] as num?)?.toDouble(),
   );
 }

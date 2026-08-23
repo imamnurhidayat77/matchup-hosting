@@ -129,7 +129,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     return AppScaffold(
       safeAreaTop: true,
       showHomeIndicator: true,
-      backgroundColor: AppColors.textOnPrimary, // Pure white
+      backgroundColor: context.colors.background,
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(
@@ -266,7 +266,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                               ? Icons.visibility_off_outlined
                               : Icons.visibility_outlined,
                           size: 20,
-                          color: const Color(0xFF6B7280),
+                          color: context.colors.textTertiary,
                         ),
                         onPressed: () => setState(
                           () => _obscurePassword = !_obscurePassword,
@@ -286,7 +286,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                           child: Text(
                             'Forgot Password?',
                             style: AppTypography.labelField(context).copyWith(
-                              color: AppColors.primary,
+                              color: context.colors.primaryOnSurface,
                               fontWeight: FontWeight.w600,
                               fontSize: 13.5,
                             ),
@@ -344,23 +344,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                               color: context.colors.surface,
                               borderRadius:
                                   BorderRadius.circular(AppRadius.lg),
-                              border: Border.all(color: AppColors.primary),
+                              border: Border.all(
+                                color: context.colors.primaryOnSurface,
+                              ),
                             ),
                             alignment: Alignment.center,
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Icon(
+                                Icon(
                                   Icons.fingerprint_rounded,
                                   size: 20,
-                                  color: AppColors.primary,
+                                  color: context.colors.primaryOnSurface,
                                 ),
                                 const SizedBox(width: AppSpacing.x2),
                                 Text(
                                   'Use Biometrics',
                                   style: AppTypography.labelField(context)
                                       .copyWith(
-                                        color: AppColors.primary,
+                                        color: context.colors.primaryOnSurface,
                                         fontWeight: FontWeight.w700,
                                       ),
                                 ),
@@ -392,10 +394,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                 style:
                                     AppTypography.bodyFormSecondary(context)
                                         .copyWith(
-                                          color: AppColors.primary,
+                                          color: context.colors.primaryOnSurface,
                                           fontWeight: FontWeight.w700,
                                           decoration: TextDecoration.underline,
-                                          decorationColor: AppColors.primary,
+                                          decorationColor: context.colors.primaryOnSurface,
                                         ),
                               ),
                             ),
@@ -501,13 +503,6 @@ class _TextField extends StatelessWidget {
   final ValueChanged<String>? onSubmitted;
   final Widget? suffixIcon;
 
-  // Design-specified exact values for this screen's input fields —
-  // intentionally not routed through AppColors tokens since they don't
-  // match existing surfaceMuted (#F1F5F9) / textTertiary (#9CA3AF).
-  static const Color _fieldFillColor = Color(0xFFF9FAFB);
-  static const Color _fieldBorderColor = Color(0xFFE5E7EB);
-  static const Color _placeholderColor = Color(0xFF6B7280);
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -530,7 +525,7 @@ class _TextField extends StatelessWidget {
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: AppTypography.bodyReading(context).copyWith(
-            color: _placeholderColor,
+            color: context.colors.textTertiary,
             fontSize: 15,
           ),
           prefixIcon: Padding(
@@ -538,36 +533,36 @@ class _TextField extends StatelessWidget {
             child: Icon(
               icon,
               size: 18,
-              color: _placeholderColor,
+              color: context.colors.textTertiary,
             ),
           ),
           prefixIconConstraints: const BoxConstraints(minWidth: 48),
           suffixIcon: suffixIcon,
           filled: true,
-          fillColor: _fieldFillColor,
+          fillColor: context.colors.surfaceMuted,
           contentPadding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.x4,
             vertical: AppSpacing.x3 + 2,
           ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(AppRadius.card),
-            borderSide: const BorderSide(color: _fieldBorderColor, width: 1),
+            borderSide: BorderSide(color: context.colors.border, width: 1),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(AppRadius.card),
-            borderSide: const BorderSide(color: _fieldBorderColor, width: 1),
+            borderSide: BorderSide(color: context.colors.border, width: 1),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(AppRadius.card),
-            borderSide: const BorderSide(color: AppColors.primary, width: 2),
+            borderSide: BorderSide(color: AppColors.primary, width: 2),
           ),
           errorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(AppRadius.card),
-            borderSide: const BorderSide(color: AppColors.danger, width: 1),
+            borderSide: BorderSide(color: context.colors.errorText, width: 1),
           ),
           focusedErrorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(AppRadius.card),
-            borderSide: const BorderSide(color: AppColors.danger, width: 2),
+            borderSide: BorderSide(color: context.colors.errorText, width: 2),
           ),
         ),
       ),

@@ -33,6 +33,12 @@ dependencies:
   # Image picker
   image_picker: ^1.2.3
 
+  # Device GPS location (chat "share location" attachment)
+  geolocator: ^14.0.2
+
+  # Opens a shared location in the device's maps app
+  url_launcher: ^6.3.2
+
   # Image processing (decode/encode/crop for wizard uploads)
   image: ^4.2.0
 

@@ -40,10 +40,10 @@ class ErrorRetry extends StatelessWidget {
                 color: context.colors.errorLight,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.wifi_off_rounded,
                 size: 32,
-                color: AppColors.danger,
+                color: context.colors.errorText,
               ),
             ),
             const SizedBox(height: AppSpacing.x5),

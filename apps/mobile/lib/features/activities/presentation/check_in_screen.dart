@@ -451,9 +451,9 @@ class _DetailsCard extends StatelessWidget {
       child: Column(
         children: [
           _DetailRow(
-            iconBg: AppColors.primarySoft,
+            iconBg: context.colors.primarySoft,
             icon: Icons.bolt_rounded,
-            iconColor: AppColors.primary,
+            iconColor: context.colors.primaryOnSurface,
             title: '${activity.skillLevel.toUpperCase()} LEVEL',
             subtitle: activity.description.isNotEmpty
                 ? activity.description.split('.').first
@@ -461,17 +461,17 @@ class _DetailsCard extends StatelessWidget {
           ),
           Divider(height: 1, color: context.colors.border, indent: 60),
           _DetailRow(
-            iconBg: AppColors.primarySoft,
+            iconBg: context.colors.primarySoft,
             icon: Icons.access_time_rounded,
-            iconColor: AppColors.primary,
+            iconColor: context.colors.primaryOnSurface,
             title: '$dateStr · $startStr – $endStr',
             subtitle: 'Arrive 10m early to warm up',
           ),
           Divider(height: 1, color: context.colors.border, indent: 60),
           _DetailRow(
-            iconBg: AppColors.primarySoft,
+            iconBg: context.colors.primarySoft,
             icon: Icons.place_outlined,
-            iconColor: AppColors.primary,
+            iconColor: context.colors.primaryOnSurface,
             title: activity.location,
             subtitle: address,
           ),
@@ -549,39 +549,36 @@ class _StatusPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    /// Accent resolution per (status, theme):
-    ///  - warning on a light bg fails AA (2.07:1) → use [warningStrong].
-    ///  - statusSuccessText (#04694A dark green) on the dark status bg
-    ///    fails AA (2.18:1) → swap to the theme's [textPrimary] in dark.
-    ///  - warning / primarySoft already pass on dark, so they stay as-is.
+    /// Accent resolution per (status, theme): all semantic accents come
+    /// from theme-aware tokens (successText, warningText, errorText) so
+    /// both light and dark mode hit WCAG AA on the corresponding status
+    /// background without per-call branching.
     final (Color bg, Color accent, IconData icon, String title, String body) =
         switch (status) {
       _CheckInStatus.notCheckedIn => (
-          isDark ? context.colors.warningBg : AppColors.warningBg,
-          isDark ? AppColors.warning : AppColors.warningStrong,
+          context.colors.warningBg,
+          context.colors.warningText,
           Icons.access_time_rounded,
           'Not checked in yet',
           'Arrive at the location and tap "Check In" below to confirm your attendance.',
         ),
       _CheckInStatus.locating => (
-          AppColors.primarySoft,
-          AppColors.primary,
+          context.colors.primarySoft,
+          context.colors.primaryOnSurface,
           Icons.my_location_rounded,
           'Detecting your location…',
           'We are verifying that you are at the activity venue.',
         ),
       _CheckInStatus.checkedIn => (
           context.colors.statusSuccessBg,
-          isDark ? context.colors.textPrimary : AppColors.statusSuccessText,
+          context.colors.successText,
           Icons.check_circle_rounded,
           'Checked in!',
           'Your attendance has been confirmed. Enjoy the game!',
         ),
       _CheckInStatus.locationDenied => (
-          isDark ? context.colors.warningBg : AppColors.warningBg,
-          isDark ? AppColors.warning : AppColors.warningStrong,
+          context.colors.warningBg,
+          context.colors.warningText,
           Icons.location_off_rounded,
           'Location permission needed',
           'Enable location access so we can verify your attendance.',

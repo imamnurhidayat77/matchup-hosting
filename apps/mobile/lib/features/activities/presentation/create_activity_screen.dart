@@ -276,9 +276,9 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
                                 ),
                               ),
                               if (selected)
-                                const Icon(
+                                Icon(
                                   Icons.check_rounded,
-                                  color: AppColors.primary,
+                                  color: context.colors.primaryOnSurface,
                                   size: 18,
                                 ),
                             ],
@@ -973,7 +973,7 @@ class _CheckRow extends StatelessWidget {
         Icon(
           Icons.check_circle_rounded,
           size: 20,
-          color: AppColors.statusSuccessText,
+          color: context.colors.successText,
         ),
         const SizedBox(width: AppSpacing.x2),
         Expanded(
@@ -1274,7 +1274,8 @@ class _PhotoBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = danger ? AppColors.danger : AppColors.primary;
+    final color =
+        danger ? context.colors.errorText : context.colors.primaryOnSurface;
     return AppTappable(
       onTap: onTap,
       semanticLabel: semanticLabel,
@@ -1283,7 +1284,7 @@ class _PhotoBtn extends StatelessWidget {
         width: 34,
         height: 34,
         decoration: BoxDecoration(
-          color: AppColors.textOnPrimary,
+          color: context.colors.surface,
           borderRadius: BorderRadius.circular(AppRadius.sm),
           border: Border.all(color: color.withValues(alpha: 0.3)),
           boxShadow: AppShadows.card,
@@ -1431,7 +1432,7 @@ class _ChoiceCard extends StatelessWidget {
             color: selected ? c.primarySoft : c.surface,
             borderRadius: BorderRadius.circular(AppRadius.card),
             border: Border.all(
-              color: selected ? AppColors.primary : c.border,
+              color: selected ? c.primaryOnSurface : c.border,
               width: selected ? 1.5 : 1,
             ),
           ),

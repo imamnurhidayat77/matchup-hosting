@@ -259,17 +259,21 @@ class _OrganizerBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(
+          Icon(
             Icons.workspace_premium,
             size: 12,
-            color: AppColors.warning,
+            color: context.colors.warningText,
           ),
           const SizedBox(width: 4),
           Text(
             'Organizer',
             style: AppTypography.chipLabel(
               context,
-            ).copyWith(fontSize: 11, color: AppColors.warning, height: 1.0),
+            ).copyWith(
+              fontSize: 11,
+              color: context.colors.warningText,
+              height: 1.0,
+            ),
           ),
         ],
       ),

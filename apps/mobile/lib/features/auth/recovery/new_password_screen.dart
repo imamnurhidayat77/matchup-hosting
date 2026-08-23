@@ -59,10 +59,10 @@ class _NewPasswordScreenState extends State<NewPasswordScreen>
     return score;
   }
 
-  Color get _strengthColor {
-    if (_strength < 34) return AppColors.danger;
-    if (_strength < 67) return AppColors.warning;
-    return AppColors.statusSuccessText;
+  Color _strengthColor(BuildContext context) {
+    if (_strength < 34) return context.colors.errorText;
+    if (_strength < 67) return context.colors.warningText;
+    return context.colors.successText;
   }
 
   String get _strengthLabel {
@@ -110,7 +110,7 @@ class _NewPasswordScreenState extends State<NewPasswordScreen>
     return AppScaffold(
       safeAreaTop: true,
       showHomeIndicator: true,
-      backgroundColor: AppColors.textOnPrimary,
+      backgroundColor: context.colors.background,
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(
@@ -155,15 +155,15 @@ class _NewPasswordScreenState extends State<NewPasswordScreen>
                   Container(
                     width: 64,
                     height: 64,
-                    decoration: const BoxDecoration(
-                      color: AppColors.primarySoft,
+                    decoration: BoxDecoration(
+                      color: context.colors.primarySoft,
                       shape: BoxShape.circle,
                     ),
                     alignment: Alignment.center,
-                    child: const Icon(
+                    child: Icon(
                       Icons.shield_rounded,
                       size: 30,
-                      color: AppColors.primary,
+                      color: context.colors.primaryOnSurface,
                     ),
                   ),
                   const SizedBox(height: AppSpacing.x4),
@@ -203,7 +203,7 @@ class _NewPasswordScreenState extends State<NewPasswordScreen>
                               value: _strength / 100,
                               minHeight: 4,
                               backgroundColor: context.colors.border,
-                              valueColor: AlwaysStoppedAnimation(_strengthColor),
+                              valueColor: AlwaysStoppedAnimation(_strengthColor(context)),
                             ),
                           ),
                         ),
@@ -211,7 +211,7 @@ class _NewPasswordScreenState extends State<NewPasswordScreen>
                         Text(
                           _strengthLabel,
                           style: AppTypography.metaSub(context)
-                              .copyWith(color: _strengthColor),
+                              .copyWith(color: _strengthColor(context)),
                         ),
                       ],
                     ),
@@ -237,7 +237,7 @@ class _NewPasswordScreenState extends State<NewPasswordScreen>
                     Text(
                       'Passwords do not match.',
                       style: AppTypography.metaSub(context)
-                          .copyWith(color: AppColors.danger),
+                          .copyWith(color: context.colors.errorText),
                     ),
                   ],
                   const SizedBox(height: AppSpacing.x4),
@@ -306,10 +306,6 @@ class _PasswordField extends StatelessWidget {
   final VoidCallback onToggle;
   final bool hasError;
 
-  static const Color _fill = Color(0xFFF9FAFB);
-  static const Color _border = Color(0xFFE5E7EB);
-  static const Color _placeholder = Color(0xFF6B7280);
-
   @override
   Widget build(BuildContext context) {
     return TextFormField(
@@ -321,43 +317,49 @@ class _PasswordField extends StatelessWidget {
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: AppTypography.bodyReading(context).copyWith(
-          color: _placeholder,
+          color: context.colors.textTertiary,
           fontSize: 15,
         ),
-        prefixIcon: const Padding(
-          padding: EdgeInsets.only(left: AppSpacing.x3),
-          child: Icon(Icons.lock_outline_rounded, size: 18, color: _placeholder),
+        prefixIcon: Padding(
+          padding: const EdgeInsets.only(left: AppSpacing.x3),
+          child: Icon(
+            Icons.lock_outline_rounded,
+            size: 18,
+            color: context.colors.textTertiary,
+          ),
         ),
         prefixIconConstraints: const BoxConstraints(minWidth: 48),
         suffixIcon: IconButton(
           icon: Icon(
             obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
             size: 20,
-            color: _placeholder,
+            color: context.colors.textTertiary,
           ),
           onPressed: onToggle,
         ),
         filled: true,
-        fillColor: hasError ? AppColors.errorLight : _fill,
+        fillColor: hasError
+            ? context.colors.errorLight
+            : context.colors.surfaceMuted,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.x4,
           vertical: AppSpacing.x3 + 2,
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.card),
-          borderSide: const BorderSide(color: _border, width: 1),
+          borderSide: BorderSide(color: context.colors.border, width: 1),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.card),
           borderSide: BorderSide(
-            color: hasError ? AppColors.danger : _border,
+            color: hasError ? context.colors.errorText : context.colors.border,
             width: 1,
           ),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.card),
           borderSide: BorderSide(
-            color: hasError ? AppColors.danger : AppColors.primary,
+            color: hasError ? context.colors.errorText : AppColors.primary,
             width: 2,
           ),
         ),
@@ -388,7 +390,7 @@ class _Requirement extends StatelessWidget {
               key: ValueKey(met),
               size: 16,
               color: met
-                  ? AppColors.statusSuccessText
+                  ? context.colors.successText
                   : context.colors.textTertiary,
             ),
           ),
@@ -398,7 +400,7 @@ class _Requirement extends StatelessWidget {
             style: AppTypography.metaSub(context).copyWith(
               fontSize: 13,
               color: met
-                  ? AppColors.statusSuccessText
+                  ? context.colors.successText
                   : context.colors.textSecondary,
             ),
           ),
@@ -456,7 +458,8 @@ class _SuccessSheet extends StatelessWidget {
             child: const Icon(
               Icons.check_rounded,
               size: 36,
-              color: AppColors.statusSuccessText,
+              color: AppColors.statusSuccessText, // Displayed on white in
+              // confirmation card; AA verified at 5.93:1.
             ),
           ),
           const SizedBox(height: AppSpacing.x4),
@@ -464,7 +467,7 @@ class _SuccessSheet extends StatelessWidget {
           Text(
             'Password Reset!',
             style: AppTypography.titleSheet(context).copyWith(
-              color: AppColors.statusSuccessText,
+              color: context.colors.successText,
             ),
           ),
           const SizedBox(height: AppSpacing.x2),

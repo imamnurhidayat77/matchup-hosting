@@ -79,7 +79,16 @@ class _TourHostState extends ConsumerState<TourHost> {
 
   void _insertEntry() {
     if (_entry != null) return;
-    final entry = OverlayEntry(builder: (_) => const _TourOverlayContent());
+    // `captureAll` snapshots every InheritedWidget from the current context
+    // (Theme, Directionality, MediaQuery, etc.) and injects them into the
+    // OverlayEntry's builder — the only correct way to give an OverlayEntry
+    // proper DefaultTextStyle and theme-aware colors without hard-coding a
+    // specific theme or re-querying a stale context at build time.
+    final capturedThemes = InheritedTheme.captureAll(
+      context,
+      const _TourOverlayContent(),
+    );
+    final entry = OverlayEntry(builder: (_) => capturedThemes);
     _entry = entry;
 
     // Defer the actual insert to after this frame. The anchors a step
@@ -199,14 +208,17 @@ class _TourOverlayContent extends ConsumerWidget {
       shape: step.shape,
       holeRadius: AppRadius.card,
       onTapScrim: controller.skip,
-      child: TourCalloutCard(
-        title: step.title,
-        body: step.body,
-        currentStep: tourState.index + 1,
-        totalSteps: tourState.steps.length,
-        isLastStep: tourState.isLast,
-        onSkip: controller.skip,
-        onNext: controller.next,
+      child: Material(
+        type: MaterialType.transparency,
+        child: TourCalloutCard(
+          title: step.title,
+          body: step.body,
+          currentStep: tourState.index + 1,
+          totalSteps: tourState.steps.length,
+          isLastStep: tourState.isLast,
+          onSkip: controller.skip,
+          onNext: controller.next,
+        ),
       ),
     );
   }

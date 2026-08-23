@@ -157,7 +157,7 @@ class _BellButton extends StatelessWidget {
                   width: 9,
                   height: 9,
                   decoration: BoxDecoration(
-                    color: AppColors.danger,
+                    color: context.colors.errorText,
                     shape: BoxShape.circle,
                     border: Border.all(
                       color: context.colors.surface,

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import '../theme/dark_colors.dart';
@@ -66,9 +65,9 @@ class _AppSnackbarContent extends StatelessWidget {
   };
 
   Color _fg(BuildContext context) => switch (variant) {
-    AppSnackbarVariant.success => AppColors.statusSuccessText,
-    AppSnackbarVariant.error => AppColors.danger,
-    AppSnackbarVariant.warning => AppColors.warning,
+    AppSnackbarVariant.success => context.colors.successText,
+    AppSnackbarVariant.error => context.colors.errorText,
+    AppSnackbarVariant.warning => context.colors.warningText,
     AppSnackbarVariant.info => context.colors.primaryOnSurface,
   };
 

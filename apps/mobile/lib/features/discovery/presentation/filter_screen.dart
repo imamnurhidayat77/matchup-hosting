@@ -471,22 +471,24 @@ class _NoBannerHint extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.colors.surface,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
+        border: Border.all(
+          color: context.colors.primaryOnSurface.withValues(alpha: 0.4),
+        ),
       ),
       child: Row(
         children: [
           Container(
             width: 36,
             height: 36,
-            decoration: const BoxDecoration(
-              color: AppColors.primarySoft,
+            decoration: BoxDecoration(
+              color: context.colors.primarySoft,
               shape: BoxShape.circle,
             ),
             alignment: Alignment.center,
             child: AppIcon(
               AppIcons.bell,
               size: AppIconSize.md,
-              color: AppColors.primary,
+              color: context.colors.primaryOnSurface,
             ),
           ),
           const SizedBox(width: AppSpacing.x3),
@@ -536,10 +538,14 @@ class _SportPill extends StatelessWidget {
           vertical: AppSpacing.x2 + 2,
         ),
         decoration: BoxDecoration(
-          color: selected ? AppColors.primarySoft : context.colors.surfaceMuted,
+          color: selected
+              ? context.colors.primarySoft
+              : context.colors.surfaceMuted,
           borderRadius: BorderRadius.circular(AppRadius.pill),
           border: Border.all(
-            color: selected ? AppColors.primary : context.colors.border,
+            color: selected
+                ? context.colors.primaryOnSurface
+                : context.colors.border,
             width: selected ? 1.5 : 1,
           ),
         ),
@@ -547,7 +553,11 @@ class _SportPill extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (selected) ...[
-              const Icon(Icons.check_rounded, size: 13, color: AppColors.primary),
+              Icon(
+                Icons.check_rounded,
+                size: 13,
+                color: context.colors.primaryOnSurface,
+              ),
               const SizedBox(width: 4),
             ],
             Text(
@@ -555,7 +565,7 @@ class _SportPill extends StatelessWidget {
               style: AppTypography.chipLabel(context).copyWith(
                 fontSize: 13,
                 color: selected
-                    ? AppColors.primaryDarker
+                    ? context.colors.primaryOnSurface
                     : context.colors.textSecondary,
                 fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
               ),
@@ -606,11 +616,13 @@ class _DatePresetGrid extends StatelessWidget {
             ),
             decoration: BoxDecoration(
               color: isSelected
-                  ? AppColors.primarySoft
+                  ? context.colors.primarySoft
                   : context.colors.surfaceMuted,
               borderRadius: BorderRadius.circular(AppRadius.pill),
               border: Border.all(
-                color: isSelected ? AppColors.primary : context.colors.border,
+                color: isSelected
+                    ? context.colors.primaryOnSurface
+                    : context.colors.border,
                 width: isSelected ? 1.5 : 1,
               ),
             ),
@@ -618,17 +630,17 @@ class _DatePresetGrid extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (preset == _DatePreset.custom)
-                  const Padding(
-                    padding: EdgeInsets.only(right: 4),
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4),
                     child: Icon(Icons.calendar_month_rounded, size: 13,
-                        color: AppColors.primary),
+                        color: context.colors.primaryOnSurface),
                   ),
                 Text(
                   label,
                   style: AppTypography.chipLabel(context).copyWith(
                     fontSize: 13,
                     color: isSelected
-                        ? AppColors.primaryDarker
+                        ? context.colors.primaryOnSurface
                         : context.colors.textSecondary,
                     fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400,
                   ),

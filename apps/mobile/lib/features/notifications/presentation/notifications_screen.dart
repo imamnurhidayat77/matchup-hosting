@@ -18,19 +18,19 @@ import '../domain/app_notification.dart';
 
 extension _NotifTypeUi on NotificationType {
   Color bgColor(BuildContext context) => switch (this) {
-    NotificationType.chat => AppColors.primarySoft,
-    NotificationType.activity => AppColors.warningBg,
-    NotificationType.system => AppColors.statusSuccessBg,
-    NotificationType.request => AppColors.warningBg,
-    NotificationType.moderation => AppColors.errorLight,
+    NotificationType.chat => context.colors.primarySoft,
+    NotificationType.activity => context.colors.warningBg,
+    NotificationType.system => context.colors.statusSuccessBg,
+    NotificationType.request => context.colors.warningBg,
+    NotificationType.moderation => context.colors.errorLight,
   };
 
   Color iconColor(BuildContext context) => switch (this) {
-    NotificationType.chat => AppColors.primary,
-    NotificationType.activity => AppColors.warning,
-    NotificationType.system => AppColors.success,
-    NotificationType.request => AppColors.warning,
-    NotificationType.moderation => AppColors.error,
+    NotificationType.chat => context.colors.primaryOnSurface,
+    NotificationType.activity => context.colors.warningText,
+    NotificationType.system => context.colors.successText,
+    NotificationType.request => context.colors.warningText,
+    NotificationType.moderation => context.colors.errorText,
   };
 
   IconData get icon => switch (this) {

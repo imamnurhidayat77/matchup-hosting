@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/dark_colors.dart';
 
 /// Skill level for a single sport preference.
 enum SkillLevel { beginner, intermediate, advanced }
@@ -18,10 +19,10 @@ extension SkillLevelX on SkillLevel {
     SkillLevel.advanced => 'Adv',
   };
 
-  Color get color => switch (this) {
-    SkillLevel.beginner => AppColors.success,
+  Color color(BuildContext context) => switch (this) {
+    SkillLevel.beginner => context.colors.successText,
     SkillLevel.intermediate => AppColors.primary,
-    SkillLevel.advanced => AppColors.warning,
+    SkillLevel.advanced => context.colors.warningText,
   };
 }
 
