@@ -509,7 +509,7 @@ class _OptionsCard extends ConsumerWidget {
           _OptionRow(
             icon: Icons.notifications_none_rounded,
             label: 'Notification Settings',
-            onTap: () => context.push('/notifications'),
+            onTap: () => context.push('/notification-settings'),
           ),
           _Divider(),
           _OptionRow(
