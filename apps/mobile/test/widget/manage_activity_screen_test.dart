@@ -1,0 +1,153 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:mocktail/mocktail.dart';
+
+import 'package:matchup_mobile/core/providers/repository_providers.dart';
+import 'package:matchup_mobile/features/activities/domain/activity_participant.dart';
+import 'package:matchup_mobile/features/activities/presentation/manage_activity_screen.dart';
+import 'package:matchup_mobile/features/discovery/data/activity_repository.dart';
+import 'package:matchup_mobile/features/discovery/domain/activity_model.dart';
+
+class _MockActivityRepository extends Mock implements ActivityRepository {}
+
+void main() {
+  late _MockActivityRepository repo;
+
+  setUp(() {
+    repo = _MockActivityRepository();
+    when(() => repo.cancel(any())).thenAnswer((_) async {});
+  });
+
+  ActivityModel activity({ActivityStatus status = ActivityStatus.available}) {
+    return ActivityModel(
+      id: '5',
+      title: 'Thursday Night Volleyball',
+      sportType: 'Volleyball',
+      description: '',
+      location: 'Eastside Rec Centre',
+      distanceKm: 2,
+      dateTime: DateTime(2026, 8, 27, 19),
+      skillLevel: 'Intermediate',
+      capacity: 8,
+      participantCount: 5,
+      hostName: 'Noor Haddad',
+      status: status,
+    );
+  }
+
+  Future<void> pumpScreen(WidgetTester tester) async {
+    final router = GoRouter(
+      initialLocation: '/manage-activity/5',
+      routes: [
+        GoRoute(
+          path: '/manage-activity/:id',
+          builder: (_, state) =>
+              ManageActivityScreen(activityId: state.pathParameters['id']!),
+        ),
+        GoRoute(
+          path: '/activity/:id/participants',
+          builder: (_, _) => const Scaffold(body: Text('Participants')),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [activityRepositoryProvider.overrideWithValue(repo)],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  group('ManageActivityScreen', () {
+    testWidgets(
+      'should render real activity + roster data, not the old hardcoded seed',
+      (tester) async {
+        when(() => repo.byId('5')).thenAnswer((_) async => activity());
+        when(() => repo.participants('5')).thenAnswer(
+          (_) async => [
+            ActivityParticipant(
+              userId: 'host',
+              name: 'Noor Haddad',
+              avatarAsset: 'host_james.png',
+              skillLevel: 'Advanced',
+              joinedAt: DateTime.now().subtract(const Duration(days: 4)),
+              isOrganizer: true,
+              isCheckedIn: true,
+            ),
+            ActivityParticipant(
+              userId: 'u2',
+              name: 'Tavita Faleolo',
+              avatarAsset: 'avatar_1.png',
+              skillLevel: 'Beginner',
+              joinedAt: DateTime.now().subtract(const Duration(hours: 6)),
+              isOrganizer: false,
+            ),
+          ],
+        );
+
+        await pumpScreen(tester);
+
+        expect(find.text('Thursday Night Volleyball'), findsOneWidget);
+        expect(find.text('Noor Haddad'), findsOneWidget);
+        expect(find.text('Tavita Faleolo'), findsOneWidget);
+        expect(find.text('Participants (2)'), findsOneWidget);
+        expect(find.text('CHECKED IN'), findsOneWidget);
+        expect(find.text('PENDING'), findsOneWidget);
+        // Old hardcoded seed content must be gone.
+        expect(find.text('Friendly 5v5 Run at Prospect'), findsNothing);
+        expect(find.text('James Wilson'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'should call activityRepository.cancel and pop after confirming cancel',
+      (tester) async {
+        when(() => repo.byId('5')).thenAnswer((_) async => activity());
+        when(() => repo.participants('5')).thenAnswer((_) async => []);
+
+        await pumpScreen(tester);
+        await tester.scrollUntilVisible(
+          find.text('Cancel Activity'),
+          300,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.tap(find.text('Cancel Activity'));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Cancel Activity').last);
+        await tester.pumpAndSettle();
+
+        verify(() => repo.cancel('5')).called(1);
+      },
+    );
+
+    testWidgets('should push participants when "View all" is tapped', (
+      tester,
+    ) async {
+      when(() => repo.byId('5')).thenAnswer((_) async => activity());
+      when(() => repo.participants('5')).thenAnswer(
+        (_) async => [
+          ActivityParticipant(
+            userId: 'host',
+            name: 'Noor Haddad',
+            avatarAsset: 'host_james.png',
+            skillLevel: 'Advanced',
+            joinedAt: DateTime.now(),
+            isOrganizer: true,
+            isCheckedIn: true,
+          ),
+        ],
+      );
+
+      await pumpScreen(tester);
+      await tester.tap(find.text('View all'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Participants'), findsOneWidget);
+    });
+  });
+}

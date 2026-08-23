@@ -1,22 +1,391 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../core/constants/app_constants.dart';
+import '../core/theme/app_colors.dart';
+import '../core/theme/app_spacing.dart';
+import '../core/theme/app_typography.dart';
+import '../core/theme/dark_colors.dart';
+import '../core/theme/theme_controller.dart';
 import 'router.dart';
 
-class MatchUpApp extends StatelessWidget {
-  MatchUpApp({super.key});
+/// Cached GoRouter instance. Using a provider ensures the router is
+/// constructed once and the refreshListenable can reference a stable [Ref].
+final _routerProvider = Provider<GoRouter>(buildRouter);
 
-  final _router = buildRouter();
+class MatchUpApp extends ConsumerWidget {
+  const MatchUpApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final mode = ref.watch(themeModeProvider);
+    // GoRouter is instantiated once and cached in a provider so it isn't
+    // recreated on every rebuild of MatchUpApp.
+    final router = ref.watch(_routerProvider);
     return MaterialApp.router(
       title: AppConstants.appName,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2563EB)),
-        useMaterial3: true,
+      debugShowCheckedModeBanner: false,
+      theme: _buildLightTheme(),
+      darkTheme: _buildDarkTheme(),
+      themeMode: mode,
+      routerConfig: router,
+      builder: (context, child) {
+        // Match Figma / CSS line-height semantics:
+        //  - leadingDistribution.even splits the extra leading equally
+        //    above and below each line (Flutter default is proportional to
+        //    the font's ascent/descent, which makes Plus Jakarta Sans "sit
+        //    high" inside its line box compared to how it renders on the web).
+        //  - applyHeightToFirstAscent/LastDescent = false makes single-line
+        //    UI text (buttons, badges, headers) hug the top/bottom of its
+        //    container instead of floating inside inflated whitespace.
+        return DefaultTextHeightBehavior(
+          textHeightBehavior: const TextHeightBehavior(
+            applyHeightToFirstAscent: false,
+            applyHeightToLastDescent: false,
+            leadingDistribution: TextLeadingDistribution.even,
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
+    );
+  }
+
+  ThemeData _buildLightTheme() {
+    const colorScheme = ColorScheme.light(
+      primary: AppColors.primary,
+      onPrimary: AppColors.textOnPrimary,
+      primaryContainer: AppColors.primaryLight,
+      onPrimaryContainer: AppColors.primary,
+      secondary: AppColors.accent,
+      onSecondary: AppColors.textOnPrimary,
+      secondaryContainer: AppColors.accentLight,
+      onSecondaryContainer: AppColors.accent,
+      surface: AppColors.surface,
+      onSurface: AppColors.textPrimary,
+      surfaceContainerHighest: AppColors.surfaceContainerHighest,
+      onSurfaceVariant: AppColors.textSecondary,
+      error: AppColors.error,
+      onError: AppColors.textOnPrimary,
+      outline: AppColors.border,
+      shadow: AppColors.shadow,
+    );
+
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.light,
+      colorScheme: colorScheme,
+      fontFamily: AppTypography.fontFamily,
+      scaffoldBackgroundColor: AppColors.background,
+      appBarTheme: AppBarTheme(
+        backgroundColor: AppColors.background,
+        elevation: 0,
+        centerTitle: true,
+        iconTheme: const IconThemeData(color: AppColors.textPrimary),
+        titleTextStyle: const TextStyle(
+          fontFamily: AppTypography.fontFamily,
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+          letterSpacing: -0.36,
+          height: AppTypography.uiLineHeight,
+          color: AppColors.textPrimary,
+        ),
       ),
-      routerConfig: _router,
+      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        backgroundColor: AppColors.surface,
+        selectedItemColor: AppColors.primary,
+        // textSecondary (4.76:1), not textTertiary (2.54:1) — this colours
+        // real always-visible tab labels, which must clear WCAG AA (PRD
+        // Appendix E.3). AppShell's own tab bar (the one actually on
+        // screen) already gets this right; this theme config exists for
+        // any Material BottomNavigationBar that might be added later.
+        unselectedItemColor: AppColors.textSecondary,
+        type: BottomNavigationBarType.fixed,
+        elevation: 8,
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: AppColors.surface,
+        indicatorColor: AppColors.primaryLight,
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return const IconThemeData(color: AppColors.primary);
+          }
+          return const IconThemeData(color: AppColors.textSecondary);
+        }),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return _captionStyle.copyWith(color: AppColors.primary);
+          }
+          return _captionStyle.copyWith(color: AppColors.textSecondary);
+        }),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: AppColors.surfaceSubtle,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 20,
+          vertical: 14,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: AppRadius.pillR,
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: AppRadius.pillR,
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: AppRadius.pillR,
+          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: AppRadius.pillR,
+          borderSide: const BorderSide(color: AppColors.error),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: AppRadius.pillR,
+          borderSide: const BorderSide(color: AppColors.error, width: 1.5),
+        ),
+        hintStyle: _bodyReadingStyle.copyWith(color: AppColors.textTertiary),
+        floatingLabelBehavior: FloatingLabelBehavior.never,
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.primary,
+          foregroundColor: AppColors.textOnPrimary,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.card),
+          ),
+          textStyle: AppTypography.button,
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: AppColors.primary,
+          foregroundColor: AppColors.textOnPrimary,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.card),
+          ),
+          textStyle: AppTypography.button,
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.textPrimary,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.card),
+          ),
+          side: const BorderSide(color: AppColors.border),
+          textStyle: AppTypography.button,
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: AppColors.primary,
+          textStyle: AppTypography.button.copyWith(fontSize: 14),
+        ),
+      ),
+      cardTheme: const CardThemeData(
+        color: AppColors.card,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(AppRadius.card)),
+        ),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: AppColors.background,
+        selectedColor: AppColors.primaryLight,
+        labelStyle: _bodyMediumStyle.copyWith(color: AppColors.textSecondary),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
+        side: const BorderSide(color: AppColors.border),
+      ),
+      extensions: const [AppColorTokens.light],
+    );
+  }
+
+  // ── Context-free style helpers ──────────────────────────────────────────
+  // `AppTypography`'s styles are theme-aware and require a `BuildContext`
+  // (see its doc comment) — but these `ThemeData` builder methods run
+  // *before* there's a `BuildContext` to read a `Theme` from (they build
+  // the `Theme` itself). These mirror the base shape of the relevant
+  // `AppTypography` styles with an explicit colour supplied by the caller
+  // instead, since baking a fixed colour in here is correct: each builder
+  // (`_buildLightTheme` / `_buildDarkTheme`) already knows which palette
+  // it's building for.
+  static const TextStyle _captionStyle = TextStyle(
+    fontFamily: AppTypography.fontFamily,
+    fontSize: 12,
+    fontWeight: FontWeight.w500,
+    height: AppTypography.uiLineHeight,
+  );
+
+  static const TextStyle _bodyReadingStyle = TextStyle(
+    fontFamily: AppTypography.fontFamily,
+    fontSize: 14,
+    fontWeight: FontWeight.normal,
+    height: AppTypography.readingLineHeight,
+  );
+
+  static const TextStyle _bodyMediumStyle = TextStyle(
+    fontFamily: AppTypography.fontFamily,
+    fontSize: 14,
+    fontWeight: FontWeight.normal,
+    height: AppTypography.uiLineHeight,
+  );
+
+  ThemeData _buildDarkTheme() {
+    const colorScheme = ColorScheme.dark(
+      primary: AppColors.primary,
+      onPrimary: AppColors.textOnPrimary,
+      primaryContainer: DarkPalette.primaryContainer,
+      onPrimaryContainer: AppColors.primaryLight,
+      secondary: AppColors.accent,
+      onSecondary: AppColors.textOnPrimary,
+      secondaryContainer: DarkPalette.secondaryContainer,
+      onSecondaryContainer: AppColors.accentLight,
+      surface: DarkPalette.surface,
+      onSurface: DarkPalette.textPrimary,
+      surfaceContainerHighest: DarkPalette.card,
+      onSurfaceVariant: DarkPalette.textSecondary,
+      error: AppColors.error,
+      onError: AppColors.textOnPrimary,
+      outline: DarkPalette.border,
+      shadow: DarkPalette.shadow,
+    );
+
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.dark,
+      colorScheme: colorScheme,
+      fontFamily: AppTypography.fontFamily,
+      scaffoldBackgroundColor: DarkPalette.background,
+      appBarTheme: AppBarTheme(
+        backgroundColor: DarkPalette.background,
+        elevation: 0,
+        centerTitle: true,
+        iconTheme: const IconThemeData(color: DarkPalette.textPrimary),
+        titleTextStyle: const TextStyle(
+          fontFamily: AppTypography.fontFamily,
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+          letterSpacing: -0.36,
+          height: AppTypography.uiLineHeight,
+          color: DarkPalette.textPrimary,
+        ),
+      ),
+      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        backgroundColor: DarkPalette.surface,
+        selectedItemColor: AppColors.primary,
+        unselectedItemColor: DarkPalette.textSecondary,
+        type: BottomNavigationBarType.fixed,
+        elevation: 8,
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: DarkPalette.surface,
+        indicatorColor: DarkPalette.primaryContainer,
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return const IconThemeData(color: AppColors.primary);
+          }
+          return const IconThemeData(color: DarkPalette.textSecondary);
+        }),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return _captionStyle.copyWith(color: AppColors.primary);
+          }
+          return _captionStyle.copyWith(color: DarkPalette.textSecondary);
+        }),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: DarkPalette.card,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 20,
+          vertical: 14,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: AppRadius.pillR,
+          borderSide: const BorderSide(color: DarkPalette.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: AppRadius.pillR,
+          borderSide: const BorderSide(color: DarkPalette.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: AppRadius.pillR,
+          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: AppRadius.pillR,
+          borderSide: const BorderSide(color: AppColors.error),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: AppRadius.pillR,
+          borderSide: const BorderSide(color: AppColors.error, width: 1.5),
+        ),
+        floatingLabelBehavior: FloatingLabelBehavior.never,
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.primary,
+          foregroundColor: AppColors.textOnPrimary,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.card),
+          ),
+          textStyle: AppTypography.button,
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: AppColors.primary,
+          foregroundColor: AppColors.textOnPrimary,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.card),
+          ),
+          textStyle: AppTypography.button,
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: DarkPalette.textPrimary,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.card),
+          ),
+          side: const BorderSide(color: DarkPalette.border),
+          textStyle: AppTypography.button,
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: AppColors.primary,
+          textStyle: AppTypography.button.copyWith(fontSize: 14),
+        ),
+      ),
+      cardTheme: const CardThemeData(
+        color: DarkPalette.card,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(AppRadius.card)),
+        ),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: DarkPalette.card,
+        selectedColor: DarkPalette.primaryContainer,
+        labelStyle: _bodyMediumStyle.copyWith(color: DarkPalette.textPrimary),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
+        side: const BorderSide(color: DarkPalette.border),
+      ),
+      extensions: const [AppColorTokens.dark],
     );
   }
 }

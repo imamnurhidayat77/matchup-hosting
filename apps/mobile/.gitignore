@@ -10,6 +10,7 @@
 .history
 .svn/
 .swiftpm/
+.codebase-memory/
 migrate_working_dir/
 
 # IntelliJ related

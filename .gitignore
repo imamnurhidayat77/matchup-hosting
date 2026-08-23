@@ -6,7 +6,8 @@
 .vscode/
 *.swp
 *.swo
-*.codebase-memory
+.claude/
+.codebase-memory/
 
 # Logs
 *.log
@@ -61,5 +62,6 @@ coverage/
 .DS_Store
 *.iml
 
-# Backend Project Folder
-dev-docs/
+# Kiro (local only, not committed)
+.kiro/
+figma-cli.ts

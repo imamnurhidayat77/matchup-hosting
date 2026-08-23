@@ -26,6 +26,15 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- Optional class-two features: biometric login + calendar integration -->
+	<key>NSFaceIDUsageDescription</key>
+	<string>MatchUp uses Face ID to quickly sign you back in.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>MatchUp adds activities you join to your calendar so you don't miss them.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>MatchUp adds activities you join to your calendar so you don't miss them.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>MatchUp uses your location so you can share it with your activity group chat.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
