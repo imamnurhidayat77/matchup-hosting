@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
@@ -10,15 +12,15 @@ import '../../../core/utils/secure_screen.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/pressable_scale.dart';
 
-class NewPasswordScreen extends StatefulWidget {
+class NewPasswordScreen extends ConsumerStatefulWidget {
   const NewPasswordScreen({super.key, this.email = ''});
   final String email;
 
   @override
-  State<NewPasswordScreen> createState() => _NewPasswordScreenState();
+  ConsumerState<NewPasswordScreen> createState() => _NewPasswordScreenState();
 }
 
-class _NewPasswordScreenState extends State<NewPasswordScreen>
+class _NewPasswordScreenState extends ConsumerState<NewPasswordScreen>
     with SecureScreenMixin {
   final _newController = TextEditingController();
   final _confirmController = TextEditingController();
@@ -80,14 +82,25 @@ class _NewPasswordScreenState extends State<NewPasswordScreen>
   Future<void> _submit() async {
     if (!_canSubmit) return;
     setState(() => _isSubmitting = true);
-    // TODO: POST /api/v1/auth/reset-password { email, newPassword }
-    await Future<void>.delayed(const Duration(milliseconds: 800));
-    if (!mounted) return;
-    setState(() => _isSubmitting = false);
-    HapticFeedback.mediumImpact();
-    await _showSuccess();
-    if (!mounted) return;
-    context.go('/login');
+    try {
+      await ref.read(authRepositoryProvider).resetPassword(
+        email: widget.email,
+        newPassword: _newController.text,
+      );
+      if (!mounted) return;
+      HapticFeedback.mediumImpact();
+      await _showSuccess();
+      if (!mounted) return;
+      context.go('/login');
+    } catch (e) {
+      if (!mounted) return;
+      // show error inline — stay on this screen
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e is Exception ? e.toString().replaceFirst('Exception: ', '') : 'Password reset failed.')),
+      );
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
   }
 
   Future<void> _showSuccess() async {

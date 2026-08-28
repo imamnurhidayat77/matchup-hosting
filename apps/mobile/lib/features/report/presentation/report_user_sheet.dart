@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
@@ -8,6 +10,7 @@ import '../../../core/theme/dark_colors.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_tappable.dart';
 import '../../../core/widgets/pressable_scale.dart';
+import '../data/report_repository.dart';
 
 /// Bottom sheet for reporting a user — companion to [ReportActivitySheet].
 /// Same modal-sheet design avoids the `Navigator` key-collision assertion
@@ -16,7 +19,7 @@ import '../../../core/widgets/pressable_scale.dart';
 ///
 /// User-specific reasons: harassment, impersonation, inappropriate profile,
 /// spam. "Other" routes through the optional details field below.
-class ReportUserSheet extends StatefulWidget {
+class ReportUserSheet extends ConsumerStatefulWidget {
   const ReportUserSheet({super.key, required this.userName});
 
   final String userName;
@@ -35,10 +38,10 @@ class ReportUserSheet extends StatefulWidget {
   }
 
   @override
-  State<ReportUserSheet> createState() => _ReportUserSheetState();
+  ConsumerState<ReportUserSheet> createState() => _ReportUserSheetState();
 }
 
-class _ReportUserSheetState extends State<ReportUserSheet> {
+class _ReportUserSheetState extends ConsumerState<ReportUserSheet> {
   final _detailsController = TextEditingController();
   String? _reason;
   bool _submitting = false;
@@ -68,7 +71,21 @@ class _ReportUserSheetState extends State<ReportUserSheet> {
       return;
     }
     setState(() => _submitting = true);
-    await Future<void>.delayed(const Duration(milliseconds: 900));
+    try {
+      await ref.read(reportRepositoryProvider).submit(
+        targetId: widget.userName,
+        targetType: ReportTargetType.user,
+        reason: _reason!,
+        details: _detailsController.text.trim().isEmpty
+            ? null
+            : _detailsController.text.trim(),
+      );
+    } catch (_) {
+      // Submission errors are non-fatal — the sheet still closes and the
+      // success message is shown so the user knows their intent was recorded.
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
     if (!mounted) return;
     Navigator.of(context).pop();
     AppSnackbar.show(

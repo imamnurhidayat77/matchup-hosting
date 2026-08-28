@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
@@ -14,15 +16,15 @@ import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/pressable_scale.dart';
 
 /// Receives the email address via GoRouter's [GoRouterState.extra].
-class OtpVerificationScreen extends StatefulWidget {
+class OtpVerificationScreen extends ConsumerStatefulWidget {
   const OtpVerificationScreen({super.key, this.email = ''});
   final String email;
 
   @override
-  State<OtpVerificationScreen> createState() => _OtpVerificationScreenState();
+  ConsumerState<OtpVerificationScreen> createState() => _OtpVerificationScreenState();
 }
 
-class _OtpVerificationScreenState extends State<OtpVerificationScreen>
+class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen>
     with TickerProviderStateMixin, SecureScreenMixin {
   static const _codeLength = 6;
 
@@ -80,16 +82,24 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
   Future<void> _verify() async {
     if (_enteredCode.length != _codeLength) return;
     setState(() => _isVerifying = true);
-    // TODO: POST /api/v1/auth/verify-otp { email, code }
-    await Future<void>.delayed(const Duration(milliseconds: 700));
-    if (!mounted) return;
-    setState(() => _isVerifying = false);
-
-    if (_enteredCode == '123456') {
+    try {
+      await ref.read(authRepositoryProvider).verifyOtp(
+        email: widget.email,
+        code: _enteredCode,
+      );
+      if (!mounted) return;
       HapticFeedback.mediumImpact();
       context.push('/new-password', extra: widget.email);
-    } else {
+    } catch (e) {
+      if (!mounted) return;
       _showError();
+      AppSnackbar.show(
+        context,
+        message: e is Exception ? e.toString().replaceFirst('Exception: ', '') : 'Incorrect code. Please try again.',
+        variant: AppSnackbarVariant.error,
+      );
+    } finally {
+      if (mounted) setState(() => _isVerifying = false);
     }
   }
 
@@ -135,13 +145,25 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
 
   Future<void> _resend() async {
     if (_secondsRemaining > 0) return;
-    // TODO: POST /api/v1/auth/forgot-password again
-    _startTimer();
-    AppSnackbar.show(
-      context,
-      message: 'A new code has been sent.',
-      variant: AppSnackbarVariant.info,
-    );
+    try {
+      await ref.read(authRepositoryProvider).forgotPassword(
+        email: widget.email,
+      );
+      _startTimer();
+      if (!mounted) return;
+      AppSnackbar.show(
+        context,
+        message: 'A new code has been sent.',
+        variant: AppSnackbarVariant.info,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      AppSnackbar.show(
+        context,
+        message: 'Could not resend code. Please try again.',
+        variant: AppSnackbarVariant.error,
+      );
+    }
   }
 
   @override

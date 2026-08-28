@@ -69,8 +69,8 @@ class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
     ref
         .read(sportPreferencesProvider.notifier)
         .setAll(_selected.map((k, v) => MapEntry(k, v.label)));
-    ref.read(distanceFilterProvider.notifier).state = _distanceKm;
-    ref.read(priceFilterProvider.notifier).state = _price.label;
+    ref.read(distanceFilterProvider.notifier).set(_distanceKm);
+    ref.read(priceFilterProvider.notifier).set(_price.label);
   }
 
   int get _selectedCount => _selected.length;

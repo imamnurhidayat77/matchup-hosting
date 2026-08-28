@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_client.dart';
 import '../domain/chat_message.dart';
@@ -160,7 +161,8 @@ class RemoteChatRepository implements ChatRepository {
       return (res.data as List)
           .map((e) => _parse(e as Map<String, dynamic>))
           .toList();
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('[RemoteChatRepository] $e\n$st');
       return _fallback.messages(activityId);
     }
   }
@@ -176,7 +178,8 @@ class RemoteChatRepository implements ChatRepository {
         data: {'text': text},
       );
       return _parse(res.data as Map<String, dynamic>);
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('[RemoteChatRepository] $e\n$st');
       return _fallback.send(activityId: activityId, text: text);
     }
   }
@@ -195,7 +198,8 @@ class RemoteChatRepository implements ChatRepository {
         data: formData,
       );
       return _parse(res.data as Map<String, dynamic>);
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('[RemoteChatRepository] $e\n$st');
       return _fallback.sendImage(activityId: activityId, imagePath: imagePath);
     }
   }
@@ -212,7 +216,8 @@ class RemoteChatRepository implements ChatRepository {
         data: {'latitude': latitude, 'longitude': longitude},
       );
       return _parse(res.data as Map<String, dynamic>);
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('[RemoteChatRepository] $e\n$st');
       return _fallback.sendLocation(
         activityId: activityId,
         latitude: latitude,
@@ -228,7 +233,8 @@ class RemoteChatRepository implements ChatRepository {
       return (res.data as List)
           .map((e) => _parseConversation(e as Map<String, dynamic>))
           .toList();
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('[RemoteChatRepository] $e\n$st');
       return _fallback.conversations();
     }
   }

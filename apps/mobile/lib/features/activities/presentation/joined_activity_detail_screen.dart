@@ -550,6 +550,13 @@ class _MetaCard extends StatelessWidget {
             title: activity.location,
             sub: address,
           ),
+          Divider(height: 1, color: context.colors.border, indent: 60),
+          _MetaRow(
+            icon: Icons.attach_money_rounded,
+            title: activity.isPaid ? 'Paid Activity' : 'Free Activity',
+            sub: activity.isPaid ? 'Fee required to join' : 'No cost to join',
+            trailingChip: _FeeChip(isPaid: activity.isPaid),
+          ),
         ],
       ),
     );
@@ -561,10 +568,12 @@ class _MetaRow extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.sub,
+    this.trailingChip,
   });
   final IconData icon;
   final String title;
   final String sub;
+  final Widget? trailingChip;
 
   @override
   Widget build(BuildContext context) {
@@ -600,7 +609,39 @@ class _MetaRow extends StatelessWidget {
               ],
             ),
           ),
+          if (trailingChip != null) ...[
+            const SizedBox(width: AppSpacing.x2),
+            trailingChip!,
+          ],
         ],
+      ),
+    );
+  }
+}
+
+class _FeeChip extends StatelessWidget {
+  const _FeeChip({required this.isPaid});
+  final bool isPaid;
+
+  @override
+  Widget build(BuildContext context) {
+    final bgColor =
+        isPaid ? context.colors.warningBg : context.colors.statusSuccessBg;
+    final fgColor =
+        isPaid ? context.colors.warningText : context.colors.successText;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+      ),
+      child: Text(
+        isPaid ? 'Paid' : 'Free',
+        style: AppTypography.chipLabel(context).copyWith(
+          color: fgColor,
+          fontWeight: FontWeight.w700,
+          fontSize: 12,
+        ),
       ),
     );
   }

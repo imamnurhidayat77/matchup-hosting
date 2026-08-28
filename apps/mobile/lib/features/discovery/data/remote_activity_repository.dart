@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../../../core/network/api_client.dart';
 import '../../activities/domain/activity_participant.dart';
 import '../domain/activity_model.dart';
@@ -26,7 +28,8 @@ class RemoteActivityRepository implements ActivityRepository {
         queryParameters: {'limit': limit, 'offset': offset},
       );
       return _parseList(res.data as List);
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('[RemoteActivityRepository] $e\n$st');
       return _fallback.feed(limit: limit, offset: offset);
     }
   }
@@ -36,7 +39,8 @@ class RemoteActivityRepository implements ActivityRepository {
     try {
       final res = await _client.dio.get('$_base/$id');
       return _parse(res.data as Map<String, dynamic>);
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('[RemoteActivityRepository] $e\n$st');
       return _fallback.byId(id);
     }
   }
@@ -48,7 +52,8 @@ class RemoteActivityRepository implements ActivityRepository {
         '/api/v1/users/$userId/joined-activities',
       );
       return _parseList(res.data as List);
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('[RemoteActivityRepository] $e\n$st');
       return _fallback.joinedByUser(userId);
     }
   }
@@ -60,7 +65,8 @@ class RemoteActivityRepository implements ActivityRepository {
         '/api/v1/users/$userId/hosted-activities',
       );
       return _parseList(res.data as List);
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('[RemoteActivityRepository] $e\n$st');
       return _fallback.hostedByUser(userId);
     }
   }
@@ -81,7 +87,8 @@ class RemoteActivityRepository implements ActivityRepository {
         },
       );
       return _parseList(res.data as List);
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('[RemoteActivityRepository] $e\n$st');
       return _fallback.search(
         sport: sport,
         skillLevel: skillLevel,
@@ -116,7 +123,8 @@ class RemoteActivityRepository implements ActivityRepository {
         },
       );
       return _parse(res.data as Map<String, dynamic>)!;
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('[RemoteActivityRepository] $e\n$st');
       return _fallback.create(
         title: title,
         sportType: sportType,
@@ -134,7 +142,8 @@ class RemoteActivityRepository implements ActivityRepository {
   Future<void> join(String activityId) async {
     try {
       await _client.dio.post('$_base/$activityId/join');
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('[RemoteActivityRepository] $e\n$st');
       await _fallback.join(activityId);
     }
   }
@@ -143,7 +152,8 @@ class RemoteActivityRepository implements ActivityRepository {
   Future<void> leave(String activityId) async {
     try {
       await _client.dio.post('$_base/$activityId/leave');
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('[RemoteActivityRepository] $e\n$st');
       await _fallback.leave(activityId);
     }
   }
@@ -152,7 +162,8 @@ class RemoteActivityRepository implements ActivityRepository {
   Future<void> cancel(String activityId) async {
     try {
       await _client.dio.post('$_base/$activityId/cancel');
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('[RemoteActivityRepository] $e\n$st');
       await _fallback.cancel(activityId);
     }
   }
@@ -164,7 +175,8 @@ class RemoteActivityRepository implements ActivityRepository {
         '/api/v1/users/$userId/past-activities',
       );
       return _parseList(res.data as List);
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('[RemoteActivityRepository] $e\n$st');
       return _fallback.pastByUser(userId);
     }
   }
@@ -176,7 +188,8 @@ class RemoteActivityRepository implements ActivityRepository {
       return (res.data as List)
           .map((e) => _parseParticipant(e as Map<String, dynamic>))
           .toList();
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('[RemoteActivityRepository] $e\n$st');
       return _fallback.participants(activityId);
     }
   }
@@ -195,26 +208,12 @@ class RemoteActivityRepository implements ActivityRepository {
     );
   }
 
+  /// Delegates to [ActivityModel.fromJson] — the single canonical parsing
+  /// path for API responses. Keeping the indirection here means callers
+  /// inside this file don't need to change if the model factory is renamed.
   ActivityModel? _parse(Map<String, dynamic>? json) {
     if (json == null) return null;
-    return ActivityModel(
-      id: json['id']?.toString() ?? '',
-      title: json['title'] as String? ?? '',
-      sportType: json['sport_type'] as String? ?? '',
-      description: json['description'] as String? ?? '',
-      location: json['location'] as String? ?? '',
-      distanceKm: (json['distance_km'] as num?)?.toDouble() ?? 0,
-      dateTime:
-          DateTime.tryParse(json['date_time'] as String? ?? '') ??
-          DateTime.now(),
-      skillLevel: json['skill_level'] as String? ?? 'All',
-      capacity: (json['capacity'] as num?)?.toInt() ?? 1,
-      participantCount: (json['participant_count'] as num?)?.toInt() ?? 0,
-      hostName: json['host_name'] as String? ?? '',
-      coverImageUrl: json['cover_image_url'] as String?,
-      status: ActivityStatus.available,
-      durationMinutes: (json['duration_minutes'] as num?)?.toInt() ?? 120,
-    );
+    return ActivityModel.fromJson(json);
   }
 
   List<ActivityModel> _parseList(List<dynamic> data) => data

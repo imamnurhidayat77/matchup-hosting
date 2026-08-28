@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/providers/auth_state_provider.dart';
+import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
@@ -58,16 +59,30 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
       return;
     }
     setState(() => _isLoading = true);
-    await Future.delayed(const Duration(seconds: 1));
-    if (!mounted) return;
-    await ref.read(authStateProvider.notifier).signIn(
-      accessToken: 'dummy-access-token',
-      refreshToken: 'dummy-refresh-token',
-      userId: 'me',
-    );
-    if (!mounted) return;
-    setState(() => _isLoading = false);
-    context.go('/get-to-know-1');
+    try {
+      final result = await ref.read(authRepositoryProvider).register(
+        name: _nameController.text.trim(),
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+      if (!mounted) return;
+      await ref.read(authStateProvider.notifier).signIn(
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+        userId: result.userId,
+      );
+      if (!mounted) return;
+      context.go('/get-to-know-1');
+    } catch (e) {
+      if (!mounted) return;
+      AppSnackbar.show(
+        context,
+        message: e is Exception ? e.toString().replaceFirst('Exception: ', '') : 'Registration failed. Please try again.',
+        variant: AppSnackbarVariant.error,
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   String? _validateName(String? value) {

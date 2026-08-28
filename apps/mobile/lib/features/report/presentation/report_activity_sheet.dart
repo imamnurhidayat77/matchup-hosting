@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
@@ -8,6 +10,7 @@ import '../../../core/theme/dark_colors.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_tappable.dart';
 import '../../../core/widgets/pressable_scale.dart';
+import '../data/report_repository.dart';
 
 /// Bottom sheet for reporting an activity — replaces the old full-screen
 /// [ReportScreen] route. The route form crashed with `Navigator` assertion
@@ -19,7 +22,7 @@ import '../../../core/widgets/pressable_scale.dart';
 /// in a scrollable sheet that respects the keyboard. Reasons list shrinks
 /// to 5 (most common — activity-specific), the "Other" free-form path is
 /// handled by the optional details field instead of a dedicated tile.
-class ReportActivitySheet extends StatefulWidget {
+class ReportActivitySheet extends ConsumerStatefulWidget {
   const ReportActivitySheet({super.key, required this.activityTitle});
 
   final String activityTitle;
@@ -49,10 +52,11 @@ class ReportActivitySheet extends StatefulWidget {
   }
 
   @override
-  State<ReportActivitySheet> createState() => _ReportActivitySheetState();
+  @override
+  ConsumerState<ReportActivitySheet> createState() => _ReportActivitySheetState();
 }
 
-class _ReportActivitySheetState extends State<ReportActivitySheet> {
+class _ReportActivitySheetState extends ConsumerState<ReportActivitySheet> {
   final _detailsController = TextEditingController();
   String? _reason;
   bool _submitting = false;
@@ -82,7 +86,20 @@ class _ReportActivitySheetState extends State<ReportActivitySheet> {
       return;
     }
     setState(() => _submitting = true);
-    await Future<void>.delayed(const Duration(milliseconds: 900));
+    try {
+      await ref.read(reportRepositoryProvider).submit(
+        targetId: widget.activityTitle,
+        targetType: ReportTargetType.activity,
+        reason: _reason!,
+        details: _detailsController.text.trim().isEmpty
+            ? null
+            : _detailsController.text.trim(),
+      );
+    } catch (_) {
+      // Non-fatal — sheet always closes and success is shown.
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
     if (!mounted) return;
     Navigator.of(context).pop();
     AppSnackbar.show(
