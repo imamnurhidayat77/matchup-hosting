@@ -1,55 +1,58 @@
+/* Load Figtree from Google Fonts — matches Figma typography */
+@import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* CSS variables for theme tokens */
-:root {
-  --color-bg: 248 250 252; /* ink-50 */
-  --color-surface: 255 255 255;
-  --color-text: 15 23 42; /* ink-900 */
-  --color-text-muted: 100 116 139; /* ink-500 */
-  --color-border: 226 232 240; /* ink-200 */
-}
-
-html,
-body,
-#root {
+html, body, #root {
   height: 100%;
+  min-height: 100vh;
+  margin: 0;
 }
 
 body {
   @apply bg-ink-50 text-ink-900 antialiased;
-  font-family:
-    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Figtree', ui-sans-serif, system-ui, sans-serif;
 }
 
-/* Reusable component classes — keep this list small and intentional. */
 @layer components {
-  .card {
-    @apply rounded-lg border border-ink-200 bg-white p-4 shadow-sm;
-  }
-  .panel {
-    @apply rounded-lg border border-ink-200 bg-white;
-  }
+  /* ── Cards & panels ───────────────────────────── */
+  .card  { @apply rounded-2xl border border-ink-200 bg-white p-5 shadow-card; }
+  .panel { @apply rounded-2xl border border-ink-200 bg-white shadow-card; }
+
+  /* ── Page layout ──────────────────────────────── */
+  /* No max-width — content fills the full area right of the sidebar. */
   .page-container {
-    @apply mx-auto w-full max-w-7xl px-6 py-8;
+    @apply w-full px-6 py-6 lg:px-8 lg:py-8;
   }
   .page-header {
-    @apply mb-6 flex items-center justify-between;
+    @apply mb-6 flex items-start justify-between;
   }
-  .badge {
-    @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium;
-  }
-  .badge-neutral {
-    @apply badge bg-ink-100 text-ink-700;
-  }
-  .badge-success {
-    @apply badge bg-success-500/10 text-success-600;
-  }
-  .badge-warning {
-    @apply badge bg-warning-500/10 text-warning-600;
-  }
-  .badge-danger {
-    @apply badge bg-danger-500/10 text-danger-600;
+
+  /* ── Badges ───────────────────────────────────── */
+  .badge         { @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold; }
+  .badge-blue    { @apply badge bg-brand-100   text-brand-700; }
+  .badge-green   { @apply badge bg-success-100 text-success-700; }
+  .badge-yellow  { @apply badge bg-warning-100 text-warning-700; }
+  .badge-red     { @apply badge bg-danger-100  text-danger-700; }
+  .badge-neutral { @apply badge bg-ink-100     text-ink-600; }
+
+  /* ── Buttons ──────────────────────────────────── */
+  .btn         { @apply inline-flex items-center justify-center gap-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-offset-2; }
+  .btn-primary { @apply btn bg-brand-500 text-white hover:bg-brand-600 focus:ring-brand-400 px-4 py-2; }
+  .btn-outline { @apply btn border border-ink-200 bg-white text-ink-700 hover:bg-ink-50 focus:ring-brand-400 px-4 py-2; }
+  .btn-ghost   { @apply btn text-brand-500 hover:bg-brand-50 focus:ring-brand-400 px-3 py-1.5; }
+  .btn-danger  { @apply btn bg-danger-500 text-white hover:bg-danger-600 focus:ring-danger-500 px-3 py-1.5; }
+  .btn-sm      { @apply px-3 py-1.5 text-xs rounded-lg; }
+
+  /* ── Table ────────────────────────────────────── */
+  .tbl-th { @apply px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-ink-600; }
+  .tbl-td { @apply px-4 py-4 text-sm text-ink-700; }
+
+  /* ── Form inputs ──────────────────────────────── */
+  .input {
+    @apply w-full rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-sm text-ink-900
+           placeholder:text-ink-400 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100;
   }
 }
