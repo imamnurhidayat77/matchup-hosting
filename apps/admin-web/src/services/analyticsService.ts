@@ -83,10 +83,10 @@ const DUMMY: AnalyticsData = {
     { label: 'Month 3', value: 34  },
   ],
   health: [
-    { label: 'Match Success Rate',  value: 84, color: '#1e6b9a' },
+    { label: 'Match Success Rate',  value: 84, color: '#0b1f8a' },
     { label: 'Host Satisfaction',   value: 91, color: '#22c55e' },
     { label: 'Report Resolution',   value: 77, color: '#f59e0b' },
-    { label: 'User Retention (M1)', value: 72, color: '#3b9ec2' },
+    { label: 'User Retention (M1)', value: 72, color: '#ff6b00' },
   ],
 };
 

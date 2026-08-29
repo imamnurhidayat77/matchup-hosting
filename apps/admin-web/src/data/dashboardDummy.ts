@@ -17,7 +17,7 @@ export const DUMMY_DASHBOARD: DashboardData = {
       change: '↑ 18.2%',
       dir: 'up',
       sparkBars: [10, 15, 8, 20, 24, 28, 30, 26, 32, 40],
-      sparkColor: '#3b9ec2',
+      sparkColor: '#ff6b00',
     },
     {
       title: 'Total Sports Activities',
@@ -26,7 +26,7 @@ export const DUMMY_DASHBOARD: DashboardData = {
       change: '↑ 12.4%',
       dir: 'up',
       sparkBars: [8, 12, 16, 14, 20, 18, 22, 28, 30, 35],
-      sparkColor: '#3b9ec2',
+      sparkColor: '#ff6b00',
     },
     {
       title: 'Pending Reports',
@@ -44,7 +44,7 @@ export const DUMMY_DASHBOARD: DashboardData = {
       change: '↑ 2.5%',
       dir: 'up',
       sparkBars: [4, 5, 3, 6, 8, 7, 9, 8, 10, 12],
-      sparkColor: '#3b9ec2',
+      sparkColor: '#ff6b00',
     },
   ],
 

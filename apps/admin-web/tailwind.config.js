@@ -18,40 +18,57 @@ export default {
           800: '#1e293b',
           900: '#0f172a',
         },
-        // Brand — from Figma: primary #1e6b9a, accent #3b9ec2
+        // Brand — MatchUp blue, from the mobile app's actual design system
+        // (apps/mobile/lib/core/theme/app_colors.dart: primary #0B1F8A).
+        // Primary sits at 500 to match the existing bg-brand-500 / hover:bg-brand-600
+        // conventions already used throughout this codebase.
         brand: {
-          50:  '#eff6ff',
+          50:  '#eef2ff',
           100: '#dbeafe',
-          200: '#bfdbfe',
-          300: '#93c5fd',
-          400: '#3b9ec2',   // Figma accent / lighter brand
-          500: '#1e6b9a',   // Figma primary button fill
-          600: '#1a5f89',
-          700: '#1e3a5f',   // Figma dark navy text
-          800: '#172d4a',
-          900: '#0f2034',
+          200: '#b9cffb',
+          300: '#8fadf6',
+          400: '#4f72e0',
+          500: '#0b1f8a',   // MatchUp primary blue
+          600: '#0a1b73',
+          700: '#0f1a52',
+          800: '#0b1440',
+          900: '#070d2b',
         },
-        // Semantic states
+        // Accent — MatchUp orange (#FF6B00), for the same "second, distinguishing
+        // color" role `sky`/brand-400 played before (chart series, gradients,
+        // sparklines). Used sparingly, same as on mobile.
+        accent: {
+          50:  '#fff4ec',
+          100: '#ffe5d0',
+          200: '#ffc79b',
+          300: '#ffab66',
+          400: '#ff8a33',
+          500: '#ff6b00',
+          600: '#e05f00',
+          700: '#b84c00',
+          800: '#8f3b00',
+          900: '#662a00',
+        },
+        // Semantic states — 500 unchanged, 600/700 upgraded to the mobile
+        // team's contrast-audited values (statusSuccessText, warningStrong, errorStrong).
         success: {
           100: '#dcfce7',
           500: '#22c55e',
-          600: '#16a34a',
-          700: '#15803d',
+          600: '#04694a',
+          700: '#014a34',
         },
         warning: {
           100: '#fef3c7',
           500: '#f59e0b',
-          600: '#d97706',
-          700: '#92400e',
+          600: '#b45309',
+          700: '#7c3d05',
         },
         danger: {
           100: '#fee2e2',
           500: '#ef4444',
-          600: '#dc2626',
-          700: '#991b1b',
+          600: '#b91c1c',
+          700: '#7f1414',
         },
-        // Figma sky accent used in chart lines
-        sky: { 400: '#0ea5e9' },
       },
       spacing: {
         sidebar: '260px',   // Figma: 260px sidebar width

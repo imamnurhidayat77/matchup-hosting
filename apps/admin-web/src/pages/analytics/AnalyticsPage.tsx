@@ -99,7 +99,7 @@ export function AnalyticsPage() {
               <p className="text-xs text-ink-600">Signups and activities by day</p>
             </div>
             <div className="flex flex-wrap gap-3">
-              {[{ label: 'Signups', color: '#1e6b9a' }, { label: 'Activities', color: '#3b9ec2' }, { label: 'Reports', color: '#ef4444' }].map((l) => (
+              {[{ label: 'Signups', color: '#0b1f8a' }, { label: 'Activities', color: '#ff6b00' }, { label: 'Reports', color: '#ef4444' }].map((l) => (
                 <span key={l.label} className="flex items-center gap-1.5 text-xs text-ink-600">
                   <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: l.color }} />
                   {l.label}
@@ -107,7 +107,7 @@ export function AnalyticsPage() {
               ))}
             </div>
           </div>
-          <LineChart data={data.weekly.map(p => ({ day: p.day, signups: p.signups, activities: p.activities, reports: p.reports }))} keys={['signups', 'activities', 'reports']} colors={['#1e6b9a', '#3b9ec2', '#ef4444']} />
+          <LineChart data={data.weekly.map(p => ({ day: p.day, signups: p.signups, activities: p.activities, reports: p.reports }))} keys={['signups', 'activities', 'reports']} colors={['#0b1f8a', '#ff6b00', '#ef4444']} />
         </div>
 
         {/* Top sports */}

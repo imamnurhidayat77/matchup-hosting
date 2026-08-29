@@ -160,16 +160,16 @@ function TrendChart({ trend }: { trend: TrendPoint[] }) {
         const bh = (pt.signups / maxVal) * chartH;
         const x = xOf(i) - barW / 2;
         return (
-          <rect key={i} x={x} y={pad.top + chartH - bh} width={barW} height={bh} fill="#0ea5e9" opacity="0.75" rx="2" />
+          <rect key={i} x={x} y={pad.top + chartH - bh} width={barW} height={bh} fill="#ff6b00" opacity="0.75" rx="2" />
         );
       })}
 
       {/* Activities polyline (navy) */}
-      <polyline points={actPts} fill="none" stroke="#1e6b9a" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+      <polyline points={actPts} fill="none" stroke="#0b1f8a" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
 
       {/* Dots */}
       {trend.map((pt, i) => (
-        <circle key={i} cx={xOf(i)} cy={yOf(pt.activities)} r="4" fill="#fff" stroke="#1e6b9a" strokeWidth="2" />
+        <circle key={i} cx={xOf(i)} cy={yOf(pt.activities)} r="4" fill="#fff" stroke="#0b1f8a" strokeWidth="2" />
       ))}
 
       {/* X labels */}
@@ -303,7 +303,7 @@ function ActivitiesTable({
                       className="h-full rounded-full"
                       style={{
                         width: `${Math.min((row.participants / row.capacity) * 100, 100)}%`,
-                        backgroundColor: row.participants >= row.capacity ? '#f59e0b' : '#1e6b9a',
+                        backgroundColor: row.participants >= row.capacity ? '#f59e0b' : '#0b1f8a',
                       }}
                     />
                   </div>
@@ -341,7 +341,7 @@ function ActivitiesTable({
                   className="h-full rounded-full"
                   style={{
                     width: `${Math.min((row.participants / row.capacity) * 100, 100)}%`,
-                    backgroundColor: row.participants >= row.capacity ? '#f59e0b' : '#1e6b9a',
+                    backgroundColor: row.participants >= row.capacity ? '#f59e0b' : '#0b1f8a',
                   }}
                 />
               </div>
@@ -428,7 +428,7 @@ export function DashboardPage() {
                 Created Activities
               </span>
               <span className="flex items-center gap-1.5 text-xs text-ink-600">
-                <span className="inline-block h-2 w-2 rounded-full bg-[#0ea5e9]" />
+                <span className="inline-block h-2 w-2 rounded-full bg-[#ff6b00]" />
                 New User Signups
               </span>
             </div>

@@ -164,7 +164,7 @@ export function ActivityDetailPage() {
               <span className="text-sm text-ink-400">/ {activity.capacity} spots</span>
             </div>
             <div className="h-2 w-full overflow-hidden rounded-full bg-ink-100">
-              <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: isFull ? '#f59e0b' : '#1e6b9a' }} />
+              <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: isFull ? '#f59e0b' : '#0b1f8a' }} />
             </div>
             <p className="mt-1.5 text-xs text-ink-400">
               {isFull ? 'Activity is full' : `${activity.capacity - activity.participants} spot${activity.capacity - activity.participants !== 1 ? 's' : ''} remaining`}
