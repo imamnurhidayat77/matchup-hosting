@@ -1,73 +1,46 @@
-import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { DashboardShell } from '../components/layout/DashboardShell';
-import { PageContainer } from '../components/layout/PageContainer';
+import { RequireAuth } from '../components/auth/RequireAuth';
 import { DashboardPage } from '../pages/dashboard/DashboardPage';
 import { LoginPage } from '../pages/login/LoginPage';
 import { MembersPage } from '../pages/members/MembersPage';
+import { MemberDetailPage } from '../pages/members/MemberDetailPage';
 import { ActivitiesPage } from '../pages/activities/ActivitiesPage';
+import { ActivityDetailPage } from '../pages/activities/ActivityDetailPage';
 import { ReportsPage } from '../pages/reports/ReportsPage';
 import { BroadcastsPage } from '../pages/broadcasts/BroadcastsPage';
+import { AnalyticsPage } from '../pages/analytics/AnalyticsPage';
+import { SettingsPage } from '../pages/settings/SettingsPage';
+import { SportsPage } from '../pages/sports/SportsPage';
+import { AppealsPage } from '../pages/appeals/AppealsPage';
+import { AuditLogPage } from '../pages/audit/AuditLogPage';
+import { NotificationTemplatesPage } from '../pages/notifications/NotificationTemplatesPage';
+import { NotFoundPage } from '../pages/NotFoundPage';
+
+function Shell({ children }: { children: React.ReactNode }) {
+  return (
+    <RequireAuth>
+      <DashboardShell>{children}</DashboardShell>
+    </RequireAuth>
+  );
+}
 
 const router = createBrowserRouter([
-  {
-    path: '/login',
-    element: (
-      <PageContainer>
-        <LoginPage />
-      </PageContainer>
-    ),
-  },
-  {
-    path: '/',
-    element: (
-      <DashboardShell>
-        <PageContainer>
-          <DashboardPage />
-        </PageContainer>
-      </DashboardShell>
-    ),
-  },
-  {
-    path: '/members',
-    element: (
-      <DashboardShell>
-        <PageContainer>
-          <MembersPage />
-        </PageContainer>
-      </DashboardShell>
-    ),
-  },
-  {
-    path: '/activities',
-    element: (
-      <DashboardShell>
-        <PageContainer>
-          <ActivitiesPage />
-        </PageContainer>
-      </DashboardShell>
-    ),
-  },
-  {
-    path: '/reports',
-    element: (
-      <DashboardShell>
-        <PageContainer>
-          <ReportsPage />
-        </PageContainer>
-      </DashboardShell>
-    ),
-  },
-  {
-    path: '/broadcasts',
-    element: (
-      <DashboardShell>
-        <PageContainer>
-          <BroadcastsPage />
-        </PageContainer>
-      </DashboardShell>
-    ),
-  },
-  { path: '*', element: <Navigate to="/" replace /> },
+  { path: '/login',                 element: <LoginPage /> },
+  { path: '/',                      element: <Shell><DashboardPage /></Shell> },
+  { path: '/members',               element: <Shell><MembersPage /></Shell> },
+  { path: '/members/:id',           element: <Shell><MemberDetailPage /></Shell> },
+  { path: '/activities',            element: <Shell><ActivitiesPage /></Shell> },
+  { path: '/activities/:id',        element: <Shell><ActivityDetailPage /></Shell> },
+  { path: '/reports',               element: <Shell><ReportsPage /></Shell> },
+  { path: '/broadcasts',            element: <Shell><BroadcastsPage /></Shell> },
+  { path: '/sports',                element: <Shell><SportsPage /></Shell> },
+  { path: '/analytics',             element: <Shell><AnalyticsPage /></Shell> },
+  { path: '/appeals',               element: <Shell><AppealsPage /></Shell> },
+  { path: '/audit',                 element: <Shell><AuditLogPage /></Shell> },
+  { path: '/notification-templates',element: <Shell><NotificationTemplatesPage /></Shell> },
+  { path: '/settings',              element: <Shell><SettingsPage /></Shell> },
+  { path: '*',                      element: <Shell><NotFoundPage /></Shell> },
 ]);
 
 export function AppRouter() {
