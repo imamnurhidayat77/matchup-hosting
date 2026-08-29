@@ -1,6 +1,6 @@
 # MatchUp API Contract
 
-Last updated: August 20, 2026
+Last updated: Sunday, August 30, 2026 (NZ local time)
 
 ## Scope
 
@@ -16,6 +16,7 @@ Current implemented domains:
 - activities
 - activity participants
 - swipes
+- notifications
 
 ## Base URL
 
@@ -65,6 +66,8 @@ Error responses:
 - `INTERNAL_ERROR`
 - `DB_UNAVAILABLE`
 - `INVALID_STATE`
+- `UNAUTHORIZED`
+- `FORBIDDEN`
 
 ---
 
@@ -172,10 +175,14 @@ Request body:
 
 ```json
 {
-  "uid": "firebase-auth-uid",
   "state": "online"
 }
 ```
+
+Authentication:
+
+- Requires `Authorization: Bearer <firebase-id-token>`
+- `uid` is derived from the verified Firebase Auth user
 
 Allowed `state` values:
 
@@ -196,9 +203,8 @@ Success `200`:
 
 Errors:
 
-- `400 INVALID_INPUT` if `uid` is not a string
+- `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
 - `400 INVALID_STATE` if `state` is not `online` or `offline`
-- `400 EMPTY_INPUT` if `uid` is blank
 
 ### `GET /api/presence/:uid`
 
@@ -234,10 +240,14 @@ Request body:
 ```json
 {
   "activityId": "activity-id",
-  "uid": "firebase-auth-uid",
   "isTyping": true
 }
 ```
+
+Authentication:
+
+- Requires `Authorization: Bearer <firebase-id-token>`
+- `uid` is derived from the verified Firebase Auth user
 
 Success `200`:
 
@@ -254,9 +264,10 @@ Success `200`:
 
 Errors:
 
-- `400 INVALID_INPUT` if `activityId` or `uid` are not strings
+- `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
+- `400 INVALID_INPUT` if `activityId` is not a string
 - `400 INVALID_INPUT` if `isTyping` is not a boolean
-- `400 EMPTY_INPUT` if `activityId` or `uid` are blank
+- `400 EMPTY_INPUT` if `activityId` is blank
 
 ### `GET /api/typing/:activityId/:uid`
 
@@ -293,11 +304,15 @@ Request body:
 ```json
 {
   "activityId": "activity-id",
-  "senderId": "firebase-auth-uid",
   "text": "Hello",
   "type": "text"
 }
 ```
+
+Authentication:
+
+- Requires `Authorization: Bearer <firebase-id-token>`
+- `senderId` is derived from the verified Firebase Auth user
 
 Allowed `type` values:
 
@@ -321,9 +336,10 @@ Success `201`:
 
 Errors:
 
-- `400 INVALID_INPUT` if `activityId`, `senderId`, or `text` are not strings
+- `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
+- `400 INVALID_INPUT` if `activityId` or `text` are not strings
 - `400 INVALID_INPUT` if `type` is invalid
-- `400 EMPTY_INPUT` if `activityId`, `senderId`, or `text` are blank
+- `400 EMPTY_INPUT` if `activityId` or `text` are blank
 
 ### `GET /api/chat/:activityId/messages`
 
@@ -362,7 +378,6 @@ Request body:
 
 ```json
 {
-  "hostId": "firebase-auth-uid",
   "title": "Evening Futsal",
   "sportType": "futsal",
   "description": "Casual 5v5 session",
@@ -376,6 +391,11 @@ Request body:
   "coverImageUrl": "https://example.com/cover.jpg"
 }
 ```
+
+Authentication:
+
+- Requires `Authorization: Bearer <firebase-id-token>`
+- `hostId` is derived from the verified Firebase Auth user
 
 Allowed `skillLevel` values:
 
@@ -397,6 +417,7 @@ Success `201`:
 
 Errors:
 
+- `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
 - `400 INVALID_INPUT` if required string fields are not strings
 - `400 INVALID_INPUT` if optional string fields are provided with wrong type
 - `400 INVALID_INPUT` if `skillLevel` is invalid
@@ -456,10 +477,13 @@ Joins a user to an activity.
 Request body:
 
 ```json
-{
-  "uid": "firebase-auth-uid"
-}
+{}
 ```
+
+Authentication:
+
+- Requires `Authorization: Bearer <firebase-id-token>`
+- `uid` is derived from the verified Firebase Auth user
 
 Success `200`:
 
@@ -475,8 +499,8 @@ Success `200`:
 
 Errors:
 
-- `400 INVALID_INPUT` if `uid` is not a string
-- `400 EMPTY_INPUT` if `activityId` or `uid` are blank
+- `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
+- `400 EMPTY_INPUT` if `activityId` is blank
 - `404 NOT_FOUND` if activity does not exist
 - `409 CONFLICT` if activity is not open
 - `409 CONFLICT` if activity is full
@@ -512,6 +536,11 @@ Errors:
 
 Removes a participant from an activity.
 
+Authentication:
+
+- Requires `Authorization: Bearer <firebase-id-token>`
+- Current behavior only allows a user to remove themselves
+
 Success `200`:
 
 ```json
@@ -526,7 +555,9 @@ Success `200`:
 
 Errors:
 
-- `400 EMPTY_INPUT` if `activityId` or `uid` are blank
+- `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
+- `400 EMPTY_INPUT` if `activityId` is blank
+- `403 FORBIDDEN` if the authenticated user tries to remove another participant
 - `404 NOT_FOUND` if activity does not exist
 - `404 NOT_FOUND` if participant does not exist
 
@@ -542,11 +573,15 @@ Request body:
 
 ```json
 {
-  "uid": "firebase-auth-uid",
   "activityId": "generated-activity-id",
   "decision": "join"
 }
 ```
+
+Authentication:
+
+- Requires `Authorization: Bearer <firebase-id-token>`
+- `uid` is derived from the verified Firebase Auth user
 
 Allowed `decision` values:
 
@@ -568,9 +603,10 @@ Success `200`:
 
 Errors:
 
-- `400 INVALID_INPUT` if `uid` or `activityId` are not strings
+- `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
+- `400 INVALID_INPUT` if `activityId` is not a string
 - `400 INVALID_INPUT` if `decision` is invalid
-- `400 EMPTY_INPUT` if `uid` or `activityId` are blank
+- `400 EMPTY_INPUT` if `activityId` is blank
 - `404 NOT_FOUND` if activity does not exist
 
 ### `GET /api/swipes/:uid`
@@ -638,8 +674,123 @@ Errors:
 
 ---
 
+## Notifications
+
+### `POST /api/notifications`
+
+Creates a notification for a target user.
+
+Request body:
+
+```json
+{
+  "recipientUid": "firebase-auth-uid",
+  "type": "activity_joined",
+  "title": "New participant",
+  "body": "A user joined your activity",
+  "activityId": "generated-activity-id",
+  "senderUid": "firebase-auth-uid"
+}
+```
+
+Allowed `type` values:
+
+- `activity_reminder`
+- `activity_joined`
+- `chat_message`
+- `system`
+
+Success `201`:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "notificationId": "generated-notification-id"
+  }
+}
+```
+
+Errors:
+
+- `400 INVALID_INPUT` if `recipientUid`, `type`, `title`, or `body` are not strings
+- `400 INVALID_INPUT` if `activityId` or `senderUid` are provided with the wrong type
+- `400 INVALID_INPUT` if `type` is invalid
+- `400 EMPTY_INPUT` if `recipientUid`, `title`, or `body` are blank
+
+### `GET /api/notifications/:uid`
+
+Lists notifications for one user.
+
+Authentication:
+
+- Requires `Authorization: Bearer <firebase-id-token>`
+- The authenticated user can only access their own notifications
+
+Success `200`:
+
+```json
+{
+  "ok": true,
+  "data": [
+    {
+      "notificationId": "generated-notification-id",
+      "recipientUid": "firebase-auth-uid",
+      "type": "activity_joined",
+      "title": "New participant",
+      "body": "A user joined your activity",
+      "isRead": false,
+      "createdAt": {
+        "_seconds": 0,
+        "_nanoseconds": 0
+      },
+      "activityId": "generated-activity-id",
+      "senderUid": "firebase-auth-uid"
+    }
+  ]
+}
+```
+
+Errors:
+
+- `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
+- `400 EMPTY_INPUT` if `uid` is blank
+- `403 FORBIDDEN` if the authenticated user tries to access another user's notifications
+
+### `PATCH /api/notifications/:uid/:notificationId/read`
+
+Marks one notification as read.
+
+Authentication:
+
+- Requires `Authorization: Bearer <firebase-id-token>`
+- The authenticated user can only update their own notifications
+
+Success `200`:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "uid": "firebase-auth-uid",
+    "notificationId": "generated-notification-id",
+    "isRead": true
+  }
+}
+```
+
+Errors:
+
+- `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
+- `400 EMPTY_INPUT` if `uid` or `notificationId` are blank
+- `403 FORBIDDEN` if the authenticated user tries to update another user's notification
+- `404 NOT_FOUND` if notification does not exist
+
+---
+
 ## Notes For Future Revisions
 
-- Current user-owned routes still accept `uid` from request body or path params.
-- Production auth middleware should later replace that with verified Firebase Auth identity.
+- User-owned write routes derive identity from verified Firebase Auth instead of trusting request body values.
+- User-owned read routes still accept `uid` from route params and may need authorization rules later.
+- `POST /api/notifications` is currently available as a server/admin-style creation route and should not be exposed as a normal client write route without additional authorization.
 - `swipeId` currently equals `activityId` because swipe documents use `activityId` as the Firestore document id under `swipes/{uid}/decisions/{activityId}`.

@@ -2,24 +2,34 @@ import type { Request, Response } from 'express';
 import { getTyping, setTyping } from './typing.service.js';
 
 type GetTypingParams = {
-    activityId: string,
+    activityId: string;
     uid: string;
 };
 
 export async function setTypingHandler(req: Request, res: Response) {
    try{
-    const { activityId, uid, isTyping } = req.body as {
+    const uid = req.auth?.uid;
+    const { activityId, isTyping } = req.body as {
         activityId?: unknown,
-        uid?: unknown,
         isTyping?: unknown,
     };
 
-    if (typeof activityId !== 'string' || typeof uid !== 'string'){
+    if(!uid){
+        return res.status(401).json({
+            ok: false,
+            error:{
+                code: 'UNAUTHORIZED',
+                message: 'Authenticated user is required',
+            },
+        });
+    }
+
+    if (typeof activityId !== 'string'){
         return res.status(400).json({
             ok: false,
             error: {
                 code: 'INVALID_INPUT',
-                message: 'activityId and uid must be strings',
+                message: 'activityId must be a string',
             },
         });
     }
@@ -29,17 +39,17 @@ export async function setTypingHandler(req: Request, res: Response) {
             ok: false,
             error: {
                 code: 'INVALID_INPUT',
-                message: 'isTyping must be a boolean'
+                message: 'isTyping must be a boolean',
             },
         });
     }
 
-    if (!activityId.trim() || !uid.trim()){
+    if (!activityId.trim()){
         return res.status(400).json({
             ok: false,
             error: {
                 code: 'EMPTY_INPUT',
-                message: 'activityId and uid are required',
+                message: 'activityId is required',
             },
         });
     }
@@ -50,7 +60,7 @@ export async function setTypingHandler(req: Request, res: Response) {
         ok: true,
         data: {
             activityId: activityId.trim(),
-            uid: uid.trim(),
+            uid,
             isTyping,
         },
     });
@@ -76,7 +86,7 @@ export async function getTypingHandler(req: Request<GetTypingParams>, res: Respo
                 ok: false,
                 error: {
                     code: 'EMPTY_INPUT',
-                    message: 'uid are required'
+                    message: 'uid is required'
                 },
             });
         }
@@ -86,7 +96,7 @@ export async function getTypingHandler(req: Request<GetTypingParams>, res: Respo
                 ok: false,
                 error: {
                     code: 'EMPTY_INPUT',
-                    message: 'activityId are required'
+                    message: 'activityId is required'
                 },
             });
         }

@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('./typing.service.js', () => {
   return {
@@ -8,258 +8,221 @@ vi.mock('./typing.service.js', () => {
   };
 });
 
+vi.mock('../../middleware/auth.middleware.js', () => {
+  return {
+    requireAuth: vi.fn((req, _res, next) => {
+      req.auth = {
+        uid: 'test-uid-1',
+        token: {} as never,
+      };
+      next();
+    }),
+  };
+});
+
 import { createApp } from '../../app/app.js';
 import * as typingService from './typing.service.js';
 
 describe('typing routes', () => {
+  describe('POST /api/typing', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
 
-  /* 
-########################################################################  
-      Test section for typing POST route
-########################################################################
-  */
+    it('when request body is valid => expected 200', async () => {
+      const app = createApp();
 
-  it('sets typing with POST /typing => expected 200', async () => {
-    const app = createApp();
+      const response = await request(app)
+        .post('/api/typing')
+        .send({
+          activityId: 'activity-1',
+          isTyping: true,
+        });
 
-    const response = await request(app)
-      .post('/api/typing')
-      .send({
-        activityId: 'activity-1',
-        uid: 'test-uid-1',
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        ok: true,
+        data: {
+          activityId: 'activity-1',
+          uid: 'test-uid-1',
+          isTyping: true,
+        },
+      });
+      expect(typingService.setTyping).toHaveBeenCalledWith(
+        'activity-1',
+        'test-uid-1',
+        true,
+      );
+    });
+
+    it('when activityId is not a string => expected 400 w/ INVALID_INPUT', async () => {
+      const app = createApp();
+
+      const response = await request(app)
+        .post('/api/typing')
+        .send({
+          activityId: 123,
+          isTyping: true,
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'activityId must be a string',
+        },
+      });
+    });
+
+    it('when isTyping is not a boolean => expected 400 w/ INVALID_INPUT', async () => {
+      const app = createApp();
+
+      const response = await request(app)
+        .post('/api/typing')
+        .send({
+          activityId: 'activity-1',
+          isTyping: 'yes',
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'isTyping must be a boolean',
+        },
+      });
+    });
+
+    it('when activityId is blank => expected 400 w/ EMPTY_INPUT', async () => {
+      const app = createApp();
+
+      const response = await request(app)
+        .post('/api/typing')
+        .send({
+          activityId: '   ',
+          isTyping: true,
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'EMPTY_INPUT',
+          message: 'activityId is required',
+        },
+      });
+    });
+
+    it('when service throws unknown error => expected 500 w/ INTERNAL_ERROR', async () => {
+      vi.mocked(typingService.setTyping).mockRejectedValueOnce(
+        new Error('Unknown error'),
+      );
+
+      const app = createApp();
+
+      const response = await request(app)
+        .post('/api/typing')
+        .send({
+          activityId: 'activity-1',
+          isTyping: true,
+        });
+
+      expect(response.status).toBe(500);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: 'Unknown error',
+        },
+      });
+    });
+  });
+
+  describe('GET /api/typing/:activityId/:uid', () => {
+    it('when typing status exists => expected 200', async () => {
+      vi.mocked(typingService.getTyping).mockResolvedValueOnce({
         isTyping: true,
       });
 
-    expect(response.status).toBe(200);
-    expect(response.body).toEqual({
-      ok: true,
-      data: {
-        activityId: 'activity-1',
-        uid: 'test-uid-1',
-        isTyping: true,
-      },
-    });
-  });
+      const app = createApp();
 
-  it('POST /typing when isTyping is not a boolean => expected 400 w/ INVALID_INPUT', async () => {
-    const app = createApp();
+      const response = await request(app).get('/api/typing/activity-1/test-uid-1');
 
-    const response = await request(app)
-      .post('/api/typing')
-      .send({
-        activityId: 'activity-1',
-        uid: 'test-uid-1',
-        isTyping: 'yes',
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        ok: true,
+        data: {
+          isTyping: true,
+        },
       });
-
-    expect(response.status).toBe(400);
-    expect(response.body).toEqual({
-      ok: false,
-      error: {
-        code: 'INVALID_INPUT',
-        message: 'isTyping must be a boolean',
-      },
     });
-  });
 
-  it('POST /typing when activityId is not a string => expected 400 w/ INVALID_INPUT', async () => {
-    const app = createApp();
+    it('when activityId is blank => expected 400 w/ EMPTY_INPUT', async () => {
+      const app = createApp();
 
-    const response = await request(app)
-      .post('/api/typing')
-      .send({
-        activityId: 123,
-        uid: 'test-uid-1',
-        isTyping: true,
+      const response = await request(app).get('/api/typing/%20%20/test-uid-1');
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'EMPTY_INPUT',
+          message: 'activityId is required',
+        },
       });
-
-    expect(response.status).toBe(400);
-    expect(response.body).toEqual({
-      ok: false,
-      error: {
-        code: 'INVALID_INPUT',
-        message: 'activityId and uid must be strings',
-      },
     });
-  });
 
-  it('POST /typing when activityId is blank => expected 400 w/ EMPTY_INPUT', async () => {
-    const app = createApp();
+    it('when uid is blank => expected 400 w/ EMPTY_INPUT', async () => {
+      const app = createApp();
 
-    const response = await request(app)
-      .post('/api/typing')
-      .send({
-        activityId: '   ',
-        uid: 'test-uid-1',
-        isTyping: true,
+      const response = await request(app).get('/api/typing/activity-1/%20%20');
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'EMPTY_INPUT',
+          message: 'uid is required',
+        },
       });
-
-    expect(response.status).toBe(400);
-    expect(response.body).toEqual({
-      ok: false,
-      error: {
-        code: 'EMPTY_INPUT',
-        message: 'activityId and uid are required',
-      },
     });
-  });
 
-  it('POST /typing when uid is not a string => expected 400 w/ INVALID_INPUT', async () => {
-    const app = createApp();
+    it('when typing status is not found => expected 404 w/ NOT_FOUND', async () => {
+      vi.mocked(typingService.getTyping).mockResolvedValueOnce(null);
 
-    const response = await request(app)
-      .post('/api/typing')
-      .send({
-        activityId: 'activity-1',
-        uid: 123456,
-        isTyping: true,
+      const app = createApp();
+
+      const response = await request(app).get('/api/typing/activity-1/missing-user');
+
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'NOT_FOUND',
+          message: 'Typing status not found',
+        },
       });
-
-    expect(response.status).toBe(400);
-    expect(response.body).toEqual({
-      ok: false,
-      error: {
-        code: 'INVALID_INPUT',
-        message: 'activityId and uid must be strings',
-      },
     });
-  });
 
-  it('POST /typing when uid is blank => expected 400 w/ EMPTY_INPUT', async () => {
-    const app = createApp();
+    it('when service throws unknown error => expected 500 w/ INTERNAL_ERROR', async () => {
+      vi.mocked(typingService.getTyping).mockRejectedValueOnce(
+        new Error('Unknown error'),
+      );
 
-    const response = await request(app)
-      .post('/api/typing')
-      .send({
-        activityId: 'activity-1',
-        uid: '   ',
-        isTyping: true,
+      const app = createApp();
+
+      const response = await request(app).get('/api/typing/activity-1/test-uid-1');
+
+      expect(response.status).toBe(500);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: 'Unknown error',
+        },
       });
-
-    expect(response.status).toBe(400);
-    expect(response.body).toEqual({
-      ok: false,
-      error: {
-        code: 'EMPTY_INPUT',
-        message: 'activityId and uid are required',
-      },
-    });
-  });
-
-  it('POST /typing when service throws => expected 500 w/ INTERNAL_ERROR', async () => {
-    vi.mocked(typingService.setTyping).mockRejectedValueOnce(
-      new Error('Unknown error'),
-    );
-
-    const app = createApp();
-
-    const response = await request(app)
-      .post('/api/typing')
-      .send({
-        activityId: 'activity-1',
-        uid: 'test-uid-1',
-        isTyping: true,
-      });
-
-    expect(response.status).toBe(500);
-    expect(response.body).toEqual({
-      ok: false,
-      error: {
-        code: 'INTERNAL_ERROR',
-        message: 'Unknown error',
-      },
-    });
-  });
-
-  /* 
-########################################################################  
-      Test section for typing GET route
-########################################################################
-  */
-
-  it('gets typing with GET /typing/:activityId/:uid => expected 200', async () => {
-    vi.mocked(typingService.getTyping).mockResolvedValueOnce({
-      isTyping: true,
-    });
-
-    const app = createApp();
-
-    const response = await request(app).get('/api/typing/activity-1/test-uid-1');
-
-    expect(response.status).toBe(200);
-    expect(response.body).toEqual({
-      ok: true,
-      data: {
-        isTyping: true,
-      },
-    });
-  });
-
-  it('GET /typing/:activityId/:uid when activityId is blank => expected 400 w/ EMPTY_INPUT', async () => {
-
-    const app = createApp();
-
-    const response = await request(app).get('/api/typing/%20%20/test-uid-1');
-
-    expect(response.status).toBe(400);
-    expect(response.body).toEqual({
-      ok: false,
-      error: {
-        code: 'EMPTY_INPUT',
-        message: 'activityId are required'
-      },
-    });
-  });
-
-  it('GET /typing/:activityId/:uid when uid is blank => expected 400 w/ EMPTY_INPUT', async () => {
-
-    const app = createApp();
-
-    const response = await request(app).get('/api/typing/activity-1/%20%20');
-
-    expect(response.status).toBe(400);
-    expect(response.body).toEqual({
-      ok: false,
-      error: {
-        code: 'EMPTY_INPUT',
-        message: 'uid are required'
-      },
-    });
-  });
-
-  it('GET /typing/:activityId/:uid when isTyping record is not found => expected 404 w/ NOT_FOUND', async () => {
-    vi.mocked(typingService.getTyping).mockResolvedValueOnce(null);
-
-    const app = createApp();
-
-    const response = await request(app).get('/api/typing/activity-1/missing-user');
-
-    expect(response.status).toBe(404);
-    expect(response.body).toEqual({
-      ok: false,
-      error: {
-        code: 'NOT_FOUND',
-        message: 'Typing status not found'
-      },
-    });
-  });
-
-  it('GET /typing/:activityId/:uid when service throws => expected 500 w/ INTERNAL_ERROR', async () => {
-    vi.mocked(typingService.getTyping).mockRejectedValueOnce(
-      new Error('Unknown error'),
-    );
-
-    const app = createApp();
-
-    const response = await request(app).get('/api/typing/activity-1/test-uid-1');
-
-    expect(response.status).toBe(500);
-    expect(response.body).toEqual({
-      ok: false,
-      error: {
-        code: 'INTERNAL_ERROR',
-        message: 'Unknown error',
-      },
     });
   });
 });
