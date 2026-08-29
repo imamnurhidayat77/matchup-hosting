@@ -66,7 +66,7 @@ export function MembersPage() {
   function closeMenu() { setMenuOpenId(null); }
 
   function toggleSelect(id: string) {
-    setSelectedIds((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+    setSelectedIds((prev) => { const n = new Set(prev); if (n.has(id)) { n.delete(id); } else { n.add(id); } return n; });
   }
   function toggleAll() {
     setSelectedIds(selectedIds.size === paginated.length ? new Set() : new Set(paginated.map((m) => m.id)));

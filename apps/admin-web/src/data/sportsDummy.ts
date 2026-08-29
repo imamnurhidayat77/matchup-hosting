@@ -50,7 +50,9 @@ export function loadSports(): SportConfig[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) return JSON.parse(raw) as SportConfig[];
-  } catch {}
+  } catch {
+    // localStorage unavailable or corrupt — fall through to defaults
+  }
   return DEFAULT_SPORTS;
 }
 

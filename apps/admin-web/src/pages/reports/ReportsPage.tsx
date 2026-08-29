@@ -242,7 +242,7 @@ export function ReportsPage() {
 
   // Bulk actions
   function toggleSelect(id: string) {
-    setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+    setSelectedIds(prev => { const n = new Set(prev); if (n.has(id)) { n.delete(id); } else { n.add(id); } return n; });
   }
   function toggleSelectAll() {
     const pendingIds = filtered.filter(r => r.status === 'Pending').map(r => r.id);

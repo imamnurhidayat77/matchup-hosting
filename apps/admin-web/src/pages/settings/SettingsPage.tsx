@@ -46,7 +46,9 @@ function loadSettings(): SettingsData {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) return { ...DEFAULTS, ...(JSON.parse(raw) as Partial<SettingsData>) };
-  } catch {}
+  } catch {
+    // localStorage unavailable or corrupt — fall through to defaults
+  }
   return DEFAULTS;
 }
 
