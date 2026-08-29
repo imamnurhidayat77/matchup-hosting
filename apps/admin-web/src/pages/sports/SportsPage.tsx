@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { loadSports, saveSports, DEFAULT_SPORTS } from '../../data/sportsDummy';
 import { downloadCsv } from '../../utils/csvExport';
+import { useToast } from '../../context/ToastContext';
 import type { SportConfig } from '../../data/sportsDummy';
 
 // ─── Sports emoji palette ─────────────────────────────────────────────────────
@@ -312,17 +313,19 @@ function MobilePreview({ sports }: { sports: SportConfig[] }) {
 
 export function SportsPage() {
   const [sports, setSports] = useState<SportConfig[]>(loadSports);
-  const [saved, setSaved] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [search, setSearch] = useState('');
   const dragId = useRef<string | null>(null);
+  const { push: toast } = useToast();
 
   function update(id: string, patch: Partial<SportConfig>) {
     setSports((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
   }
 
   function handleDelete(id: string) {
+    const sport = sports.find(s => s.id === id);
     setSports((prev) => prev.filter((s) => s.id !== id));
+    if (sport) toast(`"${sport.name}" removed.`, 'info');
   }
 
   function handleAdd(sport: SportConfig) {
@@ -330,6 +333,7 @@ export function SportsPage() {
       const maxOrder = Math.max(...prev.map((s) => s.sortOrder), 0);
       return [...prev, { ...sport, sortOrder: maxOrder + 1 }];
     });
+    toast(`"${sport.name}" added.`, 'success');
   }
 
   function handleSave() {
@@ -337,13 +341,13 @@ export function SportsPage() {
     const sorted = [...sports].sort((a, b) => a.sortOrder - b.sortOrder).map((s, i) => ({ ...s, sortOrder: i + 1 }));
     saveSports(sorted);
     setSports(sorted);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    toast('Changes published.', 'success');
   }
 
   function handleReset() {
     if (confirm('Reset all sports to default configuration?')) {
       setSports(DEFAULT_SPORTS);
+      toast('Sports reset to defaults.', 'info');
     }
   }
 
@@ -352,6 +356,7 @@ export function SportsPage() {
       sports.map((s) => ({ ID: s.id, Name: s.name, Enabled: s.enabled, Filter: s.showInFilter, Onboarding: s.showInOnboarding, CanHost: s.canHost, Activities: s.activityCount })),
       'matchup-sports.csv',
     );
+    toast('Sports exported as CSV.', 'info');
   }
 
   // Drag reorder
@@ -397,9 +402,9 @@ export function SportsPage() {
           <button onClick={() => setShowAdd(true)} className="btn-outline rounded-lg px-3 py-1.5 text-sm">+ Add Sport</button>
           <button
             onClick={handleSave}
-            className={`btn-primary rounded-lg px-4 py-1.5 text-sm transition-all ${saved ? '!bg-success-500' : ''}`}
+            className="btn-primary rounded-lg px-4 py-1.5 text-sm"
           >
-            {saved ? '✓ Published' : 'Publish Changes'}
+            Publish Changes
           </button>
         </div>
       </div>

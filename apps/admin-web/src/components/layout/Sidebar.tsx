@@ -1,6 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { cn } from '../../utils/cn';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -89,21 +90,39 @@ const NAV_ITEMS = [
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { user, signOut } = useAuth();
+  const { theme, toggle: toggleTheme } = useTheme();
   const navigate = useNavigate();
+  const isDark = theme === 'dark';
+
+  const colors = {
+    text:        isDark ? '#f1f5f9' : '#0f172a',
+    textMuted:   isDark ? '#94a3b8' : '#475569',
+    textFaint:   isDark ? '#64748b' : '#94a3b8',
+    border:      isDark ? '#334155' : '#e2e8f0',
+    navActive:   isDark ? 'rgba(30,107,154,0.25)' : '#eff6ff',
+    navActiveText: isDark ? '#93c5fd' : '#1e3a5f',
+    navHover:    isDark ? 'rgba(51,65,85,0.6)' : '#f8fafc',
+    iconActive:  isDark ? '#93c5fd' : '#1e3a5f',
+    iconDefault: isDark ? '#64748b' : '#94a3b8',
+  };
 
   async function handleSignOut() {
     await signOut();
     navigate('/login', { replace: true });
   }
+
   return (
     <div className="flex h-full flex-col">
       {/* Logo */}
-      <div className="flex h-[85px] shrink-0 items-center gap-3 px-6">
+      <div
+        className="flex h-[85px] shrink-0 items-center gap-3 px-6 border-b"
+        style={{ borderColor: colors.border }}
+      >
         <div className="flex h-8 w-8 shrink-0 overflow-hidden rounded-lg">
           <img src="/logo-badge.png" alt="MatchUp logo" className="h-full w-full object-cover" />
         </div>
         <div>
-          <p className="text-[18px] font-bold leading-none text-ink-900">MatchUp</p>
+          <p className="text-[18px] font-bold leading-none" style={{ color: colors.text }}>MatchUp</p>
           <p className="mt-0.5 text-[11px] font-semibold leading-none tracking-wide text-brand-400">
             ADMIN CONSOLE
           </p>
@@ -118,18 +137,19 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             to={item.to}
             end={'end' in item ? item.end : undefined}
             onClick={onNavigate}
-            className={({ isActive }) =>
-              cn(
-                'flex h-10 w-full items-center gap-3 rounded-[10px] px-3 text-sm font-medium transition-colors',
-                isActive
-                  ? 'bg-[#eff6ff] font-semibold text-brand-700'
-                  : 'text-ink-600 hover:bg-ink-50 hover:text-ink-900',
-              )
-            }
           >
             {({ isActive }) => (
-              <>
-                <span className={isActive ? 'text-brand-700' : 'text-ink-400'}>
+              <span
+                className="flex h-10 w-full items-center gap-3 rounded-[10px] px-3 text-sm font-medium transition-colors"
+                style={{
+                  backgroundColor: isActive ? colors.navActive : 'transparent',
+                  color: isActive ? colors.navActiveText : colors.textMuted,
+                  fontWeight: isActive ? 600 : 500,
+                }}
+                onMouseEnter={(e) => { if (!isActive) (e.currentTarget as HTMLElement).style.backgroundColor = colors.navHover; }}
+                onMouseLeave={(e) => { if (!isActive) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+              >
+                <span style={{ color: isActive ? colors.iconActive : colors.iconDefault }}>
                   {item.icon}
                 </span>
                 <span className="flex-1">{item.label}</span>
@@ -138,14 +158,17 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                     {item.badge}
                   </span>
                 )}
-              </>
+              </span>
             )}
           </NavLink>
         ))}
       </nav>
 
       {/* Admin footer */}
-      <div className="flex shrink-0 items-center gap-3 border-t border-ink-200 px-4 py-4">
+      <div
+        className="flex shrink-0 items-center gap-3 border-t px-4 py-4"
+        style={{ borderColor: colors.border }}
+      >
         <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full bg-ink-200">
           <img
             src={`https://api.dicebear.com/8.x/thumbs/svg?seed=${user && typeof user === 'object' ? user.avatarSeed : 'Devon'}`}
@@ -154,16 +177,35 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-ink-900">
+          <p className="truncate text-sm font-semibold" style={{ color: colors.text }}>
             {user && typeof user === 'object' ? user.name : '—'}
           </p>
-          <p className="truncate text-xs text-ink-400">
+          <p className="truncate text-xs" style={{ color: colors.textFaint }}>
             {user && typeof user === 'object' ? user.role : ''}
           </p>
         </div>
+        {/* Dark mode toggle */}
+        <button
+          onClick={toggleTheme}
+          className="shrink-0 rounded-md p-1.5 transition-colors"
+          style={{ color: colors.textMuted }}
+          aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          title={isDark ? 'Light mode' : 'Dark mode'}
+        >
+          {isDark ? (
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+              <circle cx="8" cy="8" r="3.5" /><path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3.05 3.05l1.06 1.06M11.89 11.89l1.06 1.06M3.05 12.95l1.06-1.06M11.89 4.11l1.06-1.06" />
+            </svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+              <path d="M13.5 10A6 6 0 016 2.5a6 6 0 100 11 6 6 0 007.5-3.5z" />
+            </svg>
+          )}
+        </button>
         <button
           onClick={handleSignOut}
-          className="shrink-0 rounded-md p-1.5 text-ink-400 hover:bg-ink-100 hover:text-danger-500 transition-colors"
+          className="shrink-0 rounded-md p-1.5 transition-colors hover:text-danger-500"
+          style={{ color: colors.textMuted }}
           aria-label="Sign out"
           title="Sign out"
         >
@@ -180,8 +222,13 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 // ─── Desktop sidebar ──────────────────────────────────────────────────────────
 
 export function Sidebar() {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
   return (
-    <aside className="hidden h-full w-[260px] shrink-0 border-r border-ink-200 bg-white md:flex md:flex-col">
+    <aside
+      className="hidden h-full w-[260px] shrink-0 border-r border-ink-200 dark:border-ink-700 md:flex md:flex-col transition-colors duration-200"
+      style={{ backgroundColor: isDark ? '#1e293b' : '#ffffff', borderColor: isDark ? '#334155' : undefined }}
+    >
       <SidebarContent />
     </aside>
   );
@@ -210,7 +257,7 @@ export function MobileDrawer({
       {/* Drawer panel */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 flex w-[260px] flex-col border-r border-ink-200 bg-white transition-transform duration-300 md:hidden',
+          'fixed inset-y-0 left-0 z-50 flex w-[260px] flex-col border-r border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-800 transition-transform duration-300 md:hidden',
           open ? 'translate-x-0' : '-translate-x-full',
         )}
         aria-label="Navigation"
@@ -218,7 +265,7 @@ export function MobileDrawer({
         {/* Close button */}
         <button
           onClick={onClose}
-          className="absolute right-3 top-3 rounded-md p-1.5 text-ink-400 hover:bg-ink-100 hover:text-ink-700"
+          className="absolute right-3 top-3 rounded-md p-1.5 text-ink-400 hover:bg-ink-100 dark:hover:bg-ink-700 hover:text-ink-700 dark:hover:text-ink-100"
           aria-label="Close menu"
         >
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">

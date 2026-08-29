@@ -1,5 +1,5 @@
 import { useAnalytics } from '../../hooks/useAnalytics';
-import { PageSkeleton, PageError } from '../../components/ui/PageStates';
+import { AnalyticsPageSkeleton, PageError } from '../../components/ui/PageStates';
 import type { AnalyticsRange } from '../../services/analyticsService';
 
 // ─── SVG line chart ───────────────────────────────────────────────────────────
@@ -46,7 +46,7 @@ function LineChart({ data, keys, colors }: { data: Array<Record<string, number |
 export function AnalyticsPage() {
   const { loading, error, data, range, setRange, reload } = useAnalytics();
 
-  if (loading) return <PageSkeleton />;
+  if (loading) return <AnalyticsPageSkeleton />;
   if (error) return <PageError message={error} onRetry={reload} />;
   if (!data) return null;
 

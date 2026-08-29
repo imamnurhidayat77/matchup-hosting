@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { DashboardShell } from '../components/layout/DashboardShell';
 import { RequireAuth } from '../components/auth/RequireAuth';
 import { DashboardPage } from '../pages/dashboard/DashboardPage';
@@ -12,6 +12,7 @@ import { BroadcastsPage } from '../pages/broadcasts/BroadcastsPage';
 import { AnalyticsPage } from '../pages/analytics/AnalyticsPage';
 import { SettingsPage } from '../pages/settings/SettingsPage';
 import { SportsPage } from '../pages/sports/SportsPage';
+import { NotFoundPage } from '../pages/NotFoundPage';
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
@@ -33,7 +34,7 @@ const router = createBrowserRouter([
   { path: '/sports',           element: <Shell><SportsPage /></Shell> },
   { path: '/analytics',        element: <Shell><AnalyticsPage /></Shell> },
   { path: '/settings',         element: <Shell><SettingsPage /></Shell> },
-  { path: '*',                 element: <Navigate to="/" replace /> },
+  { path: '*',                 element: <Shell><NotFoundPage /></Shell> },
 ]);
 
 export function AppRouter() {

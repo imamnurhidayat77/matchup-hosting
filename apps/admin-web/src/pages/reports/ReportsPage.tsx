@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useReports } from '../../hooks/useReports';
-import { PageSkeleton, PageError } from '../../components/ui/PageStates';
+import { ReportsPageSkeleton, PageError, EmptyState, EmptyIcons } from '../../components/ui/PageStates';
 import { downloadCsv } from '../../utils/csvExport';
+import { useToast } from '../../context/ToastContext';
 import type { Report, ReportStatus } from '../../data/reportsDummy';
 import type { ReportAction } from '../../services/reportsService';
 
@@ -204,22 +205,53 @@ function ReportCard({
 
 export function ReportsPage() {
   const { loading, error, reports, reload, handleAction } = useReports();
+  const { push: toast } = useToast();
   const [activeTab, setActiveTab] = useState<ReportStatus | 'All'>('All');
   const [search, setSearch] = useState('');
   const [sortNewest, setSortNewest] = useState(true);
   const [modal, setModal] = useState<{ report: Report; action: ReportAction } | null>(null);
+  // Bulk action state (Task 11)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  if (loading) return <PageSkeleton rows={4} />;
+  // Keyboard shortcuts: R = resolve first pending, D = dismiss first pending (Task 6)
+  // Must be declared before any early returns to satisfy rules-of-hooks
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+      const firstPending = reports.find(r => r.status === 'Pending');
+      if (!firstPending) return;
+      if (e.key === 'r' || e.key === 'R') { e.preventDefault(); setModal({ report: firstPending, action: 'resolve' }); }
+      if (e.key === 'd' || e.key === 'D') { e.preventDefault(); setModal({ report: firstPending, action: 'dismiss' }); }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [reports]);
+
+  if (loading) return <ReportsPageSkeleton />;
   if (error)   return <PageError message={error} onRetry={reload} />;
-
-  function openModal(report: Report, action: ReportAction) {
-    setModal({ report, action });
-  }
 
   function handleConfirm(note: string) {
     if (!modal) return;
     handleAction(modal.report.id, modal.action, note);
+    toast(
+      modal.action === 'resolve' ? 'Report resolved.' : 'Report dismissed.',
+      modal.action === 'resolve' ? 'success' : 'info',
+    );
     setModal(null);
+  }
+
+  // Bulk actions
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
+  function toggleSelectAll() {
+    const pendingIds = filtered.filter(r => r.status === 'Pending').map(r => r.id);
+    setSelectedIds(prev => prev.size === pendingIds.length ? new Set() : new Set(pendingIds));
+  }
+  function executeBulkAction(action: ReportAction) {
+    selectedIds.forEach(id => handleAction(id, action, 'Bulk action'));
+    toast(`${selectedIds.size} report(s) ${action === 'resolve' ? 'resolved' : 'dismissed'}.`, action === 'resolve' ? 'success' : 'info');
+    setSelectedIds(new Set());
   }
 
   function handleExport() {
@@ -231,6 +263,7 @@ export function ReportsPage() {
       })),
       'matchup-reports.csv',
     );
+    toast('Report log exported as CSV.', 'info');
   }
 
   const TABS: Array<ReportStatus | 'All'> = ['All', 'Pending', 'Resolved', 'Dismissed'];
@@ -268,9 +301,18 @@ export function ReportsPage() {
           <h1 className="text-xl font-bold text-ink-900 sm:text-2xl">Reports & Moderation</h1>
           <p className="mt-1 text-xs text-ink-600 sm:text-sm">Review flagged content and take moderation action</p>
         </div>
-        <button onClick={handleExport} className="btn-outline rounded-lg px-3 py-1.5 text-sm self-start sm:self-auto">
-          Export Log
-        </button>
+        <div className="flex gap-2 self-start sm:self-auto">
+          <button onClick={handleExport} className="btn-outline rounded-lg px-3 py-1.5 text-sm">
+            Export Log
+          </button>
+          <button
+            onClick={() => window.print()}
+            className="btn-outline rounded-lg px-3 py-1.5 text-sm"
+            title="Print / Save as PDF"
+          >
+            Print
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -294,14 +336,25 @@ export function ReportsPage() {
         <div className="panel overflow-hidden">
 
           {/* Toolbar */}
-          <div className="flex flex-col gap-3 border-b border-ink-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <div className="flex flex-col gap-3 border-b border-ink-200 dark:border-ink-700 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
             <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-base font-semibold text-ink-900">Moderation Queue</h2>
+              <h2 className="text-base font-semibold text-ink-900 dark:text-ink-100">Moderation Queue</h2>
               {pendingCount > 0 && (
-                <span className="badge-red">
-                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-danger-700" />
-                  {pendingCount} pending
-                </span>
+                <>
+                  <span className="badge-red">
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-danger-700" />
+                    {pendingCount} pending
+                  </span>
+                  <label className="flex cursor-pointer items-center gap-1.5">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.size === filtered.filter(r => r.status === 'Pending').length && filtered.filter(r => r.status === 'Pending').length > 0}
+                      onChange={toggleSelectAll}
+                      className="rounded"
+                    />
+                    <span className="text-xs text-ink-400">All pending</span>
+                  </label>
+                </>
               )}
             </div>
             <div className="flex flex-wrap gap-1">
@@ -341,19 +394,48 @@ export function ReportsPage() {
             </button>
           </div>
 
+          {/* Bulk action bar */}
+          {selectedIds.size > 0 && (
+            <div className="flex items-center gap-3 border-b border-ink-100 dark:border-ink-700 bg-brand-50 dark:bg-brand-900/20 px-4 sm:px-6 py-2.5">
+              <span className="text-xs font-semibold text-brand-700 dark:text-brand-300">{selectedIds.size} selected</span>
+              <button onClick={() => executeBulkAction('resolve')} className="text-xs font-semibold text-success-600 hover:underline">Resolve all</button>
+              <button onClick={() => executeBulkAction('dismiss')} className="text-xs font-semibold text-ink-500 dark:text-ink-400 hover:underline">Dismiss all</button>
+              <button onClick={() => setSelectedIds(new Set())} className="ml-auto text-xs text-ink-400 hover:underline">Clear</button>
+            </div>
+          )}
+
+          {/* Keyboard hint */}
+          {reports.some(r => r.status === 'Pending') && selectedIds.size === 0 && (
+            <div className="flex items-center gap-2 border-b border-ink-100 dark:border-ink-700 px-4 sm:px-6 py-2 text-xs text-ink-400">
+              <span>Shortcuts:</span>
+              <kbd className="rounded bg-ink-100 dark:bg-ink-700 px-1.5 py-0.5 font-mono">R</kbd><span>Resolve</span>
+              <kbd className="rounded bg-ink-100 dark:bg-ink-700 px-1.5 py-0.5 font-mono">D</kbd><span>Dismiss (first pending)</span>
+            </div>
+          )}
+
           {/* List */}
-          <div className="divide-y divide-ink-200">
+          <div className="divide-y divide-ink-200 dark:divide-ink-700">
             {filtered.length === 0 ? (
               <p className="py-12 text-center text-sm text-ink-400">
-                {activeTab === 'Pending' ? 'No pending reports 🎉' : 'No reports found.'}
+                {activeTab === 'Pending' ? (
+                  <EmptyState icon={EmptyIcons.reports} title="No pending reports" description="All reports have been handled." />
+                ) : (
+                  <EmptyState icon={EmptyIcons.search} title="No reports found." description="Try adjusting your search or filter." />
+                )}
               </p>
             ) : (
               filtered.map((r) => (
                 <div key={r.id} className="px-4 py-3 sm:px-6">
-                  <ReportCard
-                    report={r}
-                    onAction={(action) => openModal(r, action)}
-                  />
+                  {r.status === 'Pending' ? (
+                    <label className="flex items-start gap-3">
+                      <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => toggleSelect(r.id)} className="mt-0.5 rounded cursor-pointer" />
+                      <div className="flex-1">
+                        <ReportCard report={r} onAction={(action) => setModal({ report: r, action })} />
+                      </div>
+                    </label>
+                  ) : (
+                    <ReportCard report={r} onAction={(action) => setModal({ report: r, action })} />
+                  )}
                 </div>
               ))
             )}
