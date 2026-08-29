@@ -63,6 +63,34 @@ function IconSettings() {
   );
 }
 
+function IconAppeals() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 1a8 8 0 100 16A8 8 0 009 1z" />
+      <path d="M9 6v4M9 12h.01" />
+    </svg>
+  );
+}
+function IconAudit() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="1" width="14" height="16" rx="2" />
+      <path d="M5 5h8M5 8.5h8M5 12h5" />
+      <circle cx="13.5" cy="13.5" r="2.5" />
+      <path d="M15.5 15.5l1.5 1.5" />
+    </svg>
+  );
+}
+function IconTemplate() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 1a5 5 0 015 5c0 5 2 6 2 6H2s2-1 2-6a5 5 0 015-5z" />
+      <path d="M6.27 14.5a3 3 0 005.46 0" />
+      <path d="M9 1V0" />
+    </svg>
+  );
+}
+
 // ─── Nav config ───────────────────────────────────────────────────────────────
 
 function IconSports() {
@@ -78,12 +106,15 @@ function IconSports() {
 const NAV_ITEMS = [
   { to: '/',           label: 'Dashboard',  icon: <IconDashboard />, end: true  },
   { to: '/members',    label: 'Members',    icon: <IconUsers />                  },
-  { to: '/activities', label: 'Activities', icon: <IconCalendar />               },
-  { to: '/reports',    label: 'Reports',    icon: <IconBell />,   badge: '14'    },
-  { to: '/broadcasts', label: 'Broadcasts', icon: <IconAirplay />                },
-  { to: '/sports',     label: 'Sports',     icon: <IconSports />                 },
-  { to: '/analytics',  label: 'Analytics',  icon: <IconChart />                  },
-  { to: '/settings',   label: 'Settings',   icon: <IconSettings />               },
+  { to: '/activities',             label: 'Activities',    icon: <IconCalendar />               },
+  { to: '/reports',                label: 'Reports',       icon: <IconBell />,   badge: '14'    },
+  { to: '/broadcasts',             label: 'Broadcasts',    icon: <IconAirplay />                },
+  { to: '/appeals',                label: 'Appeals',       icon: <IconAppeals />, badge: '2'    },
+  { to: '/sports',                 label: 'Sports',        icon: <IconSports />                 },
+  { to: '/analytics',              label: 'Analytics',     icon: <IconChart />                  },
+  { to: '/audit',                  label: 'Audit Log',     icon: <IconAudit />                  },
+  { to: '/notification-templates', label: 'Notif Templates', icon: <IconTemplate />             },
+  { to: '/settings',               label: 'Settings',      icon: <IconSettings />               },
 ] as const;
 
 // ─── Inner sidebar content ────────────────────────────────────────────────────
