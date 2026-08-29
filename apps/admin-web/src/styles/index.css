@@ -5,38 +5,32 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── CSS variables for theme-aware tokens ────────────────────────────────── */
+/* ── CSS custom properties ──────────────────────────────────────────────────── */
 :root {
-  --bg-page:       #f8fafc;
-  --bg-surface:    #ffffff;
-  --bg-elevated:   #f1f5f9;
-  --bg-muted:      #f8fafc;
-  --border:        #e2e8f0;
-  --border-muted:  #f1f5f9;
-  --text-primary:  #0f172a;
-  --text-secondary:#475569;
-  --text-muted:    #94a3b8;
-  --text-faint:    #cbd5e1;
+  --bg-page:         #f8fafc;
+  --bg-surface:      #ffffff;
+  --bg-elevated:     #f1f5f9;   /* hover target — slightly darker than surface */
+  --bg-muted:        #f8fafc;   /* alternate table rows */
+  --border:          #e2e8f0;
+  --border-muted:    #f1f5f9;
+  --text-primary:    #0f172a;
+  --text-secondary:  #475569;
+  --text-muted:      #94a3b8;
 }
 
 .dark {
-  --bg-page:       #0f1117;
-  --bg-surface:    #1e293b;
-  --bg-elevated:   #263244;
-  --bg-muted:      #1a2332;
-  --border:        #334155;
-  --border-muted:  #2a3a4e;
-  --text-primary:  #f1f5f9;   /* 13.4:1 on surface */
-  --text-secondary:#94a3b8;   /*  5.7:1 on surface — tbl-th, tbl-td, btn-outline */
-  --text-muted:    #8899ae;   /*  5.0:1 on surface — input placeholder */
-  --text-faint:    #7b8fa6;   /*  4.4:1 on surface — decorative separators */
+  --bg-page:         #0f1117;
+  --bg-surface:      #1e293b;
+  --bg-elevated:     #2d3f54;   /* hover — LIGHTER than surface so text stays visible */
+  --bg-muted:        #192130;   /* alternate table rows only (no text overlap issue) */
+  --border:          #334155;
+  --border-muted:    #2a3a4e;
+  --text-primary:    #f1f5f9;
+  --text-secondary:  #94a3b8;
+  --text-muted:      #8899ae;
 }
 
-html, body, #root {
-  height: 100%;
-  min-height: 100vh;
-  margin: 0;
-}
+html, body, #root { height: 100%; min-height: 100vh; margin: 0; }
 
 body {
   background-color: var(--bg-page);
@@ -46,69 +40,92 @@ body {
   transition: background-color 0.2s, color 0.2s;
 }
 
-/* ── Light mode: text-ink-400 is too light (#94a3b8 = 2.56:1 on white)       */
-/* Override to #64748b (4.76:1) for all uses as normal text                   */
-/* Exception: decorative elements like sparkline fills are not text nodes     */
+/* ════════════════════════════════════════════════════════════════════════════
+   LIGHT MODE FIXES
+   text-ink-400 (#94a3b8) is only 2.56:1 on white — upgrade to #64748b
+   ════════════════════════════════════════════════════════════════════════════ */
 body:not(.dark) .text-ink-400 { color: #64748b !important; }
-body:not(.dark) .placeholder\:text-ink-400::placeholder { color: #64748b !important; }
+body:not(.dark) input::placeholder  { color: #64748b !important; }
+body:not(.dark) textarea::placeholder { color: #64748b !important; }
 
-/* ── Dark mode text contrast overrides ───────────────────────────────────── */
-/* WCAG AA: ≥4.5:1 normal text, ≥3:1 large/bold (≥18px or ≥14px bold)       */
-/* All values verified against bg-surface #1e293b and bg-muted #192130        */
-.dark .text-ink-900 { color: #f1f5f9 !important; }   /* 13.4:1 — headings    */
-.dark .text-ink-800 { color: #e2e8f0 !important; }   /* 11.9:1 — strong text */
-.dark .text-ink-700 { color: #cbd5e1 !important; }   /*  9.9:1 — body text   */
-.dark .text-ink-600 { color: #94a3b8 !important; }   /*  5.7:1 — secondary   */
-.dark .text-ink-500 { color: #8899ae !important; }   /*  5.0:1 — labels      */
-.dark .text-ink-400 { color: #94a3b8 !important; }   /*  5.7:1 — faint text  */
-.dark .text-ink-300 { color: #7e91a8 !important; }   /*  4.5:1 — separators  */
+/* ════════════════════════════════════════════════════════════════════════════
+   DARK MODE — TEXT CONTRAST
+   All ratios verified against bg-surface #1e293b (WCAG AA ≥ 4.5:1)
+   ════════════════════════════════════════════════════════════════════════════ */
+.dark .text-ink-900 { color: #f1f5f9 !important; }  /* 13.4:1 */
+.dark .text-ink-800 { color: #e2e8f0 !important; }  /* 11.9:1 */
+.dark .text-ink-700 { color: #cbd5e1 !important; }  /*  9.9:1 */
+.dark .text-ink-600 { color: #94a3b8 !important; }  /*  5.7:1 */
+.dark .text-ink-500 { color: #8899ae !important; }  /*  5.0:1 */
+.dark .text-ink-400 { color: #94a3b8 !important; }  /*  5.7:1 */
+.dark .text-ink-300 { color: #7e91a8 !important; }  /*  4.5:1 */
 
-.dark .bg-white     { background-color: #1e293b !important; }
-.dark .bg-ink-50    { background-color: #192130 !important; }
-.dark .bg-ink-100   { background-color: #263244 !important; }
-.dark .bg-ink-200   { background-color: #2d3f54 !important; }
+/* ════════════════════════════════════════════════════════════════════════════
+   DARK MODE — STATIC BACKGROUNDS
+   Only applied to non-interactive, non-hover elements
+   ════════════════════════════════════════════════════════════════════════════ */
 
+/* bg-white on static containers (cards, panels, modals) */
+.dark .bg-white { background-color: #1e293b !important; }
+
+/* thead and static zebra-stripe alternate rows */
+.dark tr.bg-ink-50 { background-color: #192130 !important; }
+.dark tr.bg-white  { background-color: #1e293b !important; }
+.dark thead .bg-ink-50,
+.dark .bg-ink-50:not([class*="hover:"]):not(button):not(a):not([role="button"]) {
+  background-color: #192130 !important;
+}
+
+/* bg-ink-100 static (pills, tags, search bar bg) — keep readable */
+.dark .bg-ink-100 { background-color: #263244 !important; }
+.dark .bg-ink-200 { background-color: #2d3f54 !important; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   DARK MODE — HOVER STATES
+   Hover bg must be LIGHTER than surface so text remains visible
+   --bg-elevated = #2d3f54 gives adequate contrast for all ink text colors
+   ════════════════════════════════════════════════════════════════════════════ */
+.dark .hover\:bg-ink-50:hover,
+.dark .hover\:bg-ink-100:hover,
+.dark .hover\:bg-ink-200:hover { background-color: #2d3f54 !important; }
+
+/* Table row hover — override the tr selector specifically */
+.dark tbody tr:hover { background-color: #2d3f54 !important; }
+
+/* Generic hover:bg-white in dark mode */
+.dark .hover\:bg-white:hover { background-color: #263244 !important; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   DARK MODE — BORDERS & DIVIDERS
+   ════════════════════════════════════════════════════════════════════════════ */
 .dark .border-ink-100 { border-color: #2a3a4e !important; }
 .dark .border-ink-200 { border-color: #334155 !important; }
-
-.dark .divide-ink-200 > :not([hidden]) ~ :not([hidden]) { border-color: #334155 !important; }
 .dark .divide-ink-100 > :not([hidden]) ~ :not([hidden]) { border-color: #2a3a4e !important; }
+.dark .divide-ink-200 > :not([hidden]) ~ :not([hidden]) { border-color: #334155 !important; }
 
-/* Table rows alternate */
-.dark tr.bg-white   { background-color: #1e293b !important; }
-.dark tr.bg-ink-50  { background-color: #192130 !important; }
-
-/* Placeholder / faint labels that appear on dark cards */
-.dark .text-\[13px\].text-ink-400 { color: #94a3b8 !important; }
-.dark .text-xs.text-ink-400       { color: #94a3b8 !important; }
-.dark .text-xs.text-ink-500       { color: #8899ae !important; }
-
-/* placeholder text in bg-transparent inputs (search bars) */
-/* #8899ae = 5.0:1 on #1e293b — passes WCAG AA 4.5:1 */
+/* ════════════════════════════════════════════════════════════════════════════
+   DARK MODE — INPUTS & PLACEHOLDERS
+   ════════════════════════════════════════════════════════════════════════════ */
 .dark input::placeholder  { color: #8899ae !important; }
 .dark textarea::placeholder { color: #8899ae !important; }
 
-/* Inline transparent search inputs (not .input class) */
-.dark .bg-transparent { color: inherit; }
+/* Search bar inline inputs (bg-transparent inside bg-ink-50 containers) */
+.dark .bg-ink-50 input,
+.dark .bg-ink-700\/50 input { color: #cbd5e1 !important; }
 
-/* Sport/role pills: bg-ink-100 text-ink-600 */
-.dark .bg-ink-100.text-ink-600 { color: #94a3b8 !important; }
-
-/* bg-ink-50 used as search bar background in table headers */
-.dark .bg-ink-50 input { color: #cbd5e1 !important; }
-
+/* ════════════════════════════════════════════════════════════════════════════
+   COMPONENT STYLES
+   ════════════════════════════════════════════════════════════════════════════ */
 @layer utilities {
   @keyframes slide-in {
     from { transform: translateX(110%); opacity: 0; }
     to   { transform: translateX(0);    opacity: 1; }
   }
-  .animate-slide-in {
-    animation: slide-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  }
+  .animate-slide-in { animation: slide-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 }
 
 @layer components {
-  /* ── Cards & panels ───────────────────────────────────────────── */
+  /* ── Cards & panels ─────────────────────────────────────────── */
   .card {
     @apply rounded-2xl border p-5 shadow-card;
     background-color: var(--bg-surface);
@@ -120,11 +137,11 @@ body:not(.dark) .placeholder\:text-ink-400::placeholder { color: #64748b !import
     border-color: var(--border);
   }
 
-  /* ── Page layout ──────────────────────────────────────────────── */
+  /* ── Page layout ────────────────────────────────────────────── */
   .page-container { @apply w-full px-6 py-6 lg:px-8 lg:py-8; }
   .page-header    { @apply mb-6 flex items-start justify-between; }
 
-  /* ── Badges ───────────────────────────────────────────────────── */
+  /* ── Badges ─────────────────────────────────────────────────── */
   .badge         { @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold; }
   .badge-blue    { @apply badge bg-brand-100  text-brand-700; }
   .badge-green   { @apply badge bg-success-100 text-success-700; }
@@ -138,7 +155,7 @@ body:not(.dark) .placeholder\:text-ink-400::placeholder { color: #64748b !import
   .dark .badge-red     { background-color: rgba(220,38,38,0.25); color: #fca5a5; }
   .dark .badge-neutral { background-color: #263244; color: #94a3b8; }
 
-  /* ── Buttons ──────────────────────────────────────────────────── */
+  /* ── Buttons ────────────────────────────────────────────────── */
   .btn         { @apply inline-flex items-center justify-center gap-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-offset-2; }
   .btn-primary { @apply btn bg-brand-500 text-white hover:bg-brand-600 focus:ring-brand-400 px-4 py-2; }
   .btn-outline {
@@ -147,12 +164,12 @@ body:not(.dark) .placeholder\:text-ink-400::placeholder { color: #64748b !import
     background-color: var(--bg-surface);
     color: var(--text-secondary);
   }
-  .btn-outline:hover { background-color: var(--bg-elevated); }
-  .btn-ghost   { @apply btn text-brand-500 hover:bg-brand-50 focus:ring-brand-400 px-3 py-1.5; }
-  .btn-danger  { @apply btn bg-danger-500 text-white hover:bg-danger-600 focus:ring-danger-500 px-3 py-1.5; }
-  .btn-sm      { @apply px-3 py-1.5 text-xs rounded-lg; }
+  .btn-outline:hover  { background-color: var(--bg-elevated); }
+  .btn-ghost  { @apply btn text-brand-500 hover:bg-brand-50 focus:ring-brand-400 px-3 py-1.5; }
+  .btn-danger { @apply btn bg-danger-500 text-white hover:bg-danger-600 focus:ring-danger-500 px-3 py-1.5; }
+  .btn-sm     { @apply px-3 py-1.5 text-xs rounded-lg; }
 
-  /* ── Table ────────────────────────────────────────────────────── */
+  /* ── Table ──────────────────────────────────────────────────── */
   .tbl-th {
     @apply px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide;
     color: var(--text-secondary);
@@ -162,20 +179,16 @@ body:not(.dark) .placeholder\:text-ink-400::placeholder { color: #64748b !import
     color: var(--text-secondary);
   }
 
-  /* ── Form inputs ──────────────────────────────────────────────── */
+  /* ── Form inputs ─────────────────────────────────────────────── */
   .input {
-    @apply w-full rounded-xl border px-4 py-2.5 text-sm placeholder:text-ink-400
-           focus:outline-none focus:ring-2;
+    @apply w-full rounded-xl border px-4 py-2.5 text-sm focus:outline-none focus:ring-2;
     background-color: var(--bg-surface);
     border-color: var(--border);
     color: var(--text-primary);
-    focus-within: border-brand-400;
   }
+  .input::placeholder { color: var(--text-muted); }
   .input:focus {
     border-color: #3b9ec2;
     box-shadow: 0 0 0 2px rgba(59,158,194,0.15);
-  }
-  .input::placeholder {
-    color: var(--text-muted);
   }
 }

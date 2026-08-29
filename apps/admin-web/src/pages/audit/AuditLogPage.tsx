@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuditLog } from '../../hooks/useAuditLog';
+import { useTheme } from '../../context/ThemeContext';
 import { downloadCsv } from '../../utils/csvExport';
 import { useToast } from '../../context/ToastContext';
 import { PageSkeleton, PageError, EmptyState, EmptyIcons } from '../../components/ui/PageStates';
@@ -7,21 +8,33 @@ import type { AuditEntry, AuditCategory } from '../../data/auditLogDummy';
 
 // ─── Category badge ───────────────────────────────────────────────────────────
 
-const CATEGORY_STYLES: Record<AuditCategory, { badge: string; dot: string }> = {
-  Reports:    { badge: 'bg-danger-100  text-danger-700  dark:bg-red-900/20    dark:text-red-400',    dot: 'bg-danger-500' },
-  Members:    { badge: 'bg-brand-100   text-brand-700   dark:bg-brand-900/30  dark:text-brand-300',  dot: 'bg-brand-500' },
-  Activities: { badge: 'bg-warning-100 text-warning-700 dark:bg-yellow-900/20 dark:text-yellow-400', dot: 'bg-warning-500' },
-  Appeals:    { badge: 'bg-purple-100  text-purple-700  dark:bg-purple-900/20 dark:text-purple-400', dot: 'bg-purple-500' },
-  Broadcasts: { badge: 'bg-sky-100     text-sky-700     dark:bg-sky-900/20    dark:text-sky-400',    dot: 'bg-sky-500' },
-  Sports:     { badge: 'bg-green-100   text-green-700   dark:bg-green-900/20  dark:text-green-400',  dot: 'bg-green-500' },
-  Settings:   { badge: 'bg-ink-100     text-ink-600     dark:bg-ink-700       dark:text-ink-300',    dot: 'bg-ink-400' },
+// Light/dark colors defined explicitly — Tailwind dark: variants on arbitrary
+// colors are not reliably generated, so we use inline style for dark mode.
+const CATEGORY_META: Record<AuditCategory, {
+  lightBg: string; lightText: string;
+  darkBg: string;  darkText: string;
+  dot: string;
+}> = {
+  Reports:    { lightBg: '#fee2e2', lightText: '#991b1b', darkBg: 'rgba(220,38,38,0.2)',   darkText: '#fca5a5', dot: '#ef4444' },
+  Members:    { lightBg: '#dbeafe', lightText: '#1e3a5f', darkBg: 'rgba(30,107,154,0.25)', darkText: '#93c5fd', dot: '#1e6b9a' },
+  Activities: { lightBg: '#fef3c7', lightText: '#92400e', darkBg: 'rgba(217,119,6,0.25)',  darkText: '#fcd34d', dot: '#f59e0b' },
+  Appeals:    { lightBg: '#f3e8ff', lightText: '#6b21a8', darkBg: 'rgba(168,85,247,0.2)',  darkText: '#d8b4fe', dot: '#a855f7' },
+  Broadcasts: { lightBg: '#e0f2fe', lightText: '#0369a1', darkBg: 'rgba(14,165,233,0.2)',  darkText: '#7dd3fc', dot: '#0ea5e9' },
+  Sports:     { lightBg: '#dcfce7', lightText: '#15803d', darkBg: 'rgba(34,197,94,0.2)',   darkText: '#86efac', dot: '#22c55e' },
+  Settings:   { lightBg: '#f1f5f9', lightText: '#475569', darkBg: 'rgba(71,85,105,0.3)',   darkText: '#cbd5e1', dot: '#94a3b8' },
 };
 
-function CategoryBadge({ category }: { category: AuditCategory }) {
-  const { badge, dot } = CATEGORY_STYLES[category];
+function CategoryBadge({ category, isDark }: { category: AuditCategory; isDark: boolean }) {
+  const m = CATEGORY_META[category];
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${badge}`}>
-      <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold"
+      style={{
+        backgroundColor: isDark ? m.darkBg : m.lightBg,
+        color: isDark ? m.darkText : m.lightText,
+      }}
+    >
+      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: m.dot }} />
       {category}
     </span>
   );
@@ -53,53 +66,82 @@ function actionVerb(action: string): string {
 
 // ─── Log row ──────────────────────────────────────────────────────────────────
 
-function LogRow({ entry, index }: { entry: AuditEntry; index: number }) {
+function LogRow({ entry, index, isDark }: { entry: AuditEntry; index: number; isDark: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const hasMetadata = entry.metadata && Object.keys(entry.metadata).length > 0;
+  const m = CATEGORY_META[entry.category];
+
+  // Action verb colors — distinct per action type
+  const verbColor: Record<string, string> = {
+    'report.resolve':  isDark ? '#4ade80' : '#15803d',
+    'report.dismiss':  isDark ? '#94a3b8' : '#475569',
+    'member.suspend':  isDark ? '#fca5a5' : '#991b1b',
+    'member.activate': isDark ? '#4ade80' : '#15803d',
+    'member.remove':   isDark ? '#f87171' : '#dc2626',
+    'activity.cancel': isDark ? '#fcd34d' : '#92400e',
+    'activity.flag':   isDark ? '#fcd34d' : '#92400e',
+    'activity.remove': isDark ? '#f87171' : '#dc2626',
+    'appeal.approve':  isDark ? '#4ade80' : '#15803d',
+    'appeal.reject':   isDark ? '#fca5a5' : '#991b1b',
+    'broadcast.send':  isDark ? '#7dd3fc' : '#0369a1',
+    'broadcast.delete':isDark ? '#94a3b8' : '#475569',
+    'sport.add':       isDark ? '#86efac' : '#15803d',
+    'sport.disable':   isDark ? '#94a3b8' : '#475569',
+    'sport.publish':   isDark ? '#93c5fd' : '#1e3a5f',
+    'settings.update': isDark ? '#cbd5e1' : '#334155',
+  };
 
   return (
     <div
-      className={`group cursor-pointer px-4 sm:px-6 py-3.5 transition-colors hover:bg-ink-50 dark:hover:bg-ink-800/60 ${
-        index % 2 === 0 ? '' : 'bg-ink-50/40 dark:bg-ink-900/20'
+      className={`group cursor-pointer px-4 sm:px-6 py-3.5 transition-colors hover:bg-ink-50 ${
+        index % 2 !== 0 ? 'bg-ink-50/40' : ''
       }`}
+      style={index % 2 !== 0 && isDark ? { backgroundColor: 'rgba(25,33,48,0.5)' } : undefined}
       onClick={() => hasMetadata && setExpanded((v) => !v)}
     >
       <div className="flex items-start gap-3">
         {/* Timeline dot */}
-        <div className="mt-1.5 flex shrink-0 flex-col items-center">
-          <div className={`h-2 w-2 rounded-full ${CATEGORY_STYLES[entry.category].dot}`} />
+        <div className="mt-2 shrink-0">
+          <div className="h-2 w-2 rounded-full" style={{ backgroundColor: m.dot }} />
         </div>
 
         {/* Main content */}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2 min-w-0">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-ink-400">
+              {/* Action verb — colored by action type */}
+              <span
+                className="text-[11px] font-bold uppercase tracking-wider"
+                style={{ color: verbColor[entry.action] ?? (isDark ? '#94a3b8' : '#475569') }}
+              >
                 {actionVerb(entry.action)}
               </span>
-              <CategoryBadge category={entry.category} />
-              <p className="text-sm font-medium text-ink-900 truncate max-w-[280px] sm:max-w-none">
+              <CategoryBadge category={entry.category} isDark={isDark} />
+              {/* Description — primary text, must be clearly readable */}
+              <p className="text-sm font-semibold text-ink-900 truncate max-w-[280px] sm:max-w-none">
                 {entry.description}
               </p>
             </div>
-            <time className="shrink-0 text-xs text-ink-400">
+            {/* Timestamp — use ink-500 level, not ink-400 */}
+            <time className="shrink-0 text-xs font-medium text-ink-500">
               {new Date(entry.createdAt).toLocaleString('en-US', {
                 month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
               })}
             </time>
           </div>
 
-          <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-ink-500">
+          {/* Sub-row: admin name + target */}
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-ink-600">
             <span className="flex items-center gap-1">
               <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
                 <circle cx="6" cy="4" r="2.5" /><path d="M1 11c0-2.76 2.24-4 5-4s5 1.24 5 4" />
               </svg>
               {entry.adminName}
             </span>
-            <span className="text-ink-300">·</span>
-            <span className="font-mono text-[11px] text-ink-400">{entry.targetLabel}</span>
+            <span className="text-ink-400">·</span>
+            <span className="font-mono text-[11px] text-ink-500">{entry.targetLabel}</span>
             {hasMetadata && (
-              <span className="text-ink-300 group-hover:text-brand-400 transition-colors">
+              <span className="text-ink-500 group-hover:text-brand-400 transition-colors ml-1">
                 {expanded ? '▲ less' : '▾ details'}
               </span>
             )}
@@ -107,12 +149,18 @@ function LogRow({ entry, index }: { entry: AuditEntry; index: number }) {
 
           {/* Expanded metadata */}
           {expanded && hasMetadata && (
-            <div className="mt-2 rounded-lg bg-ink-50 dark:bg-ink-700/40 border border-ink-100 dark:border-ink-700 px-3 py-2">
+            <div
+              className="mt-2 rounded-lg border px-3 py-2"
+              style={{
+                backgroundColor: isDark ? 'rgba(51,65,85,0.4)' : '#f8fafc',
+                borderColor: isDark ? '#334155' : '#e2e8f0',
+              }}
+            >
               <div className="flex flex-wrap gap-x-6 gap-y-1">
                 {Object.entries(entry.metadata!).map(([k, v]) => (
                   <span key={k} className="text-xs">
-                    <span className="font-semibold text-ink-500">{k}:</span>{' '}
-                    <span className="text-ink-700 dark:text-ink-300">{v}</span>
+                    <span className="font-semibold text-ink-600">{k}:</span>{' '}
+                    <span className="text-ink-800">{v}</span>
                   </span>
                 ))}
               </div>
@@ -132,6 +180,8 @@ const PAGE_SIZE = 10;
 export function AuditLogPage() {
   const { loading, error, entries } = useAuditLog();
   const { push: toast } = useToast();
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<AuditCategory | 'All'>('All');
   const [page, setPage] = useState(1);
@@ -257,7 +307,7 @@ export function AuditLogPage() {
             />
           ) : (
             <div className="divide-y divide-ink-100 dark:divide-ink-700">
-              {paginated.map((e, i) => <LogRow key={e.id} entry={e} index={i} />)}
+              {paginated.map((e, i) => <LogRow key={e.id} entry={e} index={i} isDark={isDark} />)}
             </div>
           )}
 
@@ -305,7 +355,7 @@ export function AuditLogPage() {
             <div className="space-y-3">
               {breakdown.map(({ category, count }) => {
                 const pct = entries.length ? Math.round((count / entries.length) * 100) : 0;
-                const { dot } = CATEGORY_STYLES[category];
+                const m = CATEGORY_META[category];
                 return (
                   <button
                     key={category}
@@ -314,13 +364,13 @@ export function AuditLogPage() {
                   >
                     <div className="flex items-center justify-between text-xs mb-1">
                       <span className="flex items-center gap-1.5 font-medium text-ink-700">
-                        <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
+                        <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: m.dot }} />
                         {category}
                       </span>
-                      <span className="text-ink-400">{count}</span>
+                      <span className="text-ink-500">{count}</span>
                     </div>
                     <div className="h-1.5 w-full overflow-hidden rounded-full bg-ink-100 dark:bg-ink-700">
-                      <div className={`h-full rounded-full ${dot}`} style={{ width: `${pct}%` }} />
+                      <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: m.dot }} />
                     </div>
                   </button>
                 );
@@ -334,10 +384,10 @@ export function AuditLogPage() {
             <div className="space-y-2">
               {entries.slice(0, 5).map((e) => (
                 <div key={e.id} className="flex items-start gap-2">
-                  <div className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${CATEGORY_STYLES[e.category].dot}`} />
+                  <div className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: CATEGORY_META[e.category].dot }} />
                   <div className="min-w-0">
-                    <p className="text-xs text-ink-700 dark:text-ink-300 truncate">{e.description}</p>
-                    <p className="text-[10px] text-ink-400">
+                    <p className="text-xs text-ink-700 truncate">{e.description}</p>
+                    <p className="text-[10px] text-ink-500">
                       {new Date(e.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                     </p>
                   </div>
