@@ -12,6 +12,12 @@ export type ActivityParticipantRecord = {
   joinedAt: FirebaseFirestore.Timestamp;
 };
 
+export type LeaveActivityInput = {
+  activityId: string;
+  targetUid: string;
+  actorUid: string;
+};
+
 export type ActivityParticipantWithId = ActivityParticipantRecord & {
   participantId: string;
 };
@@ -135,23 +141,27 @@ export async function getParticipants(
 }
 
 export async function leaveActivity(
-  activityId: string,
-  uid: string,
+  input: LeaveActivityInput,
 ): Promise<void> {
-  const normalizedActivityId = activityId.trim();
-  const normalizedUid = uid.trim();
+  const normalizedActivityId = input.activityId.trim();
+  const normalizedTargetUid = input.targetUid.trim();
+  const normalizedActorUid = input.actorUid.trim();
 
   if (!normalizedActivityId) {
     throw new Error('activityId is required');
   }
 
-  if (!normalizedUid) {
-    throw new Error('uid is required');
+  if (!normalizedTargetUid) {
+    throw new Error('targetUid is required');
+  }
+
+  if (!normalizedActorUid) {
+    throw new Error('actorUid is required');
   }
 
   const activityRef = firestore.doc(activityDocPath(normalizedActivityId));
   const participantRef = firestore.doc(
-    activityParticipantDocPath(normalizedActivityId, normalizedUid),
+    activityParticipantDocPath(normalizedActivityId, normalizedTargetUid),
   );
 
   await firestore.runTransaction(async (transaction) => {
@@ -181,6 +191,17 @@ export async function leaveActivity(
 
     if (typeof activityData.status !== 'string') {
       throw new Error('Invalid activity record: status must be a string');
+    }
+
+    if(typeof activityData.hostId !== 'string'){
+      throw new Error('Invalid activity record: hostId must be a string');
+    }
+
+    const isSelfRemoval = normalizedActorUid === normalizedTargetUid;
+    const isHostRemoval = activityData.hostId === normalizedActorUid;
+
+    if(!isSelfRemoval && !isHostRemoval){
+      throw new Error('Only the participant or activity host can remove this participant');
     }
 
     const participantSnap = await transaction.get(participantRef);

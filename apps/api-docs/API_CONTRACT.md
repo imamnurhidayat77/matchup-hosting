@@ -425,6 +425,186 @@ Errors:
 - `400 INVALID_INPUT` if `capacity` is not a positive integer
 - `400 EMPTY_INPUT` if required string fields are blank
 
+### `GET /api/activities`
+
+Lists activities for discovery/feed views.
+
+Query parameters:
+
+```text
+status=open
+sportType=futsal
+skillLevel=any
+limit=20
+```
+
+Defaults:
+
+- `status` defaults to `open`
+- `limit` defaults to `20`
+
+Limits:
+
+- `limit` must be an integer between `1` and `50`
+
+Allowed `status` values:
+
+- `open`
+- `full`
+- `cancelled`
+- `completed`
+- `removed`
+
+Allowed `skillLevel` values:
+
+- `beginner`
+- `intermediate`
+- `advanced`
+- `any`
+
+Success `200`:
+
+```json
+{
+  "ok": true,
+  "data": [
+    {
+      "activityId": "generated-activity-id",
+      "hostId": "firebase-auth-uid",
+      "title": "Evening Futsal",
+      "sportType": "futsal",
+      "description": "Casual 5v5 session",
+      "locationName": "Auckland Domain",
+      "geohash": "rckq2m",
+      "startTime": "2026-08-20T18:30:00+12:00",
+      "skillLevel": "any",
+      "capacity": 10,
+      "participantCount": 0,
+      "status": "open",
+      "createdAt": {
+        "_seconds": 0,
+        "_nanoseconds": 0
+      },
+      "updatedAt": {
+        "_seconds": 0,
+        "_nanoseconds": 0
+      }
+    }
+  ]
+}
+```
+
+Errors:
+
+- `400 INVALID_INPUT` if `status` is invalid
+- `400 INVALID_INPUT` if `skillLevel` is invalid
+- `400 INVALID_INPUT` if `sportType` is not a string
+- `400 INVALID_INPUT` if `limit` is not an integer between `1` and `50`
+- `400 EMPTY_INPUT` if `sportType` is blank when provided
+
+### `PATCH /api/activities/:activityId`
+
+Updates editable activity details. Only the activity host can update an activity.
+
+Request body:
+
+```json
+{
+  "title": "Updated Futsal",
+  "sportType": "futsal",
+  "description": "Updated activity description",
+  "locationName": "Auckland Domain",
+  "address": "Optional updated address",
+  "geohash": "rckq2m",
+  "startTime": "2026-08-20T18:30:00+12:00",
+  "endTime": "2026-08-20T20:00:00+12:00",
+  "skillLevel": "intermediate",
+  "capacity": 12,
+  "coverImageUrl": "https://example.com/updated-cover.jpg"
+}
+```
+
+Authentication:
+
+- Requires `Authorization: Bearer <firebase-id-token>`
+- The authenticated user must be the activity host
+
+Notes:
+
+- All request body fields are optional.
+- `status` is not updated through this endpoint. Use `PATCH /api/activities/:activityId/status`.
+
+Success `200`:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "activityId": "generated-activity-id"
+  }
+}
+```
+
+Errors:
+
+- `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
+- `400 INVALID_INPUT` if an updated string field is not a string
+- `400 INVALID_INPUT` if `skillLevel` is invalid
+- `400 INVALID_INPUT` if `capacity` is not a positive integer
+- `400 EMPTY_INPUT` if `activityId` is blank
+- `400 EMPTY_INPUT` if an updated string field is blank
+- `403 FORBIDDEN` if the authenticated user is not the activity host
+- `404 NOT_FOUND` if activity does not exist
+
+### `PATCH /api/activities/:activityId/status`
+
+Updates an activity status. Only the activity host can update status.
+
+Request body:
+
+```json
+{
+  "status": "cancelled"
+}
+```
+
+Authentication:
+
+- Requires `Authorization: Bearer <firebase-id-token>`
+- The authenticated user must be the activity host
+
+Allowed `status` values:
+
+- `open`
+- `cancelled`
+- `completed`
+- `removed`
+
+Note:
+
+- `full` is not manually set through this endpoint. It should be derived from capacity and participant count.
+
+Success `200`:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "activityId": "generated-activity-id",
+    "status": "cancelled"
+  }
+}
+```
+
+Errors:
+
+- `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
+- `400 INVALID_INPUT` if `status` is not a string
+- `400 INVALID_INPUT` if `status` is not `open`, `cancelled`, `completed`, or `removed`
+- `400 EMPTY_INPUT` if `activityId` or `status` are blank
+- `403 FORBIDDEN` if the authenticated user is not the activity host
+- `404 NOT_FOUND` if activity does not exist
+
 ### `GET /api/activities/:activityId`
 
 Gets one activity by id.
@@ -540,7 +720,8 @@ Removes a participant from an activity.
 Authentication:
 
 - Requires `Authorization: Bearer <firebase-id-token>`
-- Current behavior only allows a user to remove themselves
+- The authenticated user can remove themselves
+- The activity host can remove any participant from their own activity
 
 Success `200`:
 
@@ -558,7 +739,7 @@ Errors:
 
 - `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
 - `400 EMPTY_INPUT` if `activityId` is blank
-- `403 FORBIDDEN` if the authenticated user tries to remove another participant
+- `403 FORBIDDEN` if the authenticated user is neither the target participant nor the activity host
 - `404 NOT_FOUND` if activity does not exist
 - `404 NOT_FOUND` if participant does not exist
 

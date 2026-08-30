@@ -140,17 +140,11 @@ export async function leaveActivityHandler(req: Request<LeaveActivityParams>, re
             });
         }
 
-        if (authUid !== uid){
-            return res.status(403).json({
-                ok: false,
-                error:{
-                    code: 'FORBIDDEN',
-                    message: 'You can only leave an activity for yourself'
-                }
-            })
-        }
-
-        await leaveActivity(activityId, uid);
+        await leaveActivity({
+            activityId,
+            targetUid: uid,
+            actorUid: authUid,
+        });
 
         return res.status(200).json({
             ok: true,
@@ -167,6 +161,16 @@ export async function leaveActivityHandler(req: Request<LeaveActivityParams>, re
                 ok: false,
                 error: {
                     code: 'NOT_FOUND',
+                    message,
+                },
+            });
+        }
+
+        if (message === 'Only the participant or activity host can remove this participant') {
+            return res.status(403).json({
+                ok: false,
+                error: {
+                    code: 'FORBIDDEN',
                     message,
                 },
             });
