@@ -6,7 +6,8 @@
 .vscode/
 *.swp
 *.swo
-*.codebase-memory
+.claude/
+.codebase-memory/
 
 # Logs
 *.log
@@ -64,3 +65,6 @@ coverage/
 # Backend Project Folder
 dev-docs/
 apps/api-server/src/modules/auth-dev-only/
+# Kiro (local only, not committed)
+.kiro/
+figma-cli.ts
