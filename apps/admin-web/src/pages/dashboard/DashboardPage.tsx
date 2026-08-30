@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useDashboard } from '../../hooks/useDashboard';
 import { downloadCsv } from '../../utils/csvExport';
+import { useTheme } from '../../context/ThemeContext';
 import type { KpiData, ModerationItem, ActivityRow, TrendPoint } from '../../types/dashboard';
 
 function exportCsv(activities: ActivityRow[]) {
@@ -126,6 +127,8 @@ function KpiCard({ kpi }: { kpi: KpiData }) {
 // ─── Trend chart (responsive SVG) ────────────────────────────────────────────
 
 function TrendChart({ trend }: { trend: TrendPoint[] }) {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
   if (!trend.length) return null;
 
   const maxVal = Math.max(...trend.flatMap((t) => [t.activities, t.signups]));
@@ -152,7 +155,7 @@ function TrendChart({ trend }: { trend: TrendPoint[] }) {
       {/* Grid lines */}
       {[0, 0.25, 0.5, 0.75, 1].map((t) => {
         const y = pad.top + chartH * (1 - t);
-        return <line key={t} x1={pad.left} y1={y} x2={W - pad.right} y2={y} stroke="#e2e8f0" strokeWidth="1" />;
+        return <line key={t} x1={pad.left} y1={y} x2={W - pad.right} y2={y} stroke={isDark ? '#334155' : '#e2e8f0'} strokeWidth="1" />;
       })}
 
       {/* Signup bars (sky) */}
@@ -169,7 +172,7 @@ function TrendChart({ trend }: { trend: TrendPoint[] }) {
 
       {/* Dots */}
       {trend.map((pt, i) => (
-        <circle key={i} cx={xOf(i)} cy={yOf(pt.activities)} r="4" fill="#fff" stroke="#0b1f8a" strokeWidth="2" />
+        <circle key={i} cx={xOf(i)} cy={yOf(pt.activities)} r="4" fill={isDark ? '#1e293b' : '#fff'} stroke="#0b1f8a" strokeWidth="2" />
       ))}
 
       {/* X labels */}

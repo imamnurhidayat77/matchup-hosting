@@ -4,6 +4,7 @@ import { useActivities } from '../../hooks/useActivities';
 import { ActivitiesPageSkeleton, PageError, EmptyState, EmptyIcons } from '../../components/ui/PageStates';
 import { downloadCsv } from '../../utils/csvExport';
 import { useToast } from '../../context/ToastContext';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import type { ActivityStatus } from '../../data/activitiesDummy';
 
 const PAGE_SIZE = 10;
@@ -72,6 +73,7 @@ export function ActivitiesPage() {
   const [dateRange, setDateRange] = useState<DateRange>('All');
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const [confirm, setConfirm] = useState<{ type: 'cancel' | 'remove'; id: string; name: string } | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -279,8 +281,8 @@ export function ActivitiesPage() {
                       {menuOpenId === a.id && (
                         <div className="absolute right-0 z-10 mt-1 w-44 rounded-xl border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-800 py-1 shadow-panel">
                           {a.status !== 'Flagged'   && <button className="w-full px-4 py-2 text-left text-sm text-warning-600 hover:bg-ink-50 dark:hover:bg-ink-700" onClick={() => { handleStatusChange(a.id, 'Flagged');   toast('Activity flagged.', 'warning'); setMenuOpenId(null); }}>Flag</button>}
-                          {a.status !== 'Cancelled' && <button className="w-full px-4 py-2 text-left text-sm text-danger-500 hover:bg-ink-50 dark:hover:bg-ink-700"  onClick={() => { handleStatusChange(a.id, 'Cancelled'); toast('Activity cancelled.', 'info'); setMenuOpenId(null); }}>Cancel Activity</button>}
-                          <button className="w-full px-4 py-2 text-left text-sm text-danger-700 hover:bg-ink-50 dark:hover:bg-ink-700" onClick={() => { handleDelete(a.id); toast('Activity removed.', 'info'); setMenuOpenId(null); }}>Remove</button>
+                          {a.status !== 'Cancelled' && <button className="w-full px-4 py-2 text-left text-sm text-danger-500 hover:bg-ink-50 dark:hover:bg-ink-700"  onClick={() => { setConfirm({ type: 'cancel', id: a.id, name: a.name }); setMenuOpenId(null); }}>Cancel Activity</button>}
+                          <button className="w-full px-4 py-2 text-left text-sm text-danger-700 hover:bg-ink-50 dark:hover:bg-ink-700" onClick={() => { setConfirm({ type: 'remove', id: a.id, name: a.name }); setMenuOpenId(null); }}>Remove</button>
                         </div>
                       )}
                     </div>
@@ -337,6 +339,26 @@ export function ActivitiesPage() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={!!confirm}
+        title={confirm?.type === 'cancel' ? `Cancel ${confirm?.name}?` : `Remove ${confirm?.name}?`}
+        description={confirm?.type === 'cancel' ? 'Participants will be notified that this activity has been cancelled.' : 'This action cannot be undone. The activity will be permanently removed.'}
+        confirmLabel={confirm?.type === 'cancel' ? 'Cancel Activity' : 'Remove'}
+        destructive
+        onConfirm={() => {
+          if (!confirm) return;
+          if (confirm.type === 'cancel') {
+            handleStatusChange(confirm.id, 'Cancelled');
+            toast('Activity cancelled.', 'info');
+          } else {
+            handleDelete(confirm.id);
+            toast('Activity removed.', 'info');
+          }
+          setConfirm(null);
+        }}
+        onCancel={() => setConfirm(null)}
+      />
     </div>
   );
 }
