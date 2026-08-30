@@ -17,6 +17,7 @@ Current implemented domains:
 - activity participants
 - swipes
 - notifications
+- devices
 
 ## Base URL
 
@@ -785,6 +786,122 @@ Errors:
 - `400 EMPTY_INPUT` if `uid` or `notificationId` are blank
 - `403 FORBIDDEN` if the authenticated user tries to update another user's notification
 - `404 NOT_FOUND` if notification does not exist
+
+---
+
+## Devices
+
+### `POST /api/devices`
+
+Registers or updates a device for the authenticated user.
+
+Request body:
+
+```json
+{
+  "deviceId": "device-1",
+  "fcmToken": "firebase-cloud-messaging-token",
+  "platform": "android"
+}
+```
+
+Authentication:
+
+- Requires `Authorization: Bearer <firebase-id-token>`
+- `uid` is derived from the verified Firebase Auth user
+
+Allowed `platform` values:
+
+- `ios`
+- `android`
+- `web`
+
+Success `200`:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "uid": "firebase-auth-uid",
+    "deviceId": "device-1",
+    "platform": "android"
+  }
+}
+```
+
+Errors:
+
+- `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
+- `400 INVALID_INPUT` if `deviceId`, `fcmToken`, or `platform` are not strings
+- `400 INVALID_INPUT` if `platform` is invalid
+- `400 EMPTY_INPUT` if `deviceId` or `fcmToken` are blank
+
+### `GET /api/devices/:uid`
+
+Lists registered devices for one user.
+
+Authentication:
+
+- Requires `Authorization: Bearer <firebase-id-token>`
+- The authenticated user can only access their own devices
+
+Success `200`:
+
+```json
+{
+  "ok": true,
+  "data": [
+    {
+      "deviceId": "device-1",
+      "uid": "firebase-auth-uid",
+      "fcmToken": "firebase-cloud-messaging-token",
+      "platform": "android",
+      "createdAt": {
+        "_seconds": 0,
+        "_nanoseconds": 0
+      },
+      "updatedAt": {
+        "_seconds": 0,
+        "_nanoseconds": 0
+      }
+    }
+  ]
+}
+```
+
+Errors:
+
+- `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
+- `400 EMPTY_INPUT` if `uid` is blank
+- `403 FORBIDDEN` if the authenticated user tries to access another user's devices
+
+### `DELETE /api/devices/:uid/:deviceId`
+
+Deletes one registered device.
+
+Authentication:
+
+- Requires `Authorization: Bearer <firebase-id-token>`
+- The authenticated user can only delete their own devices
+
+Success `200`:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "uid": "firebase-auth-uid",
+    "deviceId": "device-1"
+  }
+}
+```
+
+Errors:
+
+- `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
+- `400 EMPTY_INPUT` if `uid` or `deviceId` are blank
+- `403 FORBIDDEN` if the authenticated user tries to delete another user's device
+- `404 NOT_FOUND` if device does not exist
 
 ---
 
