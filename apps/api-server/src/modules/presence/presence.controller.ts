@@ -7,17 +7,17 @@ type GetPresenceParams = {
 
 export async function setPresenceHandler(req: Request, res: Response) {
     try {
-        const {uid, state} = req.body as {
-            uid?: string;
+        const uid = req.auth?.uid;
+        const { state } = req.body as {
             state?: unknown;
         };
 
-        if (typeof uid !== 'string'){
-            return res.status(400).json({
+        if (!uid) {
+            return res.status(401).json({
                 ok: false,
                 error: {
-                    code: 'INVALID_INPUT',
-                    message: 'uid must be a string',
+                    code: 'UNAUTHORIZED',
+                    message: 'Authenticated user is required',
                 },
             });
         }
@@ -31,23 +31,12 @@ export async function setPresenceHandler(req: Request, res: Response) {
                 },
             });
         }
-
-        if (!uid.trim()){
-            return res.status(400).json({
-                ok: false,
-                error: {
-                    code: 'EMPTY_INPUT',
-                    message: 'uid is required',
-                },
-            });
-        }
-
         await setPresence(uid, state);
 
         return res.status(200).json({
             ok: true,
             data: {
-                uid: uid.trim(),
+                uid,
                 state,
             },
         });

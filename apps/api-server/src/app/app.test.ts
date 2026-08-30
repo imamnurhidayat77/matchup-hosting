@@ -13,7 +13,7 @@ describe('createApp', () => {
   it('returns healthy response from GET /health', async () => {
     const app = createApp();
 
-    const response = await request(app).get('/health');
+    const response = await request(app).get('/api/health');
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({
@@ -32,7 +32,7 @@ describe('createApp', () => {
 
     const app = createApp();
 
-    const response = await request(app).get('/health');
+    const response = await request(app).get('/api/health');
 
     expect(response.status).toBe(503);
     expect(response.body).toEqual({

@@ -8,6 +8,8 @@ import { presenceRouter } from '../modules/presence/presence.routes.js';
 import { typingRouter } from '../modules/typing/typing.routes.js';
 import { chatRouter } from '../modules/chat/chat.routes.js';
 import { activitiesRouter } from '../modules/activities/activities.routes.js';
+import { swipesRouter } from '../modules/swipes/swipes.routes.js';
+import { notificationsRouter } from '../modules/notifications/notifications.routes.js';
 
 export function createApp(){
     const app = express();
@@ -17,7 +19,7 @@ export function createApp(){
     app.use(morgan('dev'));
     app.use(express.json());
 
-    app.get("/health", async (_req, res) =>{
+    app.get('/api/health', async (_req, res) =>{
         try {
             await checkFirestoreConnection();
             res.json({
@@ -39,11 +41,13 @@ export function createApp(){
         }
     })
 
-    app.use("/users", usersRouter);
-    app.use("/presence", presenceRouter);
-    app.use('/typing', typingRouter);
-    app.use('/chat', chatRouter);
-    app.use('/activities', activitiesRouter);
+    app.use('/api/users', usersRouter);
+    app.use('/api/presence', presenceRouter);
+    app.use('/api/typing', typingRouter);
+    app.use('/api/chat', chatRouter);
+    app.use('/api/activities', activitiesRouter);
+    app.use('/api/swipes', swipesRouter);
+    app.use('/api/notifications', notificationsRouter);
 
     return app;
 }

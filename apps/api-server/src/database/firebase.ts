@@ -1,4 +1,5 @@
 import { cert, getApp, getApps, initializeApp } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 import { getDatabase } from 'firebase-admin/database';
 import { getFirestore } from 'firebase-admin/firestore';
 import { env } from '../config/env.js';
@@ -27,6 +28,7 @@ function createFirebaseApp() {
 
 const firebaseApp = createFirebaseApp();
 
+export const auth = getAuth(firebaseApp);
 export const firestore = getFirestore(firebaseApp);
 export const rtdb = getDatabase(firebaseApp);
 

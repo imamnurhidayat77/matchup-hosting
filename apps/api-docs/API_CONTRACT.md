@@ -1,0 +1,796 @@
+# MatchUp API Contract
+
+Last updated: Sunday, August 30, 2026 (NZ local time)
+
+## Scope
+
+This document describes the current backend HTTP contract for the `apps/api-server` service. As the development progressing, this document is in effect of change.
+
+Current implemented domains:
+
+- health
+- users
+- presence
+- typing
+- chat
+- activities
+- activity participants
+- swipes
+- notifications
+
+## Base URL
+
+Intended API base path:
+
+```text
+/api
+```
+
+Examples:
+
+```text
+GET /api/health
+POST /api/users
+GET /api/activities/:activityId
+```
+
+## Response Envelope
+
+Successful responses:
+
+```json
+{
+  "ok": true,
+  "data": {}
+}
+```
+
+Error responses:
+
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "Human readable message"
+  }
+}
+```
+
+## Common Error Codes
+
+- `INVALID_INPUT`
+- `EMPTY_INPUT`
+- `NOT_FOUND`
+- `CONFLICT`
+- `INTERNAL_ERROR`
+- `DB_UNAVAILABLE`
+- `INVALID_STATE`
+- `UNAUTHORIZED`
+- `FORBIDDEN`
+
+---
+
+## Health
+
+### `GET /api/health`
+
+Checks whether the API server is alive and Firestore is reachable.
+
+Success `200`:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "status": "ok",
+    "service": "api-server",
+    "database": "connected"
+  }
+}
+```
+
+Failure `503`:
+
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "DB_UNAVAILABLE",
+    "message": "Firestore unreachable"
+  }
+}
+```
+
+---
+
+## Users
+
+### `POST /api/users`
+
+Creates a user document.
+
+Request body:
+
+```json
+{
+  "authUid": "firebase-auth-uid",
+  "email": "user@example.com"
+}
+```
+
+Success `201`:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "authUid": "firebase-auth-uid",
+    "email": "user@example.com"
+  }
+}
+```
+
+Errors:
+
+- `400 INVALID_INPUT` if `authUid` or `email` are not strings
+- `400 EMPTY_INPUT` if `authUid` or `email` are blank
+- `409 CONFLICT` if user already exists
+- `409 CONFLICT` if email already in use
+
+### `GET /api/users/:authUid`
+
+Gets a user by Firebase Auth UID.
+
+Success `200`:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "authUid": "firebase-auth-uid",
+    "email": "user@example.com",
+    "createdAt": {
+      "_seconds": 0,
+      "_nanoseconds": 0
+    }
+  }
+}
+```
+
+Errors:
+
+- `400 INVALID_INPUT` if `authUid` is missing
+- `404 NOT_FOUND` if user does not exist
+
+---
+
+## Presence
+
+### `POST /api/presence`
+
+Sets user presence.
+
+Request body:
+
+```json
+{
+  "state": "online"
+}
+```
+
+Authentication:
+
+- Requires `Authorization: Bearer <firebase-id-token>`
+- `uid` is derived from the verified Firebase Auth user
+
+Allowed `state` values:
+
+- `online`
+- `offline`
+
+Success `200`:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "uid": "firebase-auth-uid",
+    "state": "online"
+  }
+}
+```
+
+Errors:
+
+- `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
+- `400 INVALID_STATE` if `state` is not `online` or `offline`
+
+### `GET /api/presence/:uid`
+
+Gets presence for one user.
+
+Success `200`:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "state": "online",
+    "lastChanged": 1787000000000
+  }
+}
+```
+
+Errors:
+
+- `400 EMPTY_INPUT` if `uid` is blank
+- `404 NOT_FOUND` if presence record does not exist
+
+---
+
+## Typing
+
+### `POST /api/typing`
+
+Sets typing status for a user in an activity.
+
+Request body:
+
+```json
+{
+  "activityId": "activity-id",
+  "isTyping": true
+}
+```
+
+Authentication:
+
+- Requires `Authorization: Bearer <firebase-id-token>`
+- `uid` is derived from the verified Firebase Auth user
+
+Success `200`:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "activityId": "activity-id",
+    "uid": "firebase-auth-uid",
+    "isTyping": true
+  }
+}
+```
+
+Errors:
+
+- `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
+- `400 INVALID_INPUT` if `activityId` is not a string
+- `400 INVALID_INPUT` if `isTyping` is not a boolean
+- `400 EMPTY_INPUT` if `activityId` is blank
+
+### `GET /api/typing/:activityId/:uid`
+
+Gets typing status for one user in one activity.
+
+Success `200`:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "isTyping": true,
+    "updatedAt": 1787000000000
+  }
+}
+```
+
+Errors:
+
+- `400 EMPTY_INPUT` if `activityId` is blank
+- `400 EMPTY_INPUT` if `uid` is blank
+- `404 NOT_FOUND` if typing status does not exist
+
+---
+
+## Chat
+
+### `POST /api/chat/messages`
+
+Creates a chat message in an activity chat room.
+
+Request body:
+
+```json
+{
+  "activityId": "activity-id",
+  "text": "Hello",
+  "type": "text"
+}
+```
+
+Authentication:
+
+- Requires `Authorization: Bearer <firebase-id-token>`
+- `senderId` is derived from the verified Firebase Auth user
+
+Allowed `type` values:
+
+- `text`
+- `system`
+
+Default `type`:
+
+- `text`
+
+Success `201`:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "messageId": "generated-message-id"
+  }
+}
+```
+
+Errors:
+
+- `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
+- `400 INVALID_INPUT` if `activityId` or `text` are not strings
+- `400 INVALID_INPUT` if `type` is invalid
+- `400 EMPTY_INPUT` if `activityId` or `text` are blank
+
+### `GET /api/chat/:activityId/messages`
+
+Lists chat messages for one activity.
+
+Success `200`:
+
+```json
+{
+  "ok": true,
+  "data": [
+    {
+      "messageId": "generated-message-id",
+      "senderId": "firebase-auth-uid",
+      "text": "Hello",
+      "type": "text",
+      "timestamp": 1787000000000
+    }
+  ]
+}
+```
+
+Errors:
+
+- `400 EMPTY_INPUT` if `activityId` is blank
+
+---
+
+## Activities
+
+### `POST /api/activities`
+
+Creates an activity.
+
+Request body:
+
+```json
+{
+  "title": "Evening Futsal",
+  "sportType": "futsal",
+  "description": "Casual 5v5 session",
+  "locationName": "Auckland Domain",
+  "address": "Optional address",
+  "geohash": "rckq2m",
+  "startTime": "2026-08-20T18:30:00+12:00",
+  "endTime": "2026-08-20T20:00:00+12:00",
+  "skillLevel": "any",
+  "capacity": 10,
+  "coverImageUrl": "https://example.com/cover.jpg"
+}
+```
+
+Authentication:
+
+- Requires `Authorization: Bearer <firebase-id-token>`
+- `hostId` is derived from the verified Firebase Auth user
+
+Allowed `skillLevel` values:
+
+- `beginner`
+- `intermediate`
+- `advanced`
+- `any`
+
+Success `201`:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "activityId": "generated-activity-id"
+  }
+}
+```
+
+Errors:
+
+- `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
+- `400 INVALID_INPUT` if required string fields are not strings
+- `400 INVALID_INPUT` if optional string fields are provided with wrong type
+- `400 INVALID_INPUT` if `skillLevel` is invalid
+- `400 INVALID_INPUT` if `capacity` is not a positive integer
+- `400 EMPTY_INPUT` if required string fields are blank
+
+### `GET /api/activities/:activityId`
+
+Gets one activity by id.
+
+Success `200`:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "activityId": "generated-activity-id",
+    "hostId": "firebase-auth-uid",
+    "title": "Evening Futsal",
+    "sportType": "futsal",
+    "description": "Casual 5v5 session",
+    "locationName": "Auckland Domain",
+    "address": "Optional address",
+    "geohash": "rckq2m",
+    "startTime": "2026-08-20T18:30:00+12:00",
+    "endTime": "2026-08-20T20:00:00+12:00",
+    "skillLevel": "any",
+    "capacity": 10,
+    "participantCount": 0,
+    "status": "open",
+    "coverImageUrl": "https://example.com/cover.jpg",
+    "createdAt": {
+      "_seconds": 0,
+      "_nanoseconds": 0
+    },
+    "updatedAt": {
+      "_seconds": 0,
+      "_nanoseconds": 0
+    }
+  }
+}
+```
+
+Errors:
+
+- `400 EMPTY_INPUT` if `activityId` is blank
+- `404 NOT_FOUND` if activity does not exist
+
+---
+
+## Activity Participants
+
+### `POST /api/activities/:activityId/participants`
+
+Joins a user to an activity.
+
+Request body:
+
+```json
+{}
+```
+
+Authentication:
+
+- Requires `Authorization: Bearer <firebase-id-token>`
+- `uid` is derived from the verified Firebase Auth user
+
+Success `200`:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "activityId": "generated-activity-id",
+    "uid": "firebase-auth-uid"
+  }
+}
+```
+
+Errors:
+
+- `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
+- `400 EMPTY_INPUT` if `activityId` is blank
+- `404 NOT_FOUND` if activity does not exist
+- `409 CONFLICT` if activity is not open
+- `409 CONFLICT` if activity is full
+- `409 CONFLICT` if user already joined
+
+### `GET /api/activities/:activityId/participants`
+
+Lists participants for an activity.
+
+Success `200`:
+
+```json
+{
+  "ok": true,
+  "data": [
+    {
+      "participantId": "firebase-auth-uid",
+      "uid": "firebase-auth-uid",
+      "joinedAt": {
+        "_seconds": 0,
+        "_nanoseconds": 0
+      }
+    }
+  ]
+}
+```
+
+Errors:
+
+- `400 EMPTY_INPUT` if `activityId` is blank
+
+### `DELETE /api/activities/:activityId/participants/:uid`
+
+Removes a participant from an activity.
+
+Authentication:
+
+- Requires `Authorization: Bearer <firebase-id-token>`
+- Current behavior only allows a user to remove themselves
+
+Success `200`:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "activityId": "generated-activity-id",
+    "uid": "firebase-auth-uid"
+  }
+}
+```
+
+Errors:
+
+- `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
+- `400 EMPTY_INPUT` if `activityId` is blank
+- `403 FORBIDDEN` if the authenticated user tries to remove another participant
+- `404 NOT_FOUND` if activity does not exist
+- `404 NOT_FOUND` if participant does not exist
+
+---
+
+## Swipes
+
+### `POST /api/swipes`
+
+Creates or updates a swipe decision for a user on an activity.
+
+Request body:
+
+```json
+{
+  "activityId": "generated-activity-id",
+  "decision": "join"
+}
+```
+
+Authentication:
+
+- Requires `Authorization: Bearer <firebase-id-token>`
+- `uid` is derived from the verified Firebase Auth user
+
+Allowed `decision` values:
+
+- `pass`
+- `join`
+
+Success `200`:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "uid": "firebase-auth-uid",
+    "activityId": "generated-activity-id",
+    "decision": "join"
+  }
+}
+```
+
+Errors:
+
+- `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
+- `400 INVALID_INPUT` if `activityId` is not a string
+- `400 INVALID_INPUT` if `decision` is invalid
+- `400 EMPTY_INPUT` if `activityId` is blank
+- `404 NOT_FOUND` if activity does not exist
+
+### `GET /api/swipes/:uid`
+
+Lists swipe decisions for a user.
+
+Success `200`:
+
+```json
+{
+  "ok": true,
+  "data": [
+    {
+      "swipeId": "generated-activity-id",
+      "uid": "firebase-auth-uid",
+      "activityId": "generated-activity-id",
+      "decision": "join",
+      "createdAt": {
+        "_seconds": 0,
+        "_nanoseconds": 0
+      },
+      "updatedAt": {
+        "_seconds": 0,
+        "_nanoseconds": 0
+      }
+    }
+  ]
+}
+```
+
+Errors:
+
+- `400 EMPTY_INPUT` if `uid` is blank
+
+### `GET /api/swipes/:uid/:activityId`
+
+Gets one swipe decision for a user and activity.
+
+Success `200`:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "swipeId": "generated-activity-id",
+    "uid": "firebase-auth-uid",
+    "activityId": "generated-activity-id",
+    "decision": "join",
+    "createdAt": {
+      "_seconds": 0,
+      "_nanoseconds": 0
+    },
+    "updatedAt": {
+      "_seconds": 0,
+      "_nanoseconds": 0
+    }
+  }
+}
+```
+
+Errors:
+
+- `400 EMPTY_INPUT` if `uid` or `activityId` are blank
+- `404 NOT_FOUND` if swipe decision does not exist
+
+---
+
+## Notifications
+
+### `POST /api/notifications`
+
+Creates a notification for a target user.
+
+Request body:
+
+```json
+{
+  "recipientUid": "firebase-auth-uid",
+  "type": "activity_joined",
+  "title": "New participant",
+  "body": "A user joined your activity",
+  "activityId": "generated-activity-id",
+  "senderUid": "firebase-auth-uid"
+}
+```
+
+Allowed `type` values:
+
+- `activity_reminder`
+- `activity_joined`
+- `chat_message`
+- `system`
+
+Success `201`:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "notificationId": "generated-notification-id"
+  }
+}
+```
+
+Errors:
+
+- `400 INVALID_INPUT` if `recipientUid`, `type`, `title`, or `body` are not strings
+- `400 INVALID_INPUT` if `activityId` or `senderUid` are provided with the wrong type
+- `400 INVALID_INPUT` if `type` is invalid
+- `400 EMPTY_INPUT` if `recipientUid`, `title`, or `body` are blank
+
+### `GET /api/notifications/:uid`
+
+Lists notifications for one user.
+
+Authentication:
+
+- Requires `Authorization: Bearer <firebase-id-token>`
+- The authenticated user can only access their own notifications
+
+Success `200`:
+
+```json
+{
+  "ok": true,
+  "data": [
+    {
+      "notificationId": "generated-notification-id",
+      "recipientUid": "firebase-auth-uid",
+      "type": "activity_joined",
+      "title": "New participant",
+      "body": "A user joined your activity",
+      "isRead": false,
+      "createdAt": {
+        "_seconds": 0,
+        "_nanoseconds": 0
+      },
+      "activityId": "generated-activity-id",
+      "senderUid": "firebase-auth-uid"
+    }
+  ]
+}
+```
+
+Errors:
+
+- `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
+- `400 EMPTY_INPUT` if `uid` is blank
+- `403 FORBIDDEN` if the authenticated user tries to access another user's notifications
+
+### `PATCH /api/notifications/:uid/:notificationId/read`
+
+Marks one notification as read.
+
+Authentication:
+
+- Requires `Authorization: Bearer <firebase-id-token>`
+- The authenticated user can only update their own notifications
+
+Success `200`:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "uid": "firebase-auth-uid",
+    "notificationId": "generated-notification-id",
+    "isRead": true
+  }
+}
+```
+
+Errors:
+
+- `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
+- `400 EMPTY_INPUT` if `uid` or `notificationId` are blank
+- `403 FORBIDDEN` if the authenticated user tries to update another user's notification
+- `404 NOT_FOUND` if notification does not exist
+
+---
+
+## Notes For Future Revisions
+
+- User-owned write routes derive identity from verified Firebase Auth instead of trusting request body values.
+- User-owned read routes still accept `uid` from route params and may need authorization rules later.
+- `POST /api/notifications` is currently available as a server/admin-style creation route and should not be exposed as a normal client write route without additional authorization.
+- `swipeId` currently equals `activityId` because swipe documents use `activityId` as the Firestore document id under `swipes/{uid}/decisions/{activityId}`.

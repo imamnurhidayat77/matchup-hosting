@@ -1,10 +1,22 @@
 import request from 'supertest';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('./chat.service.js', () => {
     return {
         sendMessage: vi.fn().mockResolvedValue({ messageId: 'msg-1' }),
         getMessages: vi.fn(),
+    };
+});
+
+vi.mock('../../middleware/auth.middleware.js', () => {
+    return {
+        requireAuth: vi.fn((req, _res, next) => {
+            req.auth = {
+                uid: 'test-uid-1',
+                token: {} as never,
+            };
+            next();
+        }),
     };
 });
 
@@ -17,13 +29,16 @@ describe('chat routes', () => {
         Test section for chat POST route
   ########################################################################
     */
-    describe('POST /chat/messages', () => {
-        it('send message with POST /chat/messages => expected 201', async () => {
+    describe('POST /api/chat/messages', () => {
+        beforeEach(() => {
+            vi.clearAllMocks();
+        });
+
+        it('when request body is valid => expected 201', async () => {
             const app = createApp();
 
-            const response = await request(app).post('/chat/messages').send({
+            const response = await request(app).post('/api/chat/messages').send({
                 activityId: 'activity-1',
-                senderId: 'test-uid-1',
                 text: 'Hello from chat',
                 type: 'text',
             });
@@ -32,17 +47,16 @@ describe('chat routes', () => {
             expect(response.body).toEqual({
                 ok: true,
                 data: {
-                    messageId: 'msg-1'
+                    messageId: 'msg-1',
                 },
             });
         });
 
-        it('send request when activityId, senderId, or text are not strings => expected 400 w/ INVALID_INPUT', async () => {
+        it('when activityId is not a string => expected 400 w/ INVALID_INPUT', async () => {
             const app = createApp();
 
-            const response = await request(app).post('/chat/messages').send({
+            const response = await request(app).post('/api/chat/messages').send({
                 activityId: 123,
-                senderId: 'test-uid-1',
                 text: 'Hello from chat',
                 type: 'text',
             });
@@ -52,17 +66,35 @@ describe('chat routes', () => {
                 ok: false,
                 error: {
                     code: 'INVALID_INPUT',
-                    message: 'activityId, senderId, and text must be strings',
+                    message: 'activityId and text must be strings',
                 },
             });
         });
 
-        it('send request when type is invalid => expected 400 w/ INVALID_INPUT', async () => {
+        it('when text is not a string => expected 400 w/ INVALID_INPUT', async () => {
             const app = createApp();
 
-            const response = await request(app).post('/chat/messages').send({
+            const response = await request(app).post('/api/chat/messages').send({
                 activityId: 'activity-1',
-                senderId: 'test-uid-1',
+                text: 123,
+                type: 'text',
+            });
+
+            expect(response.status).toBe(400);
+            expect(response.body).toEqual({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message: 'activityId and text must be strings',
+                },
+            });
+        });
+
+        it('when type is invalid => expected 400 w/ INVALID_INPUT', async () => {
+            const app = createApp();
+
+            const response = await request(app).post('/api/chat/messages').send({
+                activityId: 'activity-1',
                 text: 'Hello from chat',
                 type: 'image',
             });
@@ -80,39 +112,36 @@ describe('chat routes', () => {
         it.each([
             {
                 name: 'activityId is blank',
-                body: { activityId: '   ', senderId: 'test-uid-1', text: 'Hello', type: 'text' },
-            },
-            {
-                name: 'senderId is blank',
-                body: { activityId: 'activity-1', senderId: '   ', text: 'Hello', type: 'text' },
+                body: { activityId: '   ', text: 'Hello', type: 'text' },
             },
             {
                 name: 'text is blank',
-                body: { activityId: 'activity-1', senderId: 'test-uid-1', text: '   ', type: 'text' },
+                body: { activityId: 'activity-1', text: '   ', type: 'text' },
             },
-        ])('returns 400 when $name', async ({ body }) => {
+        ])('when $name => expected 400 w/ EMPTY_INPUT', async ({ body }) => {
             const app = createApp();
 
-            const response = await request(app).post('/chat/messages').send(body);
+            const response = await request(app).post('/api/chat/messages').send(body);
 
             expect(response.status).toBe(400);
             expect(response.body).toEqual({
                 ok: false,
                 error: {
                     code: 'EMPTY_INPUT',
-                    message: 'activityId, senderId, and text are required',
+                    message: 'activityId and text are required',
                 },
             });
         });
 
-        it('send request when service throws => expected 500 w/ INTERNAL_ERROR', async () => {
-            vi.mocked(chatService.sendMessage).mockRejectedValueOnce(new Error('Unknown error'));
+        it('when service throws unknown error => expected 500 w/ INTERNAL_ERROR', async () => {
+            vi.mocked(chatService.sendMessage).mockRejectedValueOnce(
+                new Error('Unknown error'),
+            );
 
             const app = createApp();
 
-            const response = await request(app).post('/chat/messages').send({
+            const response = await request(app).post('/api/chat/messages').send({
                 activityId: 'activity-1',
-                senderId: 'test-uid-1',
                 text: 'Hello from chat',
                 type: 'text',
             });
@@ -128,8 +157,8 @@ describe('chat routes', () => {
         });
     });
 
-    describe('GET /chat/:activityId/messages', () => {
-        it('returns 200 with messages', async () => {
+    describe('GET /api/chat/:activityId/messages', () => {
+        it('when messages exist => expected 200', async () => {
             vi.mocked(chatService.getMessages).mockResolvedValueOnce([
                 {
                     messageId: 'msg-1',
@@ -142,7 +171,7 @@ describe('chat routes', () => {
 
             const app = createApp();
 
-            const response = await request(app).get('/chat/activity-1/messages');
+            const response = await request(app).get('/api/chat/activity-1/messages');
 
             expect(response.status).toBe(200);
             expect(response.body).toEqual({
@@ -159,10 +188,10 @@ describe('chat routes', () => {
             });
         });
 
-        it('returns 400 when activityId is blank', async () => {
+        it('when activityId is blank => expected 400 w/ EMPTY_INPUT', async () => {
             const app = createApp();
 
-            const response = await request(app).get('/chat/%20%20/messages');
+            const response = await request(app).get('/api/chat/%20%20/messages');
 
             expect(response.status).toBe(400);
             expect(response.body).toEqual({
@@ -174,12 +203,12 @@ describe('chat routes', () => {
             });
         });
 
-        it('returns 200 with empty array when no messages exist', async () => {
+        it('when no messages exist => expected 200', async () => {
             vi.mocked(chatService.getMessages).mockResolvedValueOnce([]);
 
             const app = createApp();
 
-            const response = await request(app).get('/chat/activity-empty/messages');
+            const response = await request(app).get('/api/chat/activity-empty/messages');
 
             expect(response.status).toBe(200);
             expect(response.body).toEqual({
@@ -188,12 +217,12 @@ describe('chat routes', () => {
             });
         });
 
-        it('returns 500 when service throws', async () => {
+        it('when service throws unknown error => expected 500 w/ INTERNAL_ERROR', async () => {
             vi.mocked(chatService.getMessages).mockRejectedValueOnce(new Error('Unknown error'));
 
             const app = createApp();
 
-            const response = await request(app).get('/chat/activity-1/messages');
+            const response = await request(app).get('/api/chat/activity-1/messages');
 
             expect(response.status).toBe(500);
             expect(response.body).toEqual({

@@ -12,25 +12,25 @@ type LeaveActivityParams = {
 
 export async function joinActivityHandler(req: Request<ActivityParams>, res: Response) {
     try {
+        const uid = req.auth?.uid;
         const { activityId } = req.params;
-        const { uid } = req.body as { uid?: unknown };
 
-        if (typeof uid !== 'string') {
-            return res.status(400).json({
+        if (!uid) {
+            return res.status(401).json({
                 ok: false,
                 error: {
-                    code: 'INVALID_INPUT',
-                    message: 'uid must be a string',
+                    code: 'UNAUTHORIZED',
+                    message: 'Authenticated user is required',
                 },
             });
         }
 
-        if (!activityId.trim() || !uid.trim()) {
+        if (!activityId.trim()) {
             return res.status(400).json({
                 ok: false,
                 error: {
                     code: 'EMPTY_INPUT',
-                    message: 'activityId and uid are required',
+                    message: 'activityId is required',
                 },
             });
         }
@@ -117,16 +117,37 @@ export async function getParticipantsHandler(
 
 export async function leaveActivityHandler(req: Request<LeaveActivityParams>, res: Response) {
     try {
+        const authUid = req.auth?.uid;
         const { activityId, uid } = req.params;
 
-        if (!activityId.trim() || !uid.trim()) {
+        if(!authUid){
+            return res.status(401).json({
+                ok: false,
+                error: {
+                    code: 'UNAUTHORIZED',
+                    message: 'Authenticated user is required'
+                }
+            })
+        }
+
+        if (!activityId.trim()) {
             return res.status(400).json({
                 ok: false,
                 error: {
                     code: 'EMPTY_INPUT',
-                    message: 'activityId and uid are required',
+                    message: 'activityId is required',
                 },
             });
+        }
+
+        if (authUid !== uid){
+            return res.status(403).json({
+                ok: false,
+                error:{
+                    code: 'FORBIDDEN',
+                    message: 'You can only leave an activity for yourself'
+                }
+            })
         }
 
         await leaveActivity(activityId, uid);

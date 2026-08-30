@@ -7,22 +7,31 @@ type GetMessagesParams = {
 
 export async function sendMessageHandler(req: Request, res: Response) {
     try {
-        const { activityId, senderId, text, type } = req.body as {
+        const senderId = req.auth?.uid;
+        const { activityId, text, type } = req.body as {
             activityId?: unknown;
-            senderId?: unknown;
             text?: unknown;
             type?: unknown;
         };
 
+        if(!senderId){
+            return res.status(401).json({
+                ok: false,
+                error: {
+                    code: 'UNAUTHORIZED',
+                    message: 'Authenticated user is required',
+                },
+            });
+        }
+
         if (typeof activityId !== 'string' ||
-            typeof senderId !== 'string' ||
             typeof text !== 'string'
         ) {
             return res.status(400).json({
                 ok: false,
                 error: {
                     code: 'INVALID_INPUT',
-                    message: 'activityId, senderId, and text must be strings',
+                    message: 'activityId and text must be strings',
                 },
             });
         }
@@ -37,12 +46,12 @@ export async function sendMessageHandler(req: Request, res: Response) {
             });
         }
 
-        if (!activityId.trim() || !senderId.trim() || !text.trim()) {
+        if (!activityId.trim() || !text.trim()) {
             return res.status(400).json({
                 ok: false,
                 error: {
                     code: 'EMPTY_INPUT',
-                    message: 'activityId, senderId, and text are required',
+                    message: 'activityId and text are required',
                 },
             });
         }
