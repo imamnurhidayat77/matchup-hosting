@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../../../core/network/api_client.dart';
 import '../domain/calendar_event.dart';
 import 'calendar_repository.dart';
@@ -58,7 +60,8 @@ class RemoteCalendarRepository implements CalendarRepository {
         queryParameters: {'days': days},
       );
       return (res.data as List).map(_parse).toList();
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('[RemoteCalendarRepository] $e\n$st');
       return _fallback.upcoming(days: days);
     }
   }
@@ -67,7 +70,8 @@ class RemoteCalendarRepository implements CalendarRepository {
   Future<void> addToDeviceCalendar(CalendarEvent event) async {
     try {
       await _client.dio.post('/api/v1/calendar/sync', data: _toJson(event));
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('[RemoteCalendarRepository] $e\n$st');
       await _fallback.addToDeviceCalendar(event);
     }
   }

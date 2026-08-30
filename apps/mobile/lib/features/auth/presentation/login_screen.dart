@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/providers/auth_state_provider.dart';
+import '../../../core/providers/repository_providers.dart';
 import '../../../core/services/biometric_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -85,19 +86,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
     try {
-      await Future.delayed(const Duration(milliseconds: 800));
+      final result = await ref.read(authRepositoryProvider).signIn(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
       if (!mounted) return;
       await ref.read(authStateProvider.notifier).signIn(
-        accessToken: 'demo_access_token',
-        refreshToken: 'demo_refresh_token',
-        userId: 'demo_user_001',
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+        userId: result.userId,
       );
       // Router redirect fires automatically — no manual context.go needed.
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       AppSnackbar.show(
         context,
-        message: 'Login failed. Please try again.',
+        message: e is Exception ? e.toString().replaceFirst('Exception: ', '') : 'Login failed. Please try again.',
         variant: AppSnackbarVariant.error,
       );
     } finally {

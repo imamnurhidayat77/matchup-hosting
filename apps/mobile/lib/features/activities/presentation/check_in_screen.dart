@@ -475,6 +475,16 @@ class _DetailsCard extends StatelessWidget {
             title: activity.location,
             subtitle: address,
           ),
+          Divider(height: 1, color: context.colors.border, indent: 60),
+          _DetailRow(
+            iconBg: context.colors.primarySoft,
+            icon: Icons.attach_money_rounded,
+            iconColor: context.colors.primaryOnSurface,
+            title: activity.isPaid ? 'Paid Activity' : 'Free Activity',
+            subtitle:
+                activity.isPaid ? 'Fee required to join' : 'No cost to join',
+            trailingChip: _FeeChip(isPaid: activity.isPaid),
+          ),
         ],
       ),
     );
@@ -488,12 +498,14 @@ class _DetailRow extends StatelessWidget {
     required this.iconColor,
     required this.title,
     required this.subtitle,
+    this.trailingChip,
   });
   final Color iconBg;
   final IconData icon;
   final Color iconColor;
   final String title;
   final String subtitle;
+  final Widget? trailingChip;
 
   @override
   Widget build(BuildContext context) {
@@ -535,7 +547,39 @@ class _DetailRow extends StatelessWidget {
               ],
             ),
           ),
+          if (trailingChip != null) ...[
+            const SizedBox(width: AppSpacing.x2),
+            trailingChip!,
+          ],
         ],
+      ),
+    );
+  }
+}
+
+class _FeeChip extends StatelessWidget {
+  const _FeeChip({required this.isPaid});
+  final bool isPaid;
+
+  @override
+  Widget build(BuildContext context) {
+    final bgColor =
+        isPaid ? context.colors.warningBg : context.colors.statusSuccessBg;
+    final fgColor =
+        isPaid ? context.colors.warningText : context.colors.successText;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+      ),
+      child: Text(
+        isPaid ? 'Paid' : 'Free',
+        style: AppTypography.chipLabel(context).copyWith(
+          color: fgColor,
+          fontWeight: FontWeight.w700,
+          fontSize: 12,
+        ),
       ),
     );
   }

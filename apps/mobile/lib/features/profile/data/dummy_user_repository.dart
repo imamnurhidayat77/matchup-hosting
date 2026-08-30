@@ -1,6 +1,11 @@
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
+
 import '../../../core/network/api_client.dart';
+import '../../../core/storage/secure_token_store.dart';
 import '../domain/user_model.dart';
 import 'user_repository.dart';
+
 
 class DummyUserRepository implements UserRepository {
   UserModel _me = UserModel(
@@ -127,7 +132,23 @@ class RemoteUserRepository implements UserRepository {
   final UserRepository _fallback;
 
   @override
-  Future<UserModel> me() async => _fallback.me();
+  Future<UserModel> me() async {
+    try {
+      final userId = await SecureTokenStore.instance.readUserId();
+      if (userId == null || userId.isEmpty) {
+        debugPrint('[RemoteUserRepository.me] no stored userId — falling back');
+        return _fallback.me();
+      }
+      final res = await _client.dio.get('/api/v1/users/$userId');
+      return _parse(res.data as Map<String, dynamic>) ?? await _fallback.me();
+    } on DioException catch (e) {
+      debugPrint('[RemoteUserRepository.me] DioException ${e.response?.statusCode}: ${e.message}');
+      return _fallback.me();
+    } catch (e) {
+      debugPrint('[RemoteUserRepository.me] unexpected: $e');
+      return _fallback.me();
+    }
+  }
 
   @override
   Future<UserModel?> byId(String id) async {

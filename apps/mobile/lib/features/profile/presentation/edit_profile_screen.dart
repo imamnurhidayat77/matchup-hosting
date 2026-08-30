@@ -7,6 +7,7 @@ import '../../../core/providers/profile_providers.dart';
 import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/app_dialog.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/widgets/app_scaffold.dart';
@@ -182,26 +183,13 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
   Future<bool> _confirmDiscard() async {
     if (!_dirty) return true;
-    final discard = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Discard changes?'),
-        content: const Text('Your edits have not been saved.'),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.card),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Keep editing'),
-          ),
-          TextButton(
-            style: TextButton.styleFrom(foregroundColor: context.colors.errorText),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Discard'),
-          ),
-        ],
-      ),
+    final discard = await AppDialog.confirm(
+      context,
+      title: 'Discard changes?',
+      body: 'Your edits have not been saved.',
+      confirmLabel: 'Discard',
+      cancelLabel: 'Keep editing',
+      destructive: true,
     );
     return discard ?? false;
   }

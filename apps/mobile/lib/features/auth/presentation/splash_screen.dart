@@ -5,6 +5,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/providers/auth_state_provider.dart';
+import '../../../core/storage/route_store.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
@@ -47,16 +48,23 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   Future<void> _checkSessionAndRoute() async {
     if (!mounted) return;
-    // checkSession() updates authStateProvider which triggers the GoRouter
-    // redirect — the router then navigates automatically. We just need to
-    // ensure the check is complete before any redirect fires.
     await ref.read(authStateProvider.notifier).checkSession();
 
     if (!mounted) return;
     final status = ref.read(authStatusProvider);
     if (status == AuthStatus.authenticated) {
-      context.go('/discovery');
+      // Restore the last visited route so the user continues where they
+      // left off after minimize or OS kill. Falls back to /discovery if
+      // nothing was saved (first install) or the stored path is no longer
+      // valid.
+      final lastRoute = await RouteStore.instance.read();
+      if (!mounted) return;
+      context.go(lastRoute ?? '/discovery');
     } else {
+      // On logout or first run, clear any stale stored route so the next
+      // login always starts fresh at /discovery.
+      await RouteStore.instance.clear();
+      if (!mounted) return;
       context.go('/onboarding');
     }
   }

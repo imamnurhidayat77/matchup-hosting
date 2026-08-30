@@ -105,57 +105,75 @@ class ActivityModel {
 
   int get spotsLeft => capacity - participantCount;
 
+  /// Serialises to the API wire format (snake_case).
+  /// Used by [RemoteActivityRepository] for request bodies and
+  /// as the canonical JSON representation of this model.
   Map<String, dynamic> toJson() {
     return {
       'id': id,
       'title': title,
-      'sportType': sportType,
+      'sport_type': sportType,
       'description': description,
       'location': location,
-      'addressLine': addressLine,
-      'distanceKm': distanceKm,
-      'dateTime': dateTime.toIso8601String(),
-      'skillLevel': skillLevel,
+      'address_line': addressLine,
+      'distance_km': distanceKm,
+      'date_time': dateTime.toIso8601String(),
+      'skill_level': skillLevel,
       'capacity': capacity,
-      'participantCount': participantCount,
-      'hostName': hostName,
-      'coverImageUrl': coverImageUrl,
-      'status': status.index,
-      'durationMinutes': durationMinutes,
-      'isPaid': isPaid,
-      'hostRating': hostRating,
-      'hostGamesCount': hostGamesCount,
-      'vibeTags': vibeTags,
+      'participant_count': participantCount,
+      'host_name': hostName,
+      'cover_image_url': coverImageUrl,
+      'status': status.name,
+      'duration_minutes': durationMinutes,
+      'is_paid': isPaid,
+      'host_rating': hostRating,
+      'host_games_count': hostGamesCount,
+      'vibe_tags': vibeTags,
     };
   }
 
+  /// Deserialises from the API wire format (snake_case).
+  ///
+  /// All [RemoteActivityRepository] methods call this instead of maintaining
+  /// their own private `_parse` — one parsing path, one place to update.
   factory ActivityModel.fromJson(Map<String, dynamic> json) {
     return ActivityModel(
-      id: json['id'] as String? ?? '',
+      id: json['id']?.toString() ?? '',
       title: json['title'] as String? ?? '',
-      sportType: json['sportType'] as String? ?? '',
+      sportType: json['sport_type'] as String? ?? '',
       description: json['description'] as String? ?? '',
       location: json['location'] as String? ?? '',
-      addressLine: json['addressLine'] as String?,
-      distanceKm: (json['distanceKm'] as num?)?.toDouble() ?? 0.0,
-      dateTime: DateTime.parse(
-        json['dateTime'] as String? ?? DateTime.now().toIso8601String(),
-      ),
-      skillLevel: json['skillLevel'] as String? ?? '',
-      capacity: json['capacity'] as int? ?? 10,
-      participantCount: json['participantCount'] as int? ?? 0,
-      hostName: json['hostName'] as String? ?? '',
-      coverImageUrl: json['coverImageUrl'] as String?,
-      status: ActivityStatus.values[json['status'] as int? ?? 0],
-      durationMinutes: json['durationMinutes'] as int? ?? 120,
-      isPaid: json['isPaid'] as bool? ?? false,
-      hostRating: (json['hostRating'] as num?)?.toDouble() ?? 4.8,
-      hostGamesCount: json['hostGamesCount'] as int? ?? 32,
+      addressLine: json['address_line'] as String?,
+      distanceKm: (json['distance_km'] as num?)?.toDouble() ?? 0.0,
+      dateTime: DateTime.tryParse(
+            json['date_time'] as String? ?? '',
+          ) ??
+          DateTime.now(),
+      skillLevel: json['skill_level'] as String? ?? '',
+      capacity: (json['capacity'] as num?)?.toInt() ?? 10,
+      participantCount: (json['participant_count'] as num?)?.toInt() ?? 0,
+      hostName: json['host_name'] as String? ?? '',
+      coverImageUrl: json['cover_image_url'] as String?,
+      status: _statusFromString(json['status'] as String?),
+      durationMinutes: (json['duration_minutes'] as num?)?.toInt() ?? 120,
+      isPaid: json['is_paid'] as bool? ?? false,
+      hostRating: (json['host_rating'] as num?)?.toDouble() ?? 4.8,
+      hostGamesCount: (json['host_games_count'] as num?)?.toInt() ?? 0,
       vibeTags:
-          (json['vibeTags'] as List?)?.map((e) => e.toString()).toList() ??
-          const ['Friendly people', 'Great vibes'],
+          (json['vibe_tags'] as List?)?.map((e) => e.toString()).toList() ??
+          const [],
     );
   }
+
+  static ActivityStatus _statusFromString(String? s) => switch (s) {
+    'available' => ActivityStatus.available,
+    'almostFull' || 'almost_full' => ActivityStatus.almostFull,
+    'full' => ActivityStatus.full,
+    'joined' => ActivityStatus.joined,
+    'hosted' => ActivityStatus.hosted,
+    'past' => ActivityStatus.past,
+    _ => ActivityStatus.available,
+  };
 }
 
 enum ActivityStatus { available, almostFull, full, joined, hosted, past }

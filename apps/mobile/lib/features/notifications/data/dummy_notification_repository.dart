@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../../../core/network/api_client.dart';
 import '../domain/app_notification.dart';
 import 'notification_repository.dart';
@@ -111,7 +113,8 @@ class RemoteNotificationRepository implements NotificationRepository {
     try {
       final res = await _client.dio.get('/api/v1/notifications');
       return (res.data as List).map(_parse).toList();
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('[RemoteNotificationRepository] $e\n$st');
       return _fallback.all();
     }
   }
@@ -121,7 +124,8 @@ class RemoteNotificationRepository implements NotificationRepository {
     try {
       final res = await _client.dio.get('/api/v1/notifications/unread');
       return (res.data as List).map(_parse).toList();
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('[RemoteNotificationRepository] $e\n$st');
       return _fallback.unread();
     }
   }
@@ -130,7 +134,8 @@ class RemoteNotificationRepository implements NotificationRepository {
   Future<void> markRead(String id) async {
     try {
       await _client.dio.post('/api/v1/notifications/$id/read');
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('[RemoteNotificationRepository] $e\n$st');
       await _fallback.markRead(id);
     }
   }
@@ -139,7 +144,8 @@ class RemoteNotificationRepository implements NotificationRepository {
   Future<void> markAllRead() async {
     try {
       await _client.dio.post('/api/v1/notifications/read-all');
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('[RemoteNotificationRepository] $e\n$st');
       await _fallback.markAllRead();
     }
   }

@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/storage/route_store.dart';
 import '../core/theme/app_spacing.dart';
 
 import '../core/providers/auth_state_provider.dart';
@@ -107,6 +108,9 @@ GoRouter buildRouter(Ref ref) {
     initialLocation: '/splash',
     refreshListenable: _AuthListenable(ref),
     redirect: (context, state) {
+      // Persist every navigation so we can resume after minimize/kill.
+      RouteStore.instance.save(state.matchedLocation);
+
       final authStatus = ref.read(authStatusProvider);
       final location = state.matchedLocation;
 

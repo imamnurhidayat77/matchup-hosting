@@ -7,6 +7,7 @@ import '../../../core/providers/repository_providers.dart';
 import '../../../core/services/calendar_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/widgets/app_dialog.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/app_avatar.dart';
@@ -43,28 +44,12 @@ class JoinedActivityDetailScreen extends ConsumerWidget {
   final String activityId;
 
   Future<void> _confirmLeave(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.card),
-        ),
-        title: const Text('Leave Activity?'),
-        content: const Text(
-          'Are you sure you want to leave? You can re-join later if spots are available.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            style: TextButton.styleFrom(foregroundColor: context.colors.errorText),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Leave'),
-          ),
-        ],
-      ),
+    final confirmed = await AppDialog.confirm(
+      context,
+      title: 'Leave Activity?',
+      body: 'Are you sure you want to leave? You can re-join later if spots are available.',
+      confirmLabel: 'Leave',
+      destructive: true,
     );
     if (confirmed != true || !context.mounted) return;
     AppSnackbar.show(
@@ -565,6 +550,13 @@ class _MetaCard extends StatelessWidget {
             title: activity.location,
             sub: address,
           ),
+          Divider(height: 1, color: context.colors.border, indent: 60),
+          _MetaRow(
+            icon: Icons.attach_money_rounded,
+            title: activity.isPaid ? 'Paid Activity' : 'Free Activity',
+            sub: activity.isPaid ? 'Fee required to join' : 'No cost to join',
+            trailingChip: _FeeChip(isPaid: activity.isPaid),
+          ),
         ],
       ),
     );
@@ -576,10 +568,12 @@ class _MetaRow extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.sub,
+    this.trailingChip,
   });
   final IconData icon;
   final String title;
   final String sub;
+  final Widget? trailingChip;
 
   @override
   Widget build(BuildContext context) {
@@ -615,7 +609,39 @@ class _MetaRow extends StatelessWidget {
               ],
             ),
           ),
+          if (trailingChip != null) ...[
+            const SizedBox(width: AppSpacing.x2),
+            trailingChip!,
+          ],
         ],
+      ),
+    );
+  }
+}
+
+class _FeeChip extends StatelessWidget {
+  const _FeeChip({required this.isPaid});
+  final bool isPaid;
+
+  @override
+  Widget build(BuildContext context) {
+    final bgColor =
+        isPaid ? context.colors.warningBg : context.colors.statusSuccessBg;
+    final fgColor =
+        isPaid ? context.colors.warningText : context.colors.successText;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+      ),
+      child: Text(
+        isPaid ? 'Paid' : 'Free',
+        style: AppTypography.chipLabel(context).copyWith(
+          color: fgColor,
+          fontWeight: FontWeight.w700,
+          fontSize: 12,
+        ),
       ),
     );
   }

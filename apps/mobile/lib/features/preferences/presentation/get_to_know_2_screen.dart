@@ -43,7 +43,7 @@ class _GetToKnow2ScreenState extends ConsumerState<GetToKnow2Screen> {
 
   void _onNext() {
     ref.read(sportPreferencesProvider.notifier).setAll(_sports);
-    ref.read(distanceFilterProvider.notifier).state = _distanceKm;
+    ref.read(distanceFilterProvider.notifier).set(_distanceKm);
     context.push('/get-to-know-3');
   }
 
