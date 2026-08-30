@@ -130,10 +130,10 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     textMuted:   isDark ? '#94a3b8' : '#475569',
     textFaint:   isDark ? '#64748b' : '#94a3b8',
     border:      isDark ? '#334155' : '#e2e8f0',
-    navActive:   isDark ? 'rgba(30,107,154,0.25)' : '#eff6ff',
-    navActiveText: isDark ? '#93c5fd' : '#1e3a5f',
+    navActive:   isDark ? 'rgba(11,31,138,0.25)' : '#eef2ff',
+    navActiveText: isDark ? '#8fadf6' : '#0f1a52',
     navHover:    isDark ? 'rgba(51,65,85,0.6)' : '#f8fafc',
-    iconActive:  isDark ? '#93c5fd' : '#1e3a5f',
+    iconActive:  isDark ? '#8fadf6' : '#0f1a52',
     iconDefault: isDark ? '#64748b' : '#94a3b8',
   };
 

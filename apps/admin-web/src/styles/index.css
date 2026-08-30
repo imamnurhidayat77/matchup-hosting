@@ -149,7 +149,7 @@ body:not(.dark) textarea::placeholder { color: #64748b !important; }
   .badge-red     { @apply badge bg-danger-100  text-danger-700; }
   .badge-neutral { @apply badge bg-ink-100     text-ink-600; }
 
-  .dark .badge-blue    { background-color: rgba(30,107,154,0.3); color: #93c5fd; }
+  .dark .badge-blue    { background-color: rgba(11,31,138,0.3); color: #8fadf6; }
   .dark .badge-green   { background-color: rgba(22,163,74,0.25); color: #4ade80; }
   .dark .badge-yellow  { background-color: rgba(217,119,6,0.25); color: #fcd34d; }
   .dark .badge-red     { background-color: rgba(220,38,38,0.25); color: #fca5a5; }
@@ -188,7 +188,7 @@ body:not(.dark) textarea::placeholder { color: #64748b !important; }
   }
   .input::placeholder { color: var(--text-muted); }
   .input:focus {
-    border-color: #3b9ec2;
-    box-shadow: 0 0 0 2px rgba(59,158,194,0.15);
+    border-color: #0b1f8a;
+    box-shadow: 0 0 0 2px rgba(11,31,138,0.15);
   }
 }

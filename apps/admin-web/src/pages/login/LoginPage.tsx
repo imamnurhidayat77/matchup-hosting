@@ -49,7 +49,7 @@ export function LoginPage() {
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[#f8fafc]">
       {/* Radial gradient background */}
-      <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(ellipse 80% 60% at 50% 0%, #eff6ff 0%, #f8fafc 100%)' }} />
+      <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(ellipse 80% 60% at 50% 0%, #eef2ff 0%, #f8fafc 100%)' }} />
 
       {/* Login card */}
       <div className="relative z-10 w-full max-w-[480px] rounded-3xl bg-white px-8 py-10 shadow-panel sm:px-10 sm:py-12">
@@ -150,7 +150,7 @@ export function LoginPage() {
             type="submit"
             disabled={submitting || authLoading}
             className="btn mt-2 w-full py-3 text-[15px] font-bold text-white rounded-xl disabled:opacity-60 transition-opacity"
-            style={{ background: 'linear-gradient(135deg, #1e6b9a 0%, #3b9ec2 100%)' }}
+            style={{ background: 'linear-gradient(135deg, #0b1f8a 0%, #ff6b00 100%)' }}
           >
             {submitting ? (
               <span className="flex items-center justify-center gap-2">

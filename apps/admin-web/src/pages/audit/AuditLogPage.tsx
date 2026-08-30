@@ -16,10 +16,10 @@ const CATEGORY_META: Record<AuditCategory, {
   dot: string;
 }> = {
   Reports:    { lightBg: '#fee2e2', lightText: '#991b1b', darkBg: 'rgba(220,38,38,0.2)',   darkText: '#fca5a5', dot: '#ef4444' },
-  Members:    { lightBg: '#dbeafe', lightText: '#1e3a5f', darkBg: 'rgba(30,107,154,0.25)', darkText: '#93c5fd', dot: '#1e6b9a' },
+  Members:    { lightBg: '#dbeafe', lightText: '#0f1a52', darkBg: 'rgba(11,31,138,0.25)', darkText: '#8fadf6', dot: '#0b1f8a' },
   Activities: { lightBg: '#fef3c7', lightText: '#92400e', darkBg: 'rgba(217,119,6,0.25)',  darkText: '#fcd34d', dot: '#f59e0b' },
   Appeals:    { lightBg: '#f3e8ff', lightText: '#6b21a8', darkBg: 'rgba(168,85,247,0.2)',  darkText: '#d8b4fe', dot: '#a855f7' },
-  Broadcasts: { lightBg: '#e0f2fe', lightText: '#0369a1', darkBg: 'rgba(14,165,233,0.2)',  darkText: '#7dd3fc', dot: '#0ea5e9' },
+  Broadcasts: { lightBg: '#ffe5d0', lightText: '#b84c00', darkBg: 'rgba(255,107,0,0.2)',  darkText: '#ffab66', dot: '#ff6b00' },
   Sports:     { lightBg: '#dcfce7', lightText: '#15803d', darkBg: 'rgba(34,197,94,0.2)',   darkText: '#86efac', dot: '#22c55e' },
   Settings:   { lightBg: '#f1f5f9', lightText: '#475569', darkBg: 'rgba(71,85,105,0.3)',   darkText: '#cbd5e1', dot: '#94a3b8' },
 };
@@ -87,7 +87,7 @@ function LogRow({ entry, index, isDark }: { entry: AuditEntry; index: number; is
     'broadcast.delete':isDark ? '#94a3b8' : '#475569',
     'sport.add':       isDark ? '#86efac' : '#15803d',
     'sport.disable':   isDark ? '#94a3b8' : '#475569',
-    'sport.publish':   isDark ? '#93c5fd' : '#1e3a5f',
+    'sport.publish':   isDark ? '#8fadf6' : '#0f1a52',
     'settings.update': isDark ? '#cbd5e1' : '#334155',
   };
 
