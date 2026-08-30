@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useBroadcasts } from '../../hooks/useBroadcasts';
 import { BroadcastsPageSkeleton, PageError, EmptyState, EmptyIcons } from '../../components/ui/PageStates';
 import { useToast } from '../../context/ToastContext';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import type { BroadcastStatus, BroadcastAudience } from '../../data/broadcastsDummy';
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
@@ -95,6 +96,7 @@ export function BroadcastsPage() {
   const [form, setForm] = useState({ title: '', message: '', audience: 'All Users' as BroadcastAudience });
   const [activeTab, setActiveTab] = useState<BroadcastStatus | 'All'>('All');
   const [sending, setSending] = useState(false);
+  const [confirm, setConfirm] = useState<{ type: 'send' | 'delete'; id: string; title: string } | null>(null);
 
   if (loading) return <BroadcastsPageSkeleton />;
   if (error) return <PageError message={error} onRetry={reload} />;
@@ -283,10 +285,10 @@ export function BroadcastsPage() {
                   </div>
                   <div className="flex shrink-0 gap-1">
                     {b.status === 'Draft' && (
-                      <button onClick={() => handleSendDraft(b.id)} className="btn-primary btn-sm">Send</button>
+                      <button onClick={() => setConfirm({ type: 'send', id: b.id, title: b.title })} className="btn-primary btn-sm">Send</button>
                     )}
                     <button
-                      onClick={() => handleDeleteBroadcast(b.id)}
+                      onClick={() => setConfirm({ type: 'delete', id: b.id, title: b.title })}
                       className="rounded-lg p-1.5 text-ink-400 hover:bg-danger-50 dark:hover:bg-danger-900/30 hover:text-danger-600 transition-colors"
                       title="Delete"
                     >
@@ -301,6 +303,24 @@ export function BroadcastsPage() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={!!confirm}
+        title={confirm?.type === 'send' ? `Send "${confirm?.title}"?` : `Delete "${confirm?.title}"?`}
+        description={confirm?.type === 'send' ? 'This draft will be sent to its selected audience immediately.' : 'This action cannot be undone. The broadcast will be permanently removed.'}
+        confirmLabel={confirm?.type === 'send' ? 'Send' : 'Delete'}
+        destructive={confirm?.type === 'delete'}
+        onConfirm={async () => {
+          if (!confirm) return;
+          if (confirm.type === 'send') {
+            await handleSendDraft(confirm.id);
+          } else {
+            await handleDeleteBroadcast(confirm.id);
+          }
+          setConfirm(null);
+        }}
+        onCancel={() => setConfirm(null)}
+      />
     </div>
   );
 }

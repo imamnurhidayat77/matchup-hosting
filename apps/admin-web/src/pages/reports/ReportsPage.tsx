@@ -3,6 +3,7 @@ import { useReports } from '../../hooks/useReports';
 import { ReportsPageSkeleton, PageError, EmptyState, EmptyIcons } from '../../components/ui/PageStates';
 import { downloadCsv } from '../../utils/csvExport';
 import { useToast } from '../../context/ToastContext';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import type { Report, ReportStatus } from '../../data/reportsDummy';
 import type { ReportAction } from '../../services/reportsService';
 
@@ -212,6 +213,7 @@ export function ReportsPage() {
   const [modal, setModal] = useState<{ report: Report; action: ReportAction } | null>(null);
   // Bulk action state (Task 11)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkConfirm, setBulkConfirm] = useState<ReportAction | null>(null);
 
   // Keyboard shortcuts: R = resolve first pending, D = dismiss first pending (Task 6)
   // Must be declared before any early returns to satisfy rules-of-hooks
@@ -252,6 +254,7 @@ export function ReportsPage() {
     selectedIds.forEach(id => handleAction(id, action, 'Bulk action'));
     toast(`${selectedIds.size} report(s) ${action === 'resolve' ? 'resolved' : 'dismissed'}.`, action === 'resolve' ? 'success' : 'info');
     setSelectedIds(new Set());
+    setBulkConfirm(null);
   }
 
   function handleExport() {
@@ -294,6 +297,16 @@ export function ReportsPage() {
           onCancel={() => setModal(null)}
         />
       )}
+
+      <ConfirmDialog
+        open={!!bulkConfirm}
+        title={bulkConfirm === 'resolve' ? `Resolve ${selectedIds.size} report(s)?` : `Dismiss ${selectedIds.size} report(s)?`}
+        description="This will apply to every selected report and cannot be undone."
+        confirmLabel={bulkConfirm === 'resolve' ? 'Resolve all' : 'Dismiss all'}
+        destructive={bulkConfirm === 'dismiss'}
+        onConfirm={() => { if (bulkConfirm) executeBulkAction(bulkConfirm); }}
+        onCancel={() => setBulkConfirm(null)}
+      />
 
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -398,8 +411,8 @@ export function ReportsPage() {
           {selectedIds.size > 0 && (
             <div className="flex items-center gap-3 border-b border-ink-100 dark:border-ink-700 bg-brand-50 dark:bg-brand-900/20 px-4 sm:px-6 py-2.5">
               <span className="text-xs font-semibold text-brand-700 dark:text-brand-300">{selectedIds.size} selected</span>
-              <button onClick={() => executeBulkAction('resolve')} className="text-xs font-semibold text-success-600 hover:underline">Resolve all</button>
-              <button onClick={() => executeBulkAction('dismiss')} className="text-xs font-semibold text-ink-500 dark:text-ink-400 hover:underline">Dismiss all</button>
+              <button onClick={() => setBulkConfirm('resolve')} className="text-xs font-semibold text-success-600 hover:underline">Resolve all</button>
+              <button onClick={() => setBulkConfirm('dismiss')} className="text-xs font-semibold text-ink-500 dark:text-ink-400 hover:underline">Dismiss all</button>
               <button onClick={() => setSelectedIds(new Set())} className="ml-auto text-xs text-ink-400 hover:underline">Clear</button>
             </div>
           )}

@@ -1,10 +1,13 @@
 import { useAnalytics } from '../../hooks/useAnalytics';
 import { AnalyticsPageSkeleton, PageError } from '../../components/ui/PageStates';
+import { useTheme } from '../../context/ThemeContext';
 import type { AnalyticsRange } from '../../services/analyticsService';
 
 // ─── SVG line chart ───────────────────────────────────────────────────────────
 
 function LineChart({ data, keys, colors }: { data: Array<Record<string, number | string>>; keys: string[]; colors: string[] }) {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
   const H = 180;
   const pad = { top: 10, bottom: 24, left: 4, right: 4 };
   const W = 600;
@@ -16,7 +19,7 @@ function LineChart({ data, keys, colors }: { data: Array<Record<string, number |
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full" preserveAspectRatio="none" aria-label="Analytics chart">
       {[0, 0.25, 0.5, 0.75, 1].map((t) => {
         const y = pad.top + chartH * (1 - t);
-        return <line key={t} x1={pad.left} y1={y} x2={W - pad.right} y2={y} stroke="#e2e8f0" strokeWidth="1" />;
+        return <line key={t} x1={pad.left} y1={y} x2={W - pad.right} y2={y} stroke={isDark ? '#334155' : '#e2e8f0'} strokeWidth="1" />;
       })}
       {keys.map((key, ki) => {
         const vals = data.map((d) => Number(d[key]));
@@ -27,7 +30,7 @@ function LineChart({ data, keys, colors }: { data: Array<Record<string, number |
           <g key={key}>
             <polyline points={pts} fill="none" stroke={colors[ki]} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
             {data.map((_, i) => (
-              <circle key={i} cx={xOf(i)} cy={yOf(vals[i])} r="3.5" fill="#fff" stroke={colors[ki]} strokeWidth="2" />
+              <circle key={i} cx={xOf(i)} cy={yOf(vals[i])} r="3.5" fill={isDark ? '#1e293b' : '#fff'} stroke={colors[ki]} strokeWidth="2" />
             ))}
           </g>
         );
