@@ -1,6 +1,6 @@
 # MatchUp API Contract
 
-Last updated: Sunday, August 30, 2026 (NZ local time)
+Last updated: Monday, August 31, 2026 (NZ local time)
 
 ## Scope
 
@@ -655,6 +655,10 @@ Errors:
 
 Joins a user to an activity.
 
+Side effects:
+
+- Creates an `activity_joined` notification for the activity host when the joining user is not the host.
+
 Request body:
 
 ```json
@@ -717,6 +721,11 @@ Errors:
 
 Removes a participant from an activity.
 
+Side effects:
+
+- Creates an `activity_left` notification for the activity host when a participant removes themselves and the participant is not the host.
+- Creates a `participant_removed` notification for the removed participant when the activity host removes another participant.
+
 Authentication:
 
 - Requires `Authorization: Bearer <firebase-id-token>`
@@ -750,6 +759,11 @@ Errors:
 ### `POST /api/swipes`
 
 Creates or updates a swipe decision for a user on an activity.
+
+Side effects:
+
+- Creates an `activity_interest` notification for the activity host when `decision` is `join` and the swiping user is not the host.
+- Does not create a notification when `decision` is `pass`.
 
 Request body:
 
@@ -795,6 +809,11 @@ Errors:
 
 Lists swipe decisions for a user.
 
+Authentication:
+
+- Requires `Authorization: Bearer <firebase-id-token>`
+- The authenticated user can only access their own swipe decisions
+
 Success `200`:
 
 ```json
@@ -821,11 +840,18 @@ Success `200`:
 
 Errors:
 
+- `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
 - `400 EMPTY_INPUT` if `uid` is blank
+- `403 FORBIDDEN` if the authenticated user does not own the requested swipe decisions
 
 ### `GET /api/swipes/:uid/:activityId`
 
 Gets one swipe decision for a user and activity.
+
+Authentication:
+
+- Requires `Authorization: Bearer <firebase-id-token>`
+- The authenticated user can only access their own swipe decision
 
 Success `200`:
 
@@ -851,12 +877,21 @@ Success `200`:
 
 Errors:
 
+- `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
 - `400 EMPTY_INPUT` if `uid` or `activityId` are blank
+- `403 FORBIDDEN` if the authenticated user does not own the requested swipe decision
 - `404 NOT_FOUND` if swipe decision does not exist
 
 ---
 
 ## Notifications
+
+Current delivery behavior:
+
+- Notifications are persisted as in-app notification records under the recipient user's notification collection.
+- The backend does not send Firebase Cloud Messaging push notifications yet.
+- The frontend should fetch notifications with `GET /api/notifications/me` or later attach a listener if realtime notification UX is required.
+- Event-generated notifications currently include activity join, participant self-leave, and host participant removal.
 
 ### `POST /api/notifications`
 
@@ -878,7 +913,10 @@ Request body:
 Allowed `type` values:
 
 - `activity_reminder`
+- `activity_interest`
 - `activity_joined`
+- `activity_left`
+- `participant_removed`
 - `chat_message`
 - `system`
 
@@ -899,6 +937,43 @@ Errors:
 - `400 INVALID_INPUT` if `activityId` or `senderUid` are provided with the wrong type
 - `400 INVALID_INPUT` if `type` is invalid
 - `400 EMPTY_INPUT` if `recipientUid`, `title`, or `body` are blank
+
+### `GET /api/notifications/me`
+
+Lists notifications for the authenticated user.
+
+Authentication:
+
+- Requires `Authorization: Bearer <firebase-id-token>`
+- `uid` is derived from the verified Firebase Auth user
+
+Success `200`:
+
+```json
+{
+  "ok": true,
+  "data": [
+    {
+      "notificationId": "generated-notification-id",
+      "recipientUid": "firebase-auth-uid",
+      "type": "activity_joined",
+      "title": "New participant",
+      "body": "A user joined your activity",
+      "isRead": false,
+      "createdAt": {
+        "_seconds": 0,
+        "_nanoseconds": 0
+      },
+      "activityId": "generated-activity-id",
+      "senderUid": "firebase-auth-uid"
+    }
+  ]
+}
+```
+
+Errors:
+
+- `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
 
 ### `GET /api/notifications/:uid`
 
@@ -938,6 +1013,34 @@ Errors:
 - `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
 - `400 EMPTY_INPUT` if `uid` is blank
 - `403 FORBIDDEN` if the authenticated user tries to access another user's notifications
+
+### `PATCH /api/notifications/me/:notificationId/read`
+
+Marks one notification as read for the authenticated user.
+
+Authentication:
+
+- Requires `Authorization: Bearer <firebase-id-token>`
+- `uid` is derived from the verified Firebase Auth user
+
+Success `200`:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "uid": "firebase-auth-uid",
+    "notificationId": "generated-notification-id",
+    "isRead": true
+  }
+}
+```
+
+Errors:
+
+- `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
+- `400 EMPTY_INPUT` if `notificationId` is blank
+- `404 NOT_FOUND` if notification does not exist
 
 ### `PATCH /api/notifications/:uid/:notificationId/read`
 

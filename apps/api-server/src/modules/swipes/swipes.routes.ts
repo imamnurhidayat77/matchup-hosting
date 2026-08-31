@@ -9,6 +9,6 @@ import {
 export const swipesRouter = Router();
 
 swipesRouter.post('/', requireAuth, saveSwipeDecisionHandler);
-swipesRouter.get('/:uid/:activityId', getSwipeDecisionHandler);
-swipesRouter.get('/:uid', listSwipeDecisionsHandler);
+swipesRouter.get('/:uid/:activityId', requireAuth, getSwipeDecisionHandler);
+swipesRouter.get('/:uid', requireAuth, listSwipeDecisionsHandler);
 

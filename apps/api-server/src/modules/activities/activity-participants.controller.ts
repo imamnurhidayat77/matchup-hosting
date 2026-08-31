@@ -1,5 +1,7 @@
 import type { Request, Response } from 'express';
 import { getParticipants, joinActivity, leaveActivity } from './activity-participants.service.js';
+import { getActivityById } from './activities.service.js';
+import { createNotification } from '../notifications/notifications.service.js';
 
 type ActivityParams = {
     activityId: string;
@@ -36,6 +38,18 @@ export async function joinActivityHandler(req: Request<ActivityParams>, res: Res
         }
 
         await joinActivity(activityId, uid);
+        const activity = await getActivityById(activityId);
+
+        if (activity && activity.hostId !== uid) {
+            await createNotification({
+                recipientUid: activity.hostId,
+                type: 'activity_joined',
+                title: 'New participant',
+                body: 'Someone joined your activity',
+                activityId,
+                senderUid: uid,
+            });
+        }
 
         return res.status(200).json({
             ok: true,
@@ -120,14 +134,14 @@ export async function leaveActivityHandler(req: Request<LeaveActivityParams>, re
         const authUid = req.auth?.uid;
         const { activityId, uid } = req.params;
 
-        if(!authUid){
+        if (!authUid) {
             return res.status(401).json({
                 ok: false,
                 error: {
                     code: 'UNAUTHORIZED',
-                    message: 'Authenticated user is required'
-                }
-            })
+                    message: 'Authenticated user is required',
+                },
+            });
         }
 
         if (!activityId.trim()) {
@@ -145,6 +159,29 @@ export async function leaveActivityHandler(req: Request<LeaveActivityParams>, re
             targetUid: uid,
             actorUid: authUid,
         });
+        const activity = await getActivityById(activityId);
+
+        if (activity && activity.hostId !== uid) {
+            await createNotification({
+                recipientUid: activity.hostId,
+                type: 'activity_left',
+                title: 'Participant left',
+                body: 'Someone left your activity',
+                activityId,
+                senderUid: uid,
+            });
+        }
+
+        if (activity && activity.hostId === authUid && uid !== authUid) {
+            await createNotification({
+                recipientUid: uid,
+                type: 'participant_removed',
+                title: 'Removed from activity',
+                body: 'The host removed you from an activity',
+                activityId,
+                senderUid: authUid,
+            });
+        }
 
         return res.status(200).json({
             ok: true,

@@ -115,7 +115,7 @@ describe('notifications routes', () => {
         ok: false,
         error: {
           code: 'INVALID_INPUT',
-          message: 'type must be activity_reminder, activity_joined, chat_message, or system',
+          message: 'type must be activity_reminder, activity_interest, activity_joined, activity_left, participant_removed, chat_message, or system',
         },
       });
     });
@@ -153,6 +153,69 @@ describe('notifications routes', () => {
         title: 'New participant',
         body: 'A user joined your activity',
       });
+
+      expect(response.status).toBe(500);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: 'Unknown error',
+        },
+      });
+    });
+  });
+
+  describe('GET /api/notifications/me', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it('when authenticated user requests own notifications => expected 200', async () => {
+      vi.mocked(notificationsService.listNotifications).mockResolvedValueOnce([
+        {
+          notificationId: 'notification-1',
+          recipientUid: 'test-uid-1',
+          type: 'activity_joined',
+          title: 'New participant',
+          body: 'A user joined your activity',
+          isRead: false,
+          createdAt: { toDate: () => new Date('2026-08-30T00:00:00Z') } as never,
+          activityId: 'activity-1',
+          senderUid: 'test-uid-2',
+        },
+      ]);
+
+      const app = createApp();
+
+      const response = await request(app).get('/api/notifications/me');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({
+        ok: true,
+        data: [
+          {
+            notificationId: 'notification-1',
+            recipientUid: 'test-uid-1',
+            type: 'activity_joined',
+            title: 'New participant',
+            body: 'A user joined your activity',
+            isRead: false,
+            activityId: 'activity-1',
+            senderUid: 'test-uid-2',
+          },
+        ],
+      });
+      expect(notificationsService.listNotifications).toHaveBeenCalledWith('test-uid-1');
+    });
+
+    it('when service throws unknown error => expected 500 w/ INTERNAL_ERROR', async () => {
+      vi.mocked(notificationsService.listNotifications).mockRejectedValueOnce(
+        new Error('Unknown error'),
+      );
+
+      const app = createApp();
+
+      const response = await request(app).get('/api/notifications/me');
 
       expect(response.status).toBe(500);
       expect(response.body).toEqual({
@@ -259,6 +322,91 @@ describe('notifications routes', () => {
       const app = createApp();
 
       const response = await request(app).get('/api/notifications/test-uid-1');
+
+      expect(response.status).toBe(500);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: 'Unknown error',
+        },
+      });
+    });
+  });
+
+  describe('PATCH /api/notifications/me/:notificationId/read', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it('when authenticated user marks own notification read => expected 200', async () => {
+      const app = createApp();
+
+      const response = await request(app).patch(
+        '/api/notifications/me/notification-1/read',
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        ok: true,
+        data: {
+          uid: 'test-uid-1',
+          notificationId: 'notification-1',
+          isRead: true,
+        },
+      });
+      expect(notificationsService.markNotificationRead).toHaveBeenCalledWith(
+        'test-uid-1',
+        'notification-1',
+      );
+    });
+
+    it('when notificationId is blank => expected 400 w/ EMPTY_INPUT', async () => {
+      const app = createApp();
+
+      const response = await request(app).patch('/api/notifications/me/%20%20/read');
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'EMPTY_INPUT',
+          message: 'notificationId is required',
+        },
+      });
+    });
+
+    it('when notification is not found => expected 404 w/ NOT_FOUND', async () => {
+      vi.mocked(notificationsService.markNotificationRead).mockRejectedValueOnce(
+        new Error('Notification not found'),
+      );
+
+      const app = createApp();
+
+      const response = await request(app).patch(
+        '/api/notifications/me/missing-notification/read',
+      );
+
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'NOT_FOUND',
+          message: 'Notification not found',
+        },
+      });
+    });
+
+    it('when service throws unknown error => expected 500 w/ INTERNAL_ERROR', async () => {
+      vi.mocked(notificationsService.markNotificationRead).mockRejectedValueOnce(
+        new Error('Unknown error'),
+      );
+
+      const app = createApp();
+
+      const response = await request(app).patch(
+        '/api/notifications/me/notification-1/read',
+      );
 
       expect(response.status).toBe(500);
       expect(response.body).toEqual({

@@ -19,6 +19,12 @@ vi.mock('./activity-participants.service.js', () => {
     };
 });
 
+vi.mock('../notifications/notifications.service.js', () => {
+    return {
+        createNotification: vi.fn().mockResolvedValue({ notificationId: 'notification-1' }),
+    };
+});
+
 vi.mock('../../middleware/auth.middleware.js', () => {
     return {
         requireAuth: vi.fn((req, _res, next) => {
@@ -34,6 +40,7 @@ vi.mock('../../middleware/auth.middleware.js', () => {
 import { createApp } from '../../app/app.js';
 import * as activitiesService from './activities.service.js';
 import * as activityParticipantsService from './activity-participants.service.js';
+import * as notificationsService from '../notifications/notifications.service.js';
 
 describe('activities routes', () => {
     describe('POST /api/activities', () => {
@@ -601,7 +608,12 @@ describe('activities routes', () => {
             vi.clearAllMocks();
         });
 
-        it('when request is valid => expected 200', async () => {
+        it('when request is valid and authenticated user is not host => expected 200', async () => {
+            vi.mocked(activitiesService.getActivityById).mockResolvedValueOnce({
+                activityId: 'activity-1',
+                hostId: 'host-uid-1',
+            } as never);
+
             const app = createApp();
 
             const response = await request(app)
@@ -616,6 +628,37 @@ describe('activities routes', () => {
                     uid: 'test-uid-1',
                 },
             });
+            expect(notificationsService.createNotification).toHaveBeenCalledWith({
+                recipientUid: 'host-uid-1',
+                type: 'activity_joined',
+                title: 'New participant',
+                body: 'Someone joined your activity',
+                activityId: 'activity-1',
+                senderUid: 'test-uid-1',
+            });
+        });
+
+        it('when authenticated user is activity host => expected 200 without notification', async () => {
+            vi.mocked(activitiesService.getActivityById).mockResolvedValueOnce({
+                activityId: 'activity-1',
+                hostId: 'test-uid-1',
+            } as never);
+
+            const app = createApp();
+
+            const response = await request(app)
+                .post('/api/activities/activity-1/participants')
+                .send({});
+
+            expect(response.status).toBe(200);
+            expect(response.body).toEqual({
+                ok: true,
+                data: {
+                    activityId: 'activity-1',
+                    uid: 'test-uid-1',
+                },
+            });
+            expect(notificationsService.createNotification).not.toHaveBeenCalled();
         });
 
         it('when activityId is blank => expected 400 w/ EMPTY_INPUT', async () => {
@@ -1051,6 +1094,11 @@ describe('DELETE /api/activities/:activityId/participants/:uid', () => {
     });
 
     it('when request is valid => expected 200', async () => {
+        vi.mocked(activitiesService.getActivityById).mockResolvedValueOnce({
+            activityId: 'activity-1',
+            hostId: 'host-uid-1',
+        } as never);
+
         const app = createApp();
 
         const response = await request(app).delete(
@@ -1070,9 +1118,22 @@ describe('DELETE /api/activities/:activityId/participants/:uid', () => {
             targetUid: 'test-uid-1',
             actorUid: 'test-uid-1',
         });
+        expect(notificationsService.createNotification).toHaveBeenCalledWith({
+            recipientUid: 'host-uid-1',
+            type: 'activity_left',
+            title: 'Participant left',
+            body: 'Someone left your activity',
+            activityId: 'activity-1',
+            senderUid: 'test-uid-1',
+        });
     });
 
     it('when activity host removes another participant => expected 200', async () => {
+        vi.mocked(activitiesService.getActivityById).mockResolvedValueOnce({
+            activityId: 'activity-1',
+            hostId: 'test-uid-1',
+        } as never);
+
         const app = createApp();
 
         const response = await request(app).delete(
@@ -1091,6 +1152,14 @@ describe('DELETE /api/activities/:activityId/participants/:uid', () => {
             activityId: 'activity-1',
             targetUid: 'other-user',
             actorUid: 'test-uid-1',
+        });
+        expect(notificationsService.createNotification).toHaveBeenCalledWith({
+            recipientUid: 'other-user',
+            type: 'participant_removed',
+            title: 'Removed from activity',
+            body: 'The host removed you from an activity',
+            activityId: 'activity-1',
+            senderUid: 'test-uid-1',
         });
     });
 

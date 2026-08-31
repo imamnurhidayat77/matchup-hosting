@@ -14,6 +14,10 @@ type MarkNotificationReadParams = {
     notificationId: string;
 };
 
+type MarkMyNotificationReadParams = {
+    notificationId: string;
+};
+
 export async function createNotificationHandler(req: Request, res: Response) {
     try {
         const {
@@ -62,7 +66,10 @@ export async function createNotificationHandler(req: Request, res: Response) {
 
         if (
             type !== 'activity_reminder' &&
+            type !== 'activity_interest' &&
             type !== 'activity_joined' &&
+            type !== 'activity_left' &&
+            type !== 'participant_removed' &&
             type !== 'chat_message' &&
             type !== 'system'
         ) {
@@ -70,7 +77,7 @@ export async function createNotificationHandler(req: Request, res: Response) {
                 ok: false,
                 error: {
                     code: 'INVALID_INPUT',
-                    message: 'type must be activity_reminder, activity_joined, chat_message, or system',
+                    message: 'type must be activity_reminder, activity_interest, activity_joined, activity_left, participant_removed, chat_message, or system',
                 },
             });
         }
@@ -174,6 +181,39 @@ export async function listNotificationsHandler(
     }
 }
 
+export async function listMyNotificationsHandler(req: Request, res: Response) {
+    try {
+        const authUid = req.auth?.uid;
+
+        if (!authUid) {
+            return res.status(401).json({
+                ok: false,
+                error: {
+                    code: 'UNAUTHORIZED',
+                    message: 'Authenticated user is required',
+                },
+            });
+        }
+
+        const notifications = await listNotifications(authUid);
+
+        return res.status(200).json({
+            ok: true,
+            data: notifications,
+        });
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+
+        return res.status(500).json({
+            ok: false,
+            error: {
+                code: 'INTERNAL_ERROR',
+                message,
+            },
+        });
+    }
+}
+
 export async function markNotificationReadHandler(
     req: Request<MarkNotificationReadParams>,
     res: Response,
@@ -218,6 +258,67 @@ export async function markNotificationReadHandler(
             ok: true,
             data: {
                 uid,
+                notificationId,
+                isRead: true,
+            },
+        });
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+
+        if (message === 'Notification not found') {
+            return res.status(404).json({
+                ok: false,
+                error: {
+                    code: 'NOT_FOUND',
+                    message,
+                },
+            });
+        }
+
+        return res.status(500).json({
+            ok: false,
+            error: {
+                code: 'INTERNAL_ERROR',
+                message,
+            },
+        });
+    }
+}
+
+export async function markMyNotificationReadHandler(
+    req: Request<MarkMyNotificationReadParams>,
+    res: Response,
+) {
+    try {
+        const authUid = req.auth?.uid;
+        const { notificationId } = req.params;
+
+        if (!authUid) {
+            return res.status(401).json({
+                ok: false,
+                error: {
+                    code: 'UNAUTHORIZED',
+                    message: 'Authenticated user is required',
+                },
+            });
+        }
+
+        if (!notificationId.trim()) {
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'EMPTY_INPUT',
+                    message: 'notificationId is required',
+                },
+            });
+        }
+
+        await markNotificationRead(authUid, notificationId);
+
+        return res.status(200).json({
+            ok: true,
+            data: {
+                uid: authUid,
                 notificationId,
                 isRead: true,
             },

@@ -4,6 +4,8 @@ import {
   listSwipeDecisions,
   saveSwipeDecision,
 } from './swipes.service.js';
+import { getActivityById } from '../activities/activities.service.js';
+import { createNotification } from '../notifications/notifications.service.js';
 
 type GetSwipeParams = {
   uid: string;
@@ -68,6 +70,21 @@ export async function saveSwipeDecisionHandler(req: Request, res: Response) {
       decision,
     });
 
+    if (decision === 'join') {
+      const activity = await getActivityById(activityId);
+
+      if (activity && activity.hostId !== uid) {
+        await createNotification({
+          recipientUid: activity.hostId,
+          type: 'activity_interest',
+          title: 'New activity interest',
+          body: 'Someone is interested in your activity',
+          activityId,
+          senderUid: uid,
+        });
+      }
+    }
+
     return res.status(200).json({
       ok: true,
       data: {
@@ -116,6 +133,16 @@ export async function getSwipeDecisionHandler(
       });
     }
 
+    if (req.auth?.uid !== uid) {
+      return res.status(403).json({
+        ok: false,
+        error: {
+          code: 'FORBIDDEN',
+          message: 'You can only access your own swipe decisions',
+        },
+      });
+    }
+
     const swipe = await getSwipeDecision(uid, activityId);
 
     if (!swipe) {
@@ -158,6 +185,16 @@ export async function listSwipeDecisionsHandler(
         error: {
           code: 'EMPTY_INPUT',
           message: 'uid is required',
+        },
+      });
+    }
+
+    if (req.auth?.uid !== uid) {
+      return res.status(403).json({
+        ok: false,
+        error: {
+          code: 'FORBIDDEN',
+          message: 'You can only access your own swipe decisions',
         },
       });
     }

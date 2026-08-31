@@ -9,6 +9,18 @@ vi.mock('./swipes.service.js', () => {
   };
 });
 
+vi.mock('../activities/activities.service.js', () => {
+  return {
+    getActivityById: vi.fn(),
+  };
+});
+
+vi.mock('../notifications/notifications.service.js', () => {
+  return {
+    createNotification: vi.fn().mockResolvedValue({ notificationId: 'notification-1' }),
+  };
+});
+
 vi.mock('../../middleware/auth.middleware.js', () => {
   return {
     requireAuth: vi.fn((req, _res, next) => {
@@ -23,6 +35,8 @@ vi.mock('../../middleware/auth.middleware.js', () => {
 
 import { createApp } from '../../app/app.js';
 import * as swipesService from './swipes.service.js';
+import * as activitiesService from '../activities/activities.service.js';
+import * as notificationsService from '../notifications/notifications.service.js';
 
 describe('swipes routes', () => {
   describe('POST /api/swipes', () => {
@@ -30,7 +44,12 @@ describe('swipes routes', () => {
       vi.clearAllMocks();
     });
 
-    it('when request body is valid => expected 200', async () => {
+    it('when request body is valid and decision is join => expected 200', async () => {
+      vi.mocked(activitiesService.getActivityById).mockResolvedValueOnce({
+        activityId: 'activity-1',
+        hostId: 'host-uid-1',
+      } as never);
+
       const app = createApp();
 
       const response = await request(app).post('/api/swipes').send({
@@ -47,6 +66,60 @@ describe('swipes routes', () => {
           decision: 'join',
         },
       });
+      expect(notificationsService.createNotification).toHaveBeenCalledWith({
+        recipientUid: 'host-uid-1',
+        type: 'activity_interest',
+        title: 'New activity interest',
+        body: 'Someone is interested in your activity',
+        activityId: 'activity-1',
+        senderUid: 'test-uid-1',
+      });
+    });
+
+    it('when decision is pass => expected 200 without notification', async () => {
+      const app = createApp();
+
+      const response = await request(app).post('/api/swipes').send({
+        activityId: 'activity-1',
+        decision: 'pass',
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        ok: true,
+        data: {
+          uid: 'test-uid-1',
+          activityId: 'activity-1',
+          decision: 'pass',
+        },
+      });
+      expect(activitiesService.getActivityById).not.toHaveBeenCalled();
+      expect(notificationsService.createNotification).not.toHaveBeenCalled();
+    });
+
+    it('when authenticated user is activity host => expected 200 without notification', async () => {
+      vi.mocked(activitiesService.getActivityById).mockResolvedValueOnce({
+        activityId: 'activity-1',
+        hostId: 'test-uid-1',
+      } as never);
+
+      const app = createApp();
+
+      const response = await request(app).post('/api/swipes').send({
+        activityId: 'activity-1',
+        decision: 'join',
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        ok: true,
+        data: {
+          uid: 'test-uid-1',
+          activityId: 'activity-1',
+          decision: 'join',
+        },
+      });
+      expect(notificationsService.createNotification).not.toHaveBeenCalled();
     });
 
     it('when activityId is not a string => expected 400 w/ INVALID_INPUT', async () => {
@@ -193,6 +266,21 @@ describe('swipes routes', () => {
       });
     });
 
+    it('when authenticated user does not own requested swipe decision => expected 403 w/ FORBIDDEN', async () => {
+      const app = createApp();
+
+      const response = await request(app).get('/api/swipes/other-uid/activity-1');
+
+      expect(response.status).toBe(403);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'FORBIDDEN',
+          message: 'You can only access your own swipe decisions',
+        },
+      });
+    });
+
     it('when swipe decision is not found => expected 404 w/ NOT_FOUND', async () => {
       vi.mocked(swipesService.getSwipeDecision).mockResolvedValueOnce(null);
 
@@ -272,6 +360,21 @@ describe('swipes routes', () => {
         error: {
           code: 'EMPTY_INPUT',
           message: 'uid is required',
+        },
+      });
+    });
+
+    it('when authenticated user does not own requested swipe decisions => expected 403 w/ FORBIDDEN', async () => {
+      const app = createApp();
+
+      const response = await request(app).get('/api/swipes/other-uid');
+
+      expect(response.status).toBe(403);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'FORBIDDEN',
+          message: 'You can only access your own swipe decisions',
         },
       });
     });
