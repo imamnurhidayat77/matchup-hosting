@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/providers/auth_state_provider.dart';
 import '../../../core/providers/repository_providers.dart';
+import '../data/auth_repository.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
@@ -77,7 +78,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
       if (!mounted) return;
       AppSnackbar.show(
         context,
-        message: e is Exception ? e.toString().replaceFirst('Exception: ', '') : 'Registration failed. Please try again.',
+        message: e is AuthException ? e.userMessage : 'Registration failed. Please try again.',
         variant: AppSnackbarVariant.error,
       );
     } finally {

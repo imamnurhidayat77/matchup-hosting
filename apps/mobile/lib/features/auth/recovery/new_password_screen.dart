@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/providers/repository_providers.dart';
+import '../data/auth_repository.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
@@ -96,7 +97,7 @@ class _NewPasswordScreenState extends ConsumerState<NewPasswordScreen>
       if (!mounted) return;
       // show error inline — stay on this screen
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e is Exception ? e.toString().replaceFirst('Exception: ', '') : 'Password reset failed.')),
+        SnackBar(content: Text(e is AuthException ? e.userMessage : 'Password reset failed. Please try again.')),
       );
     } finally {
       if (mounted) setState(() => _isSubmitting = false);

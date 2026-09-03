@@ -8,9 +8,11 @@ class Env {
 
   static String get appEnv => dotenv.maybeGet('APP_ENV') ?? 'local';
 
-  /// Toggle for the data layer: `true` hits the live backend, `false` keeps
-  /// the in-memory dummy repository. Defaults to `false` until the API is
-  /// ready; flip to `true` via env or provider override once endpoints ship.
+  /// Firebase Web API Key — used by the Firebase REST Auth API.
+  /// Get this from Firebase Console → Project Settings → General → Web API Key.
+  static String get firebaseWebApiKey =>
+      dotenv.maybeGet('FIREBASE_WEB_API_KEY') ?? '';
+
   static bool get useRemoteApi =>
       (dotenv.maybeGet('USE_REMOTE_API') ?? 'false').toLowerCase() == 'true';
 

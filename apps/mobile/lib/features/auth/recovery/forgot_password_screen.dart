@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/providers/repository_providers.dart';
+import '../data/auth_repository.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
@@ -53,7 +54,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
       if (!mounted) return;
       AppSnackbar.show(
         context,
-        message: e is Exception ? e.toString().replaceFirst('Exception: ', '') : 'Could not send reset email.',
+        message: e is AuthException ? e.userMessage : 'Could not send reset email. Please try again.',
         variant: AppSnackbarVariant.error,
       );
     } finally {

@@ -56,7 +56,7 @@ class RemoteCalendarRepository implements CalendarRepository {
   Future<List<CalendarEvent>> upcoming({int days = 30}) async {
     try {
       final res = await _client.dio.get(
-        '/api/v1/calendar/upcoming',
+        '/calendar/upcoming',
         queryParameters: {'days': days},
       );
       return (res.data as List).map(_parse).toList();
@@ -69,7 +69,7 @@ class RemoteCalendarRepository implements CalendarRepository {
   @override
   Future<void> addToDeviceCalendar(CalendarEvent event) async {
     try {
-      await _client.dio.post('/api/v1/calendar/sync', data: _toJson(event));
+      await _client.dio.post('/calendar/sync', data: _toJson(event));
     } catch (e, st) {
       debugPrint('[RemoteCalendarRepository] $e\n$st');
       await _fallback.addToDeviceCalendar(event);

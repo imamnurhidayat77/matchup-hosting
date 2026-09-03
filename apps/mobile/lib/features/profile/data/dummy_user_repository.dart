@@ -139,7 +139,7 @@ class RemoteUserRepository implements UserRepository {
         debugPrint('[RemoteUserRepository.me] no stored userId — falling back');
         return _fallback.me();
       }
-      final res = await _client.dio.get('/api/v1/users/$userId');
+      final res = await _client.dio.get('/users/$userId');
       return _parse(res.data as Map<String, dynamic>) ?? await _fallback.me();
     } on DioException catch (e) {
       debugPrint('[RemoteUserRepository.me] DioException ${e.response?.statusCode}: ${e.message}');
@@ -153,7 +153,7 @@ class RemoteUserRepository implements UserRepository {
   @override
   Future<UserModel?> byId(String id) async {
     try {
-      final res = await _client.dio.get('/api/v1/users/$id');
+      final res = await _client.dio.get('/users/$id');
       return _parse(res.data as Map<String, dynamic>);
     } catch (_) {
       return _fallback.byId(id);
@@ -175,7 +175,7 @@ class RemoteUserRepository implements UserRepository {
   }) async {
     try {
       final res = await _client.dio.patch(
-        '/api/v1/users/me',
+        '/users/me',
         data: {
           'display_name': ?displayName,
           'bio': ?bio,

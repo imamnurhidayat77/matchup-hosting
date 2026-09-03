@@ -31,7 +31,7 @@ class RemoteReportRepository implements ReportRepository {
   }) async {
     try {
       await _client.dio.post(
-        '/api/v1/reports',
+        '/reports',
         data: {
           'target_id': targetId,
           'target_type': targetType.name, // 'user' | 'activity'

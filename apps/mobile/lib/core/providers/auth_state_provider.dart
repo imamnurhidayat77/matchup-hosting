@@ -4,24 +4,14 @@ import '../storage/secure_token_store.dart';
 
 // ─── Domain ──────────────────────────────────────────────────────────────────
 
-/// Represents the authentication state of the current session.
-enum AuthStatus {
-  /// Initial state — session check not complete yet.
-  unknown,
-
-  /// Valid access token exists in secure storage.
-  authenticated,
-
-  /// No token or token cleared (logged out).
-  unauthenticated,
-}
+enum AuthStatus { unknown, authenticated, unauthenticated }
 
 class AuthState {
   const AuthState({this.status = AuthStatus.unknown, this.userId});
 
   final AuthStatus status;
 
-  /// The stored user ID, or null when unauthenticated.
+  /// The stored Firebase UID, or null when unauthenticated.
   final String? userId;
 
   bool get isAuthenticated => status == AuthStatus.authenticated;
@@ -41,7 +31,8 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
 
   final _store = SecureTokenStore.instance;
 
-  /// Called at app start (splash screen). Reads secure storage and sets state.
+  /// Called at app start (splash screen). Reads secure storage to determine
+  /// if a valid session exists (stored Firebase ID token + userId).
   Future<void> checkSession() async {
     final hasSession = await _store.hasValidSession;
     if (hasSession) {
@@ -52,11 +43,12 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  /// Called after successful login. Persists tokens and sets authenticated.
+  /// Called after successful Firebase REST sign-in/register.
+  /// Persists the Firebase ID token (accessToken), refresh token, and userId.
   Future<void> signIn({
-    required String accessToken,
-    required String refreshToken,
-    required String userId,
+    required String accessToken,   // Firebase ID token
+    required String refreshToken,  // Firebase refresh token
+    required String userId,        // Firebase UID (localId)
   }) async {
     await Future.wait([
       _store.saveAccessToken(accessToken),
@@ -66,7 +58,7 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
     state = AuthState(status: AuthStatus.authenticated, userId: userId);
   }
 
-  /// Called on logout. Clears ALL tokens and navigates to unauthenticated.
+  /// Clears all stored tokens and sets state to unauthenticated.
   Future<void> signOut() async {
     await _store.clearAll();
     state = AuthState.unauthenticated;
@@ -79,12 +71,10 @@ final authStateProvider = StateNotifierProvider<AuthStateNotifier, AuthState>(
   (ref) => AuthStateNotifier(),
 );
 
-/// Convenience: just the status enum.
 final authStatusProvider = Provider<AuthStatus>(
   (ref) => ref.watch(authStateProvider).status,
 );
 
-/// True when session check has completed AND user is authenticated.
 final isAuthenticatedProvider = Provider<bool>(
   (ref) => ref.watch(authStateProvider).isAuthenticated,
 );

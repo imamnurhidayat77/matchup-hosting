@@ -1,25 +1,44 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../../core/config/env.dart';
 import '../../../core/network/api_client.dart';
 import 'auth_repository.dart';
-import 'dummy_auth_repository.dart';
 
-/// HTTP-backed [AuthRepository].
+/// Firebase Auth REST API base URL.
+const _firebaseAuthBase =
+    'https://identitytoolkit.googleapis.com/v1/accounts';
+
+/// HTTP-backed [AuthRepository] using the Firebase Authentication REST API.
 ///
-/// All calls hit `/api/v1/auth/*`. On network failure the error is
-/// re-thrown as [AuthException] so screens show a proper message rather
-/// than silently succeeding with dummy data — auth failures are not
-/// gracefully recoverable the way a missing activity list might be.
+/// No Firebase Flutter SDK required — all calls go through plain HTTP.
+/// The ID token returned by Firebase is what the backend's [requireAuth]
+/// middleware verifies via `firebase-admin verifyIdToken`.
 ///
-/// [DummyAuthRepository] is kept as a fallback only for the [signOut]
-/// path — a failing sign-out should still clear local state.
+/// Flow:
+///   1. signIn/register → Firebase REST → get idToken + refreshToken
+///   2. Store tokens in [SecureTokenStore] (via [AuthStateNotifier.signIn])
+///   3. [ApiClient] reads idToken for every backend request
+///   4. On 401 → refresh via securetoken endpoint → retry once
 class RemoteAuthRepository implements AuthRepository {
-  RemoteAuthRepository({ApiClient? client})
-      : _client = client ?? ApiClient.instance;
+  RemoteAuthRepository({Dio? firebaseClient, ApiClient? apiClient})
+      : _fb = firebaseClient ?? _buildFirebaseDio(),
+        _api = apiClient ?? ApiClient.instance;
 
-  final ApiClient _client;
-  final _dummy = DummyAuthRepository();
+  final Dio _fb;
+  final ApiClient _api;
+
+  static Dio _buildFirebaseDio() => Dio(
+        BaseOptions(
+          connectTimeout: const Duration(seconds: 12),
+          receiveTimeout: const Duration(seconds: 12),
+          headers: {'Content-Type': 'application/json'},
+        ),
+      );
+
+  String get _key => Env.firebaseWebApiKey;
+
+  // ─── AuthRepository ────────────────────────────────────────────────────────
 
   @override
   Future<AuthResult> signIn({
@@ -27,11 +46,15 @@ class RemoteAuthRepository implements AuthRepository {
     required String password,
   }) async {
     try {
-      final res = await _client.dio.post(
-        '/api/v1/auth/sign-in',
-        data: {'email': email, 'password': password},
+      final res = await _fb.post(
+        '$_firebaseAuthBase:signInWithPassword?key=$_key',
+        data: {
+          'email': email.trim(),
+          'password': password,
+          'returnSecureToken': true,
+        },
       );
-      return _parseResult(res.data as Map<String, dynamic>);
+      return _parseFirebaseResult(res.data as Map<String, dynamic>);
     } on DioException catch (e) {
       throw _toAuthException(e);
     } catch (e) {
@@ -47,11 +70,46 @@ class RemoteAuthRepository implements AuthRepository {
     required String password,
   }) async {
     try {
-      final res = await _client.dio.post(
-        '/api/v1/auth/register',
-        data: {'display_name': name, 'email': email, 'password': password},
+      // 1. Create Firebase user
+      final res = await _fb.post(
+        '$_firebaseAuthBase:signUp?key=$_key',
+        data: {
+          'email': email.trim(),
+          'password': password,
+          'returnSecureToken': true,
+        },
       );
-      return _parseResult(res.data as Map<String, dynamic>);
+      final result = _parseFirebaseResult(res.data as Map<String, dynamic>);
+
+      // 2. Set display name via updateProfile
+      try {
+        await _fb.post(
+          '$_firebaseAuthBase:update?key=$_key',
+          data: {
+            'idToken': result.accessToken,
+            'displayName': name.trim(),
+            'returnSecureToken': false,
+          },
+        );
+      } catch (e) {
+        // Non-fatal — display name update can fail silently
+        debugPrint('[RemoteAuthRepository.register] displayName update failed: $e');
+      }
+
+      // 3. Create user profile in backend Firestore
+      try {
+        await _api.dio.post(
+          '/users',
+          data: {
+            'authUid': result.userId,
+            'email': email.trim().toLowerCase(),
+          },
+        );
+      } catch (e) {
+        debugPrint('[RemoteAuthRepository.register] backend profile create failed: $e');
+      }
+
+      return result;
     } on DioException catch (e) {
       throw _toAuthException(e);
     } catch (e) {
@@ -63,15 +121,19 @@ class RemoteAuthRepository implements AuthRepository {
   @override
   Future<void> forgotPassword({required String email}) async {
     try {
-      await _client.dio.post(
-        '/api/v1/auth/forgot-password',
-        data: {'email': email},
+      await _fb.post(
+        '$_firebaseAuthBase:sendOobCode?key=$_key',
+        data: {
+          'requestType': 'PASSWORD_RESET',
+          'email': email.trim(),
+        },
       );
     } on DioException catch (e) {
       throw _toAuthException(e);
     } catch (e) {
       debugPrint('[RemoteAuthRepository.forgotPassword] unexpected: $e');
-      throw const AuthException('Could not send reset email. Please try again.');
+      throw const AuthException(
+          'Could not send reset email. Please try again.');
     }
   }
 
@@ -80,17 +142,8 @@ class RemoteAuthRepository implements AuthRepository {
     required String email,
     required String code,
   }) async {
-    try {
-      await _client.dio.post(
-        '/api/v1/auth/verify-otp',
-        data: {'email': email, 'code': code},
-      );
-    } on DioException catch (e) {
-      throw _toAuthException(e);
-    } catch (e) {
-      debugPrint('[RemoteAuthRepository.verifyOtp] unexpected: $e');
-      throw const AuthException('Verification failed. Please try again.');
-    }
+    // Firebase email/password reset uses a link, not a 6-digit OTP.
+    // This is a no-op in the Firebase REST path — kept for interface compat.
   }
 
   @override
@@ -98,58 +151,90 @@ class RemoteAuthRepository implements AuthRepository {
     required String email,
     required String newPassword,
   }) async {
-    try {
-      await _client.dio.post(
-        '/api/v1/auth/reset-password',
-        data: {'email': email, 'new_password': newPassword},
-      );
-    } on DioException catch (e) {
-      throw _toAuthException(e);
-    } catch (e) {
-      debugPrint('[RemoteAuthRepository.resetPassword] unexpected: $e');
-      throw const AuthException('Password reset failed. Please try again.');
-    }
+    // Firebase password reset is done via the link sent in forgotPassword.
+    // If the user has a valid idToken (signed in), we can update directly.
+    // Otherwise this is handled by Firebase on the web side via the reset link.
+    debugPrint('[RemoteAuthRepository.resetPassword] handled via Firebase reset link');
   }
 
   @override
   Future<void> signOut() async {
-    try {
-      await _client.dio.post('/api/v1/auth/sign-out');
-    } catch (_) {
-      // Sign-out failure is non-fatal — local tokens are always cleared by
-      // AuthStateNotifier.signOut() regardless of this call's outcome.
-      await _dummy.signOut();
-    }
+    // Firebase REST API has no server-side sign-out — tokens are cleared
+    // locally by AuthStateNotifier.signOut().
   }
 
-  // ─── Helpers ───────────────────────────────────────────────────────────────
+  // ─── Helpers ──────────────────────────────────────────────────────────────
 
-  AuthResult _parseResult(Map<String, dynamic> json) {
-    final accessToken = json['access_token'] as String?;
-    final refreshToken = json['refresh_token'] as String?;
-    final userId = json['user_id']?.toString();
+  AuthResult _parseFirebaseResult(Map<String, dynamic> json) {
+    final idToken = json['idToken'] as String?;
+    final refreshToken = json['refreshToken'] as String?;
+    final localId = json['localId'] as String?; // Firebase UID
 
-    if (accessToken == null || refreshToken == null || userId == null) {
+    if (idToken == null || refreshToken == null || localId == null) {
       throw const AuthException(
-        'Unexpected server response. Please try again.',
+        'Unexpected response from auth server.',
         code: 'PARSE_ERROR',
       );
     }
+
     return AuthResult(
-      accessToken: accessToken,
+      accessToken: idToken,
       refreshToken: refreshToken,
-      userId: userId,
+      userId: localId,
     );
   }
 
   AuthException _toAuthException(DioException e) {
-    final err = e.error;
-    if (err is ApiException) {
-      return AuthException(err.userMessage, code: err.code);
-    }
-    // Fallback for non-intercepted errors (e.g. connection refused in test).
-    return AuthException(
-      e.message ?? 'Network error. Please check your connection.',
-    );
+    // Firebase REST errors: { "error": { "message": "EMAIL_NOT_FOUND" } }
+    // Message sometimes has suffix detail: "WEAK_PASSWORD : Password should be..."
+    final data = e.response?.data;
+    final rawMsg = data is Map
+        ? (data['error'] as Map?)?.tryGet<String>('message')
+        : null;
+
+    // Strip suffix after ' : ' so matching is stable regardless of Firebase
+    // appending extra detail (e.g. "WEAK_PASSWORD : Password should be at least 6 characters")
+    final firebaseCode = rawMsg?.split(' : ').first.trim();
+
+    final userMsg = switch (firebaseCode) {
+      'EMAIL_NOT_FOUND' ||
+      'INVALID_PASSWORD' ||
+      'INVALID_LOGIN_CREDENTIALS' =>
+        'Incorrect email or password.',
+      'EMAIL_EXISTS' =>
+        'An account with this email already exists.',
+      'WEAK_PASSWORD' =>
+        'Password must be at least 6 characters.',
+      'INVALID_EMAIL' =>
+        'Please enter a valid email address.',
+      'USER_DISABLED' =>
+        'This account has been disabled.',
+      'TOO_MANY_ATTEMPTS_TRY_LATER' =>
+        'Too many attempts. Please try again later.',
+      'MISSING_PASSWORD' =>
+        'Password is required.',
+      'MISSING_EMAIL' =>
+        'Email is required.',
+      'USER_NOT_FOUND' =>
+        'Account not found.',
+      'TOKEN_EXPIRED' ||
+      'INVALID_ID_TOKEN' =>
+        'Session expired. Please sign in again.',
+      _ when e.type == DioExceptionType.connectionError ||
+            e.type == DioExceptionType.connectionTimeout =>
+        'Cannot reach the server. Check your internet connection.',
+      _ => 'Authentication failed. Please try again.',
+    };
+
+    return AuthException(userMsg, code: firebaseCode);
+  }
+}
+
+// ─── Extension helpers ────────────────────────────────────────────────────────
+
+extension _MapTryGet on Map {
+  T? tryGet<T>(String key) {
+    final v = this[key];
+    return v is T ? v : null;
   }
 }

@@ -4,11 +4,11 @@ import 'package:flutter/foundation.dart';
 import '../config/env.dart';
 import '../storage/secure_token_store.dart';
 
-/// Base path versioning — one place to change when the API version bumps.
-const String _apiBase = '/api/v1';
+/// Base path — matches the api-server route prefix.
+const String _apiBase = '/api';
 
 /// Production-ready Dio client with three interceptors:
-///   1. [_AuthInterceptor]    — inject Bearer token; refresh on 401.
+///   1. [_AuthInterceptor]    — inject stored Firebase ID token; refresh on 401.
 ///   2. [_ErrorInterceptor]   — normalise Dio errors into [ApiException].
 ///   3. [_LoggingInterceptor] — debug-only, redacts sensitive headers.
 class ApiClient {
@@ -18,7 +18,6 @@ class ApiClient {
 
   final Dio _dio;
 
-  /// Fully configured Dio instance. Use this for all HTTP calls.
   Dio get dio => _dio;
 
   static Dio _buildDio() {
@@ -31,12 +30,10 @@ class ApiClient {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        // Never follow redirects to a cleartext http:// origin.
         followRedirects: false,
       ),
     );
 
-    // Order matters: auth → error → logging (logging wraps everything).
     dio.interceptors.addAll([
       _AuthInterceptor(),
       _ErrorInterceptor(),
@@ -49,7 +46,9 @@ class ApiClient {
 
 // ─── Interceptors ────────────────────────────────────────────────────────────
 
-/// Injects the stored access token and handles a single 401 refresh cycle.
+/// Injects the stored Firebase ID token and handles a single 401 refresh cycle.
+/// The ID token is a short-lived JWT issued by Firebase — expired after 1 hour.
+/// On 401, we call the Firebase securetoken REST endpoint to get a fresh one.
 class _AuthInterceptor extends Interceptor {
   @override
   Future<void> onRequest(
@@ -69,11 +68,9 @@ class _AuthInterceptor extends Interceptor {
     ErrorInterceptorHandler handler,
   ) async {
     if (err.response?.statusCode == 401) {
-      // Attempt token refresh once. If it fails, clear and propagate.
       try {
-        final refreshed = await _tryRefresh();
+        final refreshed = await _tryRefreshFirebaseToken();
         if (refreshed) {
-          // Retry original request with new token.
           final token = await SecureTokenStore.instance.readAccessToken();
           final opts = err.requestOptions;
           opts.headers['Authorization'] = 'Bearer $token';
@@ -81,32 +78,46 @@ class _AuthInterceptor extends Interceptor {
           return handler.resolve(response);
         }
       } catch (_) {
-        // Refresh failed — force logout by clearing tokens.
         await SecureTokenStore.instance.clearAll();
       }
     }
     handler.next(err);
   }
 
-  Future<bool> _tryRefresh() async {
-    final refresh = await SecureTokenStore.instance.readRefreshToken();
-    if (refresh == null || refresh.isEmpty) return false;
+  /// Exchanges the stored Firebase refresh token for a fresh ID token
+  /// using the Firebase securetoken REST endpoint.
+  Future<bool> _tryRefreshFirebaseToken() async {
+    final refreshToken = await SecureTokenStore.instance.readRefreshToken();
+    if (refreshToken == null || refreshToken.isEmpty) return false;
+
+    final apiKey = Env.firebaseWebApiKey;
+    if (apiKey.isEmpty) return false;
+
     try {
-      // Bypass interceptors to avoid infinite loop.
-      final plain = Dio(BaseOptions(baseUrl: Env.apiBaseUrl));
+      final plain = Dio();
       final res = await plain.post(
-        '/api/v1/auth/refresh',
-        data: {'refresh_token': refresh},
+        'https://securetoken.googleapis.com/v1/token?key=$apiKey',
+        data: {
+          'grant_type': 'refresh_token',
+          'refresh_token': refreshToken,
+        },
+        options: Options(
+          headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        ),
       );
-      final newAccess = res.data['access_token'] as String?;
-      final newRefresh = res.data['refresh_token'] as String?;
-      if (newAccess == null) return false;
-      await SecureTokenStore.instance.saveAccessToken(newAccess);
-      if (newRefresh != null) {
-        await SecureTokenStore.instance.saveRefreshToken(newRefresh);
+
+      final newIdToken = res.data['id_token'] as String?;
+      final newRefreshToken = res.data['refresh_token'] as String?;
+
+      if (newIdToken == null) return false;
+
+      await SecureTokenStore.instance.saveAccessToken(newIdToken);
+      if (newRefreshToken != null) {
+        await SecureTokenStore.instance.saveRefreshToken(newRefreshToken);
       }
       return true;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[ApiClient] token refresh failed: $e');
       return false;
     }
   }
@@ -160,9 +171,6 @@ class _LoggingInterceptor extends Interceptor {
 
 // ─── Domain error types ───────────────────────────────────────────────────────
 
-/// Typed failure surfaced by [_ErrorInterceptor].
-/// Screens convert this to a user-friendly message rather than showing
-/// raw HTTP exceptions.
 class ApiException implements Exception {
   const ApiException({
     required this.statusCode,
@@ -172,7 +180,7 @@ class ApiException implements Exception {
 
   final int? statusCode;
   final String userMessage;
-  final String? code; // server error code, e.g. "USER_NOT_FOUND"
+  final String? code;
 
   factory ApiException.fromDio(DioException err) {
     final status = err.response?.statusCode;
