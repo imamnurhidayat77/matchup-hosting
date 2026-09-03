@@ -7,7 +7,7 @@ import '../domain/user_model.dart';
 import 'user_repository.dart';
 
 
-class DummyUserRepository implements UserRepository {
+class LocalUserRepository implements UserRepository {
   UserModel _me = UserModel(
     id: 'me',
     displayName: 'Alex Mercer',
@@ -126,7 +126,7 @@ class DummyUserRepository implements UserRepository {
 class RemoteUserRepository implements UserRepository {
   RemoteUserRepository({ApiClient? client, UserRepository? fallback})
     : _client = client ?? ApiClient.instance,
-      _fallback = fallback ?? DummyUserRepository();
+      _fallback = fallback ?? LocalUserRepository();
 
   final ApiClient _client;
   final UserRepository _fallback;

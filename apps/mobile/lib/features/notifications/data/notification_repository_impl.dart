@@ -4,7 +4,7 @@ import '../../../core/network/api_client.dart';
 import '../domain/app_notification.dart';
 import 'notification_repository.dart';
 
-class DummyNotificationRepository implements NotificationRepository {
+class LocalNotificationRepository implements NotificationRepository {
   final List<AppNotification> _all = [
     AppNotification(
       id: '1',
@@ -103,7 +103,7 @@ class RemoteNotificationRepository implements NotificationRepository {
     ApiClient? client,
     NotificationRepository? fallback,
   }) : _client = client ?? ApiClient.instance,
-       _fallback = fallback ?? DummyNotificationRepository();
+       _fallback = fallback ?? LocalNotificationRepository();
 
   final ApiClient _client;
   final NotificationRepository _fallback;

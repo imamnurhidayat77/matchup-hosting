@@ -1,7 +1,7 @@
 import '../../activities/domain/activity_participant.dart';
 import '../domain/activity_model.dart';
 
-/// Read/write contract for activity data. Both [DummyActivityRepository]
+/// Read/write contract for activity data. Both [LocalActivityRepository]
 /// (current static-data fallback) and [RemoteActivityRepository] (calls
 /// the MatchUp backend via [ApiClient]) implement this interface, so screens
 /// can swap implementations at the provider layer without changes.

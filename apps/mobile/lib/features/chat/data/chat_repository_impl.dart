@@ -5,7 +5,7 @@ import '../../../core/network/api_client.dart';
 import '../domain/chat_message.dart';
 import 'chat_repository.dart';
 
-class DummyChatRepository implements ChatRepository {
+class LocalChatRepository implements ChatRepository {
   final Map<String, List<ChatMessage>> _byActivity = {};
 
   List<ChatMessage> _seed(String activityId) {
@@ -147,7 +147,7 @@ class DummyChatRepository implements ChatRepository {
 class RemoteChatRepository implements ChatRepository {
   RemoteChatRepository({ApiClient? client, ChatRepository? fallback})
     : _client = client ?? ApiClient.instance,
-      _fallback = fallback ?? DummyChatRepository();
+      _fallback = fallback ?? LocalChatRepository();
 
   final ApiClient _client;
   final ChatRepository _fallback;

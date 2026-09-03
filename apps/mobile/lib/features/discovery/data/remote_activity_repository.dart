@@ -4,16 +4,16 @@ import '../../../core/network/api_client.dart';
 import '../../activities/domain/activity_participant.dart';
 import '../domain/activity_model.dart';
 import 'activity_repository.dart';
-import 'dummy_activity_repository.dart';
+import 'activity_repository_impl.dart';
 
 /// HTTP-backed [ActivityRepository] for the live MatchUp API. All endpoints
 /// are stubbed at `/api/v1/activities/...` — replace the path constants and
 /// JSON parsing once the backend ships. Until then, this implementation
-/// delegates to [DummyActivityRepository] so the app keeps working.
+/// delegates to [LocalActivityRepository] so the app keeps working.
 class RemoteActivityRepository implements ActivityRepository {
   RemoteActivityRepository({ApiClient? client, ActivityRepository? fallback})
     : _client = client ?? ApiClient.instance,
-      _fallback = fallback ?? DummyActivityRepository();
+      _fallback = fallback ?? LocalActivityRepository();
 
   final ApiClient _client;
   final ActivityRepository _fallback;

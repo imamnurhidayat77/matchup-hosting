@@ -4,7 +4,7 @@ import '../../../core/network/api_client.dart';
 import '../domain/calendar_event.dart';
 import 'calendar_repository.dart';
 
-class DummyCalendarRepository implements CalendarRepository {
+class LocalCalendarRepository implements CalendarRepository {
   final List<CalendarEvent> _events = [
     CalendarEvent(
       id: '1',
@@ -47,7 +47,7 @@ class DummyCalendarRepository implements CalendarRepository {
 class RemoteCalendarRepository implements CalendarRepository {
   RemoteCalendarRepository({ApiClient? client, CalendarRepository? fallback})
     : _client = client ?? ApiClient.instance,
-      _fallback = fallback ?? DummyCalendarRepository();
+      _fallback = fallback ?? LocalCalendarRepository();
 
   final ApiClient _client;
   final CalendarRepository _fallback;
