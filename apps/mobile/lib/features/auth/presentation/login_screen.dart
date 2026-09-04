@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/providers/auth_state_provider.dart';
 import '../../../core/providers/repository_providers.dart';
+import '../data/auth_repository.dart';
 import '../../../core/services/biometric_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -96,12 +97,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         refreshToken: result.refreshToken,
         userId: result.userId,
       );
-      // Router redirect fires automatically — no manual context.go needed.
+      if (!mounted) return;
+      // Navigate explicitly — don't rely solely on the router redirect
+      // which fires asynchronously via refreshListenable. On slower devices
+      // the listener notification can arrive a frame late, requiring a
+      // second tap before the redirect triggers.
+      context.go('/discovery');
     } catch (e) {
       if (!mounted) return;
       AppSnackbar.show(
         context,
-        message: e is Exception ? e.toString().replaceFirst('Exception: ', '') : 'Login failed. Please try again.',
+        message: e is AuthException ? e.userMessage : 'Login failed. Please try again.',
         variant: AppSnackbarVariant.error,
       );
     } finally {

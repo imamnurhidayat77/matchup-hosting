@@ -6,8 +6,8 @@ import 'activity_repository.dart';
 /// All methods return deterministic seed data so screens render the same way
 /// they did before the data layer was introduced. Replace by binding
 /// [RemoteActivityRepository] in the provider override once endpoints ship.
-class DummyActivityRepository implements ActivityRepository {
-  DummyActivityRepository() {
+class LocalActivityRepository implements ActivityRepository {
+  LocalActivityRepository() {
     _all = _seed();
   }
 

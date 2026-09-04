@@ -318,7 +318,9 @@ class _StatsRow extends StatelessWidget {
             value: user.rating != null && user.rating! > 0
                 ? user.rating!.toStringAsFixed(1)
                 : '—',
-            label: 'Rating',
+            label: user.totalRatingCount > 0
+                ? 'Rating · ${user.totalRatingCount}'
+                : 'Rating',
           ),
         ),
       ],

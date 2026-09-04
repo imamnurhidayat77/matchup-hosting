@@ -4,7 +4,7 @@ import 'auth_repository.dart';
 /// Produces deterministic dummy tokens so the rest of the app
 /// (routing, profile loading, SecureTokenStore) behaves identically to
 /// the real backend path.
-class DummyAuthRepository implements AuthRepository {
+class LocalAuthRepository implements AuthRepository {
   @override
   Future<AuthResult> signIn({
     required String email,

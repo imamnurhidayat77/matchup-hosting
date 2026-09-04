@@ -82,8 +82,8 @@ void main() {
           ),
         ),
         GoRoute(
-          path: '/preferences',
-          builder: (_, _) => const Scaffold(body: Text('Preferences')),
+          path: '/filter',
+          builder: (_, _) => const Scaffold(body: Text('Filters')),
         ),
         GoRoute(
           path: '/notifications',
@@ -132,7 +132,7 @@ void main() {
       await pumpDiscovery(tester);
       await tester.tap(find.bySemanticsLabel('Filters'));
       await tester.pumpAndSettle();
-      expect(find.text('Preferences'), findsOneWidget);
+      expect(find.text('Filters'), findsOneWidget);
     });
 
     testWidgets(
@@ -141,7 +141,7 @@ void main() {
         await pumpDiscovery(tester);
         expect(find.text('Saturday Basketball'), findsOneWidget);
 
-        await tester.tap(find.text('Join game'));
+        await tester.tap(find.bySemanticsLabel('Join game'));
         // The exit animation (~320ms) plays before the navigation Future
         // (420ms delay) fires — settle both.
         await tester.pumpAndSettle(const Duration(milliseconds: 600));
@@ -162,7 +162,7 @@ void main() {
 
       await pumpDiscovery(tester);
 
-      await tester.tap(find.text('Not now'));
+      await tester.tap(find.bySemanticsLabel('Not now'));
       await tester.pumpAndSettle();
 
       expect(find.text("You're all caught up"), findsOneWidget);

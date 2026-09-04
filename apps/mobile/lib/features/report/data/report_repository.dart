@@ -3,7 +3,7 @@ enum ReportTargetType { user, activity }
 
 /// Abstract contract for submitting moderation reports.
 ///
-/// Implementations: [DummyReportRepository] (no-op, always succeeds),
+/// Implementations: [LocalReportRepository] (no-op, always succeeds),
 /// [RemoteReportRepository] (live API).
 abstract class ReportRepository {
   /// Submits a report for a user or activity.

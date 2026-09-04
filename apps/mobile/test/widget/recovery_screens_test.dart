@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:matchup_mobile/core/providers/repository_providers.dart';
+import 'package:matchup_mobile/features/auth/data/auth_repository_impl.dart';
 import 'package:matchup_mobile/features/auth/recovery/forgot_password_screen.dart';
 import 'package:matchup_mobile/features/auth/recovery/new_password_screen.dart';
 import 'package:matchup_mobile/features/auth/recovery/otp_verification_screen.dart';
@@ -14,7 +16,15 @@ Future<void> _pumpRouter(
 }) async {
   final router = GoRouter(initialLocation: initialLocation, routes: routes);
   await tester.pumpWidget(
-    ProviderScope(child: MaterialApp.router(routerConfig: router)),
+    ProviderScope(
+      overrides: [
+        // Default authRepositoryProvider reads Env.useRemoteApi (needs
+        // dotenv-loaded .env) and would hit Firebase network in tests —
+        // LocalAuthRepository always succeeds with short delays instead.
+        authRepositoryProvider.overrideWithValue(LocalAuthRepository()),
+      ],
+      child: MaterialApp.router(routerConfig: router),
+    ),
   );
   await tester.pumpAndSettle();
 }
@@ -42,7 +52,7 @@ void main() {
       await tester.tap(find.text('Send Code'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Please enter a valid email address.'), findsOneWidget);
+      expect(find.text('Enter a valid email address'), findsOneWidget);
     });
 
     testWidgets('should push otp-verification with the email once submitted', (

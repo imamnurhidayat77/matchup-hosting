@@ -51,7 +51,7 @@ void main() {
       expect(find.text('Notifications'), findsOneWidget);
       expect(find.text('New message from Alex'), findsOneWidget);
       expect(find.text('TODAY'), findsOneWidget);
-      expect(find.text('Mark all\nread'), findsOneWidget);
+      expect(find.text('Mark all read'), findsOneWidget);
     });
 
     testWidgets('should show an empty state when there are no notifications', (
@@ -113,7 +113,7 @@ void main() {
         );
 
         await pumpScreen(tester);
-        await tester.tap(find.text('Mark all\nread'));
+        await tester.tap(find.text('Mark all read'));
         await tester.pumpAndSettle();
 
         verify(() => repo.markAllRead()).called(1);

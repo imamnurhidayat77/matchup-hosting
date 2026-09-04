@@ -548,6 +548,7 @@ class _DobPicker extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadius.card),
         border: Border.all(color: _fieldBorder),
       ),
+      clipBehavior: Clip.hardEdge,
       child: Stack(
         children: [
           // Centre selection band
@@ -564,38 +565,44 @@ class _DobPicker extends StatelessWidget {
               ),
             ),
           ),
-          Row(
-            children: [
-              Expanded(
-                child: _Wheel(
-                  itemCount: daysInMonth,
-                  selectedIndex: day - 1,
-                  labelAt: (i) => '${i + 1}',
-                  onSelected: (i) => onDayChanged(i + 1),
-                  semanticLabel: 'Day',
+          // Wheels
+          Positioned.fill(
+            child: Row(
+              children: [
+                Expanded(
+                  child: _Wheel(
+                    key: ValueKey('day-$daysInMonth'),
+                    itemCount: daysInMonth,
+                    selectedIndex: day - 1,
+                    labelAt: (i) => '${i + 1}',
+                    onSelected: (i) => onDayChanged(i + 1),
+                    semanticLabel: 'Day',
+                  ),
                 ),
-              ),
-              Expanded(
-                flex: 2,
-                child: _Wheel(
-                  itemCount: 12,
-                  selectedIndex: month - 1,
-                  labelAt: (i) =>
-                      DateFormat('MMMM').format(DateTime(2000, i + 1)),
-                  onSelected: (i) => onMonthChanged(i + 1),
-                  semanticLabel: 'Month',
+                Expanded(
+                  flex: 2,
+                  child: _Wheel(
+                    key: const ValueKey('month'),
+                    itemCount: 12,
+                    selectedIndex: month - 1,
+                    labelAt: (i) =>
+                        DateFormat('MMMM').format(DateTime(2000, i + 1)),
+                    onSelected: (i) => onMonthChanged(i + 1),
+                    semanticLabel: 'Month',
+                  ),
                 ),
-              ),
-              Expanded(
-                child: _Wheel(
-                  itemCount: maxYear - minYear + 1,
-                  selectedIndex: year - minYear,
-                  labelAt: (i) => '${minYear + i}',
-                  onSelected: (i) => onYearChanged(minYear + i),
-                  semanticLabel: 'Year',
+                Expanded(
+                  child: _Wheel(
+                    key: const ValueKey('year'),
+                    itemCount: maxYear - minYear + 1,
+                    selectedIndex: year - minYear,
+                    labelAt: (i) => '${minYear + i}',
+                    onSelected: (i) => onYearChanged(minYear + i),
+                    semanticLabel: 'Year',
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
@@ -605,6 +612,7 @@ class _DobPicker extends StatelessWidget {
 
 class _Wheel extends StatefulWidget {
   const _Wheel({
+    super.key,
     required this.itemCount,
     required this.selectedIndex,
     required this.labelAt,
@@ -629,11 +637,18 @@ class _WheelState extends State<_Wheel> {
   @override
   void didUpdateWidget(_Wheel old) {
     super.didUpdateWidget(old);
-    // Keep the wheel in sync when the value is clamped externally (e.g. day
-    // 31 → 28 after switching to February).
+    // Sync position when selected index changes externally (e.g. day clamped
+    // after month switch). Use postFrameCallback to avoid calling jumpToItem
+    // during a build/layout phase.
     if (widget.selectedIndex != _controller.selectedItem &&
         _controller.hasClients) {
-      _controller.jumpToItem(widget.selectedIndex);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _controller.hasClients) {
+          _controller.jumpToItem(
+            widget.selectedIndex.clamp(0, widget.itemCount - 1),
+          );
+        }
+      });
     }
   }
 
@@ -650,7 +665,8 @@ class _WheelState extends State<_Wheel> {
       child: ListWheelScrollView.useDelegate(
         controller: _controller,
         itemExtent: _DobPicker._rowHeight,
-        diameterRatio: 100, // effectively flat, matching the mock
+        diameterRatio: 100,
+        overAndUnderCenterOpacity: 0.45,
         physics: const FixedExtentScrollPhysics(),
         onSelectedItemChanged: widget.onSelected,
         childDelegate: ListWheelChildBuilderDelegate(

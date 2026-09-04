@@ -16,7 +16,7 @@ class AuthResult {
 
 /// Abstract contract for every authentication operation the app performs.
 ///
-/// Implementations: [DummyAuthRepository] (local, always succeeds),
+/// Implementations: [LocalAuthRepository] (local, always succeeds),
 /// [RemoteAuthRepository] (live API).
 abstract class AuthRepository {
   /// Signs in with email + password. Returns [AuthResult] on success.

@@ -33,6 +33,9 @@ void main() {
   );
 
   Future<void> pumpScreen(WidgetTester tester) async {
+    await tester.binding.setSurfaceSize(const Size(600, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     await tester.pumpWidget(
       ProviderScope(
         overrides: [activityRepositoryProvider.overrideWithValue(repo)],
@@ -65,14 +68,17 @@ void main() {
       when(() => repo.byId('3')).thenAnswer((_) async => activity());
 
       await pumpScreen(tester);
-      await tester.tap(find.text('Check In'));
+      final checkIn = find.text('Check In');
+      await tester.ensureVisible(checkIn);
+      await tester.pumpAndSettle();
+      await tester.tap(checkIn);
       await tester.pump();
-      expect(find.text('Locating…'), findsOneWidget);
+      expect(find.text('Detecting your location…'), findsOneWidget);
 
       await tester.pump(const Duration(milliseconds: 900));
       await tester.pumpAndSettle();
 
-      expect(find.text('Checked in'), findsOneWidget);
+      expect(find.text('Checked in!'), findsOneWidget);
       expect(find.text('Checked In'), findsOneWidget);
     });
   });

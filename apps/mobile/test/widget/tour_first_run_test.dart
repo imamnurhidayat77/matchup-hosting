@@ -13,6 +13,7 @@ import 'package:matchup_mobile/features/discovery/data/activity_repository.dart'
 import 'package:matchup_mobile/features/discovery/presentation/discovery_screen.dart';
 import 'package:matchup_mobile/features/notifications/data/notification_repository.dart';
 import 'package:matchup_mobile/features/notifications/domain/app_notification.dart';
+import 'package:matchup_mobile/features/profile/data/user_repository_impl.dart';
 import 'package:matchup_mobile/features/preferences/presentation/get_to_know_1_screen.dart';
 import 'package:matchup_mobile/features/preferences/presentation/get_to_know_2_screen.dart';
 import 'package:matchup_mobile/features/preferences/presentation/get_to_know_3_screen.dart';
@@ -117,6 +118,12 @@ void main() {
         overrides: [
           activityRepositoryProvider.overrideWithValue(activityRepo),
           notificationRepositoryProvider.overrideWithValue(notifRepo),
+          // GetToKnow3Screen._onNext() calls userRepositoryProvider.
+          // updateProfile — the default provider reads Env.useRemoteApi
+          // (USE_REMOTE_API=true in .env.example) and hits network with a
+          // long timeout + endless saving spinner, timing out pumpAndSettle.
+          // LocalUserRepository completes synchronously instead.
+          userRepositoryProvider.overrideWithValue(LocalUserRepository()),
         ],
         child: MaterialApp.router(routerConfig: router),
       ),

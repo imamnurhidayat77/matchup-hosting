@@ -1,20 +1,23 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/auth/data/auth_repository.dart';
-import '../../features/auth/data/dummy_auth_repository.dart';
+import '../../features/auth/data/auth_repository_impl.dart';
 import '../../features/auth/data/remote_auth_repository.dart';
 import '../../features/calendar/data/calendar_repository.dart';
-import '../../features/calendar/data/dummy_calendar_repository.dart';
+import '../../features/calendar/data/calendar_repository_impl.dart';
 import '../../features/chat/data/chat_repository.dart';
-import '../../features/chat/data/dummy_chat_repository.dart';
+import '../../features/chat/data/chat_repository_impl.dart';
 import '../../features/discovery/data/activity_repository.dart';
-import '../../features/discovery/data/dummy_activity_repository.dart';
+import '../../features/discovery/data/activity_repository_impl.dart';
 import '../../features/discovery/data/remote_activity_repository.dart';
-import '../../features/notifications/data/dummy_notification_repository.dart';
+import '../../features/notifications/data/notification_repository_impl.dart';
 import '../../features/notifications/data/notification_repository.dart';
-import '../../features/profile/data/dummy_user_repository.dart';
+import '../../features/profile/data/user_repository_impl.dart';
 import '../../features/profile/data/user_repository.dart';
-import '../../features/report/data/dummy_report_repository.dart';
+import '../../features/ratings/data/ratings_repository.dart';
+import '../../features/ratings/data/ratings_repository_impl.dart';
+import '../../features/ratings/data/remote_ratings_repository.dart';
+import '../../features/report/data/report_repository_impl.dart';
 import '../../features/report/data/remote_report_repository.dart';
 import '../../features/report/data/report_repository.dart';
 import '../config/env.dart';
@@ -25,49 +28,58 @@ import '../config/env.dart';
 final useRemoteApiProvider = Provider<bool>((ref) => Env.useRemoteApi);
 
 /// Auth operations: sign-in, register, OTP, password reset.
-/// All auth screens use this — never call AuthStateNotifier with dummy tokens
+/// All auth screens use this — never call AuthStateNotifier with local tokens
 /// directly from the UI layer.
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   final remote = ref.watch(useRemoteApiProvider);
   if (remote) return RemoteAuthRepository();
-  return DummyAuthRepository();
+  return LocalAuthRepository();
 });
 
 final activityRepositoryProvider = Provider<ActivityRepository>((ref) {
   final remote = ref.watch(useRemoteApiProvider);
   if (remote) return RemoteActivityRepository();
-  return DummyActivityRepository();
+  return LocalActivityRepository();
 });
 
 final userRepositoryProvider = Provider<UserRepository>((ref) {
   final remote = ref.watch(useRemoteApiProvider);
   if (remote) return RemoteUserRepository();
-  return DummyUserRepository();
+  return LocalUserRepository();
 });
 
 final chatRepositoryProvider = Provider<ChatRepository>((ref) {
   final remote = ref.watch(useRemoteApiProvider);
   if (remote) return RemoteChatRepository();
-  return DummyChatRepository();
+  return LocalChatRepository();
 });
 
 final notificationRepositoryProvider = Provider<NotificationRepository>((ref) {
   final remote = ref.watch(useRemoteApiProvider);
   if (remote) return RemoteNotificationRepository();
-  return DummyNotificationRepository();
+  return LocalNotificationRepository();
 });
 
 final calendarRepositoryProvider = Provider<CalendarRepository>((ref) {
   final remote = ref.watch(useRemoteApiProvider);
   if (remote) return RemoteCalendarRepository();
-  return DummyCalendarRepository();
+  return LocalCalendarRepository();
 });
 
 /// Report submissions: user and activity moderation reports.
 final reportRepositoryProvider = Provider<ReportRepository>((ref) {
   final remote = ref.watch(useRemoteApiProvider);
   if (remote) return RemoteReportRepository();
-  return DummyReportRepository();
+  return LocalReportRepository();
+});
+
+/// Post-activity 1-5 rating submissions. Remote flavour posts to
+/// `/api/activities/{id}/ratings`; local flavour records in memory for the
+/// rest of the session.
+final ratingsRepositoryProvider = Provider<RatingsRepository>((ref) {
+  final remote = ref.watch(useRemoteApiProvider);
+  if (remote) return RemoteRatingsRepository();
+  return LocalRatingsRepository();
 });
 
 /// Async provider of the discovery feed. Screens read this and render based

@@ -3,11 +3,12 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/storage/secure_token_store.dart';
+import '../../ratings/domain/rating_models.dart';
 import '../domain/user_model.dart';
 import 'user_repository.dart';
 
 
-class DummyUserRepository implements UserRepository {
+class LocalUserRepository implements UserRepository {
   UserModel _me = UserModel(
     id: 'me',
     displayName: 'Alex Mercer',
@@ -21,6 +22,12 @@ class DummyUserRepository implements UserRepository {
       (sport: 'Basketball', level: 'Intermediate'),
       (sport: 'Running', level: 'Beginner'),
     ],
+    ratingBySport: const {
+      'Basketball': SportRatingSummary(average: 4.9, count: 12),
+      'Running': SportRatingSummary(average: 4.7, count: 5),
+      'Tennis': SportRatingSummary(average: 4.6, count: 3),
+    },
+    totalRatingCount: 20,
     email: 'alex.mercer@email.com',
     phone: '+64 21 555 0173',
     dateOfBirth: DateTime(1996, 3, 29),
@@ -43,6 +50,11 @@ class DummyUserRepository implements UserRepository {
         (sport: 'Basketball', level: 'Intermediate'),
         (sport: 'Tennis', level: 'Advanced'),
       ],
+      ratingBySport: {
+        'Basketball': SportRatingSummary(average: 4.9, count: 32),
+        'Tennis': SportRatingSummary(average: 4.8, count: 14),
+      },
+      totalRatingCount: 46,
     ),
     UserModel(
       id: 'sarah',
@@ -56,6 +68,11 @@ class DummyUserRepository implements UserRepository {
         (sport: 'Tennis', level: 'Intermediate'),
         (sport: 'Volleyball', level: 'Beginner'),
       ],
+      ratingBySport: {
+        'Tennis': SportRatingSummary(average: 4.7, count: 9),
+        'Volleyball': SportRatingSummary(average: 4.6, count: 4),
+      },
+      totalRatingCount: 13,
     ),
     UserModel(
       id: 'mike',
@@ -66,6 +83,10 @@ class DummyUserRepository implements UserRepository {
       activitiesCount: 18,
       hostedCount: 5,
       sports: [(sport: 'Tennis', level: 'Advanced')],
+      ratingBySport: {
+        'Tennis': SportRatingSummary(average: 4.5, count: 22),
+      },
+      totalRatingCount: 22,
     ),
     UserModel(
       id: 'lisa',
@@ -79,6 +100,11 @@ class DummyUserRepository implements UserRepository {
         (sport: 'Volleyball', level: 'Advanced'),
         (sport: 'Basketball', level: 'Beginner'),
       ],
+      ratingBySport: {
+        'Volleyball': SportRatingSummary(average: 4.8, count: 18),
+        'Basketball': SportRatingSummary(average: 4.4, count: 6),
+      },
+      totalRatingCount: 24,
     ),
   ];
 
@@ -126,7 +152,7 @@ class DummyUserRepository implements UserRepository {
 class RemoteUserRepository implements UserRepository {
   RemoteUserRepository({ApiClient? client, UserRepository? fallback})
     : _client = client ?? ApiClient.instance,
-      _fallback = fallback ?? DummyUserRepository();
+      _fallback = fallback ?? LocalUserRepository();
 
   final ApiClient _client;
   final UserRepository _fallback;
@@ -139,7 +165,7 @@ class RemoteUserRepository implements UserRepository {
         debugPrint('[RemoteUserRepository.me] no stored userId — falling back');
         return _fallback.me();
       }
-      final res = await _client.dio.get('/api/v1/users/$userId');
+      final res = await _client.dio.get('/users/$userId');
       return _parse(res.data as Map<String, dynamic>) ?? await _fallback.me();
     } on DioException catch (e) {
       debugPrint('[RemoteUserRepository.me] DioException ${e.response?.statusCode}: ${e.message}');
@@ -153,7 +179,7 @@ class RemoteUserRepository implements UserRepository {
   @override
   Future<UserModel?> byId(String id) async {
     try {
-      final res = await _client.dio.get('/api/v1/users/$id');
+      final res = await _client.dio.get('/users/$id');
       return _parse(res.data as Map<String, dynamic>);
     } catch (_) {
       return _fallback.byId(id);
@@ -175,7 +201,7 @@ class RemoteUserRepository implements UserRepository {
   }) async {
     try {
       final res = await _client.dio.patch(
-        '/api/v1/users/me',
+        '/users/me',
         data: {
           'display_name': ?displayName,
           'bio': ?bio,
@@ -231,6 +257,8 @@ class RemoteUserRepository implements UserRepository {
               )
               .toList() ??
           const [],
+      ratingBySport: _parseRatingBySport(json['rating_by_sport']),
+      totalRatingCount: (json['total_rating_count'] as num?)?.toInt() ?? 0,
       email: json['email'] as String?,
       phone: json['phone'] as String?,
       dateOfBirth: json['date_of_birth'] != null
@@ -240,5 +268,27 @@ class RemoteUserRepository implements UserRepository {
       weightKg: json['weight_kg'] as int?,
       goal: json['goal'] as String?,
     );
+  }
+
+  /// Decodes the API's per-sport rating map. The shape is
+  /// `{ "Basketball": { "average": 4.7, "count": 12 } }`.
+  Map<String, SportRatingSummary> _parseRatingBySport(dynamic raw) {
+    if (raw is! Map) return const {};
+    return raw.entries
+        .where((e) => e.value is Map)
+        .map(
+          (e) => MapEntry<String, SportRatingSummary>(
+            e.key.toString(),
+            SportRatingSummary(
+              average: ((e.value as Map)['average'] as num?)?.toDouble() ?? 0,
+              count: ((e.value as Map)['count'] as num?)?.toInt() ?? 0,
+            ),
+          ),
+        )
+        .where((e) => e.value.hasRatings)
+        .fold<Map<String, SportRatingSummary>>(
+          <String, SportRatingSummary>{},
+          (acc, e) => acc..[e.key] = e.value,
+        );
   }
 }

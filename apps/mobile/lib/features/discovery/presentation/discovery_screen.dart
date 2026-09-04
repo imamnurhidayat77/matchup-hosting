@@ -8,6 +8,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/home_header.dart';
 import '../../../core/widgets/pressable_scale.dart';
+import '../../../core/widgets/skeleton.dart';
 import '../../tour/presentation/tour_anchors.dart';
 import '../domain/activity_model.dart';
 import 'widgets/discovery_actions.dart';
@@ -31,10 +32,8 @@ class DiscoveryScreen extends ConsumerStatefulWidget {
 
 class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
   int _topIndex = 0;
-
-  /// Fallback data shown immediately on first frame while the repository
-  /// load is in flight. Replaced once the network/dummy repo returns.
-  late List<ActivityModel> _activities = _seed();
+  List<ActivityModel> _activities = const [];
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -45,82 +44,14 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
   Future<void> _load() async {
     try {
       final list = await ref.read(activityRepositoryProvider).feed();
-      if (mounted && list.isNotEmpty) {
-        setState(() => _activities = list);
-      }
+      if (!mounted) return;
+      setState(() {
+        _activities = list;
+        _isLoading = false;
+      });
     } catch (_) {
-      // Repository already falls back internally; keep seed for safety.
+      if (mounted) setState(() => _isLoading = false);
     }
-  }
-
-  static List<ActivityModel> _seed() {
-    final now = DateTime.now();
-    final tomorrow4pm = DateTime(now.year, now.month, now.day + 1, 16);
-    return <ActivityModel>[
-      ActivityModel(
-        id: '1',
-        title: 'Saturday Afternoon 5v5 Basketball',
-        sportType: 'Basketball',
-        description:
-            'Looking for intermediate players to join us for some friendly '
-            "5v5 runs. Let's have fun!",
-        location: 'Riverside Court',
-        distanceKm: 2.4,
-        dateTime: tomorrow4pm,
-        durationMinutes: 120,
-        skillLevel: 'Intermediate',
-        capacity: 10,
-        participantCount: 6,
-        hostName: 'Michael Torres',
-        hostRating: 4.8,
-        hostGamesCount: 32,
-        coverImageUrl: 'assets/images/discovery/covers/basketball_1.png',
-        status: ActivityStatus.available,
-        vibeTags: const ['Friendly people', 'Great vibes', 'Arrive 15m early'],
-      ),
-      ActivityModel(
-        id: '2',
-        title: 'Weekend Tennis Doubles',
-        sportType: 'Tennis',
-        description:
-            'Looking for doubles partners for a weekend match at Central Park '
-            'courts. Bring your own racket.',
-        location: 'Central Park Courts',
-        distanceKm: 1.2,
-        dateTime: now.add(const Duration(days: 1, hours: 2)),
-        durationMinutes: 90,
-        skillLevel: 'Intermediate',
-        capacity: 8,
-        participantCount: 4,
-        hostName: 'Sarah Chen',
-        hostRating: 4.9,
-        hostGamesCount: 41,
-        coverImageUrl: 'assets/images/discovery/covers/tennis_5.png',
-        status: ActivityStatus.available,
-        vibeTags: const ['Competitive', 'Bring water'],
-      ),
-      ActivityModel(
-        id: '3',
-        title: 'Trail Run Saturday',
-        sportType: 'Running',
-        description:
-            '8km trail run through the park. Casual pace, group of mixed '
-            'experience levels. Coffee after.',
-        location: 'Forest Trail Park',
-        distanceKm: 5.6,
-        dateTime: now.add(const Duration(days: 4, hours: 7)),
-        durationMinutes: 60,
-        skillLevel: 'Beginner',
-        capacity: 8,
-        participantCount: 3,
-        hostName: 'Tyler Vance',
-        hostRating: 4.7,
-        hostGamesCount: 18,
-        coverImageUrl: 'assets/images/discovery/covers/basketball_3.png',
-        status: ActivityStatus.available,
-        vibeTags: const ['Friendly people', 'Coffee after'],
-      ),
-    ];
   }
 
   void _swipeOut(bool liked) {
@@ -130,8 +61,6 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
     final next = _topIndex + 1;
     setState(() => _topIndex = next);
     if (liked && next < _activities.length) {
-      // Let the exit animation finish (~320ms) before navigating so the
-      // match screen doesn't cut the card mid-flight.
       Future.delayed(const Duration(milliseconds: 420), () {
         if (mounted) context.go('/match/${activity.id}');
       });
@@ -154,7 +83,7 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final deckExhausted = _topIndex >= _activities.length;
+    final deckExhausted = !_isLoading && _topIndex >= _activities.length;
     final unreadCount = ref.watch(_unreadNotifCountProvider).valueOrNull ?? 0;
 
     return AppScaffold(
@@ -189,7 +118,12 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
               ),
               // Tapping the card opens details — a natural gesture that
               // mirrors how the like/dismiss buttons mirror the swipe.
-              child: deckExhausted
+              child: _isLoading
+                  ? KeyedSubtree(
+                      key: TourAnchors.swipeDeck,
+                      child: const ActivityCardSkeleton(),
+                    )
+                  : deckExhausted
                   ? DiscoveryEmptyDeck(onRestart: _reset)
                   // KeyedSubtree carries the tour anchor so SwipeDeck keeps
                   // its own `ValueKey(_topIndex)` (needed to force a fresh
@@ -212,7 +146,7 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
                     ),
             ),
           ),
-          if (!deckExhausted)
+          if (!_isLoading && !deckExhausted)
             Padding(
               key: TourAnchors.actionRow,
               padding: const EdgeInsets.only(

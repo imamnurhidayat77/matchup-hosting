@@ -5,7 +5,7 @@ import '../../../core/network/api_client.dart';
 import '../domain/chat_message.dart';
 import 'chat_repository.dart';
 
-class DummyChatRepository implements ChatRepository {
+class LocalChatRepository implements ChatRepository {
   final Map<String, List<ChatMessage>> _byActivity = {};
 
   List<ChatMessage> _seed(String activityId) {
@@ -147,7 +147,7 @@ class DummyChatRepository implements ChatRepository {
 class RemoteChatRepository implements ChatRepository {
   RemoteChatRepository({ApiClient? client, ChatRepository? fallback})
     : _client = client ?? ApiClient.instance,
-      _fallback = fallback ?? DummyChatRepository();
+      _fallback = fallback ?? LocalChatRepository();
 
   final ApiClient _client;
   final ChatRepository _fallback;
@@ -156,7 +156,7 @@ class RemoteChatRepository implements ChatRepository {
   Future<List<ChatMessage>> messages(String activityId) async {
     try {
       final res = await _client.dio.get(
-        '/api/v1/activities/$activityId/messages',
+        '/activities/$activityId/messages',
       );
       return (res.data as List)
           .map((e) => _parse(e as Map<String, dynamic>))
@@ -174,7 +174,7 @@ class RemoteChatRepository implements ChatRepository {
   }) async {
     try {
       final res = await _client.dio.post(
-        '/api/v1/activities/$activityId/messages',
+        '/activities/$activityId/messages',
         data: {'text': text},
       );
       return _parse(res.data as Map<String, dynamic>);
@@ -194,7 +194,7 @@ class RemoteChatRepository implements ChatRepository {
         'image': await MultipartFile.fromFile(imagePath),
       });
       final res = await _client.dio.post(
-        '/api/v1/activities/$activityId/messages/image',
+        '/activities/$activityId/messages/image',
         data: formData,
       );
       return _parse(res.data as Map<String, dynamic>);
@@ -212,7 +212,7 @@ class RemoteChatRepository implements ChatRepository {
   }) async {
     try {
       final res = await _client.dio.post(
-        '/api/v1/activities/$activityId/messages/location',
+        '/activities/$activityId/messages/location',
         data: {'latitude': latitude, 'longitude': longitude},
       );
       return _parse(res.data as Map<String, dynamic>);
@@ -229,7 +229,7 @@ class RemoteChatRepository implements ChatRepository {
   @override
   Future<List<ChatConversation>> conversations() async {
     try {
-      final res = await _client.dio.get('/api/v1/conversations');
+      final res = await _client.dio.get('/conversations');
       return (res.data as List)
           .map((e) => _parseConversation(e as Map<String, dynamic>))
           .toList();

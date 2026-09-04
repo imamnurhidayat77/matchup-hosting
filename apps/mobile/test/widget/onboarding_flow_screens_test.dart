@@ -80,7 +80,7 @@ void main() {
       expect(find.text('Next'), findsOneWidget);
     });
 
-    testWidgets('should navigate to welcome after tapping through all pages', (
+    testWidgets('should navigate to get-to-know-1 after tapping through all pages', (
       tester,
     ) async {
       await _pumpRouter(
@@ -90,6 +90,10 @@ void main() {
           GoRoute(
             path: '/onboarding',
             builder: (_, _) => const OnboardingScreen(),
+          ),
+          GoRoute(
+            path: '/get-to-know-1',
+            builder: (_, _) => const Scaffold(body: Text('Get To Know 1')),
           ),
           GoRoute(
             path: '/welcome',
@@ -114,10 +118,11 @@ void main() {
       expect(find.text('Join, Chat, and Play Together'), findsOneWidget);
       expect(find.text('Get Started'), findsOneWidget);
 
-      // Page 3 -> welcome
+      // Page 3 -> get-to-know-1 (post-signup flow sits outside the shell;
+      // see lib/app/router.dart — onboarding no longer goes to /welcome).
       await tester.tap(find.text('Get Started'));
       await tester.pumpAndSettle();
-      expect(find.text('Welcome'), findsOneWidget);
+      expect(find.text('Get To Know 1'), findsOneWidget);
     });
   });
 
@@ -127,12 +132,14 @@ void main() {
     ) async {
       // WelcomeScreen lays out at real-phone proportions (collage + heading +
       // Spacer + CTAs); the default 800x600 test canvas is shorter than a
-      // phone and overflows vertically. A wider surface also gives the
-      // SocialPillButton row enough room under the test environment's
-      // fallback font metrics, which render wider than the bundled Plus
-      // Jakarta Sans used in production.
-      await tester.binding.setSurfaceSize(const Size(600, 1000));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
+      // phone and overflows vertically. setSurfaceSize alone doesn't change
+      // MediaQuery.size on this Flutter version (see
+      // spotlight_overlay_test.dart), so resize the test view itself —
+      // otherwise the collage Row (sized from MediaQuery width) overflows
+      // the narrower surface.
+      tester.view.physicalSize = const Size(600, 1000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
 
       await _pumpRouter(
         tester,

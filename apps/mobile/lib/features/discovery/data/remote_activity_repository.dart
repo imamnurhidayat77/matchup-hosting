@@ -4,21 +4,21 @@ import '../../../core/network/api_client.dart';
 import '../../activities/domain/activity_participant.dart';
 import '../domain/activity_model.dart';
 import 'activity_repository.dart';
-import 'dummy_activity_repository.dart';
+import 'activity_repository_impl.dart';
 
 /// HTTP-backed [ActivityRepository] for the live MatchUp API. All endpoints
 /// are stubbed at `/api/v1/activities/...` — replace the path constants and
 /// JSON parsing once the backend ships. Until then, this implementation
-/// delegates to [DummyActivityRepository] so the app keeps working.
+/// delegates to [LocalActivityRepository] so the app keeps working.
 class RemoteActivityRepository implements ActivityRepository {
   RemoteActivityRepository({ApiClient? client, ActivityRepository? fallback})
     : _client = client ?? ApiClient.instance,
-      _fallback = fallback ?? DummyActivityRepository();
+      _fallback = fallback ?? LocalActivityRepository();
 
   final ApiClient _client;
   final ActivityRepository _fallback;
 
-  static const _base = '/api/v1/activities';
+  static const _base = '/activities';
 
   @override
   Future<List<ActivityModel>> feed({int limit = 20, int offset = 0}) async {
@@ -48,9 +48,7 @@ class RemoteActivityRepository implements ActivityRepository {
   @override
   Future<List<ActivityModel>> joinedByUser(String userId) async {
     try {
-      final res = await _client.dio.get(
-        '/api/v1/users/$userId/joined-activities',
-      );
+      final res = await _client.dio.get('/users/$userId/joined-activities');
       return _parseList(res.data as List);
     } catch (e, st) {
       debugPrint('[RemoteActivityRepository] $e\n$st');
@@ -61,9 +59,7 @@ class RemoteActivityRepository implements ActivityRepository {
   @override
   Future<List<ActivityModel>> hostedByUser(String userId) async {
     try {
-      final res = await _client.dio.get(
-        '/api/v1/users/$userId/hosted-activities',
-      );
+      final res = await _client.dio.get('/users/$userId/hosted-activities');
       return _parseList(res.data as List);
     } catch (e, st) {
       debugPrint('[RemoteActivityRepository] $e\n$st');
@@ -171,9 +167,7 @@ class RemoteActivityRepository implements ActivityRepository {
   @override
   Future<List<ActivityModel>> pastByUser(String userId) async {
     try {
-      final res = await _client.dio.get(
-        '/api/v1/users/$userId/past-activities',
-      );
+      final res = await _client.dio.get('/users/$userId/past-activities');
       return _parseList(res.data as List);
     } catch (e, st) {
       debugPrint('[RemoteActivityRepository] $e\n$st');

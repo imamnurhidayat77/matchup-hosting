@@ -2,13 +2,13 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_client.dart';
-import 'dummy_report_repository.dart';
+import 'report_repository_impl.dart';
 import 'report_repository.dart';
 
 /// HTTP-backed [ReportRepository].
 ///
 /// Submits to `POST /api/v1/reports` with a JSON body. Falls back to
-/// [DummyReportRepository] on network failure so the UI always closes —
+/// [LocalReportRepository] on network failure so the UI always closes —
 /// a report submission silently failing is acceptable UX; the user has
 /// already signalled their intent and the local state (sheet dismisses,
 /// success snackbar) should not be blocked by a transient error.
@@ -20,7 +20,7 @@ class RemoteReportRepository implements ReportRepository {
       : _client = client ?? ApiClient.instance;
 
   final ApiClient _client;
-  final _dummy = DummyReportRepository();
+  final _dummy = LocalReportRepository();
 
   @override
   Future<void> submit({
@@ -31,7 +31,7 @@ class RemoteReportRepository implements ReportRepository {
   }) async {
     try {
       await _client.dio.post(
-        '/api/v1/reports',
+        '/reports',
         data: {
           'target_id': targetId,
           'target_type': targetType.name, // 'user' | 'activity'

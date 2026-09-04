@@ -4,7 +4,7 @@ import '../../../core/network/api_client.dart';
 import '../domain/app_notification.dart';
 import 'notification_repository.dart';
 
-class DummyNotificationRepository implements NotificationRepository {
+class LocalNotificationRepository implements NotificationRepository {
   final List<AppNotification> _all = [
     AppNotification(
       id: '1',
@@ -103,7 +103,7 @@ class RemoteNotificationRepository implements NotificationRepository {
     ApiClient? client,
     NotificationRepository? fallback,
   }) : _client = client ?? ApiClient.instance,
-       _fallback = fallback ?? DummyNotificationRepository();
+       _fallback = fallback ?? LocalNotificationRepository();
 
   final ApiClient _client;
   final NotificationRepository _fallback;
@@ -111,7 +111,7 @@ class RemoteNotificationRepository implements NotificationRepository {
   @override
   Future<List<AppNotification>> all() async {
     try {
-      final res = await _client.dio.get('/api/v1/notifications');
+      final res = await _client.dio.get('/notifications');
       return (res.data as List).map(_parse).toList();
     } catch (e, st) {
       debugPrint('[RemoteNotificationRepository] $e\n$st');
@@ -122,7 +122,7 @@ class RemoteNotificationRepository implements NotificationRepository {
   @override
   Future<List<AppNotification>> unread() async {
     try {
-      final res = await _client.dio.get('/api/v1/notifications/unread');
+      final res = await _client.dio.get('/notifications/unread');
       return (res.data as List).map(_parse).toList();
     } catch (e, st) {
       debugPrint('[RemoteNotificationRepository] $e\n$st');
@@ -133,7 +133,7 @@ class RemoteNotificationRepository implements NotificationRepository {
   @override
   Future<void> markRead(String id) async {
     try {
-      await _client.dio.post('/api/v1/notifications/$id/read');
+      await _client.dio.post('/notifications/$id/read');
     } catch (e, st) {
       debugPrint('[RemoteNotificationRepository] $e\n$st');
       await _fallback.markRead(id);
@@ -143,7 +143,7 @@ class RemoteNotificationRepository implements NotificationRepository {
   @override
   Future<void> markAllRead() async {
     try {
-      await _client.dio.post('/api/v1/notifications/read-all');
+      await _client.dio.post('/notifications/read-all');
     } catch (e, st) {
       debugPrint('[RemoteNotificationRepository] $e\n$st');
       await _fallback.markAllRead();

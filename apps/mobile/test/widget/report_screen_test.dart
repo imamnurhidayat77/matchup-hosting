@@ -1,79 +1,147 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:go_router/go_router.dart';
 
-import 'package:matchup_mobile/features/report/presentation/report_screen.dart';
+import 'package:matchup_mobile/core/providers/repository_providers.dart';
+import 'package:matchup_mobile/features/report/data/report_repository.dart';
+import 'package:matchup_mobile/features/report/presentation/report_activity_sheet.dart';
+import 'package:matchup_mobile/features/report/presentation/report_user_sheet.dart';
+
+class _FakeReportRepository implements ReportRepository {
+  int calls = 0;
+  String? lastTargetId;
+  ReportTargetType? lastTargetType;
+  String? lastReason;
+  String? lastDetails;
+
+  @override
+  Future<void> submit({
+    required String targetId,
+    required ReportTargetType targetType,
+    required String reason,
+    String? details,
+  }) async {
+    calls++;
+    lastTargetId = targetId;
+    lastTargetType = targetType;
+    lastReason = reason;
+    lastDetails = details;
+  }
+}
 
 void main() {
-  Future<void> pumpScreen(WidgetTester tester) async {
-    await tester.binding.setSurfaceSize(const Size(430, 1400));
+  Future<_FakeReportRepository> pumpSheet(
+    WidgetTester tester,
+    void Function(BuildContext context) show,
+  ) async {
+    final fake = _FakeReportRepository();
+    await tester.binding.setSurfaceSize(const Size(430, 1200));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    final router = GoRouter(
-      initialLocation: '/activities',
-      routes: [
-        GoRoute(
-          path: '/activities',
-          builder: (_, _) => const Scaffold(body: Text('Activities')),
-        ),
-        GoRoute(
-          path: '/report/:type/:name',
-          builder: (_, state) => ReportScreen(
-            targetType: state.pathParameters['type']!,
-            targetName: state.pathParameters['name']!,
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [reportRepositoryProvider.overrideWithValue(fake)],
+        child: MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () => show(context),
+                child: const Text('Open sheet'),
+              ),
+            ),
           ),
         ),
-      ],
+      ),
     );
 
-    await tester.pumpWidget(
-      ProviderScope(child: MaterialApp.router(routerConfig: router)),
-    );
+    await tester.tap(find.text('Open sheet'));
     await tester.pumpAndSettle();
-
-    router.push('/report/user/Jamal Osei');
-    await tester.pumpAndSettle();
+    return fake;
   }
 
-  group('ReportScreen', () {
-    testWidgets('should render the target name and default reason selected', (
+  group('ReportUserSheet', () {
+    testWidgets('renders the target name, reasons and submit button', (
       tester,
     ) async {
-      await pumpScreen(tester);
+      await pumpSheet(
+        tester,
+        (context) => ReportUserSheet.show(context, userName: 'Jamal Osei'),
+      );
 
-      expect(find.text('Report'), findsOneWidget);
-      expect(find.text('Report user'), findsOneWidget);
+      expect(find.text('Report User'), findsOneWidget);
       expect(find.text('Jamal Osei'), findsOneWidget);
+      expect(find.text('Harassment'), findsOneWidget);
+      expect(find.text('Impersonation'), findsOneWidget);
+      expect(find.text('Submit Report'), findsOneWidget);
+    });
+
+    testWidgets('warns when submitting without a reason', (tester) async {
+      final fake = await pumpSheet(
+        tester,
+        (context) => ReportUserSheet.show(context, userName: 'Jamal Osei'),
+      );
+
+      await tester.tap(find.text('Submit Report'));
+      await tester.pumpAndSettle();
+
+      expect(fake.calls, 0);
+      expect(find.text('Please select a reason.'), findsOneWidget);
+      // Sheet stays open so the user can pick a reason.
+      expect(find.text('Report User'), findsOneWidget);
+    });
+
+    testWidgets('submits the selected reason and closes', (tester) async {
+      final fake = await pumpSheet(
+        tester,
+        (context) => ReportUserSheet.show(context, userName: 'Jamal Osei'),
+      );
+
+      await tester.tap(find.text('Harassment'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Submit Report'));
+      await tester.pumpAndSettle();
+
+      expect(fake.calls, 1);
+      expect(fake.lastTargetId, 'Jamal Osei');
+      expect(fake.lastTargetType, ReportTargetType.user);
+      expect(fake.lastReason, 'Harassment');
+      expect(find.text('Report User'), findsNothing);
+      expect(find.text('Report submitted. Thank you.'), findsOneWidget);
+    });
+  });
+
+  group('ReportActivitySheet', () {
+    testWidgets('renders the activity title and reasons', (tester) async {
+      await pumpSheet(
+        tester,
+        (context) =>
+            ReportActivitySheet.show(context, activityTitle: 'Morning Run'),
+      );
+
+      expect(find.text('Report Activity'), findsOneWidget);
+      expect(find.text('Morning Run'), findsOneWidget);
       expect(find.text('Inappropriate content'), findsOneWidget);
       expect(find.text('Submit Report'), findsOneWidget);
     });
 
-    testWidgets('should switch the selected reason when another is tapped', (
-      tester,
-    ) async {
-      await pumpScreen(tester);
+    testWidgets('submits the selected reason and closes', (tester) async {
+      final fake = await pumpSheet(
+        tester,
+        (context) =>
+            ReportActivitySheet.show(context, activityTitle: 'Morning Run'),
+      );
 
-      await tester.tap(find.text('Harassment'));
+      await tester.tap(find.text('Spam / Fake activity'));
       await tester.pumpAndSettle();
-
-      // No exception on selecting a different radio option confirms the
-      // RadioGroup wiring survived the AppScaffold migration.
-      expect(find.text('Harassment'), findsOneWidget);
-    });
-
-    testWidgets('should pop back after submitting the report', (tester) async {
-      await pumpScreen(tester);
-
       await tester.tap(find.text('Submit Report'));
-      await tester.pump();
-      expect(find.text('Submitting...'), findsOneWidget);
-
-      await tester.pump(const Duration(seconds: 1));
       await tester.pumpAndSettle();
 
-      expect(find.text('Report'), findsNothing);
-      expect(find.text('Activities'), findsOneWidget);
+      expect(fake.calls, 1);
+      expect(fake.lastTargetId, 'Morning Run');
+      expect(fake.lastTargetType, ReportTargetType.activity);
+      expect(fake.lastReason, 'Spam / Fake activity');
+      expect(find.text('Report Activity'), findsNothing);
+      expect(find.text('Report submitted. Thank you.'), findsOneWidget);
     });
   });
 }

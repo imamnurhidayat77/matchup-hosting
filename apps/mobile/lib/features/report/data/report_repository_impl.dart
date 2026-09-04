@@ -2,7 +2,7 @@ import 'report_repository.dart';
 
 /// In-memory [ReportRepository] — always succeeds after a short delay.
 /// Used in development when [Env.useRemoteApi] is false.
-class DummyReportRepository implements ReportRepository {
+class LocalReportRepository implements ReportRepository {
   @override
   Future<void> submit({
     required String targetId,

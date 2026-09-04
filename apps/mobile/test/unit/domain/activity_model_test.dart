@@ -6,17 +6,17 @@ void main() {
     final baseJson = <String, dynamic>{
       'id': 'act-001',
       'title': 'Weekend Basketball',
-      'sportType': 'Basketball',
+      'sport_type': 'Basketball',
       'description': 'Fun pickup game',
       'location': 'Central Park',
-      'distanceKm': 2.5,
-      'dateTime': '2026-09-15T16:00:00.000Z',
-      'skillLevel': 'Intermediate',
+      'distance_km': 2.5,
+      'date_time': '2026-09-15T16:00:00.000Z',
+      'skill_level': 'Intermediate',
       'capacity': 10,
-      'participantCount': 6,
-      'hostName': 'Alex',
-      'coverImageUrl': null,
-      'status': 0, // ActivityStatus.available
+      'participant_count': 6,
+      'host_name': 'Alex',
+      'cover_image_url': null,
+      'status': 'available', // ActivityStatus.available
     };
 
     test('should deserialise correctly from JSON', () {
@@ -55,7 +55,7 @@ void main() {
       test('should return true when participantCount equals capacity', () {
         final full = ActivityModel.fromJson({
           ...baseJson,
-          'participantCount': 10,
+          'participant_count': 10,
           'capacity': 10,
         });
         expect(full.isFull, isTrue);
@@ -71,7 +71,7 @@ void main() {
       test('should return true when fill rate is at or above 80%', () {
         final almostFull = ActivityModel.fromJson({
           ...baseJson,
-          'participantCount': 8,
+          'participant_count': 8,
           'capacity': 10,
         });
         expect(almostFull.isAlmostFull, isTrue);
@@ -80,7 +80,7 @@ void main() {
       test('should return false when fill rate is below 80%', () {
         final notAlmost = ActivityModel.fromJson({
           ...baseJson,
-          'participantCount': 3,
+          'participant_count': 3,
           'capacity': 10,
         });
         expect(notAlmost.isAlmostFull, isFalse);
@@ -93,9 +93,9 @@ void main() {
       expect(model.spotsLeft, 4);
     });
 
-    test('should map all ActivityStatus values from JSON index', () {
+    test('should map all ActivityStatus values from JSON name', () {
       for (final status in ActivityStatus.values) {
-        final json = {...baseJson, 'status': status.index};
+        final json = {...baseJson, 'status': status.name};
         expect(ActivityModel.fromJson(json).status, status);
       }
     });
@@ -109,7 +109,7 @@ void main() {
       test('should read durationMinutes from JSON when present', () {
         final model = ActivityModel.fromJson({
           ...baseJson,
-          'durationMinutes': 90,
+          'duration_minutes': 90,
         });
         expect(model.durationMinutes, 90);
       });
@@ -117,8 +117,8 @@ void main() {
       test('should compute endTime as dateTime + durationMinutes', () {
         final model = ActivityModel.fromJson({
           ...baseJson,
-          'dateTime': '2026-09-15T16:00:00.000Z',
-          'durationMinutes': 90,
+          'date_time': '2026-09-15T16:00:00.000Z',
+          'duration_minutes': 90,
         });
         expect(model.endTime, DateTime.parse('2026-09-15T17:30:00.000Z'));
       });
@@ -126,7 +126,7 @@ void main() {
       test('should round-trip durationMinutes through toJson/fromJson', () {
         final original = ActivityModel.fromJson({
           ...baseJson,
-          'durationMinutes': 180,
+          'duration_minutes': 180,
         });
         final roundTripped = ActivityModel.fromJson(original.toJson());
         expect(roundTripped.durationMinutes, 180);
