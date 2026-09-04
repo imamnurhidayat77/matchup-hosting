@@ -156,7 +156,7 @@ void main() {
     });
 
     testWidgets(
-      'should show the password strength meter once a password is typed',
+      'should validate password length on submit',
       (tester) async {
         await tester.binding.setSurfaceSize(const Size(430, 932));
         addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -172,16 +172,36 @@ void main() {
           ],
         );
 
+        // Redesign removed the strength meter/checklist — the current UI
+        // only validates length (>= 6 chars) on submit.
         expect(find.text('At least 8 characters'), findsNothing);
 
         await tester.enterText(
-          find.widgetWithText(TextFormField, 'Create a strong password'),
-          'Password1',
+          find.widgetWithText(TextFormField, 'Enter your full name'),
+          'Jordan Lee',
         );
+        await tester.enterText(
+          find.widgetWithText(TextFormField, 'Enter your email'),
+          'jordan@example.com',
+        );
+        await tester.enterText(
+          find.widgetWithText(TextFormField, 'Create a strong password'),
+          'Pw1',
+        );
+        await tester.enterText(
+          find.widgetWithText(TextFormField, 'Confirm your password'),
+          'Pw1',
+        );
+        final createAccount = find.text('Create Account');
+        await tester.ensureVisible(createAccount);
+        await tester.pumpAndSettle();
+        await tester.tap(createAccount);
         await tester.pumpAndSettle();
 
-        expect(find.text('At least 8 characters'), findsOneWidget);
-        expect(find.text('Strong'), findsOneWidget);
+        expect(
+          find.text('Password must be at least 6 characters'),
+          findsOneWidget,
+        );
       },
     );
 

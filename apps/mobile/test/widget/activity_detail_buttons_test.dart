@@ -161,7 +161,10 @@ void main() {
         via: (context) => context.push('/activity/a-1'),
       );
 
-      final joinButton = find.bySemanticsLabel('Join activity');
+      // NOTE: find.bySemanticsLabel('Join Game') finds 0 nodes here even
+      // though the Semantics widget exists — the label merges with the
+      // 'Join Game' text child in the semantics tree. Match the Text instead.
+      final joinButton = find.text('Join Game');
       expect(
         joinButton,
         findsOneWidget,
@@ -176,7 +179,7 @@ void main() {
       verify(() => repo.join('a-1')).called(1);
     });
 
-    testWidgets('report button navigates to the report route when tapped', (
+    testWidgets('report button opens the report bottom sheet when tapped', (
       tester,
     ) async {
       final router = GoRouter(
@@ -186,10 +189,6 @@ void main() {
             path: '/activity/:id',
             builder: (_, state) =>
                 ActivityDetailScreen(activityId: state.pathParameters['id']!),
-          ),
-          GoRoute(
-            path: '/report/activity/:id',
-            builder: (_, _) => const Scaffold(body: Text('Report Screen')),
           ),
         ],
       );
@@ -209,7 +208,11 @@ void main() {
       await tester.tap(reportButton);
       await tester.pumpAndSettle();
 
-      expect(find.text('Report Screen'), findsOneWidget);
+      // Reporting is a modal bottom sheet now (not a pushed route):
+      // the sheet header + reason list + submit bar appear on top of the
+      // still-visible detail screen.
+      expect(find.text("What's the issue?"), findsOneWidget);
+      expect(find.text('Submit Report'), findsOneWidget);
     });
   });
 }

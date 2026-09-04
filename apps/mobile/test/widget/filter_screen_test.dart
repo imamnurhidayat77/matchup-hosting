@@ -20,11 +20,11 @@ void main() {
       await pumpScreen(tester);
 
       expect(find.text('Filters'), findsOneWidget);
-      expect(find.text('Sport type'), findsOneWidget);
+      expect(find.text('Your sports'), findsOneWidget);
       expect(find.text('Distance'), findsOneWidget);
-      expect(find.text('Skill level'), findsOneWidget);
-      expect(find.text('Time of day'), findsOneWidget);
-      expect(find.text('Apply Filters'), findsOneWidget);
+      expect(find.text('Skill level per sport'), findsOneWidget);
+      expect(find.text('When'), findsOneWidget);
+      expect(find.text('Show all activities'), findsOneWidget);
     });
 
     testWidgets('should toggle a sport chip selection when tapped', (
@@ -32,12 +32,14 @@ void main() {
     ) async {
       await pumpScreen(tester);
 
-      await tester.tap(find.text('Running'));
+      await tester.tap(find.text('Running').first);
       await tester.pumpAndSettle();
 
       // Tapping does not throw and the label remains visible; selection
       // state is verified indirectly since chip styling isn't text-based.
-      expect(find.text('Running'), findsOneWidget);
+      // 'Running' now appears twice: once in the sport pill and once as the
+      // per-sport skill row header.
+      expect(find.text('Running'), findsNWidgets(2));
     });
 
     testWidgets('should reset filters when Reset is tapped', (tester) async {
@@ -46,7 +48,7 @@ void main() {
       await tester.tap(find.text('Reset'));
       await tester.pumpAndSettle();
 
-      expect(find.text('15 km'), findsOneWidget);
+      expect(find.text('Within 5 km'), findsOneWidget);
     });
 
     testWidgets('should update the skill level when a segment is tapped', (

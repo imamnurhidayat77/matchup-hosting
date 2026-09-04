@@ -99,7 +99,10 @@ void main() {
       await pumpScreen(tester);
 
       await tester.enterText(find.text('Jordan Lee'), 'Jordan Lee Jr.');
-      await tester.tap(find.text('Save'));
+      final saveFinder = find.text('Save Changes');
+      await tester.ensureVisible(saveFinder);
+      await tester.pumpAndSettle();
+      await tester.tap(saveFinder);
       await tester.pumpAndSettle();
 
       verify(

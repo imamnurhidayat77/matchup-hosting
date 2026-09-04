@@ -89,7 +89,7 @@ void main() {
     ) async {
       await pumpScreen(tester);
       expect(find.text('Duration'), findsOneWidget);
-      expect(find.text('2h'), findsOneWidget);
+      expect(find.text('2 hours'), findsOneWidget);
     });
 
     testWidgets(
@@ -105,9 +105,16 @@ void main() {
         await tester.enterText(fields.at(1), 'Test Venue');
         await tester.pumpAndSettle();
 
-        // Choose the 1h duration instead of the 2h default.
-        await tester.tap(find.text('1h'));
+        // Choose 1 hour instead of the 2-hour default via the stepper
+        // (15-minute steps: 120 → 60 needs 4 taps on Shorten).
+        final shorten = find.bySemanticsLabel('Shorten duration');
+        await tester.ensureVisible(shorten);
         await tester.pumpAndSettle();
+        for (var i = 0; i < 4; i++) {
+          await tester.tap(shorten);
+          await tester.pumpAndSettle();
+        }
+        expect(find.text('1 hour'), findsOneWidget);
 
         // Advance: Setup → Rules → Preview.
         await tester.tap(find.text('Continue'));

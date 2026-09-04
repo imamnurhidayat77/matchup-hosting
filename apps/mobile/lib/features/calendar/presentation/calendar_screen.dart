@@ -422,14 +422,23 @@ class _ScheduleHeader extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: AppTypography.titleMedium(context)),
-        if (count > 0)
+        Expanded(
+          child: Text(
+            label,
+            style: AppTypography.titleMedium(context),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        if (count > 0) ...[
+          const SizedBox(width: AppSpacing.x2),
           Text(
             '$count ${count == 1 ? 'activity' : 'activities'}',
             style: AppTypography.chipLabel(
               context,
             ).copyWith(fontSize: 12, color: context.colors.primaryOnSurface),
           ),
+        ],
       ],
     );
   }

@@ -78,7 +78,7 @@ void main() {
   group('MessagesScreen', () {
     testWidgets('should render every conversation', (tester) async {
       await pumpScreen(tester);
-      expect(find.text('Messages'), findsOneWidget);
+      expect(find.text('Chat'), findsOneWidget);
       expect(find.text('Friendly 5v5 Basketball'), findsOneWidget);
       expect(find.text('Marcus Vance'), findsOneWidget);
     });

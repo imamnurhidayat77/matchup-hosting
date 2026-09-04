@@ -72,7 +72,7 @@ void main() {
 
         await pumpScreen(tester);
 
-        expect(find.text("It's a Match"), findsOneWidget);
+        expect(find.text("It's a Match!"), findsOneWidget);
         expect(find.text('Thursday Badminton Doubles'), findsOneWidget);
         expect(find.text('Harbourview Sports Centre'), findsOneWidget);
         expect(find.text('5 / 8 spots'), findsOneWidget);

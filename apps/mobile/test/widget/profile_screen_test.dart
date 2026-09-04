@@ -123,9 +123,27 @@ void main() {
         expect(find.text('Appearance'), findsOneWidget);
         expect(find.text('System'), findsOneWidget);
 
-        await tester.tap(find.text('System'));
+        // Open the bottom sheet via the row's Semantics node — tapping
+        // the raw 'System' text is flaky (small hit target, and the label
+        // text is duplicated once the sheet opens).
+        final appearanceRow = find.byWidgetPredicate(
+          (w) =>
+              w is Semantics &&
+              w.properties.label == 'Appearance: System',
+        );
+        // The Appearance row sits below the fold — scroll it into view
+        // first, otherwise the tap misses (row is off-screen at 800x600).
+        await tester.ensureVisible(appearanceRow);
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Dark'));
+        await tester.tap(appearanceRow);
+        await tester.pumpAndSettle();
+
+        expect(find.text('Dark'), findsOneWidget);
+        final darkOption = find.byWidgetPredicate(
+          (w) => w is Semantics && w.properties.label == 'Dark',
+        );
+        expect(darkOption, findsOneWidget);
+        await tester.tap(darkOption);
         await tester.pumpAndSettle();
 
         expect(container.read(themeModeProvider), ThemeMode.dark);

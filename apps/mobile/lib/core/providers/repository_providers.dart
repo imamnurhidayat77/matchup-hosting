@@ -14,6 +14,9 @@ import '../../features/notifications/data/notification_repository_impl.dart';
 import '../../features/notifications/data/notification_repository.dart';
 import '../../features/profile/data/user_repository_impl.dart';
 import '../../features/profile/data/user_repository.dart';
+import '../../features/ratings/data/ratings_repository.dart';
+import '../../features/ratings/data/ratings_repository_impl.dart';
+import '../../features/ratings/data/remote_ratings_repository.dart';
 import '../../features/report/data/report_repository_impl.dart';
 import '../../features/report/data/remote_report_repository.dart';
 import '../../features/report/data/report_repository.dart';
@@ -68,6 +71,15 @@ final reportRepositoryProvider = Provider<ReportRepository>((ref) {
   final remote = ref.watch(useRemoteApiProvider);
   if (remote) return RemoteReportRepository();
   return LocalReportRepository();
+});
+
+/// Post-activity 1-5 rating submissions. Remote flavour posts to
+/// `/api/activities/{id}/ratings`; local flavour records in memory for the
+/// rest of the session.
+final ratingsRepositoryProvider = Provider<RatingsRepository>((ref) {
+  final remote = ref.watch(useRemoteApiProvider);
+  if (remote) return RemoteRatingsRepository();
+  return LocalRatingsRepository();
 });
 
 /// Async provider of the discovery feed. Screens read this and render based

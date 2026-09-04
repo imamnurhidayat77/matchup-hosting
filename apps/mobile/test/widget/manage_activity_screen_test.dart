@@ -144,7 +144,10 @@ void main() {
       );
 
       await pumpScreen(tester);
-      await tester.tap(find.text('View all'));
+      final viewAll = find.text('View all');
+      await tester.ensureVisible(viewAll);
+      await tester.pumpAndSettle();
+      await tester.tap(viewAll);
       await tester.pumpAndSettle();
 
       expect(find.text('Participants'), findsOneWidget);

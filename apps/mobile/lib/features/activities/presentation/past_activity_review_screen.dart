@@ -14,6 +14,7 @@ import '../../../core/widgets/app_tappable.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
+import '../../ratings/domain/rating_models.dart';
 import '../domain/activity_participant.dart';
 import '../../discovery/domain/activity_model.dart';
 
@@ -50,6 +51,7 @@ class _PastActivityReviewScreenState
   final _commentController = TextEditingController();
   /// userId → star rating (1–5). Empty until user rates that participant.
   final Map<String, int> _participantRatings = {};
+  bool _submitting = false;
 
   @override
   void dispose() {
@@ -57,13 +59,71 @@ class _PastActivityReviewScreenState
     super.dispose();
   }
 
-  void _submit() {
-    AppSnackbar.show(
-      context,
-      message: 'Review submitted!',
-      variant: AppSnackbarVariant.success,
+  bool _canSubmit(List<ActivityParticipant> participants) {
+    // Activity-level rating is always required.
+    if (_stars < 1) return false;
+    // At least one participant row must have a rating OR all skipped
+    // intentionally — the user can rely on the activity-level rating alone.
+    // The MVP requires at least the activity rating, not the per-row ones.
+    return true;
+  }
+
+  Future<void> _submit({
+    required String sportType,
+    required List<ActivityParticipant> participants,
+  }) async {
+    if (_submitting) return;
+    final repo = ref.read(ratingsRepositoryProvider);
+
+    final trimmedComment = _commentController.text.trim();
+    final comment = trimmedComment.isEmpty ? null : trimmedComment;
+
+    final rated = participants
+        .where((p) => _participantRatings.containsKey(p.userId))
+        .map(
+          (p) => ParticipantRatingSubmission(
+            rateeUserId: p.userId,
+            stars: _participantRatings[p.userId]!,
+          ),
+        )
+        .toList();
+
+    setState(() => _submitting = true);
+
+    final submission = ActivityRatingSubmission(
+      activityId: widget.activityId,
+      activitySportType: sportType,
+      participants: rated,
+      comment: comment,
     );
-    Navigator.of(context).pop();
+
+    try {
+      final result = await repo.submitActivityRating(submission);
+      if (!mounted) return;
+      if (result.accepted) {
+        AppSnackbar.show(
+          context,
+          message: 'Review submitted!',
+          variant: AppSnackbarVariant.success,
+        );
+        Navigator.of(context).pop();
+      } else {
+        AppSnackbar.show(
+          context,
+          message: 'Couldn\'t submit review. ${result.remoteError ?? ''}',
+          variant: AppSnackbarVariant.error,
+        );
+        setState(() => _submitting = false);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      AppSnackbar.show(
+        context,
+        message: 'Network error. Please try again.',
+        variant: AppSnackbarVariant.error,
+      );
+      setState(() => _submitting = false);
+    }
   }
 
   @override
@@ -84,7 +144,7 @@ class _PastActivityReviewScreenState
         data: (data) => Column(
           children: [
             // Header
-            _Header(),
+            const _Header(),
             // Scrollable content
             Expanded(
               child: SingleChildScrollView(
@@ -124,7 +184,15 @@ class _PastActivityReviewScreenState
             ),
 
             // Pinned submit button
-            _SubmitBar(onTap: _submit),
+            _SubmitBar(
+              submitting: _submitting,
+              onTap: _canSubmit(data.participants)
+                  ? () => _submit(
+                        sportType: data.activity.sportType,
+                        participants: data.participants,
+                      )
+                  : null,
+            ),
           ],
         ),
       ),
@@ -135,6 +203,8 @@ class _PastActivityReviewScreenState
 // ─── Header ───────────────────────────────────────────────────────────────────
 
 class _Header extends StatelessWidget {
+  const _Header();
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -557,11 +627,19 @@ class _ParticipantRow extends StatelessWidget {
 // ─── Submit bar ───────────────────────────────────────────────────────────────
 
 class _SubmitBar extends StatelessWidget {
-  const _SubmitBar({required this.onTap});
-  final VoidCallback onTap;
+  const _SubmitBar({required this.onTap, required this.submitting});
+
+  /// `null` disables the button (greyed-out state, no press feedback).
+  /// Otherwise the press triggers the actual submission.
+  final VoidCallback? onTap;
+
+  /// When true, the button shows a spinner instead of the label and
+  /// ignores taps. The parent owns the state so we re-render automatically.
+  final bool submitting;
 
   @override
   Widget build(BuildContext context) {
+    final enabled = onTap != null && !submitting;
     return Container(
       padding: EdgeInsets.fromLTRB(
         AppSpacing.x5,
@@ -574,20 +652,33 @@ class _SubmitBar extends StatelessWidget {
         boxShadow: AppShadows.bottomBar,
       ),
       child: PressableScale(
-        onTap: onTap,
+        onTap: enabled ? onTap : null,
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: AppSpacing.x4),
           decoration: BoxDecoration(
-            color: AppColors.primary,
+            color: enabled ? AppColors.primary : context.colors.surfaceMuted,
             borderRadius: BorderRadius.circular(AppRadius.pill),
-            boxShadow: AppShadows.glowPrimary,
+            boxShadow: enabled ? AppShadows.glowPrimary : null,
           ),
           alignment: Alignment.center,
-          child: Text(
-            'Submit Review',
-            style: AppTypography.buttonPrimary,
-          ),
+          child: submitting
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.4,
+                    color: AppColors.textOnPrimary,
+                  ),
+                )
+              : Text(
+                  'Submit Review',
+                  style: AppTypography.buttonPrimary.copyWith(
+                    color: enabled
+                        ? AppColors.textOnPrimary
+                        : context.colors.textTertiary,
+                  ),
+                ),
         ),
       ),
     );

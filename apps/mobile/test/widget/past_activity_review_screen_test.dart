@@ -9,6 +9,7 @@ import 'package:matchup_mobile/features/activities/domain/activity_participant.d
 import 'package:matchup_mobile/features/activities/presentation/past_activity_review_screen.dart';
 import 'package:matchup_mobile/features/discovery/data/activity_repository.dart';
 import 'package:matchup_mobile/features/discovery/domain/activity_model.dart';
+import 'package:matchup_mobile/features/ratings/data/ratings_repository_impl.dart';
 
 class _MockActivityRepository extends Mock implements ActivityRepository {}
 
@@ -73,7 +74,15 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [activityRepositoryProvider.overrideWithValue(repo)],
+        overrides: [
+          activityRepositoryProvider.overrideWithValue(repo),
+          // The screen reads this on submit; the default body needs Env
+          // (.env) which is not loaded in tests, so inject the in-memory
+          // flavour and exercise the real local submit path.
+          ratingsRepositoryProvider.overrideWithValue(
+            LocalRatingsRepository(),
+          ),
+        ],
         child: MaterialApp.router(routerConfig: router),
       ),
     );
@@ -106,7 +115,7 @@ void main() {
       },
     );
 
-    testWidgets('should toggle the thumbs-up state for a participant', (
+    testWidgets('should record a per-participant star rating', (
       tester,
     ) async {
       when(() => repo.byId('4')).thenAnswer((_) async => activity());
@@ -116,23 +125,26 @@ void main() {
 
       await pumpScreen(tester, pushed: true);
 
-      final toggle = find.byWidgetPredicate(
+      final fifthForFreya = find.byWidgetPredicate(
         (w) =>
             w is Semantics &&
-            w.properties.label == 'Give Freya Lindqvist a thumbs up',
+            w.properties.label == '5 stars for Freya Lindqvist',
       );
-      expect(toggle, findsOneWidget);
+      expect(fifthForFreya, findsOneWidget);
 
-      await tester.tap(toggle);
+      await tester.tap(fifthForFreya);
       await tester.pumpAndSettle();
 
+      // All five mini stars in Freya's row are now filled; Bakari's row
+      // is untouched (still outlined).
       expect(
         find.byWidgetPredicate(
           (w) =>
-              w is Semantics &&
-              w.properties.label == 'Remove thumbs up for Freya Lindqvist',
+              w is Icon &&
+              w.icon == Icons.star_rounded &&
+              w.size == 22,
         ),
-        findsOneWidget,
+        findsNWidgets(5),
       );
     });
 
@@ -146,15 +158,26 @@ void main() {
 
       await pumpScreen(tester, pushed: true);
 
-      final fifthStar = find.byWidgetPredicate(
-        (w) => w is Semantics && w.properties.label == '5 stars',
+      // Activity starts at 4 stars: exactly one unfilled 36px star
+      // (participant mini-stars are 22px, so they don't match).
+      final unfilled = find.byWidgetPredicate(
+        (w) =>
+            w is Icon &&
+            w.icon == Icons.star_border_rounded &&
+            w.size == 36,
       );
-      expect(fifthStar, findsOneWidget);
-      await tester.tap(fifthStar);
+      expect(unfilled, findsOneWidget);
+      await tester.tap(unfilled);
       await tester.pumpAndSettle();
 
-      // No exception means the rating updated without crashing; behaviour
-      // is local-only state (no review-submission backend exists yet).
+      expect(unfilled, findsNothing);
+      expect(
+        find.byWidgetPredicate(
+          (w) =>
+              w is Icon && w.icon == Icons.star_rounded && w.size == 36,
+        ),
+        findsNWidgets(5),
+      );
     });
 
     testWidgets('should pop after tapping Submit Review', (tester) async {

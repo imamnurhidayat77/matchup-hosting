@@ -78,7 +78,8 @@ void main() {
 
       await pumpScreen(tester);
 
-      expect(find.text('Today'), findsOneWidget);
+      // 'TODAY' appears twice: the match banner badge + the day separator.
+      expect(find.text('TODAY'), findsWidgets);
       expect(find.text('Hey there'), findsOneWidget);
       expect(find.text('Ready for today?'), findsOneWidget);
       // Only one avatar rendered for the two-message run from the same
