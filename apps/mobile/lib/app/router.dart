@@ -32,6 +32,7 @@ import '../features/preferences/presentation/get_to_know_2_screen.dart';
 import '../features/preferences/presentation/get_to_know_3_screen.dart';
 import '../features/preferences/presentation/preferences_screen.dart';
 import '../features/notifications/presentation/notifications_screen.dart';
+import '../features/notifications/presentation/notification_settings_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
 import '../features/profile/presentation/edit_profile_screen.dart';
 import '../features/profile/presentation/player_profile_screen.dart';
@@ -255,6 +256,11 @@ GoRouter buildRouter(Ref ref) {
             path: '/notifications',
             pageBuilder: (_, state) =>
                 appPage(state, const NotificationsScreen()),
+          ),
+          GoRoute(
+            path: '/notification-settings',
+            pageBuilder: (_, state) =>
+                appPage(state, const NotificationSettingsScreen()),
           ),
           GoRoute(
             path: '/activity/:id/participants',
