@@ -264,19 +264,28 @@ export async function leaveActivity(
       throw new Error('Only the participant or activity host can remove this participant');
     }
 
+    const isHostSelfRemoval =
+      activityData.hostId === normalizedActorUid &&
+      normalizedActorUid === normalizedTargetUid;
     const participantSnap = await transaction.get(participantRef);
 
-    if (!participantSnap.exists) {
+    if (!participantSnap.exists && !isHostSelfRemoval) {
       throw new Error('Participant not found');
     }
 
-    transaction.delete(participantRef);
+    if (participantSnap.exists) {
+      transaction.delete(participantRef);
+    }
 
-    const nextParticipantCount = Math.max(activityData.participantCount - 1, 0);
+    const nextParticipantCount = participantSnap.exists
+      ? Math.max(activityData.participantCount - 1, 0)
+      : activityData.participantCount;
 
     let nextStatus = activityData.status as ActivityStatus;
 
-    if (activityData.status === 'full' && nextParticipantCount < activityData.capacity) {
+    if (isHostSelfRemoval) {
+      nextStatus = 'cancelled';
+    } else if (activityData.status === 'full' && nextParticipantCount < activityData.capacity) {
       nextStatus = 'open';
     }
 

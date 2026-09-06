@@ -9,6 +9,7 @@ export type NotificationType =
     | 'activity_reminder'
     | 'activity_interest'
     | 'activity_joined'
+    | 'activity_cancelled'
     | 'activity_left'
     | 'participant_removed'
     | 'chat_message'
@@ -43,12 +44,13 @@ function assertNotificationType(type: unknown): asserts type is NotificationType
     if (type !== 'activity_reminder' &&
         type !== 'activity_interest' &&
         type !== 'activity_joined' &&
+        type !== 'activity_cancelled' &&
         type !== 'activity_left' &&
         type !== 'participant_removed' &&
         type !== 'chat_message' &&
         type !== 'system'
     ) {
-        throw new Error('type must be activity_reminder, activity_interest, activity_joined, activity_left, participant_removed, chat_message, or system');
+        throw new Error('type must be activity_reminder, activity_interest, activity_joined, activity_cancelled, activity_left, participant_removed, chat_message, or system');
     }
 }
 

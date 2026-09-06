@@ -163,6 +163,7 @@ export async function leaveActivityHandler(req: Request<LeaveActivityParams>, re
 
         const isSelfRemoval = uid === authUid;
         const isHostRemoval = activity?.hostId === authUid && uid !== authUid;
+        const isHostSelfRemoval = activity?.hostId === authUid && uid === authUid;
 
         if (activity && isSelfRemoval && activity.hostId !== uid) {
             await createNotification({
@@ -182,6 +183,24 @@ export async function leaveActivityHandler(req: Request<LeaveActivityParams>, re
                 activityId,
                 senderUid: authUid,
             });
+        } else if (activity && isHostSelfRemoval) {
+            const participants = await getParticipants(activityId);
+            const notificationRecipients = participants
+                .map((participant) => participant.uid)
+                .filter((participantUid) => participantUid !== authUid);
+
+            await Promise.all(
+                notificationRecipients.map((recipientUid) =>
+                    createNotification({
+                        recipientUid,
+                        type: 'activity_cancelled',
+                        title: 'Activity cancelled',
+                        body: 'The host cancelled this activity',
+                        activityId,
+                        senderUid: authUid,
+                    }),
+                ),
+            );
         }
 
         return res.status(200).json({

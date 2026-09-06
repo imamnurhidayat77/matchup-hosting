@@ -993,6 +993,7 @@ Side effects:
 
 - Creates an `activity_left` notification for the activity host when a participant removes themselves and the participant is not the host.
 - Creates a `participant_removed` notification for the removed participant when the activity host removes another participant.
+- If the activity host removes themselves, the activity is marked `cancelled` and all non-host participants receive an `activity_cancelled` notification.
 
 Authentication:
 
@@ -1157,7 +1158,7 @@ Current delivery behavior:
 - The backend does not send Firebase Cloud Messaging push notifications yet.
 - The frontend should fetch notifications with `GET /api/notifications/me` or later attach a listener if realtime notification UX is required.
 - Notification records are created internally by backend services; there is no public client route for creating notifications.
-- Event-generated notifications currently include activity join, participant self-leave, and host participant removal.
+- Event-generated notifications currently include activity interest, activity join, activity cancellation, participant self-leave, and host participant removal.
 
 ### `GET /api/notifications/me`
 

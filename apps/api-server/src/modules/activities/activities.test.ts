@@ -1353,6 +1353,70 @@ describe('DELETE /api/activities/:activityId/participants/:uid', () => {
         expect(notificationsService.createNotification).toHaveBeenCalledTimes(1);
     });
 
+    it('when activity host removes themselves => expected 200', async () => {
+        vi.mocked(activitiesService.getActivityById).mockResolvedValueOnce({
+            activityId: 'activity-1',
+            hostId: 'test-uid-1',
+        } as never);
+        vi.mocked(activityParticipantsService.getParticipants).mockResolvedValueOnce([
+            {
+                participantId: 'test-uid-1',
+                uid: 'test-uid-1',
+                profile: null,
+                joinedAt: { toDate: () => new Date('2026-08-19T06:00:00Z') } as never,
+            },
+            {
+                participantId: 'participant-2',
+                uid: 'participant-2',
+                profile: null,
+                joinedAt: { toDate: () => new Date('2026-08-19T06:00:00Z') } as never,
+            },
+            {
+                participantId: 'participant-3',
+                uid: 'participant-3',
+                profile: null,
+                joinedAt: { toDate: () => new Date('2026-08-19T06:00:00Z') } as never,
+            },
+        ]);
+
+        const app = createApp();
+
+        const response = await request(app).delete(
+            '/api/activities/activity-1/participants/test-uid-1',
+        );
+
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual({
+            ok: true,
+            data: {
+                activityId: 'activity-1',
+                uid: 'test-uid-1',
+            },
+        });
+        expect(activityParticipantsService.leaveActivity).toHaveBeenCalledWith({
+            activityId: 'activity-1',
+            targetUid: 'test-uid-1',
+            actorUid: 'test-uid-1',
+        });
+        expect(notificationsService.createNotification).toHaveBeenCalledTimes(2);
+        expect(notificationsService.createNotification).toHaveBeenCalledWith({
+            recipientUid: 'participant-2',
+            type: 'activity_cancelled',
+            title: 'Activity cancelled',
+            body: 'The host cancelled this activity',
+            activityId: 'activity-1',
+            senderUid: 'test-uid-1',
+        });
+        expect(notificationsService.createNotification).toHaveBeenCalledWith({
+            recipientUid: 'participant-3',
+            type: 'activity_cancelled',
+            title: 'Activity cancelled',
+            body: 'The host cancelled this activity',
+            activityId: 'activity-1',
+            senderUid: 'test-uid-1',
+        });
+    });
+
     it('when activityId is blank => expected 400 w/ EMPTY_INPUT', async () => {
         const app = createApp();
 
