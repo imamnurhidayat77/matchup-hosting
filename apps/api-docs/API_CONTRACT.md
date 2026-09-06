@@ -279,7 +279,7 @@ Errors:
 
 ### `GET /api/users/:uid/profile`
 
-Gets a safe public profile for another user. This route does not expose private fields such as `email`, devices, notifications, or preferences that should stay owner-only.
+Gets a safe public profile for another user. This route does not expose private fields such as `email`, devices, or notifications.
 
 Authentication:
 

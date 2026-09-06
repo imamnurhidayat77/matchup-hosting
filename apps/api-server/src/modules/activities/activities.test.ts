@@ -1434,6 +1434,24 @@ describe('DELETE /api/activities/:activityId/participants/:uid', () => {
         });
     });
 
+    it('when uid is blank => expected 400 w/ EMPTY_INPUT', async () => {
+        const app = createApp();
+
+        const response = await request(app).delete(
+            '/api/activities/activity-1/participants/%20%20',
+        );
+
+        expect(response.status).toBe(400);
+        expect(response.body).toEqual({
+            ok: false,
+            error: {
+                code: 'EMPTY_INPUT',
+                message: 'uid is required',
+            },
+        });
+        expect(activityParticipantsService.leaveActivity).not.toHaveBeenCalled();
+    });
+
     it('when actor is neither participant nor activity host => expected 403 w/ FORBIDDEN', async () => {
         vi.mocked(activityParticipantsService.leaveActivity).mockRejectedValueOnce(
             new Error('Only the participant or activity host can remove this participant'),

@@ -154,6 +154,16 @@ export async function leaveActivityHandler(req: Request<LeaveActivityParams>, re
             });
         }
 
+        if (!uid.trim()) {
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'EMPTY_INPUT',
+                    message: 'uid is required',
+                },
+            });
+        }
+
         await leaveActivity({
             activityId,
             targetUid: uid,

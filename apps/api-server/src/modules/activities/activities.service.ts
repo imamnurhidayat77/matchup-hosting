@@ -237,10 +237,14 @@ export async function listPublicActivityTeasers(
         throw new Error('limit must be an integer between 1 and 20');
     }
 
-    const activities = await listActivities({
-        status: 'open',
-        limit,
-    });
+    const snap = await firestore
+        .collection('activities')
+        .where('status', '==', 'open')
+        .orderBy('createdAt', 'desc')
+        .limit(limit)
+        .get();
+
+    const activities = snap.docs.map(mapActivityDoc);
 
     return activities.map((activity) => ({
         activityId: activity.activityId,
