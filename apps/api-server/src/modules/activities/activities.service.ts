@@ -30,13 +30,19 @@ export type CreateActivityInput = {
     endTime?: string;
     skillLevel: ActivitySkillLevel;
     capacity: number;
-    coverImageUrl?: string;
 };
 
 export type UpdateActivityStatusInput = {
     activityId: string;
     hostId: string;
     status: Exclude<ActivityStatus, 'full'>;
+};
+
+export type UpdateActivityCoverInput = {
+    activityId: string;
+    hostId: string;
+    coverImagePath: string;
+    coverImageUrl: string;
 };
 
 export type UpdateActivityInput = {
@@ -54,7 +60,6 @@ export type UpdateActivityInput = {
     endTime?: string;
     skillLevel?: ActivitySkillLevel;
     capacity?: number;
-    coverImageUrl?: string;
 };
 
 export type ActivityRecord = {
@@ -73,6 +78,7 @@ export type ActivityRecord = {
     capacity: number;
     participantCount: number;
     status: ActivityStatus;
+    coverImagePath?: string;
     coverImageUrl?: string;
     cancelledAt?: FirebaseFirestore.Timestamp;
     cancelledBy?: string;
@@ -110,6 +116,7 @@ export type PublicActivityTeaser = {
     startTime: string;
     skillLevel: ActivitySkillLevel;
     availableSpots: number;
+    coverImageUrl?: string;
 };
 
 type ActivityBaseWithId = ActivityRecord & {
@@ -132,7 +139,6 @@ export async function createActivity(input: CreateActivityInput): Promise<{ acti
     const endTime = input.endTime?.trim();
     const skillLevel = input.skillLevel;
     const capacity = input.capacity;
-    const coverImageUrl = input.coverImageUrl?.trim();
 
     if (!hostId) throw new Error('hostId is required');
     if (!title) throw new Error('title is required');
@@ -177,7 +183,6 @@ export async function createActivity(input: CreateActivityInput): Promise<{ acti
         capacity,
         participantCount: 0,
         status: 'open',
-        ...(coverImageUrl ? { coverImageUrl } : {}),
         createdAt: now,
         updatedAt: now,
     });
@@ -256,7 +261,58 @@ export async function listPublicActivityTeasers(
         startTime: activity.startTime,
         skillLevel: activity.skillLevel,
         availableSpots: Math.max(activity.capacity - activity.participantCount, 0),
+        ...(activity.coverImageUrl !== undefined ? { coverImageUrl: activity.coverImageUrl } : {}),
     }));
+}
+
+export async function updateActivityCover(input: UpdateActivityCoverInput): Promise<void> {
+    const activityId = input.activityId.trim();
+    const hostId = input.hostId.trim();
+    const coverImagePath = input.coverImagePath.trim();
+    const coverImageUrl = input.coverImageUrl.trim();
+    const now = Timestamp.now();
+
+    if (!activityId) {
+        throw new Error('activityId is required');
+    }
+
+    if (!hostId) {
+        throw new Error('hostId is required');
+    }
+
+    if (!coverImagePath) {
+        throw new Error('coverImagePath is required');
+    }
+
+    if (!coverImageUrl) {
+        throw new Error('coverImageUrl is required');
+    }
+
+    if (!coverImagePath.startsWith(`activities/${activityId}/cover/`)) {
+        throw new Error('coverImagePath must belong to the activity');
+    }
+
+    const activityRef = firestore.doc(activityDocPath(activityId));
+
+    await firestore.runTransaction(async (transaction) => {
+        const activitySnap = await transaction.get(activityRef);
+
+        if (!activitySnap.exists) {
+            throw new Error('Activity not found');
+        }
+
+        const data = activitySnap.data();
+
+        if (data?.hostId !== hostId) {
+            throw new Error('Only the activity host can update this activity');
+        }
+
+        transaction.update(activityRef, {
+            coverImagePath,
+            coverImageUrl,
+            updatedAt: now,
+        });
+    });
 }
 
 export async function updateActivityStatus(input: UpdateActivityStatusInput): Promise<void> {
@@ -343,7 +399,6 @@ export async function updateActivity(input: UpdateActivityInput): Promise<void> 
     if (input.geohash !== undefined) updates.geohash = input.geohash.trim();
     if (input.startTime !== undefined) updates.startTime = input.startTime.trim();
     if (input.endTime !== undefined) updates.endTime = input.endTime.trim();
-    if (input.coverImageUrl !== undefined) updates.coverImageUrl = input.coverImageUrl.trim();
 
     if (input.skillLevel !== undefined){
         if(
@@ -518,6 +573,7 @@ function mapActivityDoc(activityDoc: FirebaseFirestore.DocumentSnapshot): Activi
         capacity: data.capacity,
         participantCount: data.participantCount,
         status: data.status as ActivityStatus,
+        ...(typeof data.coverImagePath === 'string' ? { coverImagePath: data.coverImagePath } : {}),
         ...(typeof data.coverImageUrl === 'string' ? { coverImageUrl: data.coverImageUrl } : {}),
         ...(data.cancelledAt !== undefined
             ? { cancelledAt: data.cancelledAt as FirebaseFirestore.Timestamp }

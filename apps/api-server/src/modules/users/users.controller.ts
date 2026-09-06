@@ -3,6 +3,7 @@ import {
   bootstrapUser,
   getPublicUserProfile,
   getUserByAuthUid,
+  updateUserPhoto,
   updateUserProfile,
   type SkillLevel,
   type UpdateUserProfileInput,
@@ -14,7 +15,6 @@ type PublicProfileParams = {
 
 const editableProfileFields = [
   'displayName',
-  'photoUrl',
   'bio',
   'gender',
   'dateOfBirth',
@@ -45,7 +45,7 @@ function isStringArray(value: unknown): value is string[] {
 function buildProfileInput(body: Record<string, unknown>): UpdateUserProfileInput {
   const input: UpdateUserProfileInput = {};
 
-  for (const field of ['displayName', 'photoUrl', 'bio', 'gender', 'dateOfBirth'] as const) {
+  for (const field of ['displayName', 'bio', 'gender', 'dateOfBirth'] as const) {
     if (body[field] !== undefined) {
       input[field] = (body[field] as string).trim();
     }
@@ -228,7 +228,7 @@ export async function updateMyUserProfileHandler(req: Request, res: Response) {
       });
     }
 
-    for (const field of ['displayName', 'photoUrl', 'bio', 'gender', 'dateOfBirth'] as const) {
+    for (const field of ['displayName', 'bio', 'gender', 'dateOfBirth'] as const) {
       if (body[field] !== undefined && typeof body[field] !== 'string') {
         return res.status(400).json({
           ok: false,
@@ -271,6 +271,86 @@ export async function updateMyUserProfileHandler(req: Request, res: Response) {
     }
 
     const user = await updateUserProfile(authUid, buildProfileInput(body));
+
+    return res.status(200).json({
+      ok: true,
+      data: user,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+
+    if (message === 'User not found') {
+      return res.status(404).json({
+        ok: false,
+        error: {
+          code: 'NOT_FOUND',
+          message,
+        },
+      });
+    }
+
+    return res.status(500).json({
+      ok: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message,
+      },
+    });
+  }
+}
+
+export async function updateMyUserPhotoHandler(req: Request, res: Response) {
+  try {
+    const authUid = req.auth?.uid;
+    const { photoPath, photoUrl } = req.body as {
+      photoPath?: unknown;
+      photoUrl?: unknown;
+    };
+
+    if (!authUid) {
+      return res.status(401).json({
+        ok: false,
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'Authenticated user is required',
+        },
+      });
+    }
+
+    if (typeof photoPath !== 'string' || typeof photoUrl !== 'string') {
+      return res.status(400).json({
+        ok: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'photoPath and photoUrl must be strings',
+        },
+      });
+    }
+
+    if (!photoPath.trim() || !photoUrl.trim()) {
+      return res.status(400).json({
+        ok: false,
+        error: {
+          code: 'EMPTY_INPUT',
+          message: 'photoPath and photoUrl are required',
+        },
+      });
+    }
+
+    if (!photoPath.trim().startsWith(`users/${authUid}/profile/`)) {
+      return res.status(403).json({
+        ok: false,
+        error: {
+          code: 'FORBIDDEN',
+          message: 'photoPath must belong to the authenticated user',
+        },
+      });
+    }
+
+    const user = await updateUserPhoto(authUid, {
+      photoPath,
+      photoUrl,
+    });
 
     return res.status(200).json({
       ok: true,
