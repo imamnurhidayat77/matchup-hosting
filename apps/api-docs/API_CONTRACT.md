@@ -574,6 +574,8 @@ Success `200`:
       "title": "Evening Futsal",
       "sportType": "futsal",
       "locationName": "Auckland Domain",
+      "latitude": -36.8585,
+      "longitude": 174.775,
       "startTime": "2026-08-20T18:30:00+12:00",
       "skillLevel": "any",
       "availableSpots": 4
@@ -600,6 +602,8 @@ Request body:
   "description": "Casual 5v5 session",
   "locationName": "Auckland Domain",
   "address": "Optional address",
+  "latitude": -36.8585,
+  "longitude": 174.775,
   "geohash": "rckq2m",
   "startTime": "2026-08-20T18:30:00+12:00",
   "endTime": "2026-08-20T20:00:00+12:00",
@@ -637,6 +641,8 @@ Errors:
 - `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
 - `400 INVALID_INPUT` if required string fields are not strings
 - `400 INVALID_INPUT` if optional string fields are provided with wrong type
+- `400 INVALID_INPUT` if `latitude` is not a number between `-90` and `90`
+- `400 INVALID_INPUT` if `longitude` is not a number between `-180` and `180`
 - `400 INVALID_INPUT` if `skillLevel` is invalid
 - `400 INVALID_INPUT` if `capacity` is not a positive integer
 - `400 EMPTY_INPUT` if required string fields are blank
@@ -696,6 +702,8 @@ Success `200`:
       "sportType": "futsal",
       "description": "Casual 5v5 session",
       "locationName": "Auckland Domain",
+      "latitude": -36.8585,
+      "longitude": 174.775,
       "geohash": "rckq2m",
       "startTime": "2026-08-20T18:30:00+12:00",
       "skillLevel": "any",
@@ -745,6 +753,8 @@ Request body:
   "description": "Updated activity description",
   "locationName": "Auckland Domain",
   "address": "Optional updated address",
+  "latitude": -36.8585,
+  "longitude": 174.775,
   "geohash": "rckq2m",
   "startTime": "2026-08-20T18:30:00+12:00",
   "endTime": "2026-08-20T20:00:00+12:00",
@@ -779,6 +789,8 @@ Errors:
 
 - `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
 - `400 INVALID_INPUT` if an updated string field is not a string
+- `400 INVALID_INPUT` if `latitude` is not a number between `-90` and `90`
+- `400 INVALID_INPUT` if `longitude` is not a number between `-180` and `180`
 - `400 INVALID_INPUT` if `skillLevel` is invalid
 - `400 INVALID_INPUT` if `capacity` is not a positive integer
 - `400 EMPTY_INPUT` if `activityId` is blank
@@ -857,6 +869,8 @@ Success `200`:
     "description": "Casual 5v5 session",
     "locationName": "Auckland Domain",
     "address": "Optional address",
+    "latitude": -36.8585,
+    "longitude": 174.775,
     "geohash": "rckq2m",
     "startTime": "2026-08-20T18:30:00+12:00",
     "endTime": "2026-08-20T20:00:00+12:00",

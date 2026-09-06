@@ -32,6 +32,8 @@ export async function createActivityHandler(req: Request, res: Response) {
             description,
             locationName,
             address,
+            latitude,
+            longitude,
             geohash,
             startTime,
             endTime,
@@ -44,6 +46,8 @@ export async function createActivityHandler(req: Request, res: Response) {
             description?: unknown;
             locationName?: unknown;
             address?: unknown;
+            latitude?: unknown;
+            longitude?: unknown;
             geohash?: unknown;
             startTime?: unknown;
             endTime?: unknown;
@@ -116,6 +120,26 @@ export async function createActivityHandler(req: Request, res: Response) {
             });
         }
 
+        if (typeof latitude !== 'number' || latitude < -90 || latitude > 90) {
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message: 'latitude must be a number between -90 and 90',
+                },
+            });
+        }
+
+        if (typeof longitude !== 'number' || longitude < -180 || longitude > 180) {
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message: 'longitude must be a number between -180 and 180',
+                },
+            });
+        }
+
         if (
             !title.trim() ||
             !sportType.trim() ||
@@ -139,6 +163,8 @@ export async function createActivityHandler(req: Request, res: Response) {
             sportType,
             description,
             locationName,
+            latitude,
+            longitude,
             geohash,
             startTime,
             skillLevel,
@@ -177,6 +203,8 @@ export async function updateActivityHandler(req: Request<UpdateActivityParams>, 
             description,
             locationName,
             address,
+            latitude,
+            longitude,
             geohash,
             startTime,
             endTime,
@@ -189,6 +217,8 @@ export async function updateActivityHandler(req: Request<UpdateActivityParams>, 
             description?: unknown;
             locationName?: unknown;
             address?: unknown;
+            latitude?: unknown;
+            longitude?: unknown;
             geohash?: unknown;
             startTime?: unknown;
             endTime?: unknown;
@@ -265,6 +295,26 @@ export async function updateActivityHandler(req: Request<UpdateActivityParams>, 
             });
         }
 
+        if (latitude !== undefined && (typeof latitude !== 'number' || latitude < -90 || latitude > 90)) {
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message: 'latitude must be a number between -90 and 90',
+                },
+            });
+        }
+
+        if (longitude !== undefined && (typeof longitude !== 'number' || longitude < -180 || longitude > 180)) {
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message: 'longitude must be a number between -180 and 180',
+                },
+            });
+        }
+
         await updateActivity({
             activityId,
             hostId,
@@ -273,6 +323,8 @@ export async function updateActivityHandler(req: Request<UpdateActivityParams>, 
             ...(typeof description === 'string' ? { description } : {}),
             ...(typeof locationName === 'string' ? { locationName } : {}),
             ...(typeof address === 'string' ? { address } : {}),
+            ...(typeof latitude === 'number' ? { latitude } : {}),
+            ...(typeof longitude === 'number' ? { longitude } : {}),
             ...(typeof geohash === 'string' ? { geohash } : {}),
             ...(typeof startTime === 'string' ? { startTime } : {}),
             ...(typeof endTime === 'string' ? { endTime } : {}),

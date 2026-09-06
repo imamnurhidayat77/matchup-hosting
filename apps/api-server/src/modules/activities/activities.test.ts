@@ -63,6 +63,8 @@ describe('activities routes', () => {
                 sportType: 'futsal',
                 description: 'Casual 5v5 session',
                 locationName: 'Auckland Domain',
+                latitude: -36.8585,
+                longitude: 174.775,
                 geohash: 'rckq2m',
                 startTime: '2026-08-19T18:30:00+12:00',
                 skillLevel: 'any',
@@ -175,6 +177,58 @@ describe('activities routes', () => {
             });
         });
 
+        it('when latitude is invalid => expected 400 w/ INVALID_INPUT', async () => {
+            const app = createApp();
+
+            const response = await request(app).post('/api/activities').send({
+                title: 'Evening Futsal',
+                sportType: 'futsal',
+                description: 'Casual 5v5 session',
+                locationName: 'Auckland Domain',
+                latitude: -91,
+                longitude: 174.775,
+                geohash: 'rckq2m',
+                startTime: '2026-08-19T18:30:00+12:00',
+                skillLevel: 'any',
+                capacity: 10,
+            });
+
+            expect(response.status).toBe(400);
+            expect(response.body).toEqual({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message: 'latitude must be a number between -90 and 90',
+                },
+            });
+        });
+
+        it('when longitude is invalid => expected 400 w/ INVALID_INPUT', async () => {
+            const app = createApp();
+
+            const response = await request(app).post('/api/activities').send({
+                title: 'Evening Futsal',
+                sportType: 'futsal',
+                description: 'Casual 5v5 session',
+                locationName: 'Auckland Domain',
+                latitude: -36.8585,
+                longitude: 181,
+                geohash: 'rckq2m',
+                startTime: '2026-08-19T18:30:00+12:00',
+                skillLevel: 'any',
+                capacity: 10,
+            });
+
+            expect(response.status).toBe(400);
+            expect(response.body).toEqual({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message: 'longitude must be a number between -180 and 180',
+                },
+            });
+        });
+
         it('when required string fields are blank => expected 400 w/ EMPTY_INPUT', async () => {
             const app = createApp();
 
@@ -183,6 +237,8 @@ describe('activities routes', () => {
                 sportType: 'futsal',
                 description: 'Casual 5v5 session',
                 locationName: 'Auckland Domain',
+                latitude: -36.8585,
+                longitude: 174.775,
                 geohash: 'rckq2m',
                 startTime: '2026-08-19T18:30:00+12:00',
                 skillLevel: 'any',
@@ -211,6 +267,8 @@ describe('activities routes', () => {
                 sportType: 'futsal',
                 description: 'Casual 5v5 session',
                 locationName: 'Auckland Domain',
+                latitude: -36.8585,
+                longitude: 174.775,
                 geohash: 'rckq2m',
                 startTime: '2026-08-19T18:30:00+12:00',
                 skillLevel: 'any',
@@ -771,6 +829,8 @@ describe('activities routes', () => {
                 sportType: 'futsal',
                 description: 'Casual 5v5 session',
                 locationName: 'Auckland Domain',
+                latitude: -36.8585,
+                longitude: 174.775,
                 geohash: 'rckq2m',
                 startTime: '2026-08-19T18:30:00+12:00',
                 skillLevel: 'any',
@@ -933,6 +993,8 @@ describe('activities routes', () => {
                     title: 'Evening Futsal',
                     sportType: 'futsal',
                     locationName: 'Auckland Domain',
+                    latitude: -36.8585,
+                    longitude: 174.775,
                     startTime: '2026-08-19T18:30:00+12:00',
                     skillLevel: 'any',
                     availableSpots: 4,
@@ -952,6 +1014,8 @@ describe('activities routes', () => {
                         title: 'Evening Futsal',
                         sportType: 'futsal',
                         locationName: 'Auckland Domain',
+                        latitude: -36.8585,
+                        longitude: 174.775,
                         startTime: '2026-08-19T18:30:00+12:00',
                         skillLevel: 'any',
                         availableSpots: 4,

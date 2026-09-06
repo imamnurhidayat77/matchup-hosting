@@ -23,6 +23,8 @@ export type CreateActivityInput = {
     description: string;
     locationName: string;
     address?: string;
+    latitude: number;
+    longitude: number;
     geohash: string;
     startTime: string;
     endTime?: string;
@@ -45,6 +47,8 @@ export type UpdateActivityInput = {
     description?: string;
     locationName?: string;
     address?: string;
+    latitude?: number;
+    longitude?: number;
     geohash?: string;
     startTime?: string;
     endTime?: string;
@@ -60,6 +64,8 @@ export type ActivityRecord = {
     description: string;
     locationName: string;
     address?: string;
+    latitude: number;
+    longitude: number;
     geohash: string;
     startTime: string;
     endTime?: string;
@@ -97,6 +103,8 @@ export type PublicActivityTeaser = {
     title: string;
     sportType: string;
     locationName: string;
+    latitude: number;
+    longitude: number;
     startTime: string;
     skillLevel: ActivitySkillLevel;
     availableSpots: number;
@@ -115,6 +123,8 @@ export async function createActivity(input: CreateActivityInput): Promise<{ acti
     const description = input.description.trim();
     const locationName = input.locationName.trim();
     const address = input.address?.trim();
+    const latitude = input.latitude;
+    const longitude = input.longitude;
     const geohash = input.geohash.trim();
     const startTime = input.startTime.trim();
     const endTime = input.endTime?.trim();
@@ -129,6 +139,14 @@ export async function createActivity(input: CreateActivityInput): Promise<{ acti
     if (!locationName) throw new Error('locationName is required');
     if (!geohash) throw new Error('geohash is required');
     if (!startTime) throw new Error('startTime is required');
+
+    if (typeof latitude !== 'number' || latitude < -90 || latitude > 90) {
+        throw new Error('latitude must be a number between -90 and 90');
+    }
+
+    if (typeof longitude !== 'number' || longitude < -180 || longitude > 180) {
+        throw new Error('longitude must be a number between -180 and 180');
+    }
 
     if (!['beginner', 'intermediate', 'advanced', 'any'].includes(skillLevel)) {
         throw new Error('skillLevel is invalid');
@@ -148,6 +166,8 @@ export async function createActivity(input: CreateActivityInput): Promise<{ acti
         description,
         locationName,
         ...(address ? { address } : {}),
+        latitude,
+        longitude,
         geohash,
         startTime,
         ...(endTime ? { endTime } : {}),
@@ -225,6 +245,8 @@ export async function listPublicActivityTeasers(
         title: activity.title,
         sportType: activity.sportType,
         locationName: activity.locationName,
+        latitude: activity.latitude,
+        longitude: activity.longitude,
         startTime: activity.startTime,
         skillLevel: activity.skillLevel,
         availableSpots: Math.max(activity.capacity - activity.participantCount, 0),
@@ -298,6 +320,20 @@ export async function updateActivity(input: UpdateActivityInput): Promise<void> 
     if (input.description !== undefined) updates.description = input.description.trim();
     if (input.locationName !== undefined) updates.locationName = input.locationName.trim();
     if (input.address !== undefined) updates.address = input.address.trim();
+    if (input.latitude !== undefined) {
+        if (typeof input.latitude !== 'number' || input.latitude < -90 || input.latitude > 90) {
+            throw new Error('latitude must be a number between -90 and 90');
+        }
+
+        updates.latitude = input.latitude;
+    }
+    if (input.longitude !== undefined) {
+        if (typeof input.longitude !== 'number' || input.longitude < -180 || input.longitude > 180) {
+            throw new Error('longitude must be a number between -180 and 180');
+        }
+
+        updates.longitude = input.longitude;
+    }
     if (input.geohash !== undefined) updates.geohash = input.geohash.trim();
     if (input.startTime !== undefined) updates.startTime = input.startTime.trim();
     if (input.endTime !== undefined) updates.endTime = input.endTime.trim();
@@ -425,6 +461,12 @@ function mapActivityDoc(activityDoc: FirebaseFirestore.DocumentSnapshot): Activi
     if (typeof data.geohash !== 'string') {
         throw new Error('Invalid activity record: geohash must be a string');
     }
+    if (typeof data.latitude !== 'number') {
+        throw new Error('Invalid activity record: latitude must be a number');
+    }
+    if (typeof data.longitude !== 'number') {
+        throw new Error('Invalid activity record: longitude must be a number');
+    }
     if (typeof data.startTime !== 'string') {
         throw new Error('Invalid activity record: startTime must be a string');
     }
@@ -452,6 +494,8 @@ function mapActivityDoc(activityDoc: FirebaseFirestore.DocumentSnapshot): Activi
         description: data.description,
         locationName: data.locationName,
         ...(typeof data.address === 'string' ? { address: data.address } : {}),
+        latitude: data.latitude,
+        longitude: data.longitude,
         geohash: data.geohash,
         startTime: data.startTime,
         ...(typeof data.endTime === 'string' ? { endTime: data.endTime } : {}),
