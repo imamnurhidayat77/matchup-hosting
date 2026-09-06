@@ -5,5 +5,5 @@ import { joinActivityHandler, leaveActivityHandler, getParticipantsHandler } fro
 export const activityParticipantsRouter = Router();
 
 activityParticipantsRouter.post('/:activityId/participants', requireAuth, joinActivityHandler);
-activityParticipantsRouter.get('/:activityId/participants', getParticipantsHandler);
+activityParticipantsRouter.get('/:activityId/participants', requireAuth, getParticipantsHandler);
 activityParticipantsRouter.delete('/:activityId/participants/:uid', requireAuth, leaveActivityHandler);

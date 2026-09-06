@@ -161,7 +161,10 @@ export async function leaveActivityHandler(req: Request<LeaveActivityParams>, re
         });
         const activity = await getActivityById(activityId);
 
-        if (activity && activity.hostId !== uid) {
+        const isSelfRemoval = uid === authUid;
+        const isHostRemoval = activity?.hostId === authUid && uid !== authUid;
+
+        if (activity && isSelfRemoval && activity.hostId !== uid) {
             await createNotification({
                 recipientUid: activity.hostId,
                 type: 'activity_left',
@@ -170,9 +173,7 @@ export async function leaveActivityHandler(req: Request<LeaveActivityParams>, re
                 activityId,
                 senderUid: uid,
             });
-        }
-
-        if (activity && activity.hostId === authUid && uid !== authUid) {
+        } else if (activity && isHostRemoval) {
             await createNotification({
                 recipientUid: uid,
                 type: 'participant_removed',

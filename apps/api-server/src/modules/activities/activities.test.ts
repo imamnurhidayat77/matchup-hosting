@@ -1314,6 +1314,7 @@ describe('DELETE /api/activities/:activityId/participants/:uid', () => {
             activityId: 'activity-1',
             senderUid: 'test-uid-1',
         });
+        expect(notificationsService.createNotification).toHaveBeenCalledTimes(1);
     });
 
     it('when activity host removes another participant => expected 200', async () => {
@@ -1349,6 +1350,7 @@ describe('DELETE /api/activities/:activityId/participants/:uid', () => {
             activityId: 'activity-1',
             senderUid: 'test-uid-1',
         });
+        expect(notificationsService.createNotification).toHaveBeenCalledTimes(1);
     });
 
     it('when activityId is blank => expected 400 w/ EMPTY_INPUT', async () => {

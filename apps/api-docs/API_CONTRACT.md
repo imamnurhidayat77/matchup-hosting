@@ -953,6 +953,10 @@ Errors:
 
 Lists participants for an activity.
 
+Authentication:
+
+- Requires `Authorization: Bearer <firebase-id-token>`
+
 Success `200`:
 
 ```json
@@ -978,6 +982,7 @@ Success `200`:
 
 Errors:
 
+- `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
 - `400 EMPTY_INPUT` if `activityId` is blank
 
 ### `DELETE /api/activities/:activityId/participants/:uid`
