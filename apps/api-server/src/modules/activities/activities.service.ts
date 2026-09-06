@@ -74,6 +74,8 @@ export type ActivityRecord = {
     participantCount: number;
     status: ActivityStatus;
     coverImageUrl?: string;
+    cancelledAt?: FirebaseFirestore.Timestamp;
+    cancelledBy?: string;
     createdAt: FirebaseFirestore.Timestamp;
     updatedAt: FirebaseFirestore.Timestamp;
 };
@@ -485,6 +487,15 @@ function mapActivityDoc(activityDoc: FirebaseFirestore.DocumentSnapshot): Activi
     if (!data.updatedAt || typeof data.updatedAt !== 'object' || !('toDate' in data.updatedAt)) {
         throw new Error('Invalid activity record: updatedAt must be a Firestore Timestamp');
     }
+    if (
+        data.cancelledAt !== undefined &&
+        (!data.cancelledAt || typeof data.cancelledAt !== 'object' || !('toDate' in data.cancelledAt))
+    ) {
+        throw new Error('Invalid activity record: cancelledAt must be a Firestore Timestamp');
+    }
+    if (data.cancelledBy !== undefined && typeof data.cancelledBy !== 'string') {
+        throw new Error('Invalid activity record: cancelledBy must be a string');
+    }
 
     return {
         activityId: activityDoc.id,
@@ -504,6 +515,10 @@ function mapActivityDoc(activityDoc: FirebaseFirestore.DocumentSnapshot): Activi
         participantCount: data.participantCount,
         status: data.status as ActivityStatus,
         ...(typeof data.coverImageUrl === 'string' ? { coverImageUrl: data.coverImageUrl } : {}),
+        ...(data.cancelledAt !== undefined
+            ? { cancelledAt: data.cancelledAt as FirebaseFirestore.Timestamp }
+            : {}),
+        ...(typeof data.cancelledBy === 'string' ? { cancelledBy: data.cancelledBy } : {}),
         createdAt: data.createdAt as FirebaseFirestore.Timestamp,
         updatedAt: data.updatedAt as FirebaseFirestore.Timestamp,
     };

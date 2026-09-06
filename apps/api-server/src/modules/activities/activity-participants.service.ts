@@ -292,6 +292,7 @@ export async function leaveActivity(
     transaction.update(activityRef, {
       participantCount: nextParticipantCount,
       status: nextStatus,
+      ...(isHostSelfRemoval ? { cancelledAt: now, cancelledBy: normalizedActorUid } : {}),
       updatedAt: now,
     });
   });

@@ -993,7 +993,7 @@ Side effects:
 
 - Creates an `activity_left` notification for the activity host when a participant removes themselves and the participant is not the host.
 - Creates a `participant_removed` notification for the removed participant when the activity host removes another participant.
-- If the activity host removes themselves, the activity is marked `cancelled` and all non-host participants receive an `activity_cancelled` notification.
+- If the activity host removes themselves, the activity is marked `cancelled`, `cancelledAt` and `cancelledBy` are stored, and all non-host participants receive an `activity_cancelled` notification.
 
 Authentication:
 
