@@ -12,8 +12,8 @@ import { requireAuth } from '../../middleware/auth.middleware.js';
 export const activitiesRouter = Router();
 
 activitiesRouter.post('/', requireAuth, createActivityHandler);
-activitiesRouter.get('/', listActivitiesHandler);
+activitiesRouter.get('/', requireAuth, listActivitiesHandler);
 activitiesRouter.patch('/:activityId/status', requireAuth, updateActivityStatusHandler);
 activitiesRouter.patch('/:activityId', requireAuth, updateActivityHandler);
-activitiesRouter.get('/:activityId', getActivityHandler);
+activitiesRouter.get('/:activityId', requireAuth, getActivityHandler);
 activitiesRouter.use('/', activityParticipantsRouter);

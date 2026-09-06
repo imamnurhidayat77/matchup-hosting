@@ -41,5 +41,11 @@
     "noUncheckedSideEffectImports": true,
     "moduleDetection": "force",
     "skipLibCheck": true,
-  }
+  },
+  "exclude": [
+    "dist",
+    "node_modules",
+    "src/modules/auth-dev-only",
+    "src/**/*.test.ts"
+  ]
 }

@@ -7,13 +7,8 @@ import {
 import { getActivityById } from '../activities/activities.service.js';
 import { createNotification } from '../notifications/notifications.service.js';
 
-type GetSwipeParams = {
-  uid: string;
+type GetMySwipeParams = {
   activityId: string;
-};
-
-type ListSwipeDecisionsParams = {
-  uid: string;
 };
 
 export async function saveSwipeDecisionHandler(req: Request, res: Response) {
@@ -116,29 +111,30 @@ export async function saveSwipeDecisionHandler(req: Request, res: Response) {
   }
 }
 
-export async function getSwipeDecisionHandler(
-  req: Request<GetSwipeParams>,
+export async function getMySwipeDecisionHandler(
+  req: Request<GetMySwipeParams>,
   res: Response,
 ) {
   try {
-    const { uid, activityId } = req.params;
+    const uid = req.auth?.uid;
+    const { activityId } = req.params;
 
-    if (!uid.trim() || !activityId.trim()) {
-      return res.status(400).json({
+    if (!uid) {
+      return res.status(401).json({
         ok: false,
         error: {
-          code: 'EMPTY_INPUT',
-          message: 'uid and activityId are required',
+          code: 'UNAUTHORIZED',
+          message: 'Authenticated user is required',
         },
       });
     }
 
-    if (req.auth?.uid !== uid) {
-      return res.status(403).json({
+    if (!activityId.trim()) {
+      return res.status(400).json({
         ok: false,
         error: {
-          code: 'FORBIDDEN',
-          message: 'You can only access your own swipe decisions',
+          code: 'EMPTY_INPUT',
+          message: 'activityId is required',
         },
       });
     }
@@ -172,29 +168,16 @@ export async function getSwipeDecisionHandler(
   }
 }
 
-export async function listSwipeDecisionsHandler(
-  req: Request<ListSwipeDecisionsParams>,
-  res: Response,
-) {
+export async function listMySwipeDecisionsHandler(req: Request, res: Response) {
   try {
-    const { uid } = req.params;
+    const uid = req.auth?.uid;
 
-    if (!uid.trim()) {
-      return res.status(400).json({
+    if (!uid) {
+      return res.status(401).json({
         ok: false,
         error: {
-          code: 'EMPTY_INPUT',
-          message: 'uid is required',
-        },
-      });
-    }
-
-    if (req.auth?.uid !== uid) {
-      return res.status(403).json({
-        ok: false,
-        error: {
-          code: 'FORBIDDEN',
-          message: 'You can only access your own swipe decisions',
+          code: 'UNAUTHORIZED',
+          message: 'Authenticated user is required',
         },
       });
     }

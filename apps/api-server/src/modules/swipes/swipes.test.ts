@@ -221,8 +221,12 @@ describe('swipes routes', () => {
     });
   });
 
-  describe('GET /api/swipes/:uid/:activityId', () => {
-    it('when swipe decision exists => expected 200', async () => {
+  describe('GET /api/swipes/me/:activityId', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it('when authenticated user requests own swipe decision => expected 200', async () => {
       vi.mocked(swipesService.getSwipeDecision).mockResolvedValueOnce({
         swipeId: 'activity-1',
         uid: 'test-uid-1',
@@ -234,7 +238,7 @@ describe('swipes routes', () => {
 
       const app = createApp();
 
-      const response = await request(app).get('/api/swipes/test-uid-1/activity-1');
+      const response = await request(app).get('/api/swipes/me/activity-1');
 
       expect(response.status).toBe(200);
       expect(response.body).toMatchObject({
@@ -246,37 +250,20 @@ describe('swipes routes', () => {
           decision: 'join',
         },
       });
+      expect(swipesService.getSwipeDecision).toHaveBeenCalledWith('test-uid-1', 'activity-1');
     });
 
-    it.each([
-      '/api/swipes/%20%20/activity-1',
-      '/api/swipes/test-uid-1/%20%20',
-    ])('when route params are blank: %s => expected 400 w/ EMPTY_INPUT', async (path) => {
+    it('when activityId is blank => expected 400 w/ EMPTY_INPUT', async () => {
       const app = createApp();
 
-      const response = await request(app).get(path);
+      const response = await request(app).get('/api/swipes/me/%20%20');
 
       expect(response.status).toBe(400);
       expect(response.body).toEqual({
         ok: false,
         error: {
           code: 'EMPTY_INPUT',
-          message: 'uid and activityId are required',
-        },
-      });
-    });
-
-    it('when authenticated user does not own requested swipe decision => expected 403 w/ FORBIDDEN', async () => {
-      const app = createApp();
-
-      const response = await request(app).get('/api/swipes/other-uid/activity-1');
-
-      expect(response.status).toBe(403);
-      expect(response.body).toEqual({
-        ok: false,
-        error: {
-          code: 'FORBIDDEN',
-          message: 'You can only access your own swipe decisions',
+          message: 'activityId is required',
         },
       });
     });
@@ -286,7 +273,7 @@ describe('swipes routes', () => {
 
       const app = createApp();
 
-      const response = await request(app).get('/api/swipes/test-uid-1/activity-1');
+      const response = await request(app).get('/api/swipes/me/activity-1');
 
       expect(response.status).toBe(404);
       expect(response.body).toEqual({
@@ -305,7 +292,7 @@ describe('swipes routes', () => {
 
       const app = createApp();
 
-      const response = await request(app).get('/api/swipes/test-uid-1/activity-1');
+      const response = await request(app).get('/api/swipes/me/activity-1');
 
       expect(response.status).toBe(500);
       expect(response.body).toEqual({
@@ -318,8 +305,12 @@ describe('swipes routes', () => {
     });
   });
 
-  describe('GET /api/swipes/:uid', () => {
-    it('when swipe decisions exist => expected 200', async () => {
+  describe('GET /api/swipes/me', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it('when authenticated user requests own swipe decisions => expected 200', async () => {
       vi.mocked(swipesService.listSwipeDecisions).mockResolvedValueOnce([
         {
           swipeId: 'activity-2',
@@ -333,7 +324,7 @@ describe('swipes routes', () => {
 
       const app = createApp();
 
-      const response = await request(app).get('/api/swipes/test-uid-1');
+      const response = await request(app).get('/api/swipes/me');
 
       expect(response.status).toBe(200);
       expect(response.body).toMatchObject({
@@ -347,36 +338,7 @@ describe('swipes routes', () => {
           },
         ],
       });
-    });
-
-    it('when uid is blank => expected 400 w/ EMPTY_INPUT', async () => {
-      const app = createApp();
-
-      const response = await request(app).get('/api/swipes/%20%20');
-
-      expect(response.status).toBe(400);
-      expect(response.body).toEqual({
-        ok: false,
-        error: {
-          code: 'EMPTY_INPUT',
-          message: 'uid is required',
-        },
-      });
-    });
-
-    it('when authenticated user does not own requested swipe decisions => expected 403 w/ FORBIDDEN', async () => {
-      const app = createApp();
-
-      const response = await request(app).get('/api/swipes/other-uid');
-
-      expect(response.status).toBe(403);
-      expect(response.body).toEqual({
-        ok: false,
-        error: {
-          code: 'FORBIDDEN',
-          message: 'You can only access your own swipe decisions',
-        },
-      });
+      expect(swipesService.listSwipeDecisions).toHaveBeenCalledWith('test-uid-1');
     });
 
     it('when no swipe decisions exist => expected 200', async () => {
@@ -384,7 +346,7 @@ describe('swipes routes', () => {
 
       const app = createApp();
 
-      const response = await request(app).get('/api/swipes/test-uid-1');
+      const response = await request(app).get('/api/swipes/me');
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual({
@@ -400,7 +362,7 @@ describe('swipes routes', () => {
 
       const app = createApp();
 
-      const response = await request(app).get('/api/swipes/test-uid-1');
+      const response = await request(app).get('/api/swipes/me');
 
       expect(response.status).toBe(500);
       expect(response.body).toEqual({
@@ -412,4 +374,5 @@ describe('swipes routes', () => {
       });
     });
   });
+
 });

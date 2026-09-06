@@ -4,8 +4,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('./activities.service.js', () => {
     return {
         createActivity: vi.fn().mockResolvedValue({ activityId: 'activity-1' }),
+        attachViewerActivityContext: vi.fn((activity) => Promise.resolve({
+            ...activity,
+            mySwipeDecision: 'join',
+            isParticipant: true,
+            isHost: false,
+        })),
         getActivityById: vi.fn(),
         listActivities: vi.fn(),
+        listPublicActivityTeasers: vi.fn(),
         updateActivity: vi.fn().mockResolvedValue(undefined),
         updateActivityStatus: vi.fn().mockResolvedValue(undefined),
     };
@@ -756,25 +763,35 @@ describe('activities routes', () => {
             vi.clearAllMocks();
         });
 
-        it('when activities exist => expected 200', async () => {
-            vi.mocked(activitiesService.listActivities).mockResolvedValueOnce([
-                {
-                    activityId: 'activity-1',
-                    hostId: 'test-uid-1',
-                    title: 'Evening Futsal',
-                    sportType: 'futsal',
-                    description: 'Casual 5v5 session',
-                    locationName: 'Auckland Domain',
-                    geohash: 'rckq2m',
-                    startTime: '2026-08-19T18:30:00+12:00',
-                    skillLevel: 'any',
-                    capacity: 10,
-                    participantCount: 0,
-                    status: 'open',
-                    createdAt: { toDate: () => new Date('2026-08-19T06:00:00Z') } as never,
-                    updatedAt: { toDate: () => new Date('2026-08-19T06:00:00Z') } as never,
+        it('when authenticated user reads activities => expected 200 with viewer context', async () => {
+            const activity = {
+                activityId: 'activity-1',
+                hostId: 'host-uid-1',
+                title: 'Evening Futsal',
+                sportType: 'futsal',
+                description: 'Casual 5v5 session',
+                locationName: 'Auckland Domain',
+                geohash: 'rckq2m',
+                startTime: '2026-08-19T18:30:00+12:00',
+                skillLevel: 'any',
+                capacity: 10,
+                participantCount: 0,
+                status: 'open',
+                hostProfile: {
+                    authUid: 'host-uid-1',
+                    displayName: 'Test Host',
                 },
-            ]);
+                createdAt: { toDate: () => new Date('2026-08-19T06:00:00Z') } as never,
+                updatedAt: { toDate: () => new Date('2026-08-19T06:00:00Z') } as never,
+            } as const;
+
+            vi.mocked(activitiesService.listActivities).mockResolvedValueOnce([activity]);
+            vi.mocked(activitiesService.attachViewerActivityContext).mockResolvedValueOnce({
+                ...activity,
+                mySwipeDecision: 'join',
+                isParticipant: true,
+                isHost: false,
+            });
 
             const app = createApp();
 
@@ -786,24 +803,17 @@ describe('activities routes', () => {
                 data: [
                     {
                         activityId: 'activity-1',
-                        hostId: 'test-uid-1',
-                        title: 'Evening Futsal',
-                        sportType: 'futsal',
-                        description: 'Casual 5v5 session',
-                        locationName: 'Auckland Domain',
-                        geohash: 'rckq2m',
-                        startTime: '2026-08-19T18:30:00+12:00',
-                        skillLevel: 'any',
-                        capacity: 10,
-                        participantCount: 0,
-                        status: 'open',
+                        hostId: 'host-uid-1',
+                        mySwipeDecision: 'join',
+                        isParticipant: true,
+                        isHost: false,
                     },
                 ],
             });
-            expect(activitiesService.listActivities).toHaveBeenCalledWith({
-                status: 'open',
-                limit: 20,
-            });
+            expect(activitiesService.attachViewerActivityContext).toHaveBeenCalledWith(
+                activity,
+                'test-uid-1',
+            );
         });
 
         it('when filters are valid => expected 200', async () => {
@@ -911,11 +921,106 @@ describe('activities routes', () => {
         });
     });
 
+    describe('GET /api/public/activities', () => {
+        beforeEach(() => {
+            vi.clearAllMocks();
+        });
+
+        it('when public teasers exist => expected 200', async () => {
+            vi.mocked(activitiesService.listPublicActivityTeasers).mockResolvedValueOnce([
+                {
+                    activityId: 'activity-1',
+                    title: 'Evening Futsal',
+                    sportType: 'futsal',
+                    locationName: 'Auckland Domain',
+                    startTime: '2026-08-19T18:30:00+12:00',
+                    skillLevel: 'any',
+                    availableSpots: 4,
+                },
+            ]);
+
+            const app = createApp();
+
+            const response = await request(app).get('/api/public/activities');
+
+            expect(response.status).toBe(200);
+            expect(response.body).toEqual({
+                ok: true,
+                data: [
+                    {
+                        activityId: 'activity-1',
+                        title: 'Evening Futsal',
+                        sportType: 'futsal',
+                        locationName: 'Auckland Domain',
+                        startTime: '2026-08-19T18:30:00+12:00',
+                        skillLevel: 'any',
+                        availableSpots: 4,
+                    },
+                ],
+            });
+            expect(activitiesService.listPublicActivityTeasers).toHaveBeenCalledWith(10);
+        });
+
+        it('when limit is valid => expected 200', async () => {
+            vi.mocked(activitiesService.listPublicActivityTeasers).mockResolvedValueOnce([]);
+
+            const app = createApp();
+
+            const response = await request(app).get('/api/public/activities?limit=5');
+
+            expect(response.status).toBe(200);
+            expect(response.body).toEqual({
+                ok: true,
+                data: [],
+            });
+            expect(activitiesService.listPublicActivityTeasers).toHaveBeenCalledWith(5);
+        });
+
+        it.each(['0', '21', '1.5', 'abc'])(
+            'when limit is %s => expected 400 w/ INVALID_INPUT',
+            async (limit) => {
+                const app = createApp();
+
+                const response = await request(app).get(
+                    `/api/public/activities?limit=${limit}`,
+                );
+
+                expect(response.status).toBe(400);
+                expect(response.body).toEqual({
+                    ok: false,
+                    error: {
+                        code: 'INVALID_INPUT',
+                        message: 'limit must be an integer between 1 and 20',
+                    },
+                });
+            },
+        );
+
+        it('when service throws unknown error => expected 500 w/ INTERNAL_ERROR', async () => {
+            vi.mocked(activitiesService.listPublicActivityTeasers).mockRejectedValueOnce(
+                new Error('Unknown error'),
+            );
+
+            const app = createApp();
+
+            const response = await request(app).get('/api/public/activities');
+
+            expect(response.status).toBe(500);
+            expect(response.body).toEqual({
+                ok: false,
+                error: {
+                    code: 'INTERNAL_ERROR',
+                    message: 'Unknown error',
+                },
+            });
+        });
+    });
+
     describe('GET /api/activities/:activityId', () => {
-        it('when activity exists => expected 200', async () => {
-            vi.mocked(activitiesService.getActivityById).mockResolvedValueOnce({
+        it('when authenticated user reads activity => expected 200 with viewer context', async () => {
+            const activity = {
                 activityId: 'activity-1',
-                hostId: 'test-uid-1',
+                hostId: 'host-uid-1',
                 title: 'Evening Futsal',
                 sportType: 'futsal',
                 description: 'Casual 5v5 session',
@@ -926,8 +1031,20 @@ describe('activities routes', () => {
                 capacity: 10,
                 participantCount: 0,
                 status: 'open',
+                hostProfile: {
+                    authUid: 'host-uid-1',
+                    displayName: 'Test Host',
+                },
                 createdAt: { toDate: () => new Date('2026-08-19T06:00:00Z') } as never,
                 updatedAt: { toDate: () => new Date('2026-08-19T06:00:00Z') } as never,
+            } as const;
+
+            vi.mocked(activitiesService.getActivityById).mockResolvedValueOnce(activity);
+            vi.mocked(activitiesService.attachViewerActivityContext).mockResolvedValueOnce({
+                ...activity,
+                mySwipeDecision: null,
+                isParticipant: false,
+                isHost: false,
             });
 
             const app = createApp();
@@ -939,19 +1056,16 @@ describe('activities routes', () => {
                 ok: true,
                 data: {
                     activityId: 'activity-1',
-                    hostId: 'test-uid-1',
-                    title: 'Evening Futsal',
-                    sportType: 'futsal',
-                    description: 'Casual 5v5 session',
-                    locationName: 'Auckland Domain',
-                    geohash: 'rckq2m',
-                    startTime: '2026-08-19T18:30:00+12:00',
-                    skillLevel: 'any',
-                    capacity: 10,
-                    participantCount: 0,
-                    status: 'open',
+                    hostId: 'host-uid-1',
+                    mySwipeDecision: null,
+                    isParticipant: false,
+                    isHost: false,
                 },
             });
+            expect(activitiesService.attachViewerActivityContext).toHaveBeenCalledWith(
+                activity,
+                'test-uid-1',
+            );
         });
 
         it('when activityId is blank => expected 400 w/ EMPTY_INPUT', async () => {
@@ -1019,6 +1133,11 @@ describe('GET /api/activities/:activityId/participants', () => {
             {
                 participantId: 'test-uid-1',
                 uid: 'test-uid-1',
+                profile: {
+                    authUid: 'test-uid-1',
+                    displayName: 'Test Participant',
+                    photoUrl: 'https://example.com/participant.png',
+                },
                 joinedAt: { toDate: () => new Date('2026-08-19T06:00:00Z') } as never,
             },
         ]);
@@ -1034,6 +1153,11 @@ describe('GET /api/activities/:activityId/participants', () => {
                 {
                     participantId: 'test-uid-1',
                     uid: 'test-uid-1',
+                    profile: {
+                        authUid: 'test-uid-1',
+                        displayName: 'Test Participant',
+                        photoUrl: 'https://example.com/participant.png',
+                    },
                 },
             ],
         });

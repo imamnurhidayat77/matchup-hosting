@@ -8,6 +8,7 @@ import { presenceRouter } from '../modules/presence/presence.routes.js';
 import { typingRouter } from '../modules/typing/typing.routes.js';
 import { chatRouter } from '../modules/chat/chat.routes.js';
 import { activitiesRouter } from '../modules/activities/activities.routes.js';
+import { listPublicActivityTeasersHandler } from '../modules/activities/activities.controller.js';
 import { swipesRouter } from '../modules/swipes/swipes.routes.js';
 import { notificationsRouter } from '../modules/notifications/notifications.routes.js';
 import { devicesRouter } from '../modules/devices/devices.routes.js';
@@ -41,6 +42,8 @@ export function createApp(){
             })
         }
     })
+
+    app.get('/api/public/activities', listPublicActivityTeasersHandler);
 
     app.use('/api/users', usersRouter);
     app.use('/api/presence', presenceRouter);

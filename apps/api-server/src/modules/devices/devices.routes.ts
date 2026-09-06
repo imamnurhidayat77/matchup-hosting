@@ -1,13 +1,13 @@
 import { Router } from 'express';
 import { requireAuth } from '../../middleware/auth.middleware.js';
 import {
-    deleteDeviceHandler,
-    listDevicesHandler,
+    deleteMyDeviceHandler,
+    listMyDevicesHandler,
     registerDeviceHandler,
 } from './devices.controller.js';
 
 export const devicesRouter = Router();
 
 devicesRouter.post('/', requireAuth, registerDeviceHandler);
-devicesRouter.get('/:uid', requireAuth, listDevicesHandler);
-devicesRouter.delete('/:uid/:deviceId', requireAuth, deleteDeviceHandler);
+devicesRouter.get('/me', requireAuth, listMyDevicesHandler);
+devicesRouter.delete('/me/:deviceId', requireAuth, deleteMyDeviceHandler);

@@ -137,12 +137,12 @@ describe('devices routes', () => {
     });
   });
 
-  describe('GET /api/devices/:uid', () => {
+  describe('GET /api/devices/me', () => {
     beforeEach(() => {
       vi.clearAllMocks();
     });
 
-    it('when devices exist => expected 200', async () => {
+    it('when authenticated user devices exist => expected 200', async () => {
       vi.mocked(devicesService.listDevices).mockResolvedValueOnce([
         {
           deviceId: 'device-1',
@@ -156,7 +156,7 @@ describe('devices routes', () => {
 
       const app = createApp();
 
-      const response = await request(app).get('/api/devices/test-uid-1');
+      const response = await request(app).get('/api/devices/me');
 
       expect(response.status).toBe(200);
       expect(response.body).toMatchObject({
@@ -170,50 +170,22 @@ describe('devices routes', () => {
           },
         ],
       });
+      expect(devicesService.listDevices).toHaveBeenCalledWith('test-uid-1');
     });
 
-    it('when uid is blank => expected 400 w/ EMPTY_INPUT', async () => {
-      const app = createApp();
-
-      const response = await request(app).get('/api/devices/%20%20');
-
-      expect(response.status).toBe(400);
-      expect(response.body).toEqual({
-        ok: false,
-        error: {
-          code: 'EMPTY_INPUT',
-          message: 'uid is required',
-        },
-      });
-    });
-
-    it('when authenticated user accesses another user devices => expected 403 w/ FORBIDDEN', async () => {
-      const app = createApp();
-
-      const response = await request(app).get('/api/devices/other-uid');
-
-      expect(response.status).toBe(403);
-      expect(response.body).toEqual({
-        ok: false,
-        error: {
-          code: 'FORBIDDEN',
-          message: 'You can only access your own devices',
-        },
-      });
-    });
-
-    it('when no devices exist => expected 200', async () => {
+    it('when authenticated user has no devices => expected 200', async () => {
       vi.mocked(devicesService.listDevices).mockResolvedValueOnce([]);
 
       const app = createApp();
 
-      const response = await request(app).get('/api/devices/test-uid-1');
+      const response = await request(app).get('/api/devices/me');
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual({
         ok: true,
         data: [],
       });
+      expect(devicesService.listDevices).toHaveBeenCalledWith('test-uid-1');
     });
 
     it('when service throws unknown error => expected 500 w/ INTERNAL_ERROR', async () => {
@@ -223,7 +195,7 @@ describe('devices routes', () => {
 
       const app = createApp();
 
-      const response = await request(app).get('/api/devices/test-uid-1');
+      const response = await request(app).get('/api/devices/me');
 
       expect(response.status).toBe(500);
       expect(response.body).toEqual({
@@ -236,15 +208,15 @@ describe('devices routes', () => {
     });
   });
 
-  describe('DELETE /api/devices/:uid/:deviceId', () => {
+  describe('DELETE /api/devices/me/:deviceId', () => {
     beforeEach(() => {
       vi.clearAllMocks();
     });
 
-    it('when request is valid => expected 200', async () => {
+    it('when authenticated user deletes own device => expected 200', async () => {
       const app = createApp();
 
-      const response = await request(app).delete('/api/devices/test-uid-1/device-1');
+      const response = await request(app).delete('/api/devices/me/device-1');
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual({
@@ -260,47 +232,17 @@ describe('devices routes', () => {
       );
     });
 
-    it('when uid is blank => expected 400 w/ EMPTY_INPUT', async () => {
-      const app = createApp();
-
-      const response = await request(app).delete('/api/devices/%20%20/device-1');
-
-      expect(response.status).toBe(400);
-      expect(response.body).toEqual({
-        ok: false,
-        error: {
-          code: 'EMPTY_INPUT',
-          message: 'uid and deviceId are required',
-        },
-      });
-    });
-
     it('when deviceId is blank => expected 400 w/ EMPTY_INPUT', async () => {
       const app = createApp();
 
-      const response = await request(app).delete('/api/devices/test-uid-1/%20%20');
+      const response = await request(app).delete('/api/devices/me/%20%20');
 
       expect(response.status).toBe(400);
       expect(response.body).toEqual({
         ok: false,
         error: {
           code: 'EMPTY_INPUT',
-          message: 'uid and deviceId are required',
-        },
-      });
-    });
-
-    it('when authenticated user deletes another user device => expected 403 w/ FORBIDDEN', async () => {
-      const app = createApp();
-
-      const response = await request(app).delete('/api/devices/other-uid/device-1');
-
-      expect(response.status).toBe(403);
-      expect(response.body).toEqual({
-        ok: false,
-        error: {
-          code: 'FORBIDDEN',
-          message: 'You can only delete your own devices',
+          message: 'deviceId is required',
         },
       });
     });
@@ -312,9 +254,7 @@ describe('devices routes', () => {
 
       const app = createApp();
 
-      const response = await request(app).delete(
-        '/api/devices/test-uid-1/missing-device',
-      );
+      const response = await request(app).delete('/api/devices/me/missing-device');
 
       expect(response.status).toBe(404);
       expect(response.body).toEqual({
@@ -333,7 +273,7 @@ describe('devices routes', () => {
 
       const app = createApp();
 
-      const response = await request(app).delete('/api/devices/test-uid-1/device-1');
+      const response = await request(app).delete('/api/devices/me/device-1');
 
       expect(response.status).toBe(500);
       expect(response.body).toEqual({
@@ -345,4 +285,5 @@ describe('devices routes', () => {
       });
     });
   });
+
 });

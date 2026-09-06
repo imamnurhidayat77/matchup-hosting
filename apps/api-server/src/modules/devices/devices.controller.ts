@@ -5,12 +5,7 @@ import {
     registerDevice,
 } from './devices.service.js';
 
-type DevicesParams = {
-    uid: string;
-};
-
-type DeleteDeviceParams = {
-    uid: string;
+type DeleteMyDeviceParams = {
     deviceId: string;
 };
 
@@ -95,40 +90,16 @@ export async function registerDeviceHandler(req: Request, res: Response) {
     }
 }
 
-export async function listDevicesHandler(
-    req: Request<DevicesParams>,
-    res: Response,
-) {
+export async function listMyDevicesHandler(req: Request, res: Response) {
     try {
-        const authUid = req.auth?.uid;
-        const { uid } = req.params;
+        const uid = req.auth?.uid;
 
-        if (!authUid) {
+        if (!uid) {
             return res.status(401).json({
                 ok: false,
                 error: {
                     code: 'UNAUTHORIZED',
                     message: 'Authenticated user is required',
-                },
-            });
-        }
-
-        if (!uid.trim()) {
-            return res.status(400).json({
-                ok: false,
-                error: {
-                    code: 'EMPTY_INPUT',
-                    message: 'uid is required',
-                },
-            });
-        }
-
-        if (authUid !== uid) {
-            return res.status(403).json({
-                ok: false,
-                error: {
-                    code: 'FORBIDDEN',
-                    message: 'You can only access your own devices',
                 },
             });
         }
@@ -152,15 +123,15 @@ export async function listDevicesHandler(
     }
 }
 
-export async function deleteDeviceHandler(
-    req: Request<DeleteDeviceParams>,
+export async function deleteMyDeviceHandler(
+    req: Request<DeleteMyDeviceParams>,
     res: Response,
 ) {
     try {
-        const authUid = req.auth?.uid;
-        const { uid, deviceId } = req.params;
+        const uid = req.auth?.uid;
+        const { deviceId } = req.params;
 
-        if (!authUid) {
+        if (!uid) {
             return res.status(401).json({
                 ok: false,
                 error: {
@@ -170,22 +141,12 @@ export async function deleteDeviceHandler(
             });
         }
 
-        if (!uid.trim() || !deviceId.trim()) {
+        if (!deviceId.trim()) {
             return res.status(400).json({
                 ok: false,
                 error: {
                     code: 'EMPTY_INPUT',
-                    message: 'uid and deviceId are required',
-                },
-            });
-        }
-
-        if (authUid !== uid) {
-            return res.status(403).json({
-                ok: false,
-                error: {
-                    code: 'FORBIDDEN',
-                    message: 'You can only delete your own devices',
+                    message: 'deviceId is required',
                 },
             });
         }

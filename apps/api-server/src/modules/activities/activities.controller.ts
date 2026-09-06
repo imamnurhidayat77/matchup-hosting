@@ -1,7 +1,9 @@
 import type { Request, Response } from 'express';
 import {
+    attachViewerActivityContext,
     createActivity,
     getActivityById,
+    listPublicActivityTeasers,
     listActivities,
     updateActivity,
     updateActivityStatus,
@@ -510,6 +512,66 @@ export async function listActivitiesHandler(req: Request, res: Response) {
             ...(skillLevel !== undefined ? { skillLevel } : {}),
             limit: parsedLimit,
         });
+        const viewerUid = req.auth?.uid;
+
+        if (!viewerUid) {
+            return res.status(401).json({
+                ok: false,
+                error: {
+                    code: 'UNAUTHORIZED',
+                    message: 'Authenticated user is required',
+                },
+            });
+        }
+
+        const data = await Promise.all(
+            activities.map((activity) => attachViewerActivityContext(activity, viewerUid)),
+        );
+
+        return res.status(200).json({
+            ok: true,
+            data,
+        });
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+
+        return res.status(500).json({
+            ok: false,
+            error: {
+                code: 'INTERNAL_ERROR',
+                message,
+            },
+        });
+    }
+}
+
+export async function listPublicActivityTeasersHandler(req: Request, res: Response) {
+    try {
+        const { limit } = req.query;
+
+        if (limit !== undefined && typeof limit !== 'string') {
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message: 'limit must be an integer between 1 and 20',
+                },
+            });
+        }
+
+        const parsedLimit = limit === undefined ? 10 : Number(limit);
+
+        if (!Number.isInteger(parsedLimit) || parsedLimit <= 0 || parsedLimit > 20) {
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message: 'limit must be an integer between 1 and 20',
+                },
+            });
+        }
+
+        const activities = await listPublicActivityTeasers(parsedLimit);
 
         return res.status(200).json({
             ok: true,
@@ -557,9 +619,23 @@ export async function getActivityHandler(
             });
         }
 
+        const viewerUid = req.auth?.uid;
+
+        if (!viewerUid) {
+            return res.status(401).json({
+                ok: false,
+                error: {
+                    code: 'UNAUTHORIZED',
+                    message: 'Authenticated user is required',
+                },
+            });
+        }
+
+        const data = await attachViewerActivityContext(activity, viewerUid);
+
         return res.status(200).json({
             ok: true,
-            data: activity,
+            data,
         });
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';

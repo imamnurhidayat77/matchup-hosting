@@ -1,6 +1,17 @@
 import { firestore } from '../../database/firebase.js';
 import { Timestamp } from 'firebase-admin/firestore';
-import { activityDocPath } from '../../database/paths.js';
+import {
+    activityDocPath,
+    activityParticipantDocPath,
+} from '../../database/paths.js';
+import {
+    getPublicUserProfile,
+    type PublicUserProfile,
+} from '../users/users.service.js';
+import {
+    getSwipeDecision,
+    type SwipeDecision,
+} from '../swipes/swipes.service.js';
 
 export type ActivityStatus = 'open' | 'full' | 'cancelled' | 'completed' | 'removed';
 export type ActivitySkillLevel = 'beginner' | 'intermediate' | 'advanced' | 'any';
@@ -69,6 +80,29 @@ export type ListActivitiesFilters = {
 };
 
 export type ActivityWithId = ActivityRecord & {
+    activityId: string;
+    hostProfile: PublicUserProfile | null;
+};
+
+export type ActivityViewerContext = {
+    mySwipeDecision: SwipeDecision | null;
+    isParticipant: boolean;
+    isHost: boolean;
+};
+
+export type ActivityWithViewerContext = ActivityWithId & ActivityViewerContext;
+
+export type PublicActivityTeaser = {
+    activityId: string;
+    title: string;
+    sportType: string;
+    locationName: string;
+    startTime: string;
+    skillLevel: ActivitySkillLevel;
+    availableSpots: number;
+};
+
+type ActivityBaseWithId = ActivityRecord & {
     activityId: string;
 };
 
@@ -144,7 +178,7 @@ export async function getActivityById(activityId: string): Promise<ActivityWithI
         return null;
     }
 
-    return mapActivityDoc(activityDoc);
+    return enrichActivityWithHostProfile(mapActivityDoc(activityDoc));
 }
 
 export async function listActivities(
@@ -169,7 +203,32 @@ export async function listActivities(
         .limit(filters.limit)
         .get();
 
-    return snap.docs.map(mapActivityDoc);
+    const activities = snap.docs.map(mapActivityDoc);
+
+    return Promise.all(activities.map(enrichActivityWithHostProfile));
+}
+
+export async function listPublicActivityTeasers(
+    limit = 10,
+): Promise<PublicActivityTeaser[]> {
+    if (!Number.isInteger(limit) || limit <= 0 || limit > 20) {
+        throw new Error('limit must be an integer between 1 and 20');
+    }
+
+    const activities = await listActivities({
+        status: 'open',
+        limit,
+    });
+
+    return activities.map((activity) => ({
+        activityId: activity.activityId,
+        title: activity.title,
+        sportType: activity.sportType,
+        locationName: activity.locationName,
+        startTime: activity.startTime,
+        skillLevel: activity.skillLevel,
+        availableSpots: Math.max(activity.capacity - activity.participantCount, 0),
+    }));
 }
 
 export async function updateActivityStatus(input: UpdateActivityStatusInput): Promise<void> {
@@ -296,7 +355,52 @@ export async function updateActivity(input: UpdateActivityInput): Promise<void> 
 
 }
 
-function mapActivityDoc(activityDoc: FirebaseFirestore.DocumentSnapshot): ActivityWithId {
+async function enrichActivityWithHostProfile(
+    activity: ActivityBaseWithId,
+): Promise<ActivityWithId> {
+    const hostProfile = await getPublicUserProfile(activity.hostId);
+
+    return {
+        ...activity,
+        hostProfile,
+    };
+}
+
+export async function getViewerActivityContext(
+    activity: ActivityWithId,
+    uid: string,
+): Promise<ActivityViewerContext> {
+    const normalizedUid = uid.trim();
+
+    if (!normalizedUid) {
+        throw new Error('uid is required');
+    }
+
+    const [swipe, participantSnap] = await Promise.all([
+        getSwipeDecision(normalizedUid, activity.activityId),
+        firestore.doc(activityParticipantDocPath(activity.activityId, normalizedUid)).get(),
+    ]);
+
+    return {
+        mySwipeDecision: swipe?.decision ?? null,
+        isParticipant: participantSnap.exists,
+        isHost: activity.hostId === normalizedUid,
+    };
+}
+
+export async function attachViewerActivityContext(
+    activity: ActivityWithId,
+    uid: string,
+): Promise<ActivityWithViewerContext> {
+    const viewerContext = await getViewerActivityContext(activity, uid);
+
+    return {
+        ...activity,
+        ...viewerContext,
+    };
+}
+
+function mapActivityDoc(activityDoc: FirebaseFirestore.DocumentSnapshot): ActivityBaseWithId {
     const data = activityDoc.data();
 
     if (!data) {

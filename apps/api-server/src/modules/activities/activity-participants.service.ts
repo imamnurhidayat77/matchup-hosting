@@ -6,6 +6,10 @@ import {
   activityParticipantsCollectionPath,
 } from '../../database/paths.js';
 import type { ActivityStatus } from './activities.service.js';
+import {
+  getPublicUserProfile,
+  type PublicUserProfile,
+} from '../users/users.service.js';
 
 export type ActivityParticipantRecord = {
   uid: string;
@@ -19,6 +23,11 @@ export type LeaveActivityInput = {
 };
 
 export type ActivityParticipantWithId = ActivityParticipantRecord & {
+  participantId: string;
+  profile: PublicUserProfile | null;
+};
+
+type ActivityParticipantBaseWithId = ActivityParticipantRecord & {
   participantId: string;
 };
 
@@ -115,7 +124,7 @@ export async function getParticipants(
     .collection(activityParticipantsCollectionPath(normalizedActivityId))
     .get();
 
-  return participantsSnap.docs.map((doc) => {
+  const participants = participantsSnap.docs.map((doc) => {
     const data = doc.data();
 
     if (typeof data.uid !== 'string') {
@@ -138,6 +147,57 @@ export async function getParticipants(
       joinedAt: data.joinedAt as FirebaseFirestore.Timestamp,
     };
   });
+
+  return Promise.all(participants.map(enrichParticipantWithProfile));
+}
+
+async function enrichParticipantWithProfile(
+  participant: ActivityParticipantBaseWithId,
+): Promise<ActivityParticipantWithId> {
+  const profile = await getPublicUserProfile(participant.uid);
+
+  return {
+    ...participant,
+    profile,
+  };
+}
+
+export async function canAccessActivityChat(
+  activityId: string,
+  uid: string,
+): Promise<boolean> {
+  const normalizedActivityId = activityId.trim();
+  const normalizedUid = uid.trim();
+
+  if (!normalizedActivityId) {
+    throw new Error('activityId is required');
+  }
+
+  if (!normalizedUid) {
+    throw new Error('uid is required');
+  }
+
+  const activityRef = firestore.doc(activityDocPath(normalizedActivityId));
+  const participantRef = firestore.doc(
+    activityParticipantDocPath(normalizedActivityId, normalizedUid),
+  );
+
+  const [activitySnap, participantSnap] = await Promise.all([
+    activityRef.get(),
+    participantRef.get(),
+  ]);
+
+  if (!activitySnap.exists) {
+    throw new Error('Activity not found');
+  }
+
+  const activityData = activitySnap.data();
+
+  if (!activityData || typeof activityData.hostId !== 'string') {
+    throw new Error('Invalid activity record: hostId must be a string');
+  }
+
+  return activityData.hostId === normalizedUid || participantSnap.exists;
 }
 
 export async function leaveActivity(
