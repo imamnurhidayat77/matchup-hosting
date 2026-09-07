@@ -1,10 +1,28 @@
 import request from 'supertest';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('./users.service.js', () => {
   return {
-    createUser: vi.fn().mockResolvedValue(undefined),
+    bootstrapUser: vi.fn().mockResolvedValue({
+      authUid: 'test-uid-1',
+      email: 'user@example.com',
+      created: true,
+    }),
     getUserByAuthUid: vi.fn(),
+    updateUserProfile: vi.fn(),
+    getPublicUserProfile: vi.fn(),
+  };
+});
+
+vi.mock('../../middleware/auth.middleware.js', () => {
+  return {
+    requireAuth: vi.fn((req, _res, next) => {
+      req.auth = {
+        uid: 'test-uid-1',
+        token: {} as never,
+      };
+      next();
+    }),
   };
 });
 
@@ -12,190 +30,484 @@ import { createApp } from '../../app/app.js';
 import * as usersService from './users.service.js';
 
 describe('users routes', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
-  /*
-########################################################################  
-      Test section for typing POST route
-########################################################################
-*/
+  describe('POST /api/users/me', () => {
+    it('when authenticated request body is valid => expected 201', async () => {
+      const app = createApp();
 
-  it('creates a user with POST /users => expected 200', async () => {
-    const app = createApp();
+      const response = await request(app)
+        .post('/api/users/me')
+        .send({
+          email: 'user@example.com',
+        });
 
-    const response = await request(app)
-      .post('/api/users')
-      .send({
+      expect(response.status).toBe(201);
+      expect(response.body).toEqual({
+        ok: true,
+        data: {
+          authUid: 'test-uid-1',
+          email: 'user@example.com',
+          created: true,
+        },
+      });
+      expect(usersService.bootstrapUser).toHaveBeenCalledWith({
         authUid: 'test-uid-1',
         email: 'user@example.com',
       });
+    });
 
-    expect(response.status).toBe(201);
-    expect(response.body).toEqual({
-      ok: true,
-      data: {
+    it('when authenticated user already has profile => expected 200', async () => {
+      vi.mocked(usersService.bootstrapUser).mockResolvedValueOnce({
         authUid: 'test-uid-1',
         email: 'user@example.com',
-      },
-    });
-  });
-
-  it('POST /users when input is invalid => expected 400 w/ INVALID_INPUT', async () => {
-    const app = createApp();
-
-    const response = await request(app)
-      .post('/api/users')
-      .send({
-        authUid: '',
-        email: 123,
+        created: false,
       });
 
-    expect(response.status).toBe(400);
-    expect(response.body).toEqual({
-      ok: false,
-      error: {
-        code: 'INVALID_INPUT',
-        message: 'authUid and email must be strings',
-      },
-    });
-  });
+      const app = createApp();
 
-  it('POST /users when input is empty => expected 400 w/ EMPTY_INPUT', async () => {
-    const app = createApp();
+      const response = await request(app)
+        .post('/api/users/me')
+        .send({
+          email: 'user@example.com',
+        });
 
-    const response = await request(app)
-      .post('/api/users')
-      .send({
-        authUid: '   ',
-        email: '    ',
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        ok: true,
+        data: {
+          authUid: 'test-uid-1',
+          email: 'user@example.com',
+          created: false,
+        },
       });
+    });
 
-    expect(response.status).toBe(400);
-    expect(response.body).toEqual({
-      ok: false,
-      error: {
-        code: 'EMPTY_INPUT',
-        message: 'authUid and email are required',
-      },
+    it('when email is not a string => expected 400 w/ INVALID_INPUT', async () => {
+      const app = createApp();
+
+      const response = await request(app)
+        .post('/api/users/me')
+        .send({
+          email: 123,
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'email must be a string',
+        },
+      });
+    });
+
+    it('when email is blank => expected 400 w/ EMPTY_INPUT', async () => {
+      const app = createApp();
+
+      const response = await request(app)
+        .post('/api/users/me')
+        .send({
+          email: '   ',
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'EMPTY_INPUT',
+          message: 'email is required',
+        },
+      });
+    });
+
+    it('when email already exists => expected 409 w/ CONFLICT', async () => {
+      vi.mocked(usersService.bootstrapUser).mockRejectedValueOnce(
+        new Error('Email already in use'),
+      );
+
+      const app = createApp();
+
+      const response = await request(app)
+        .post('/api/users/me')
+        .send({
+          email: 'user@example.com',
+        });
+
+      expect(response.status).toBe(409);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'CONFLICT',
+          message: 'Email already in use',
+        },
+      });
+    });
+
+    it('when service throws unknown error => expected 500 w/ INTERNAL_ERROR', async () => {
+      vi.mocked(usersService.bootstrapUser).mockRejectedValueOnce(
+        new Error('Unknown error'),
+      );
+
+      const app = createApp();
+
+      const response = await request(app)
+        .post('/api/users/me')
+        .send({
+          email: 'user@example.com',
+        });
+
+      expect(response.status).toBe(500);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: 'Unknown error',
+        },
+      });
     });
   });
 
-  it('POST /users when user already exists => expected 409 w/ CONFLICT', async () => {
-    vi.mocked(usersService.createUser).mockRejectedValueOnce(
-      new Error('User already exists'),
-    );
-
-    const app = createApp();
-
-    const response = await request(app)
-      .post('/api/users')
-      .send({
+  describe('GET /api/users/me', () => {
+    it('when authenticated user exists => expected 200', async () => {
+      vi.mocked(usersService.getUserByAuthUid).mockResolvedValueOnce({
         authUid: 'test-uid-1',
         email: 'user@example.com',
+        createdAt: {
+          toDate: () => new Date('2026-08-18T00:00:00Z'),
+        } as never,
       });
 
-    expect(response.status).toBe(409);
-    expect(response.body).toEqual({
-      ok: false,
-      error: {
-        code: 'CONFLICT',
-        message: 'User already exists',
-      },
+      const app = createApp();
+
+      const response = await request(app).get('/api/users/me');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({
+        ok: true,
+        data: {
+          authUid: 'test-uid-1',
+          email: 'user@example.com',
+        },
+      });
+      expect(usersService.getUserByAuthUid).toHaveBeenCalledWith('test-uid-1');
+    });
+
+    it('when authenticated user is not found => expected 404 w/ NOT_FOUND', async () => {
+      vi.mocked(usersService.getUserByAuthUid).mockResolvedValueOnce(null);
+
+      const app = createApp();
+
+      const response = await request(app).get('/api/users/me');
+
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'NOT_FOUND',
+          message: 'User not found',
+        },
+      });
+    });
+
+    it('when service throws unknown error => expected 500 w/ INTERNAL_ERROR', async () => {
+      vi.mocked(usersService.getUserByAuthUid).mockRejectedValueOnce(
+        new Error('Unknown error'),
+      );
+
+      const app = createApp();
+
+      const response = await request(app).get('/api/users/me');
+
+      expect(response.status).toBe(500);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: 'Unknown error',
+        },
+      });
     });
   });
 
-  it('POST /users when email already exists => expected 409 w/ CONFLICT', async () => {
-    vi.mocked(usersService.createUser).mockRejectedValueOnce(
-      new Error('Email already in use'),
-    );
-
-    const app = createApp();
-
-    const response = await request(app)
-      .post('/api/users')
-      .send({
+  describe('PATCH /api/users/me', () => {
+    it('when profile body is valid => expected 200', async () => {
+      vi.mocked(usersService.updateUserProfile).mockResolvedValueOnce({
         authUid: 'test-uid-1',
         email: 'user@example.com',
+        displayName: 'Test User',
+        bio: 'I like futsal',
+        skillLevel: 'intermediate',
+        preferredSports: ['futsal', 'badminton'],
+        preferredLocations: ['Auckland'],
+        profileCompleted: true,
+        createdAt: {
+          toDate: () => new Date('2026-08-18T00:00:00Z'),
+        } as never,
+        updatedAt: {
+          toDate: () => new Date('2026-09-06T00:00:00Z'),
+        } as never,
       });
 
-    expect(response.status).toBe(409);
-    expect(response.body).toEqual({
-      ok: false,
-      error: {
-        code: 'CONFLICT',
-        message: 'Email already in use',
-      },
+      const app = createApp();
+
+      const response = await request(app)
+        .patch('/api/users/me')
+        .send({
+          displayName: ' Test User ',
+          bio: ' I like futsal ',
+          skillLevel: 'intermediate',
+          preferredSports: [' futsal ', 'badminton'],
+          preferredLocations: [' Auckland '],
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({
+        ok: true,
+        data: {
+          authUid: 'test-uid-1',
+          email: 'user@example.com',
+          displayName: 'Test User',
+          bio: 'I like futsal',
+          skillLevel: 'intermediate',
+          preferredSports: ['futsal', 'badminton'],
+          preferredLocations: ['Auckland'],
+          profileCompleted: true,
+        },
+      });
+      expect(usersService.updateUserProfile).toHaveBeenCalledWith('test-uid-1', {
+        displayName: 'Test User',
+        bio: 'I like futsal',
+        skillLevel: 'intermediate',
+        preferredSports: ['futsal', 'badminton'],
+        preferredLocations: ['Auckland'],
+      });
+    });
+
+    it('when request body is empty => expected 400 w/ EMPTY_INPUT', async () => {
+      const app = createApp();
+
+      const response = await request(app).patch('/api/users/me').send({});
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'EMPTY_INPUT',
+          message: 'at least one profile field is required',
+        },
+      });
+    });
+
+    it('when request body contains unsupported field => expected 400 w/ INVALID_INPUT', async () => {
+      const app = createApp();
+
+      const response = await request(app)
+        .patch('/api/users/me')
+        .send({
+          email: 'new@example.com',
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'request body contains unsupported profile fields',
+        },
+      });
+    });
+
+    it('when displayName is not a string => expected 400 w/ INVALID_INPUT', async () => {
+      const app = createApp();
+
+      const response = await request(app)
+        .patch('/api/users/me')
+        .send({
+          displayName: 123,
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'displayName must be a string',
+        },
+      });
+    });
+
+    it('when skillLevel is invalid => expected 400 w/ INVALID_INPUT', async () => {
+      const app = createApp();
+
+      const response = await request(app)
+        .patch('/api/users/me')
+        .send({
+          skillLevel: 'expert',
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'skillLevel must be beginner, intermediate, advanced, or any',
+        },
+      });
+    });
+
+    it('when preferredSports is not a string array => expected 400 w/ INVALID_INPUT', async () => {
+      const app = createApp();
+
+      const response = await request(app)
+        .patch('/api/users/me')
+        .send({
+          preferredSports: ['futsal', 123],
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'preferredSports must be a string array',
+        },
+      });
+    });
+
+    it('when user is not found => expected 404 w/ NOT_FOUND', async () => {
+      vi.mocked(usersService.updateUserProfile).mockRejectedValueOnce(
+        new Error('User not found'),
+      );
+
+      const app = createApp();
+
+      const response = await request(app)
+        .patch('/api/users/me')
+        .send({
+          displayName: 'Test User',
+        });
+
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'NOT_FOUND',
+          message: 'User not found',
+        },
+      });
+    });
+
+    it('when service throws unknown error => expected 500 w/ INTERNAL_ERROR', async () => {
+      vi.mocked(usersService.updateUserProfile).mockRejectedValueOnce(
+        new Error('Unknown error'),
+      );
+
+      const app = createApp();
+
+      const response = await request(app)
+        .patch('/api/users/me')
+        .send({
+          displayName: 'Test User',
+        });
+
+      expect(response.status).toBe(500);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: 'Unknown error',
+        },
+      });
     });
   });
 
-  it('POST /users when server throws => expected 500 w/ INTERNAL_ERROR', async () => {
-    vi.mocked(usersService.createUser).mockRejectedValueOnce(
-      new Error('Unknown error'),
-    );
-
-    const app = createApp();
-
-    const response = await request(app)
-      .post('/api/users')
-      .send({
-        authUid: 'test-uid-1',
-        email: 'user@example.com',
+  describe('GET /api/users/:uid/profile', () => {
+    it('when public profile exists => expected 200', async () => {
+      vi.mocked(usersService.getPublicUserProfile).mockResolvedValueOnce({
+        authUid: 'other-uid',
+        displayName: 'Other User',
+        photoUrl: 'https://example.com/avatar.png',
+        bio: 'Weekend player',
+        skillLevel: 'beginner',
+        preferredSports: ['futsal'],
+        preferredLocations: ['Auckland'],
+        profileCompleted: true,
       });
 
-    expect(response.status).toBe(500);
-    expect(response.body).toEqual({
-      ok: false,
-      error: {
-        code: 'INTERNAL_ERROR',
-        message: 'Unknown error',
-      },
+      const app = createApp();
+
+      const response = await request(app).get('/api/users/other-uid/profile');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        ok: true,
+        data: {
+          authUid: 'other-uid',
+          displayName: 'Other User',
+          photoUrl: 'https://example.com/avatar.png',
+          bio: 'Weekend player',
+          skillLevel: 'beginner',
+          preferredSports: ['futsal'],
+          preferredLocations: ['Auckland'],
+          profileCompleted: true,
+        },
+      });
+      expect(usersService.getPublicUserProfile).toHaveBeenCalledWith('other-uid');
+    });
+
+    it('when uid is blank => expected 400 w/ EMPTY_INPUT', async () => {
+      const app = createApp();
+
+      const response = await request(app).get('/api/users/%20%20/profile');
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'EMPTY_INPUT',
+          message: 'uid is required',
+        },
+      });
+    });
+
+    it('when public profile is not found => expected 404 w/ NOT_FOUND', async () => {
+      vi.mocked(usersService.getPublicUserProfile).mockResolvedValueOnce(null);
+
+      const app = createApp();
+
+      const response = await request(app).get('/api/users/missing-user/profile');
+
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'NOT_FOUND',
+          message: 'User not found',
+        },
+      });
+    });
+
+    it('when service throws unknown error => expected 500 w/ INTERNAL_ERROR', async () => {
+      vi.mocked(usersService.getPublicUserProfile).mockRejectedValueOnce(
+        new Error('Unknown error'),
+      );
+
+      const app = createApp();
+
+      const response = await request(app).get('/api/users/test-uid-1/profile');
+
+      expect(response.status).toBe(500);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: 'Unknown error',
+        },
+      });
     });
   });
-
-  /*
-  ########################################################################  
-        Test section for typing GET route
-  ########################################################################
-  */
-
-  it('gets a user with GET /users/:authUid => expected 200', async () => {
-    vi.mocked(usersService.getUserByAuthUid).mockResolvedValueOnce({
-      authUid: 'test-uid-1',
-      email: 'user@example.com',
-      createdAt: {
-        toDate: () => new Date('2026-08-18T00:00:00Z'),
-      } as never,
-    });
-
-    const app = createApp();
-
-    const response = await request(app).get('/api/users/test-uid-1');
-
-    expect(response.status).toBe(200);
-    expect(response.body).toMatchObject({
-      ok: true,
-      data: {
-        authUid: 'test-uid-1',
-        email: 'user@example.com',
-      },
-    });
-  });
-
-  it('GET /users/:authUid when user is not found => expected 404 w/ NOT_FOUND', async () => {
-    vi.mocked(usersService.getUserByAuthUid).mockResolvedValueOnce(null);
-
-    const app = createApp();
-
-    const response = await request(app).get('/api/users/missing-user');
-
-    expect(response.status).toBe(404);
-    expect(response.body).toEqual({
-      ok: false,
-      error: {
-        code: 'NOT_FOUND',
-        message: 'User not found',
-      },
-    });
-  });
-
 
 });

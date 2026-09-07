@@ -9,6 +9,18 @@ vi.mock('./swipes.service.js', () => {
   };
 });
 
+vi.mock('../activities/activities.service.js', () => {
+  return {
+    getActivityById: vi.fn(),
+  };
+});
+
+vi.mock('../notifications/notifications.service.js', () => {
+  return {
+    createNotification: vi.fn().mockResolvedValue({ notificationId: 'notification-1' }),
+  };
+});
+
 vi.mock('../../middleware/auth.middleware.js', () => {
   return {
     requireAuth: vi.fn((req, _res, next) => {
@@ -23,6 +35,8 @@ vi.mock('../../middleware/auth.middleware.js', () => {
 
 import { createApp } from '../../app/app.js';
 import * as swipesService from './swipes.service.js';
+import * as activitiesService from '../activities/activities.service.js';
+import * as notificationsService from '../notifications/notifications.service.js';
 
 describe('swipes routes', () => {
   describe('POST /api/swipes', () => {
@@ -30,7 +44,12 @@ describe('swipes routes', () => {
       vi.clearAllMocks();
     });
 
-    it('when request body is valid => expected 200', async () => {
+    it('when request body is valid and decision is join => expected 200', async () => {
+      vi.mocked(activitiesService.getActivityById).mockResolvedValueOnce({
+        activityId: 'activity-1',
+        hostId: 'host-uid-1',
+      } as never);
+
       const app = createApp();
 
       const response = await request(app).post('/api/swipes').send({
@@ -47,6 +66,60 @@ describe('swipes routes', () => {
           decision: 'join',
         },
       });
+      expect(notificationsService.createNotification).toHaveBeenCalledWith({
+        recipientUid: 'host-uid-1',
+        type: 'activity_interest',
+        title: 'New activity interest',
+        body: 'Someone is interested in your activity',
+        activityId: 'activity-1',
+        senderUid: 'test-uid-1',
+      });
+    });
+
+    it('when decision is pass => expected 200 without notification', async () => {
+      const app = createApp();
+
+      const response = await request(app).post('/api/swipes').send({
+        activityId: 'activity-1',
+        decision: 'pass',
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        ok: true,
+        data: {
+          uid: 'test-uid-1',
+          activityId: 'activity-1',
+          decision: 'pass',
+        },
+      });
+      expect(activitiesService.getActivityById).not.toHaveBeenCalled();
+      expect(notificationsService.createNotification).not.toHaveBeenCalled();
+    });
+
+    it('when authenticated user is activity host => expected 200 without notification', async () => {
+      vi.mocked(activitiesService.getActivityById).mockResolvedValueOnce({
+        activityId: 'activity-1',
+        hostId: 'test-uid-1',
+      } as never);
+
+      const app = createApp();
+
+      const response = await request(app).post('/api/swipes').send({
+        activityId: 'activity-1',
+        decision: 'join',
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        ok: true,
+        data: {
+          uid: 'test-uid-1',
+          activityId: 'activity-1',
+          decision: 'join',
+        },
+      });
+      expect(notificationsService.createNotification).not.toHaveBeenCalled();
     });
 
     it('when activityId is not a string => expected 400 w/ INVALID_INPUT', async () => {
@@ -148,8 +221,12 @@ describe('swipes routes', () => {
     });
   });
 
-  describe('GET /api/swipes/:uid/:activityId', () => {
-    it('when swipe decision exists => expected 200', async () => {
+  describe('GET /api/swipes/me/:activityId', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it('when authenticated user requests own swipe decision => expected 200', async () => {
       vi.mocked(swipesService.getSwipeDecision).mockResolvedValueOnce({
         swipeId: 'activity-1',
         uid: 'test-uid-1',
@@ -161,7 +238,7 @@ describe('swipes routes', () => {
 
       const app = createApp();
 
-      const response = await request(app).get('/api/swipes/test-uid-1/activity-1');
+      const response = await request(app).get('/api/swipes/me/activity-1');
 
       expect(response.status).toBe(200);
       expect(response.body).toMatchObject({
@@ -173,22 +250,20 @@ describe('swipes routes', () => {
           decision: 'join',
         },
       });
+      expect(swipesService.getSwipeDecision).toHaveBeenCalledWith('test-uid-1', 'activity-1');
     });
 
-    it.each([
-      '/api/swipes/%20%20/activity-1',
-      '/api/swipes/test-uid-1/%20%20',
-    ])('when route params are blank: %s => expected 400 w/ EMPTY_INPUT', async (path) => {
+    it('when activityId is blank => expected 400 w/ EMPTY_INPUT', async () => {
       const app = createApp();
 
-      const response = await request(app).get(path);
+      const response = await request(app).get('/api/swipes/me/%20%20');
 
       expect(response.status).toBe(400);
       expect(response.body).toEqual({
         ok: false,
         error: {
           code: 'EMPTY_INPUT',
-          message: 'uid and activityId are required',
+          message: 'activityId is required',
         },
       });
     });
@@ -198,7 +273,7 @@ describe('swipes routes', () => {
 
       const app = createApp();
 
-      const response = await request(app).get('/api/swipes/test-uid-1/activity-1');
+      const response = await request(app).get('/api/swipes/me/activity-1');
 
       expect(response.status).toBe(404);
       expect(response.body).toEqual({
@@ -217,7 +292,7 @@ describe('swipes routes', () => {
 
       const app = createApp();
 
-      const response = await request(app).get('/api/swipes/test-uid-1/activity-1');
+      const response = await request(app).get('/api/swipes/me/activity-1');
 
       expect(response.status).toBe(500);
       expect(response.body).toEqual({
@@ -230,8 +305,12 @@ describe('swipes routes', () => {
     });
   });
 
-  describe('GET /api/swipes/:uid', () => {
-    it('when swipe decisions exist => expected 200', async () => {
+  describe('GET /api/swipes/me', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it('when authenticated user requests own swipe decisions => expected 200', async () => {
       vi.mocked(swipesService.listSwipeDecisions).mockResolvedValueOnce([
         {
           swipeId: 'activity-2',
@@ -245,7 +324,7 @@ describe('swipes routes', () => {
 
       const app = createApp();
 
-      const response = await request(app).get('/api/swipes/test-uid-1');
+      const response = await request(app).get('/api/swipes/me');
 
       expect(response.status).toBe(200);
       expect(response.body).toMatchObject({
@@ -259,21 +338,7 @@ describe('swipes routes', () => {
           },
         ],
       });
-    });
-
-    it('when uid is blank => expected 400 w/ EMPTY_INPUT', async () => {
-      const app = createApp();
-
-      const response = await request(app).get('/api/swipes/%20%20');
-
-      expect(response.status).toBe(400);
-      expect(response.body).toEqual({
-        ok: false,
-        error: {
-          code: 'EMPTY_INPUT',
-          message: 'uid is required',
-        },
-      });
+      expect(swipesService.listSwipeDecisions).toHaveBeenCalledWith('test-uid-1');
     });
 
     it('when no swipe decisions exist => expected 200', async () => {
@@ -281,7 +346,7 @@ describe('swipes routes', () => {
 
       const app = createApp();
 
-      const response = await request(app).get('/api/swipes/test-uid-1');
+      const response = await request(app).get('/api/swipes/me');
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual({
@@ -297,7 +362,7 @@ describe('swipes routes', () => {
 
       const app = createApp();
 
-      const response = await request(app).get('/api/swipes/test-uid-1');
+      const response = await request(app).get('/api/swipes/me');
 
       expect(response.status).toBe(500);
       expect(response.body).toEqual({
@@ -309,4 +374,5 @@ describe('swipes routes', () => {
       });
     });
   });
+
 });

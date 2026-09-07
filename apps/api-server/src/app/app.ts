@@ -8,8 +8,10 @@ import { presenceRouter } from '../modules/presence/presence.routes.js';
 import { typingRouter } from '../modules/typing/typing.routes.js';
 import { chatRouter } from '../modules/chat/chat.routes.js';
 import { activitiesRouter } from '../modules/activities/activities.routes.js';
+import { listPublicActivityTeasersHandler } from '../modules/activities/activities.controller.js';
 import { swipesRouter } from '../modules/swipes/swipes.routes.js';
 import { notificationsRouter } from '../modules/notifications/notifications.routes.js';
+import { devicesRouter } from '../modules/devices/devices.routes.js';
 
 export function createApp(){
     const app = express();
@@ -41,6 +43,8 @@ export function createApp(){
         }
     })
 
+    app.get('/api/public/activities', listPublicActivityTeasersHandler);
+
     app.use('/api/users', usersRouter);
     app.use('/api/presence', presenceRouter);
     app.use('/api/typing', typingRouter);
@@ -48,6 +52,7 @@ export function createApp(){
     app.use('/api/activities', activitiesRouter);
     app.use('/api/swipes', swipesRouter);
     app.use('/api/notifications', notificationsRouter);
-
+    app.use('/api/devices', devicesRouter);
+    
     return app;
 }

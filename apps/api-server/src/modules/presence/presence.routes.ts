@@ -5,4 +5,4 @@ import { getPresenceHandler, setPresenceHandler } from './presence.controller.js
 export const presenceRouter = Router();
 
 presenceRouter.post('/', requireAuth, setPresenceHandler);
-presenceRouter.get('/:uid', getPresenceHandler);
+presenceRouter.get('/:uid', requireAuth, getPresenceHandler);

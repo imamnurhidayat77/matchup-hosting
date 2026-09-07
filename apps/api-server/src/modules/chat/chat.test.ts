@@ -8,6 +8,12 @@ vi.mock('./chat.service.js', () => {
     };
 });
 
+vi.mock('../activities/activity-participants.service.js', () => {
+    return {
+        canAccessActivityChat: vi.fn().mockResolvedValue(true),
+    };
+});
+
 vi.mock('../../middleware/auth.middleware.js', () => {
     return {
         requireAuth: vi.fn((req, _res, next) => {
@@ -22,6 +28,7 @@ vi.mock('../../middleware/auth.middleware.js', () => {
 
 import { createApp } from '../../app/app.js';
 import * as chatService from './chat.service.js';
+import * as activityParticipantsService from '../activities/activity-participants.service.js';
 
 describe('chat routes', () => {
     /* 
@@ -50,6 +57,10 @@ describe('chat routes', () => {
                     messageId: 'msg-1',
                 },
             });
+            expect(activityParticipantsService.canAccessActivityChat).toHaveBeenCalledWith(
+                'activity-1',
+                'test-uid-1',
+            );
         });
 
         it('when activityId is not a string => expected 400 w/ INVALID_INPUT', async () => {
@@ -155,9 +166,59 @@ describe('chat routes', () => {
                 },
             });
         });
+
+        it('when authenticated user is not host or participant => expected 403 w/ FORBIDDEN', async () => {
+            vi.mocked(activityParticipantsService.canAccessActivityChat).mockResolvedValueOnce(false);
+
+            const app = createApp();
+
+            const response = await request(app).post('/api/chat/messages').send({
+                activityId: 'activity-1',
+                text: 'Hello from chat',
+                type: 'text',
+            });
+
+            expect(response.status).toBe(403);
+            expect(response.body).toEqual({
+                ok: false,
+                error: {
+                    code: 'FORBIDDEN',
+                    message: 'Only the activity host or participants can access this chat',
+                },
+            });
+            expect(chatService.sendMessage).not.toHaveBeenCalled();
+        });
+
+        it('when activity is not found => expected 404 w/ NOT_FOUND', async () => {
+            vi.mocked(activityParticipantsService.canAccessActivityChat).mockRejectedValueOnce(
+                new Error('Activity not found'),
+            );
+
+            const app = createApp();
+
+            const response = await request(app).post('/api/chat/messages').send({
+                activityId: 'missing-activity',
+                text: 'Hello from chat',
+                type: 'text',
+            });
+
+            expect(response.status).toBe(404);
+            expect(response.body).toEqual({
+                ok: false,
+                error: {
+                    code: 'NOT_FOUND',
+                    message: 'Activity not found',
+                },
+            });
+            expect(chatService.sendMessage).not.toHaveBeenCalled();
+        });
     });
 
     describe('GET /api/chat/:activityId/messages', () => {
+        beforeEach(() => {
+            vi.clearAllMocks();
+        });
+
         it('when messages exist => expected 200', async () => {
             vi.mocked(chatService.getMessages).mockResolvedValueOnce([
                 {
@@ -186,6 +247,10 @@ describe('chat routes', () => {
                     },
                 ],
             });
+            expect(activityParticipantsService.canAccessActivityChat).toHaveBeenCalledWith(
+                'activity-1',
+                'test-uid-1',
+            );
         });
 
         it('when activityId is blank => expected 400 w/ EMPTY_INPUT', async () => {
@@ -232,6 +297,44 @@ describe('chat routes', () => {
                     message: 'Unknown error',
                 },
             });
+        });
+
+        it('when authenticated user is not host or participant => expected 403 w/ FORBIDDEN', async () => {
+            vi.mocked(activityParticipantsService.canAccessActivityChat).mockResolvedValueOnce(false);
+
+            const app = createApp();
+
+            const response = await request(app).get('/api/chat/activity-1/messages');
+
+            expect(response.status).toBe(403);
+            expect(response.body).toEqual({
+                ok: false,
+                error: {
+                    code: 'FORBIDDEN',
+                    message: 'Only the activity host or participants can access this chat',
+                },
+            });
+            expect(chatService.getMessages).not.toHaveBeenCalled();
+        });
+
+        it('when activity is not found => expected 404 w/ NOT_FOUND', async () => {
+            vi.mocked(activityParticipantsService.canAccessActivityChat).mockRejectedValueOnce(
+                new Error('Activity not found'),
+            );
+
+            const app = createApp();
+
+            const response = await request(app).get('/api/chat/missing-activity/messages');
+
+            expect(response.status).toBe(404);
+            expect(response.body).toEqual({
+                ok: false,
+                error: {
+                    code: 'NOT_FOUND',
+                    message: 'Activity not found',
+                },
+            });
+            expect(chatService.getMessages).not.toHaveBeenCalled();
         });
     })
 })

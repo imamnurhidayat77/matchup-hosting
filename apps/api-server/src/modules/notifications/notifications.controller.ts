@@ -1,129 +1,16 @@
 import type { Request, Response } from 'express';
 import {
-    createNotification,
     listNotifications,
     markNotificationRead,
 } from './notifications.service.js';
 
-type NotificationParams = {
-    uid: string;
-};
-
-type MarkNotificationReadParams = {
-    uid: string;
+type MarkMyNotificationReadParams = {
     notificationId: string;
 };
 
-export async function createNotificationHandler(req: Request, res: Response) {
-    try {
-        const {
-            recipientUid,
-            type,
-            title,
-            body,
-            activityId,
-            senderUid,
-        } = req.body as {
-            recipientUid?: unknown;
-            type?: unknown;
-            title?: unknown;
-            body?: unknown;
-            activityId?: unknown;
-            senderUid?: unknown;
-        };
-
-        if (
-            typeof recipientUid !== 'string' ||
-            typeof type !== 'string' ||
-            typeof title !== 'string' ||
-            typeof body !== 'string'
-        ) {
-            return res.status(400).json({
-                ok: false,
-                error: {
-                    code: 'INVALID_INPUT',
-                    message: 'recipientUid, type, title, and body must be strings',
-                },
-            });
-        }
-
-        if (
-            (activityId !== undefined && typeof activityId !== 'string') ||
-            (senderUid !== undefined && typeof senderUid !== 'string')
-        ) {
-            return res.status(400).json({
-                ok: false,
-                error: {
-                    code: 'INVALID_INPUT',
-                    message: 'activityId and senderUid must be strings when provided',
-                },
-            });
-        }
-
-        if (
-            type !== 'activity_reminder' &&
-            type !== 'activity_joined' &&
-            type !== 'chat_message' &&
-            type !== 'system'
-        ) {
-            return res.status(400).json({
-                ok: false,
-                error: {
-                    code: 'INVALID_INPUT',
-                    message: 'type must be activity_reminder, activity_joined, chat_message, or system',
-                },
-            });
-        }
-
-        if (
-            !recipientUid.trim() ||
-            !title.trim() ||
-            !body.trim()
-        ) {
-            return res.status(400).json({
-                ok: false,
-                error: {
-                    code: 'EMPTY_INPUT',
-                    message: 'recipientUid, title, and body are required',
-                },
-            });
-        }
-
-        const result = await createNotification({
-            recipientUid,
-            type,
-            title,
-            body,
-            ...(typeof activityId === 'string' ? { activityId } : {}),
-            ...(typeof senderUid === 'string' ? { senderUid } : {}),
-        });
-
-        return res.status(201).json({
-            ok: true,
-            data: {
-                notificationId: result.notificationId,
-            },
-        });
-    } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
-
-        return res.status(500).json({
-            ok: false,
-            error: {
-                code: 'INTERNAL_ERROR',
-                message,
-            },
-        });
-    }
-}
-
-export async function listNotificationsHandler(
-    req: Request<NotificationParams>,
-    res: Response,
-) {
+export async function listMyNotificationsHandler(req: Request, res: Response) {
     try {
         const authUid = req.auth?.uid;
-        const { uid } = req.params;
 
         if (!authUid) {
             return res.status(401).json({
@@ -135,27 +22,7 @@ export async function listNotificationsHandler(
             });
         }
 
-        if (!uid.trim()) {
-            return res.status(400).json({
-                ok: false,
-                error: {
-                    code: 'EMPTY_INPUT',
-                    message: 'uid is required',
-                },
-            });
-        }
-
-        if (authUid !== uid) {
-            return res.status(403).json({
-                ok: false,
-                error: {
-                    code: 'FORBIDDEN',
-                    message: 'You can only access your own notifications',
-                },
-            });
-        }
-
-        const notifications = await listNotifications(uid);
+        const notifications = await listNotifications(authUid);
 
         return res.status(200).json({
             ok: true,
@@ -174,13 +41,13 @@ export async function listNotificationsHandler(
     }
 }
 
-export async function markNotificationReadHandler(
-    req: Request<MarkNotificationReadParams>,
+export async function markMyNotificationReadHandler(
+    req: Request<MarkMyNotificationReadParams>,
     res: Response,
 ) {
     try {
         const authUid = req.auth?.uid;
-        const { uid, notificationId } = req.params;
+        const { notificationId } = req.params;
 
         if (!authUid) {
             return res.status(401).json({
@@ -192,32 +59,22 @@ export async function markNotificationReadHandler(
             });
         }
 
-        if (!uid.trim() || !notificationId.trim()) {
+        if (!notificationId.trim()) {
             return res.status(400).json({
                 ok: false,
                 error: {
                     code: 'EMPTY_INPUT',
-                    message: 'uid and notificationId are required',
+                    message: 'notificationId is required',
                 },
             });
         }
 
-        if (authUid !== uid) {
-            return res.status(403).json({
-                ok: false,
-                error: {
-                    code: 'FORBIDDEN',
-                    message: 'You can only update your own notifications',
-                },
-            });
-        }
-
-        await markNotificationRead(uid, notificationId);
+        await markNotificationRead(authUid, notificationId);
 
         return res.status(200).json({
             ok: true,
             data: {
-                uid,
+                uid: authUid,
                 notificationId,
                 isRead: true,
             },

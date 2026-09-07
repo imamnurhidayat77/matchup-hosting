@@ -1,50 +1,126 @@
 import type { Request, Response } from 'express';
-import { createUser, getUserByAuthUid } from './users.service.js';
+import {
+  bootstrapUser,
+  getPublicUserProfile,
+  getUserByAuthUid,
+  updateUserProfile,
+  type SkillLevel,
+  type UpdateUserProfileInput,
+} from './users.service.js';
 
-type GetUserParams = {
-  authUid: string;
+type PublicProfileParams = {
+  uid: string;
 };
 
-export async function createUserHandler(req: Request, res: Response) {
+const editableProfileFields = [
+  'displayName',
+  'photoUrl',
+  'bio',
+  'gender',
+  'dateOfBirth',
+  'skillLevel',
+  'preferredSports',
+  'preferredLocations',
+] as const;
+
+function isSkillLevel(value: unknown): value is SkillLevel {
+  return (
+    value === 'beginner' ||
+    value === 'intermediate' ||
+    value === 'advanced' ||
+    value === 'any'
+  );
+}
+
+function hasUnknownProfileFields(body: Record<string, unknown>): boolean {
+  return Object.keys(body).some(
+    (key) => !editableProfileFields.includes(key as never),
+  );
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
+function buildProfileInput(body: Record<string, unknown>): UpdateUserProfileInput {
+  const input: UpdateUserProfileInput = {};
+
+  for (const field of ['displayName', 'photoUrl', 'bio', 'gender', 'dateOfBirth'] as const) {
+    if (body[field] !== undefined) {
+      input[field] = (body[field] as string).trim();
+    }
+  }
+
+  if (isSkillLevel(body.skillLevel)) {
+    input.skillLevel = body.skillLevel;
+  }
+
+  if (isStringArray(body.preferredSports)) {
+    input.preferredSports = body.preferredSports.map((sport) => sport.trim()).filter(Boolean);
+  }
+
+  if (isStringArray(body.preferredLocations)) {
+    input.preferredLocations = body.preferredLocations
+      .map((location) => location.trim())
+      .filter(Boolean);
+  }
+
+  return input;
+}
+
+export async function bootstrapUserHandler(req: Request, res: Response) {
   try {
-    const { authUid, email } = req.body as {
-      authUid?: string;
-      email?: string;
+    const authUid = req.auth?.uid;
+    const tokenEmail = req.auth?.token.email;
+    const { email } = req.body as {
+      email?: unknown;
     };
 
-    if (typeof authUid !== 'string' || typeof email !== 'string') {
+    if (!authUid) {
+      return res.status(401).json({
+        ok: false,
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'Authenticated user is required',
+        },
+      });
+    }
+
+    const emailToUse = typeof tokenEmail === 'string' ? tokenEmail : email;
+
+    if (typeof emailToUse !== 'string') {
       return res.status(400).json({
         ok: false,
         error: {
           code: 'INVALID_INPUT',
-          message: 'authUid and email must be strings',
+          message: 'email must be a string',
         },
       });
     }
 
-    if (!authUid.trim() || !email.trim()) {
+    if (!emailToUse.trim()) {
       return res.status(400).json({
         ok: false,
         error: {
           code: 'EMPTY_INPUT',
-          message: 'authUid and email are required',
+          message: 'email is required',
         },
       });
     }
 
-    await createUser({ authUid, email });
+    const user = await bootstrapUser({
+      authUid,
+      email: emailToUse,
+    });
 
-    return res.status(201).json({
+    return res.status(user.created ? 201 : 200).json({
       ok: true,
-      data: {
-        authUid: authUid.trim(),
-        email: email.trim().toLowerCase(),
-      },
+      data: user,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
 
-    if (message === 'User already exists' || message === 'Email already in use') {
+    if (message === 'Email already in use') {
       return res.status(409).json({
         ok: false,
         error: {
@@ -64,16 +140,16 @@ export async function createUserHandler(req: Request, res: Response) {
   }
 }
 
-export async function getUserHandler(req: Request<GetUserParams>, res: Response) {
+export async function getMyUserHandler(req: Request, res: Response) {
   try {
-    const { authUid } = req.params;
+    const authUid = req.auth?.uid;
 
     if (!authUid) {
-      return res.status(400).json({
+      return res.status(401).json({
         ok: false,
         error: {
-          code: 'INVALID_INPUT',
-          message: 'authUid is required',
+          code: 'UNAUTHORIZED',
+          message: 'Authenticated user is required',
         },
       });
     }
@@ -93,6 +169,168 @@ export async function getUserHandler(req: Request<GetUserParams>, res: Response)
     return res.status(200).json({
       ok: true,
       data: user,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+
+    return res.status(500).json({
+      ok: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message,
+      },
+    });
+  }
+}
+
+export async function updateMyUserProfileHandler(req: Request, res: Response) {
+  try {
+    const authUid = req.auth?.uid;
+    const body = req.body as Record<string, unknown>;
+
+    if (!authUid) {
+      return res.status(401).json({
+        ok: false,
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'Authenticated user is required',
+        },
+      });
+    }
+
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return res.status(400).json({
+        ok: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'request body must be an object',
+        },
+      });
+    }
+
+    if (hasUnknownProfileFields(body)) {
+      return res.status(400).json({
+        ok: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'request body contains unsupported profile fields',
+        },
+      });
+    }
+
+    if (Object.keys(body).length === 0) {
+      return res.status(400).json({
+        ok: false,
+        error: {
+          code: 'EMPTY_INPUT',
+          message: 'at least one profile field is required',
+        },
+      });
+    }
+
+    for (const field of ['displayName', 'photoUrl', 'bio', 'gender', 'dateOfBirth'] as const) {
+      if (body[field] !== undefined && typeof body[field] !== 'string') {
+        return res.status(400).json({
+          ok: false,
+          error: {
+            code: 'INVALID_INPUT',
+            message: `${field} must be a string`,
+          },
+        });
+      }
+    }
+
+    if (body.skillLevel !== undefined && !isSkillLevel(body.skillLevel)) {
+      return res.status(400).json({
+        ok: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'skillLevel must be beginner, intermediate, advanced, or any',
+        },
+      });
+    }
+
+    if (body.preferredSports !== undefined && !isStringArray(body.preferredSports)) {
+      return res.status(400).json({
+        ok: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'preferredSports must be a string array',
+        },
+      });
+    }
+
+    if (body.preferredLocations !== undefined && !isStringArray(body.preferredLocations)) {
+      return res.status(400).json({
+        ok: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'preferredLocations must be a string array',
+        },
+      });
+    }
+
+    const user = await updateUserProfile(authUid, buildProfileInput(body));
+
+    return res.status(200).json({
+      ok: true,
+      data: user,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+
+    if (message === 'User not found') {
+      return res.status(404).json({
+        ok: false,
+        error: {
+          code: 'NOT_FOUND',
+          message,
+        },
+      });
+    }
+
+    return res.status(500).json({
+      ok: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message,
+      },
+    });
+  }
+}
+
+export async function getPublicUserProfileHandler(
+  req: Request<PublicProfileParams>,
+  res: Response,
+) {
+  try {
+    const { uid } = req.params;
+
+    if (!uid.trim()) {
+      return res.status(400).json({
+        ok: false,
+        error: {
+          code: 'EMPTY_INPUT',
+          message: 'uid is required',
+        },
+      });
+    }
+
+    const profile = await getPublicUserProfile(uid);
+
+    if (!profile) {
+      return res.status(404).json({
+        ok: false,
+        error: {
+          code: 'NOT_FOUND',
+          message: 'User not found',
+        },
+      });
+    }
+
+    return res.status(200).json({
+      ok: true,
+      data: profile,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';

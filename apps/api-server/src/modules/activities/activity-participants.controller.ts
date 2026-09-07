@@ -1,5 +1,7 @@
 import type { Request, Response } from 'express';
 import { getParticipants, joinActivity, leaveActivity } from './activity-participants.service.js';
+import { getActivityById } from './activities.service.js';
+import { createNotification } from '../notifications/notifications.service.js';
 
 type ActivityParams = {
     activityId: string;
@@ -36,6 +38,18 @@ export async function joinActivityHandler(req: Request<ActivityParams>, res: Res
         }
 
         await joinActivity(activityId, uid);
+        const activity = await getActivityById(activityId);
+
+        if (activity && activity.hostId !== uid) {
+            await createNotification({
+                recipientUid: activity.hostId,
+                type: 'activity_joined',
+                title: 'New participant',
+                body: 'Someone joined your activity',
+                activityId,
+                senderUid: uid,
+            });
+        }
 
         return res.status(200).json({
             ok: true,
@@ -120,14 +134,14 @@ export async function leaveActivityHandler(req: Request<LeaveActivityParams>, re
         const authUid = req.auth?.uid;
         const { activityId, uid } = req.params;
 
-        if(!authUid){
+        if (!authUid) {
             return res.status(401).json({
                 ok: false,
                 error: {
                     code: 'UNAUTHORIZED',
-                    message: 'Authenticated user is required'
-                }
-            })
+                    message: 'Authenticated user is required',
+                },
+            });
         }
 
         if (!activityId.trim()) {
@@ -140,17 +154,64 @@ export async function leaveActivityHandler(req: Request<LeaveActivityParams>, re
             });
         }
 
-        if (authUid !== uid){
-            return res.status(403).json({
+        if (!uid.trim()) {
+            return res.status(400).json({
                 ok: false,
-                error:{
-                    code: 'FORBIDDEN',
-                    message: 'You can only leave an activity for yourself'
-                }
-            })
+                error: {
+                    code: 'EMPTY_INPUT',
+                    message: 'uid is required',
+                },
+            });
         }
 
-        await leaveActivity(activityId, uid);
+        await leaveActivity({
+            activityId,
+            targetUid: uid,
+            actorUid: authUid,
+        });
+        const activity = await getActivityById(activityId);
+
+        const isSelfRemoval = uid === authUid;
+        const isHostRemoval = activity?.hostId === authUid && uid !== authUid;
+        const isHostSelfRemoval = activity?.hostId === authUid && uid === authUid;
+
+        if (activity && isSelfRemoval && activity.hostId !== uid) {
+            await createNotification({
+                recipientUid: activity.hostId,
+                type: 'activity_left',
+                title: 'Participant left',
+                body: 'Someone left your activity',
+                activityId,
+                senderUid: uid,
+            });
+        } else if (activity && isHostRemoval) {
+            await createNotification({
+                recipientUid: uid,
+                type: 'participant_removed',
+                title: 'Removed from activity',
+                body: 'The host removed you from an activity',
+                activityId,
+                senderUid: authUid,
+            });
+        } else if (activity && isHostSelfRemoval) {
+            const participants = await getParticipants(activityId);
+            const notificationRecipients = participants
+                .map((participant) => participant.uid)
+                .filter((participantUid) => participantUid !== authUid);
+
+            await Promise.all(
+                notificationRecipients.map((recipientUid) =>
+                    createNotification({
+                        recipientUid,
+                        type: 'activity_cancelled',
+                        title: 'Activity cancelled',
+                        body: 'The host cancelled this activity',
+                        activityId,
+                        senderUid: authUid,
+                    }),
+                ),
+            );
+        }
 
         return res.status(200).json({
             ok: true,
@@ -167,6 +228,16 @@ export async function leaveActivityHandler(req: Request<LeaveActivityParams>, re
                 ok: false,
                 error: {
                     code: 'NOT_FOUND',
+                    message,
+                },
+            });
+        }
+
+        if (message === 'Only the participant or activity host can remove this participant') {
+            return res.status(403).json({
+                ok: false,
+                error: {
+                    code: 'FORBIDDEN',
                     message,
                 },
             });
