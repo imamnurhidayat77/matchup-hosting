@@ -7,6 +7,7 @@ import {
     listPublicActivityTeasers,
     listActivities,
     updateActivity,
+    updateActivityCover,
     updateActivityStatus,
 } from './activities.service.js';
 import { listDiscoverActivities } from './discover.service.js';
@@ -19,6 +20,10 @@ type UpdateActivityStatusParams = {
 };
 
 type UpdateActivityParams = {
+    activityId: string;
+};
+
+type UpdateActivityCoverParams = {
     activityId: string;
 };
 
@@ -88,14 +93,13 @@ export async function createActivityHandler(req: Request, res: Response) {
         }
         if (
             (address !== undefined && typeof address !== 'string') ||
-            (endTime !== undefined && typeof endTime !== 'string') ||
-            (coverImageUrl !== undefined && typeof coverImageUrl !== 'string')
+            (endTime !== undefined && typeof endTime !== 'string')
         ) {
             return res.status(400).json({
                 ok: false,
                 error: {
                     code: 'INVALID_INPUT',
-                    message: 'address, endTime, and coverImageUrl must be strings when provided',
+                    message: 'address and endTime must be strings when provided',
                 },
             });
         }
@@ -274,7 +278,6 @@ export async function updateActivityHandler(req: Request<UpdateActivityParams>, 
             geohash,
             startTime,
             endTime,
-            coverImageUrl,
         };
 
         if (Object.values(stringFields).some((value) => value !== undefined && typeof value !== 'string',)) {
@@ -475,6 +478,113 @@ export async function updateActivityStatusHandler(req: Request<UpdateActivitySta
             data: {
                 activityId,
                 status,
+            },
+        });
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+
+        if (message === 'Activity not found') {
+            return res.status(404).json({
+                ok: false,
+                error: {
+                    code: 'NOT_FOUND',
+                    message,
+                },
+            });
+        }
+
+        if (message === 'Only the activity host can update this activity') {
+            return res.status(403).json({
+                ok: false,
+                error: {
+                    code: 'FORBIDDEN',
+                    message,
+                },
+            });
+        }
+
+        return res.status(500).json({
+            ok: false,
+            error: {
+                code: 'INTERNAL_ERROR',
+                message,
+            },
+        });
+    }
+}
+
+export async function updateActivityCoverHandler(req: Request<UpdateActivityCoverParams>, res: Response) {
+    try {
+        const hostId = req.auth?.uid;
+        const { activityId } = req.params;
+        const { coverImagePath, coverImageUrl } = req.body as {
+            coverImagePath?: unknown;
+            coverImageUrl?: unknown;
+        };
+
+        if (!hostId) {
+            return res.status(401).json({
+                ok: false,
+                error: {
+                    code: 'UNAUTHORIZED',
+                    message: 'Authenticated user is required',
+                },
+            });
+        }
+
+        if (!activityId.trim()) {
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'EMPTY_INPUT',
+                    message: 'activityId is required',
+                },
+            });
+        }
+
+        if (typeof coverImagePath !== 'string' || typeof coverImageUrl !== 'string') {
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message: 'coverImagePath and coverImageUrl must be strings',
+                },
+            });
+        }
+
+        if (!coverImagePath.trim() || !coverImageUrl.trim()) {
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'EMPTY_INPUT',
+                    message: 'coverImagePath and coverImageUrl are required',
+                },
+            });
+        }
+
+        if (!coverImagePath.trim().startsWith(`activities/${activityId}/cover/`)) {
+            return res.status(403).json({
+                ok: false,
+                error: {
+                    code: 'FORBIDDEN',
+                    message: 'coverImagePath must belong to the activity',
+                },
+            });
+        }
+
+        await updateActivityCover({
+            activityId,
+            hostId,
+            coverImagePath,
+            coverImageUrl,
+        });
+
+        return res.status(200).json({
+            ok: true,
+            data: {
+                activityId,
+                coverImagePath,
+                coverImageUrl,
             },
         });
     } catch (error) {

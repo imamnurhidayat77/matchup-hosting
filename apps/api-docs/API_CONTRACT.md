@@ -207,7 +207,6 @@ Authentication:
 Editable fields:
 
 - `displayName`
-- `photoUrl`
 - `bio`
 - `gender`
 - `dateOfBirth`
@@ -219,6 +218,8 @@ Non-editable through this route:
 
 - `authUid`
 - `email`
+- `photoPath`
+- `photoUrl`
 - `createdAt`
 
 Request body:
@@ -226,7 +227,6 @@ Request body:
 ```json
 {
   "displayName": "Test User",
-  "photoUrl": "https://example.com/avatar.png",
   "bio": "Weekend futsal player",
   "gender": "male",
   "dateOfBirth": "2000-01-01",
@@ -277,6 +277,67 @@ Errors:
 - `400 INVALID_INPUT` if string fields are not strings
 - `400 INVALID_INPUT` if `skillLevel` is invalid
 - `400 INVALID_INPUT` if `preferredSports` or `preferredLocations` are not string arrays
+- `404 NOT_FOUND` if user profile does not exist
+
+### `PATCH /api/users/me/photo`
+
+Stores the authenticated user's Firebase Storage profile photo metadata after frontend upload.
+
+Authentication:
+
+- Requires `Authorization: Bearer <firebase-id-token>`
+- `authUid` is derived from the verified Firebase Auth user
+
+Storage path:
+
+- `photoPath` must start with `users/{authUid}/profile/`
+- Example: `users/firebase-auth-uid/profile/avatar-1787200000000.jpg`
+
+Firebase Storage upload constraints:
+
+- The frontend uploads directly to Firebase Storage before calling this route.
+- The authenticated Firebase user can only upload under their own `users/{authUid}/profile/` folder.
+- Allowed content types: `image/jpeg`, `image/png`, `image/webp`.
+- Maximum file size: `5MB`.
+- Firebase Storage Rules enforce these constraints; the backend stores only `photoPath` and `photoUrl` metadata.
+
+Request body:
+
+```json
+{
+  "photoPath": "users/firebase-auth-uid/profile/avatar-1787200000000.jpg",
+  "photoUrl": "https://storage.googleapis.com/bucket/users/firebase-auth-uid/profile/avatar-1787200000000.jpg"
+}
+```
+
+Success `200`:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "authUid": "firebase-auth-uid",
+    "email": "user@example.com",
+    "photoPath": "users/firebase-auth-uid/profile/avatar-1787200000000.jpg",
+    "photoUrl": "https://storage.googleapis.com/bucket/users/firebase-auth-uid/profile/avatar-1787200000000.jpg",
+    "createdAt": {
+      "_seconds": 0,
+      "_nanoseconds": 0
+    },
+    "updatedAt": {
+      "_seconds": 0,
+      "_nanoseconds": 0
+    }
+  }
+}
+```
+
+Errors:
+
+- `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
+- `400 INVALID_INPUT` if `photoPath` or `photoUrl` are not strings
+- `400 EMPTY_INPUT` if `photoPath` or `photoUrl` are blank
+- `403 FORBIDDEN` if `photoPath` does not belong to the authenticated user
 - `404 NOT_FOUND` if user profile does not exist
 
 ### `GET /api/users/:uid/profile`
@@ -672,7 +733,8 @@ Success `200`:
       "longitude": 174.775,
       "startTime": "2026-08-20T18:30:00+12:00",
       "skillLevel": "any",
-      "availableSpots": 4
+      "availableSpots": 4,
+      "coverImageUrl": "https://example.com/cover.jpg"
     }
   ]
 }
@@ -702,8 +764,7 @@ Request body:
   "startTime": "2026-08-20T18:30:00+12:00",
   "endTime": "2026-08-20T20:00:00+12:00",
   "skillLevel": "any",
-  "capacity": 10,
-  "coverImageUrl": "https://example.com/cover.jpg"
+  "capacity": 10
 }
 ```
 
@@ -853,8 +914,7 @@ Request body:
   "startTime": "2026-08-20T18:30:00+12:00",
   "endTime": "2026-08-20T20:00:00+12:00",
   "skillLevel": "intermediate",
-  "capacity": 12,
-  "coverImageUrl": "https://example.com/updated-cover.jpg"
+  "capacity": 12
 }
 ```
 
@@ -867,6 +927,7 @@ Notes:
 
 - All request body fields are optional.
 - `status` is not updated through this endpoint. Use `PATCH /api/activities/:activityId/status`.
+- Cover image metadata is not updated through this endpoint. Use `PATCH /api/activities/:activityId/cover`.
 
 Success `200`:
 
@@ -889,6 +950,59 @@ Errors:
 - `400 INVALID_INPUT` if `capacity` is not a positive integer
 - `400 EMPTY_INPUT` if `activityId` is blank
 - `400 EMPTY_INPUT` if an updated string field is blank
+- `403 FORBIDDEN` if the authenticated user is not the activity host
+- `404 NOT_FOUND` if activity does not exist
+
+### `PATCH /api/activities/:activityId/cover`
+
+Stores an activity cover image's Firebase Storage metadata after frontend upload. Only the activity host can save cover metadata.
+
+Authentication:
+
+- Requires `Authorization: Bearer <firebase-id-token>`
+- The authenticated user must be the activity host
+
+Storage path:
+
+- `coverImagePath` must start with `activities/{activityId}/cover/`
+- Example: `activities/generated-activity-id/cover/cover-1787200000000.jpg`
+
+Firebase Storage upload constraints:
+
+- The frontend uploads directly to Firebase Storage before calling this route.
+- Allowed content types: `image/jpeg`, `image/png`, `image/webp`.
+- Maximum file size: `8MB`.
+- Firebase Storage Rules enforce content type and size. The backend enforces activity host ownership before storing metadata.
+
+Request body:
+
+```json
+{
+  "coverImagePath": "activities/generated-activity-id/cover/cover-1787200000000.jpg",
+  "coverImageUrl": "https://storage.googleapis.com/bucket/activities/generated-activity-id/cover/cover-1787200000000.jpg"
+}
+```
+
+Success `200`:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "activityId": "generated-activity-id",
+    "coverImagePath": "activities/generated-activity-id/cover/cover-1787200000000.jpg",
+    "coverImageUrl": "https://storage.googleapis.com/bucket/activities/generated-activity-id/cover/cover-1787200000000.jpg"
+  }
+}
+```
+
+Errors:
+
+- `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
+- `400 EMPTY_INPUT` if `activityId` is blank
+- `400 INVALID_INPUT` if `coverImagePath` or `coverImageUrl` are not strings
+- `400 EMPTY_INPUT` if `coverImagePath` or `coverImageUrl` are blank
+- `403 FORBIDDEN` if `coverImagePath` does not belong to the activity
 - `403 FORBIDDEN` if the authenticated user is not the activity host
 - `404 NOT_FOUND` if activity does not exist
 

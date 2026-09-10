@@ -9,6 +9,7 @@ vi.mock('./users.service.js', () => {
       created: true,
     }),
     getUserByAuthUid: vi.fn(),
+    updateUserPhoto: vi.fn(),
     updateUserProfile: vi.fn(),
     getPublicUserProfile: vi.fn(),
     mintCustomToken: vi.fn().mockResolvedValue('custom-token-1'),
@@ -321,6 +322,25 @@ describe('users routes', () => {
       });
     });
 
+    it('when request body contains photoUrl => expected 400 w/ INVALID_INPUT', async () => {
+      const app = createApp();
+
+      const response = await request(app)
+        .patch('/api/users/me')
+        .send({
+          photoUrl: 'https://example.com/avatar.png',
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'request body contains unsupported profile fields',
+        },
+      });
+    });
+
     it('when displayName is not a string => expected 400 w/ INVALID_INPUT', async () => {
       const app = createApp();
 
@@ -412,6 +432,156 @@ describe('users routes', () => {
         .patch('/api/users/me')
         .send({
           displayName: 'Test User',
+        });
+
+      expect(response.status).toBe(500);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: 'Unknown error',
+        },
+      });
+    });
+  });
+
+  describe('PATCH /api/users/me/photo', () => {
+    it('when photo metadata is valid => expected 200', async () => {
+      vi.mocked(usersService.updateUserPhoto).mockResolvedValueOnce({
+        authUid: 'test-uid-1',
+        email: 'user@example.com',
+        photoPath: 'users/test-uid-1/profile/avatar-1787200000000.jpg',
+        photoUrl: 'https://storage.googleapis.com/bucket/users/test-uid-1/profile/avatar-1787200000000.jpg',
+        createdAt: {
+          toDate: () => new Date('2026-08-18T00:00:00Z'),
+        } as never,
+        updatedAt: {
+          toDate: () => new Date('2026-09-06T00:00:00Z'),
+        } as never,
+      });
+
+      const app = createApp();
+
+      const response = await request(app)
+        .patch('/api/users/me/photo')
+        .send({
+          photoPath: 'users/test-uid-1/profile/avatar-1787200000000.jpg',
+          photoUrl: 'https://storage.googleapis.com/bucket/users/test-uid-1/profile/avatar-1787200000000.jpg',
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({
+        ok: true,
+        data: {
+          authUid: 'test-uid-1',
+          email: 'user@example.com',
+          photoPath: 'users/test-uid-1/profile/avatar-1787200000000.jpg',
+          photoUrl: 'https://storage.googleapis.com/bucket/users/test-uid-1/profile/avatar-1787200000000.jpg',
+        },
+      });
+      expect(usersService.updateUserPhoto).toHaveBeenCalledWith('test-uid-1', {
+        photoPath: 'users/test-uid-1/profile/avatar-1787200000000.jpg',
+        photoUrl: 'https://storage.googleapis.com/bucket/users/test-uid-1/profile/avatar-1787200000000.jpg',
+      });
+    });
+
+    it('when photo metadata is not string => expected 400 w/ INVALID_INPUT', async () => {
+      const app = createApp();
+
+      const response = await request(app)
+        .patch('/api/users/me/photo')
+        .send({
+          photoPath: 123,
+          photoUrl: 'https://storage.googleapis.com/bucket/avatar.jpg',
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'photoPath and photoUrl must be strings',
+        },
+      });
+    });
+
+    it('when photo metadata is blank => expected 400 w/ EMPTY_INPUT', async () => {
+      const app = createApp();
+
+      const response = await request(app)
+        .patch('/api/users/me/photo')
+        .send({
+          photoPath: '   ',
+          photoUrl: 'https://storage.googleapis.com/bucket/avatar.jpg',
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'EMPTY_INPUT',
+          message: 'photoPath and photoUrl are required',
+        },
+      });
+    });
+
+    it('when photoPath belongs to another user => expected 403 w/ FORBIDDEN', async () => {
+      const app = createApp();
+
+      const response = await request(app)
+        .patch('/api/users/me/photo')
+        .send({
+          photoPath: 'users/other-uid/profile/avatar-1787200000000.jpg',
+          photoUrl: 'https://storage.googleapis.com/bucket/users/other-uid/profile/avatar-1787200000000.jpg',
+        });
+
+      expect(response.status).toBe(403);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'FORBIDDEN',
+          message: 'photoPath must belong to the authenticated user',
+        },
+      });
+      expect(usersService.updateUserPhoto).not.toHaveBeenCalled();
+    });
+
+    it('when user is not found => expected 404 w/ NOT_FOUND', async () => {
+      vi.mocked(usersService.updateUserPhoto).mockRejectedValueOnce(
+        new Error('User not found'),
+      );
+
+      const app = createApp();
+
+      const response = await request(app)
+        .patch('/api/users/me/photo')
+        .send({
+          photoPath: 'users/test-uid-1/profile/avatar-1787200000000.jpg',
+          photoUrl: 'https://storage.googleapis.com/bucket/users/test-uid-1/profile/avatar-1787200000000.jpg',
+        });
+
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'NOT_FOUND',
+          message: 'User not found',
+        },
+      });
+    });
+
+    it('when service throws unknown error => expected 500 w/ INTERNAL_ERROR', async () => {
+      vi.mocked(usersService.updateUserPhoto).mockRejectedValueOnce(
+        new Error('Unknown error'),
+      );
+
+      const app = createApp();
+
+      const response = await request(app)
+        .patch('/api/users/me/photo')
+        .send({
+          photoPath: 'users/test-uid-1/profile/avatar-1787200000000.jpg',
+          photoUrl: 'https://storage.googleapis.com/bucket/users/test-uid-1/profile/avatar-1787200000000.jpg',
         });
 
       expect(response.status).toBe(500);

@@ -15,6 +15,7 @@ vi.mock('./activities.service.js', () => {
         listActivities: vi.fn(),
         listPublicActivityTeasers: vi.fn(),
         updateActivity: vi.fn().mockResolvedValue(undefined),
+        updateActivityCover: vi.fn().mockResolvedValue(undefined),
         updateActivityStatus: vi.fn().mockResolvedValue(undefined),
     };
 });
@@ -134,7 +135,7 @@ describe('activities routes', () => {
                 ok: false,
                 error: {
                     code: 'INVALID_INPUT',
-                    message: 'address, endTime, and coverImageUrl must be strings when provided',
+                    message: 'address and endTime must be strings when provided',
                 },
             });
         });
@@ -659,6 +660,195 @@ describe('activities routes', () => {
                 .patch('/api/activities/activity-1/status')
                 .send({
                     status: 'cancelled',
+                });
+
+            expect(response.status).toBe(500);
+            expect(response.body).toEqual({
+                ok: false,
+                error: {
+                    code: 'INTERNAL_ERROR',
+                    message: 'Unknown error',
+                },
+            });
+        });
+    });
+
+    describe('PATCH /api/activities/:activityId/cover', () => {
+        beforeEach(() => {
+            vi.clearAllMocks();
+        });
+
+        it('when cover metadata is valid => expected 200', async () => {
+            const app = createApp();
+
+            const response = await request(app)
+                .patch('/api/activities/activity-1/cover')
+                .send({
+                    coverImagePath: 'activities/activity-1/cover/cover-1787200000000.jpg',
+                    coverImageUrl: 'https://storage.googleapis.com/bucket/activities/activity-1/cover/cover-1787200000000.jpg',
+                });
+
+            expect(response.status).toBe(200);
+            expect(response.body).toEqual({
+                ok: true,
+                data: {
+                    activityId: 'activity-1',
+                    coverImagePath: 'activities/activity-1/cover/cover-1787200000000.jpg',
+                    coverImageUrl: 'https://storage.googleapis.com/bucket/activities/activity-1/cover/cover-1787200000000.jpg',
+                },
+            });
+            expect(activitiesService.updateActivityCover).toHaveBeenCalledWith({
+                activityId: 'activity-1',
+                hostId: 'test-uid-1',
+                coverImagePath: 'activities/activity-1/cover/cover-1787200000000.jpg',
+                coverImageUrl: 'https://storage.googleapis.com/bucket/activities/activity-1/cover/cover-1787200000000.jpg',
+            });
+        });
+
+        it('when activityId is blank => expected 400 w/ EMPTY_INPUT', async () => {
+            const app = createApp();
+
+            const response = await request(app)
+                .patch('/api/activities/%20%20/cover')
+                .send({
+                    coverImagePath: 'activities/activity-1/cover/cover-1787200000000.jpg',
+                    coverImageUrl: 'https://storage.googleapis.com/bucket/activities/activity-1/cover/cover-1787200000000.jpg',
+                });
+
+            expect(response.status).toBe(400);
+            expect(response.body).toEqual({
+                ok: false,
+                error: {
+                    code: 'EMPTY_INPUT',
+                    message: 'activityId is required',
+                },
+            });
+            expect(activitiesService.updateActivityCover).not.toHaveBeenCalled();
+        });
+
+        it('when cover metadata is not string => expected 400 w/ INVALID_INPUT', async () => {
+            const app = createApp();
+
+            const response = await request(app)
+                .patch('/api/activities/activity-1/cover')
+                .send({
+                    coverImagePath: 123,
+                    coverImageUrl: 'https://storage.googleapis.com/bucket/cover.jpg',
+                });
+
+            expect(response.status).toBe(400);
+            expect(response.body).toEqual({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message: 'coverImagePath and coverImageUrl must be strings',
+                },
+            });
+            expect(activitiesService.updateActivityCover).not.toHaveBeenCalled();
+        });
+
+        it('when cover metadata is blank => expected 400 w/ EMPTY_INPUT', async () => {
+            const app = createApp();
+
+            const response = await request(app)
+                .patch('/api/activities/activity-1/cover')
+                .send({
+                    coverImagePath: '   ',
+                    coverImageUrl: 'https://storage.googleapis.com/bucket/cover.jpg',
+                });
+
+            expect(response.status).toBe(400);
+            expect(response.body).toEqual({
+                ok: false,
+                error: {
+                    code: 'EMPTY_INPUT',
+                    message: 'coverImagePath and coverImageUrl are required',
+                },
+            });
+            expect(activitiesService.updateActivityCover).not.toHaveBeenCalled();
+        });
+
+        it('when coverImagePath belongs to another activity => expected 403 w/ FORBIDDEN', async () => {
+            const app = createApp();
+
+            const response = await request(app)
+                .patch('/api/activities/activity-1/cover')
+                .send({
+                    coverImagePath: 'activities/activity-2/cover/cover-1787200000000.jpg',
+                    coverImageUrl: 'https://storage.googleapis.com/bucket/activities/activity-2/cover/cover-1787200000000.jpg',
+                });
+
+            expect(response.status).toBe(403);
+            expect(response.body).toEqual({
+                ok: false,
+                error: {
+                    code: 'FORBIDDEN',
+                    message: 'coverImagePath must belong to the activity',
+                },
+            });
+            expect(activitiesService.updateActivityCover).not.toHaveBeenCalled();
+        });
+
+        it('when activity is not found => expected 404 w/ NOT_FOUND', async () => {
+            vi.mocked(activitiesService.updateActivityCover).mockRejectedValueOnce(
+                new Error('Activity not found'),
+            );
+
+            const app = createApp();
+
+            const response = await request(app)
+                .patch('/api/activities/missing-activity/cover')
+                .send({
+                    coverImagePath: 'activities/missing-activity/cover/cover-1787200000000.jpg',
+                    coverImageUrl: 'https://storage.googleapis.com/bucket/activities/missing-activity/cover/cover-1787200000000.jpg',
+                });
+
+            expect(response.status).toBe(404);
+            expect(response.body).toEqual({
+                ok: false,
+                error: {
+                    code: 'NOT_FOUND',
+                    message: 'Activity not found',
+                },
+            });
+        });
+
+        it('when authenticated user is not activity host => expected 403 w/ FORBIDDEN', async () => {
+            vi.mocked(activitiesService.updateActivityCover).mockRejectedValueOnce(
+                new Error('Only the activity host can update this activity'),
+            );
+
+            const app = createApp();
+
+            const response = await request(app)
+                .patch('/api/activities/activity-1/cover')
+                .send({
+                    coverImagePath: 'activities/activity-1/cover/cover-1787200000000.jpg',
+                    coverImageUrl: 'https://storage.googleapis.com/bucket/activities/activity-1/cover/cover-1787200000000.jpg',
+                });
+
+            expect(response.status).toBe(403);
+            expect(response.body).toEqual({
+                ok: false,
+                error: {
+                    code: 'FORBIDDEN',
+                    message: 'Only the activity host can update this activity',
+                },
+            });
+        });
+
+        it('when service throws unknown error => expected 500 w/ INTERNAL_ERROR', async () => {
+            vi.mocked(activitiesService.updateActivityCover).mockRejectedValueOnce(
+                new Error('Unknown error'),
+            );
+
+            const app = createApp();
+
+            const response = await request(app)
+                .patch('/api/activities/activity-1/cover')
+                .send({
+                    coverImagePath: 'activities/activity-1/cover/cover-1787200000000.jpg',
+                    coverImageUrl: 'https://storage.googleapis.com/bucket/activities/activity-1/cover/cover-1787200000000.jpg',
                 });
 
             expect(response.status).toBe(500);

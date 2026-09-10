@@ -23,6 +23,7 @@ export type UserRecord = {
   createdAt: FirebaseFirestore.Timestamp;
   updatedAt?: FirebaseFirestore.Timestamp;
   displayName?: string;
+  photoPath?: string;
   photoUrl?: string;
   bio?: string;
   gender?: string;
@@ -39,7 +40,6 @@ export type SkillLevel = 'beginner' | 'intermediate' | 'advanced' | 'any';
 
 export type UpdateUserProfileInput = {
   displayName?: string;
-  photoUrl?: string;
   bio?: string;
   gender?: string;
   dateOfBirth?: string;
@@ -59,6 +59,11 @@ export type PublicUserProfile = {
   profileCompleted?: boolean;
   ratingBySport?: Record<string, SportRatingAggregate>;
   totalRatingCount?: number;
+};
+
+export type UpdateUserPhotoInput = {
+  photoPath: string;
+  photoUrl: string;
 };
 
 function normalizeEmail(email: string): string {
@@ -150,6 +155,7 @@ function mapUserDoc(userDoc: FirebaseFirestore.DocumentSnapshot): UserRecord | n
       ? { updatedAt: data.updatedAt as FirebaseFirestore.Timestamp }
       : {}),
     ...(typeof data.displayName === 'string' ? { displayName: data.displayName } : {}),
+    ...(typeof data.photoPath === 'string' ? { photoPath: data.photoPath } : {}),
     ...(typeof data.photoUrl === 'string' ? { photoUrl: data.photoUrl } : {}),
     ...(typeof data.bio === 'string' ? { bio: data.bio } : {}),
     ...(typeof data.gender === 'string' ? { gender: data.gender } : {}),
@@ -330,4 +336,54 @@ export async function getPublicUserProfile(authUid: string): Promise<PublicUserP
   }
 
   return toPublicUserProfile(user);
+}
+
+export async function updateUserPhoto(
+  authUid: string,
+  input: UpdateUserPhotoInput,
+): Promise<UserRecord> {
+  const normalizedAuthUid = authUid.trim();
+  const photoPath = input.photoPath.trim();
+  const photoUrl = input.photoUrl.trim();
+
+  if (!normalizedAuthUid) {
+    throw new Error('authUid is required');
+  }
+
+  if (!photoPath) {
+    throw new Error('photoPath is required');
+  }
+
+  if (!photoUrl) {
+    throw new Error('photoUrl is required');
+  }
+
+  if (!photoPath.startsWith(`users/${normalizedAuthUid}/profile/`)) {
+    throw new Error('photoPath must belong to the authenticated user');
+  }
+
+  const userRef = firestore.collection('users').doc(normalizedAuthUid);
+  const updatedAt = Timestamp.now();
+
+  return firestore.runTransaction(async (transaction) => {
+    const userDoc = await transaction.get(userRef);
+    const existingUser = mapUserDoc(userDoc);
+
+    if (!existingUser) {
+      throw new Error('User not found');
+    }
+
+    transaction.update(userRef, {
+      photoPath,
+      photoUrl,
+      updatedAt,
+    });
+
+    return {
+      ...existingUser,
+      photoPath,
+      photoUrl,
+      updatedAt,
+    };
+  });
 }
