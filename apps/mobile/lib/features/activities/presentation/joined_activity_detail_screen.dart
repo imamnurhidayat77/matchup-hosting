@@ -20,6 +20,7 @@ import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../../chat/domain/chat_message.dart';
 import '../../discovery/domain/activity_model.dart';
+import '../../discovery/presentation/widgets/venue_map_card.dart';
 import '../domain/activity_participant.dart';
 
 // ─── Data type ───────────────────────────────────────────────────────────────
@@ -165,6 +166,13 @@ class _DetailBody extends StatelessWidget {
                   // Meta card — date + location
                   _MetaCard(activity: activity),
                   const SizedBox(height: AppSpacing.x5),
+
+                  // Venue map (only when coordinates exist).
+                  if (activity.latitude != null &&
+                      activity.longitude != null) ...[
+                    VenueMapCard(activity: activity),
+                    const SizedBox(height: AppSpacing.x5),
+                  ],
 
                   // Participants
                   _ParticipantsSection(activity: activity),
@@ -700,6 +708,10 @@ class _ParticipantsSection extends ConsumerWidget {
             final overflow = members.length - visible.length;
             final slots = visible.length + (overflow > 0 ? 1 : 0);
             return SizedBox(
+              // Keyed so tests can scope finders to the live roster
+              // stack (the host card elsewhere shows the same
+              // initials when host == organizer).
+              key: const ValueKey('participant-stack'),
               height: _size,
               width: _step * (slots - 1) + _size,
               child: Stack(

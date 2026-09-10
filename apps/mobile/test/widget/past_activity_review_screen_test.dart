@@ -9,7 +9,9 @@ import 'package:matchup_mobile/features/activities/domain/activity_participant.d
 import 'package:matchup_mobile/features/activities/presentation/past_activity_review_screen.dart';
 import 'package:matchup_mobile/features/discovery/data/activity_repository.dart';
 import 'package:matchup_mobile/features/discovery/domain/activity_model.dart';
+import 'package:matchup_mobile/features/ratings/data/ratings_repository.dart';
 import 'package:matchup_mobile/features/ratings/data/ratings_repository_impl.dart';
+import 'package:matchup_mobile/features/ratings/domain/rating_models.dart';
 
 class _MockActivityRepository extends Mock implements ActivityRepository {}
 
@@ -53,7 +55,11 @@ void main() {
     ),
   ];
 
-  Future<void> pumpScreen(WidgetTester tester, {bool pushed = false}) async {
+  Future<void> pumpScreen(
+    WidgetTester tester, {
+    bool pushed = false,
+    RatingsRepository? ratingsOverride,
+  }) async {
     await tester.binding.setSurfaceSize(const Size(600, 1400));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -78,9 +84,10 @@ void main() {
           activityRepositoryProvider.overrideWithValue(repo),
           // The screen reads this on submit; the default body needs Env
           // (.env) which is not loaded in tests, so inject the in-memory
-          // flavour and exercise the real local submit path.
+          // flavour and exercise the real local submit path. Tests may
+          // pass a pre-seeded instance (e.g. an already-rated activity).
           ratingsRepositoryProvider.overrideWithValue(
-            LocalRatingsRepository(),
+            ratingsOverride ?? LocalRatingsRepository(),
           ),
         ],
         child: MaterialApp.router(routerConfig: router),
@@ -193,5 +200,52 @@ void main() {
       expect(find.text('Activity Review'), findsNothing);
       expect(find.text('Activities'), findsOneWidget);
     });
+
+    testWidgets(
+      'should show Update wording when already rated',
+      (tester) async {
+        when(() => repo.byId('4')).thenAnswer((_) async => activity());
+        when(
+          () => repo.participants('4'),
+        ).thenAnswer((_) async => participants());
+
+        // Pre-seed a previous submission through the same in-memory repo
+        // the screen will read via the provider override below.
+        // runAsync: the repo simulates 220ms network latency with a
+        // real-timer delay, which would deadlock the fake-async test
+        // clock if awaited directly before any pump.
+        final ratings = LocalRatingsRepository();
+        await tester.runAsync(
+          () => ratings.submitActivityRating(
+            ActivityRatingSubmission(
+              activityId: '4',
+              activitySportType: 'Volleyball',
+              participants: const [],
+            ),
+          ),
+        );
+
+        await pumpScreen(tester, pushed: true, ratingsOverride: ratings);
+
+        expect(find.text('Update Review'), findsOneWidget);
+        expect(find.textContaining('already reviewed'), findsOneWidget);
+        expect(find.text('Submit Review'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'should show Submit wording for a fresh review',
+      (tester) async {
+        when(() => repo.byId('4')).thenAnswer((_) async => activity());
+        when(
+          () => repo.participants('4'),
+        ).thenAnswer((_) async => participants());
+
+        await pumpScreen(tester, pushed: true);
+
+        expect(find.text('Submit Review'), findsOneWidget);
+        expect(find.textContaining('already reviewed'), findsNothing);
+      },
+    );
   });
 }

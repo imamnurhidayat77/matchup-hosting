@@ -226,6 +226,49 @@ class _ProfileContent extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.x5),
 
+                // ── Ratings by sport ─────────────────────────────────────
+                if (user.ratingBySport.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.x6,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Ratings',
+                          style: AppTypography.titleMedium(context),
+                        ),
+                        const SizedBox(height: AppSpacing.x3),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.x4,
+                            vertical: AppSpacing.x2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: context.colors.card,
+                            borderRadius: AppRadius.cardR,
+                            border: Border.all(color: context.colors.border),
+                          ),
+                          child: Column(
+                            children: [
+                              for (final entry
+                                  in user.ratingBySport.entries)
+                                _RatingRow(
+                                  sport: entry.key,
+                                  average: entry.value.average,
+                                  count: entry.value.count,
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.x5),
+                ],
+
                 // ── Bio ──────────────────────────────────────────────────
                 if (user.bio != null && user.bio!.isNotEmpty) ...[
                   Padding(
@@ -304,12 +347,10 @@ class _ProfileContent extends StatelessWidget {
                           size: 18,
                           color: AppColors.textOnPrimary,
                         ),
-                        // Direct messages aren't supported yet — the
-                        // backend's chat is per-activity, not per-user.
-                        // Disable the button until DMs land. Wired to
-                        // a TODO marker so it's easy to find when
-                        // adding `/api/dm/:uid` later.
-                        onPressed: null,
+                        onPressed: () => context.push(
+                          '/dm/${user.id}',
+                          extra: user.displayName,
+                        ),
                       ),
                       const SizedBox(height: AppSpacing.x3),
                       AppButton.secondary(
@@ -489,6 +530,51 @@ class _SportChip extends StatelessWidget {
                     : context.colors.textSecondary,
                 fontSize: 10,
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One row of the per-sport rating breakdown: sport name on the
+/// left, "★ 4.8 (12)" on the right. Rendered only for sports the
+/// user has actually been rated in.
+class _RatingRow extends StatelessWidget {
+  const _RatingRow({
+    required this.sport,
+    required this.average,
+    required this.count,
+  });
+  final String sport;
+  final double average;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.x2),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              sport,
+              style: AppTypography.labelField(context),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          AppIcon(
+            AppIcons.star,
+            size: AppIconSize.sm,
+            color: context.colors.warningText,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            '${average.toStringAsFixed(1)} ($count)',
+            style: AppTypography.labelField(context).copyWith(
+              color: context.colors.textSecondary,
             ),
           ),
         ],

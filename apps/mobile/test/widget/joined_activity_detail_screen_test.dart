@@ -241,7 +241,14 @@ void main() {
         await pumpScreen(tester);
 
         // Initials of the real roster member — no bundled face involved.
-        expect(find.text('WO'), findsOneWidget);
+        // Scoped to the stack: the host card also shows "WO" when the
+        // host is the organizer, which is correct UI, not a dupe bug.
+        final stack = find.byKey(const ValueKey('participant-stack'));
+        expect(stack, findsOneWidget);
+        expect(
+          find.descendant(of: stack, matching: find.text('WO')),
+          findsOneWidget,
+        );
       },
     );
   });

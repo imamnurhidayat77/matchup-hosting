@@ -35,6 +35,14 @@ final _reviewDataProvider = FutureProvider.autoDispose
   return (activity: activity, participants: participants);
 });
 
+/// Whether the viewer already rated this activity. Drives the
+/// "Update review" wording — the backend upserts idempotently, so a
+/// second submit edits rather than duplicates.
+final _ratedProvider = FutureProvider.autoDispose
+    .family<bool, String>((ref, activityId) async {
+  return ref.watch(ratingsRepositoryProvider).hasRated(activityId);
+});
+
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
 class PastActivityReviewScreen extends ConsumerStatefulWidget {
@@ -102,6 +110,8 @@ class _PastActivityReviewScreenState
       final result = await repo.submitActivityRating(submission);
       if (!mounted) return;
       if (result.accepted) {
+        // Flip the rated flag so a revisit shows "Update Review".
+        ref.invalidate(_ratedProvider(widget.activityId));
         AppSnackbar.show(
           context,
           message: 'Review submitted!',
@@ -130,6 +140,10 @@ class _PastActivityReviewScreenState
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(_reviewDataProvider(widget.activityId));
+    // Already-rated state loads in parallel — null (still loading
+    // or failed) renders as a fresh review, never blocks submit.
+    final alreadyRated =
+        ref.watch(_ratedProvider(widget.activityId)).valueOrNull ?? false;
 
     return AppScaffold(
       safeAreaTop: true,
@@ -162,6 +176,13 @@ class _PastActivityReviewScreenState
                     _SummaryCard(activity: data.activity),
                     const SizedBox(height: AppSpacing.x5),
 
+                    // Already-rated notice — resubmitting edits
+                    // the previous review (backend upserts).
+                    if (alreadyRated) ...[
+                      _RatedNotice(),
+                      const SizedBox(height: AppSpacing.x5),
+                    ],
+
                     // Star rating + comment
                     _RateActivitySection(
                       stars: _stars,
@@ -184,9 +205,11 @@ class _PastActivityReviewScreenState
               ),
             ),
 
-            // Pinned submit button
+            // Pinned submit button — "Update" wording when a
+            // previous review exists (resubmit edits it).
             _SubmitBar(
               submitting: _submitting,
+              label: alreadyRated ? 'Update Review' : 'Submit Review',
               onTap: _canSubmit(data.participants)
                   ? () => _submit(
                         sportType: data.activity.sportType,
@@ -626,8 +649,42 @@ class _ParticipantRow extends StatelessWidget {
 
 // ─── Submit bar ───────────────────────────────────────────────────────────────
 
+/// Shown when the viewer already rated — resubmitting edits.
+class _RatedNotice extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.x4),
+      decoration: BoxDecoration(
+        color: context.colors.primarySoft,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        border: Border.all(
+          color: context.colors.primaryOnSurface.withValues(alpha: 0.25),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.info_outline_rounded,
+            size: 20,
+            color: context.colors.primaryOnSurface,
+          ),
+          const SizedBox(width: AppSpacing.x3),
+          Expanded(
+            child: Text(
+              'You already reviewed this activity. Submitting again updates your review.',
+              style: AppTypography.metaSub(context).copyWith(fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SubmitBar extends StatelessWidget {
-  const _SubmitBar({required this.onTap, required this.submitting});
+  const _SubmitBar(
+      {required this.onTap, required this.submitting, required this.label});
 
   /// `null` disables the button (greyed-out state, no press feedback).
   /// Otherwise the press triggers the actual submission.
@@ -636,6 +693,9 @@ class _SubmitBar extends StatelessWidget {
   /// When true, the button shows a spinner instead of the label and
   /// ignores taps. The parent owns the state so we re-render automatically.
   final bool submitting;
+
+  /// "Submit Review" for fresh reviews, "Update Review" for edits.
+  final String label;
 
   @override
   Widget build(BuildContext context) {
@@ -672,7 +732,7 @@ class _SubmitBar extends StatelessWidget {
                   ),
                 )
               : Text(
-                  'Submit Review',
+                  label,
                   style: AppTypography.buttonPrimary.copyWith(
                     color: enabled
                         ? AppColors.textOnPrimary
