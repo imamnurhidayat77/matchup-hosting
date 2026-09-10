@@ -13,7 +13,10 @@ const EnvSchema = z.object({
   FIREBASE_CLIENT_EMAIL: z.string().min(1, 'FIREBASE_CLIENT_EMAIL is required'),
   FIREBASE_PRIVATE_KEY: z.string().min(1, 'FIREBASE_PRIVATE_KEY is required'),
   FIREBASE_DATABASE_URL: z.string().url('FIREBASE_DATABASE_URL must be a valid URL').min(1, 'FIREBASE_DATABASE_URL is required'),
-  FIREBASE_WEB_API_KEY: z.string().min(1, 'FIREBASE_WEB_API_KEY is required')
+  FIREBASE_WEB_API_KEY: z.string().min(1, 'FIREBASE_WEB_API_KEY is required'),
+  FIREBASE_STORAGE_BUCKET: z
+    .string()
+    .regex(/^[a-z0-9][a-z0-9._-]*[a-z0-9]$/, 'FIREBASE_STORAGE_BUCKET must be a valid bucket name'),
 });
 
 const parsed = EnvSchema.safeParse(process.env);
