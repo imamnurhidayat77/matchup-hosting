@@ -11,6 +11,7 @@ import '../../../core/theme/dark_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/app_avatar.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/asset_image.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_tappable.dart';
 import '../../../core/widgets/error_retry.dart';
@@ -25,6 +26,7 @@ import '../../discovery/domain/activity_model.dart';
 typedef _ManageData = ({
   ActivityModel activity,
   List<ActivityParticipant> roster,
+  List<ActivityParticipant> requests,
 });
 
 final _manageProvider = FutureProvider.autoDispose
@@ -32,8 +34,13 @@ final _manageProvider = FutureProvider.autoDispose
   final repo = ref.watch(activityRepositoryProvider);
   final activity = await repo.byId(activityId);
   if (activity == null) throw StateError('Activity not found');
-  final roster = await repo.participants(activityId);
-  return (activity: activity, roster: roster);
+  // joinRequests is host-gated server-side; non-hosts (and offline)
+  // get an empty list, so this is safe to always request.
+  final (roster, requests) = await (
+    repo.participants(activityId),
+    repo.joinRequests(activityId),
+  ).wait;
+  return (activity: activity, roster: roster, requests: requests);
 });
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
@@ -52,14 +59,88 @@ class ManageActivityScreen extends ConsumerWidget {
       destructive: true,
     );
     if (confirmed != true) return;
-    await ref.read(activityRepositoryProvider).cancel(activityId);
-    if (!context.mounted) return;
-    AppSnackbar.show(
+    try {
+      await ref.read(activityRepositoryProvider).cancel(activityId);
+      if (!context.mounted) return;
+      AppSnackbar.show(
+        context,
+        message: 'Activity cancelled. Participants have been notified.',
+        variant: AppSnackbarVariant.info,
+      );
+      if (context.mounted) Navigator.of(context).maybePop();
+    } catch (e) {
+      if (!context.mounted) return;
+      AppSnackbar.show(
+        context,
+        message: 'Could not cancel activity. Please try again.',
+        variant: AppSnackbarVariant.error,
+      );
+    }
+  }
+
+  Future<void> _decideRequest(
+    BuildContext context,
+    WidgetRef ref,
+    String uid,
+    String name, {
+    required bool approve,
+  }) async {
+    try {
+      final repo = ref.read(activityRepositoryProvider);
+      if (approve) {
+        await repo.approveJoinRequest(activityId, uid);
+      } else {
+        await repo.declineJoinRequest(activityId, uid);
+      }
+      ref.invalidate(_manageProvider(activityId));
+      if (!context.mounted) return;
+      AppSnackbar.show(
+        context,
+        message: approve
+            ? '$name approved! They have been notified.'
+            : '$name declined.',
+        variant: approve ? AppSnackbarVariant.success : AppSnackbarVariant.info,
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      AppSnackbar.show(
+        context,
+        message: approve
+            ? 'Could not approve. The activity may be full.'
+            : 'Could not decline. Please try again.',
+        variant: AppSnackbarVariant.error,
+      );
+    }
+  }
+
+  Future<void> _confirmComplete(BuildContext context, WidgetRef ref) async {
+    final confirmed = await AppDialog.confirm(
       context,
-      message: 'Activity cancelled. Participants have been notified.',
-      variant: AppSnackbarVariant.info,
+      title: 'Mark as Completed?',
+      body: 'This closes the activity so no one else can join. You can still see it in your history.',
+      confirmLabel: 'Mark Completed',
+      cancelLabel: 'Not yet',
     );
-    if (context.mounted) Navigator.of(context).maybePop();
+    if (confirmed != true) return;
+    try {
+      await ref
+          .read(activityRepositoryProvider)
+          .updateStatus(activityId, 'completed');
+      if (!context.mounted) return;
+      AppSnackbar.show(
+        context,
+        message: 'Activity marked as completed.',
+        variant: AppSnackbarVariant.success,
+      );
+      if (context.mounted) Navigator.of(context).maybePop();
+    } catch (e) {
+      if (!context.mounted) return;
+      AppSnackbar.show(
+        context,
+        message: 'Could not update activity. Please try again.',
+        variant: AppSnackbarVariant.error,
+      );
+    }
   }
 
   @override
@@ -80,7 +161,13 @@ class ManageActivityScreen extends ConsumerWidget {
           activityId: activityId,
           activity: data.activity,
           roster: data.roster,
+          requests: data.requests,
           onCancel: () => _confirmCancel(context, ref),
+          onComplete: () => _confirmComplete(context, ref),
+          onApprove: (uid, name) =>
+              _decideRequest(context, ref, uid, name, approve: true),
+          onDecline: (uid, name) =>
+              _decideRequest(context, ref, uid, name, approve: false),
         ),
       ),
     );
@@ -94,13 +181,25 @@ class _ManageBody extends StatelessWidget {
     required this.activityId,
     required this.activity,
     required this.roster,
+    required this.requests,
     required this.onCancel,
+    required this.onComplete,
+    required this.onApprove,
+    required this.onDecline,
   });
 
   final String activityId;
   final ActivityModel activity;
   final List<ActivityParticipant> roster;
+
+  /// Pending join requests (approval-gated activities only, host view).
+  final List<ActivityParticipant> requests;
   final VoidCallback onCancel;
+  final VoidCallback onComplete;
+
+  /// `onApprove(uid, displayName)` / `onDecline(uid, displayName)`.
+  final void Function(String uid, String name) onApprove;
+  final void Function(String uid, String name) onDecline;
 
   static const double _heroHeight = 280;
   static const double _overlapAmount = 44;
@@ -188,9 +287,27 @@ class _ManageBody extends StatelessWidget {
                   ),
                   const SizedBox(height: AppSpacing.x5),
 
+                  // Pending join requests (approval policy only)
+                  if (requests.isNotEmpty) ...[
+                    _JoinRequestsSection(
+                      requests: requests,
+                      onApprove: (p) => onApprove(p.userId, p.name),
+                      onDecline: (p) => onDecline(p.userId, p.name),
+                    ),
+                    const SizedBox(height: AppSpacing.x5),
+                  ],
+
                   // Activity details
                   _DetailsSection(activity: activity),
                   const SizedBox(height: AppSpacing.x5),
+
+                  // Mark as completed — only available once the activity
+                  // time has passed. Host-only; the backend rejects the
+                  // status update from non-hosts with FORBIDDEN.
+                  if (activity.dateTime.isBefore(DateTime.now())) ...[
+                    _CompleteButton(onTap: onComplete),
+                    const SizedBox(height: AppSpacing.x3),
+                  ],
 
                   // Cancel
                   _CancelButton(onTap: onCancel),
@@ -216,10 +333,9 @@ class _Hero extends StatelessWidget {
       fit: StackFit.expand,
       children: [
         activity.coverImageUrl != null
-            ? Image.asset(
-                activity.coverImageUrl!,
+            ? AssetImageWithFallback(
+                imagePath: activity.coverImageUrl!,
                 fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => _placeholder(),
               )
             : _placeholder(),
 
@@ -1261,8 +1377,7 @@ class _ParticipantRow extends StatelessWidget {
       child: Row(
         children: [
           AppAvatar(
-            assetPath:
-                'assets/images/discovery/avatars/${item.avatarAsset}',
+            imageUrl: item.avatarUrl,
             name: item.name,
             size: AppAvatarSize.sm,
           ),
@@ -1286,6 +1401,159 @@ class _ParticipantRow extends StatelessWidget {
             tone: item.isCheckedIn
                 ? StatusTone.checkedIn
                 : StatusTone.pending,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Join requests section ────────────────────────────────────────────────────
+
+/// Pending join requests on approval-gated activities (host view).
+/// Each row shows the requester with Approve / Decline actions. Only
+/// rendered when [requests] is non-empty — the parent guards that.
+class _JoinRequestsSection extends StatelessWidget {
+  const _JoinRequestsSection({
+    required this.requests,
+    required this.onApprove,
+    required this.onDecline,
+  });
+
+  final List<ActivityParticipant> requests;
+  final ValueChanged<ActivityParticipant> onApprove;
+  final ValueChanged<ActivityParticipant> onDecline;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Join requests (${requests.length})',
+                style: AppTypography.titleMedium(context),
+              ),
+            ),
+            StatusBadge(label: 'ACTION NEEDED', tone: StatusTone.pending),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.x3),
+        Container(
+          decoration: BoxDecoration(
+            color: context.colors.surface,
+            borderRadius: BorderRadius.circular(AppRadius.card),
+            border: Border.all(color: context.colors.border),
+            boxShadow: AppShadows.card,
+          ),
+          child: Column(
+            children: [
+              for (var i = 0; i < requests.length; i++) ...[
+                _JoinRequestRow(
+                  item: requests[i],
+                  onApprove: () => onApprove(requests[i]),
+                  onDecline: () => onDecline(requests[i]),
+                ),
+                if (i < requests.length - 1)
+                  Divider(
+                    height: 1,
+                    color: context.colors.border,
+                    indent: AppSpacing.x4,
+                    endIndent: AppSpacing.x4,
+                  ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _JoinRequestRow extends StatelessWidget {
+  const _JoinRequestRow({
+    required this.item,
+    required this.onApprove,
+    required this.onDecline,
+  });
+
+  final ActivityParticipant item;
+  final VoidCallback onApprove;
+  final VoidCallback onDecline;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.x4,
+        vertical: AppSpacing.x3,
+      ),
+      child: Row(
+        children: [
+          AppAvatar(
+            imageUrl: item.avatarUrl,
+            name: item.name,
+            size: AppAvatarSize.sm,
+          ),
+          const SizedBox(width: AppSpacing.x3),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(item.name, style: AppTypography.labelField(context)),
+                Text(
+                  item.skillLevel,
+                  style: AppTypography.metaSub(context),
+                ),
+              ],
+            ),
+          ),
+          AppTappable(
+            semanticLabel: 'Decline ${item.name}',
+            feedback: AppTapFeedback.scale,
+            minSize: 0,
+            onTap: onDecline,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.x3,
+                vertical: AppSpacing.x2,
+              ),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+                border: Border.all(color: context.colors.border),
+              ),
+              child: Text(
+                'Decline',
+                style: AppTypography.chipLabel(context).copyWith(
+                  color: context.colors.textSecondary,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.x2),
+          AppTappable(
+            semanticLabel: 'Approve ${item.name}',
+            feedback: AppTapFeedback.scale,
+            minSize: 0,
+            onTap: onApprove,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.x3,
+                vertical: AppSpacing.x2,
+              ),
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+              ),
+              child: Text(
+                'Approve',
+                style: AppTypography.chipLabel(context).copyWith(
+                  color: AppColors.textOnPrimary,
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -1390,6 +1658,50 @@ class _CancelButton extends StatelessWidget {
               'Cancel Activity',
               style: AppTypography.labelField(context).copyWith(
                 color: context.colors.errorText,
+                fontSize: 15,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Complete button ─────────────────────────────────────────────────────────
+
+class _CompleteButton extends StatelessWidget {
+  const _CompleteButton({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return PressableScale(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.x3 + 2),
+        decoration: BoxDecoration(
+          color: context.colors.statusSuccessBg,
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          border: Border.all(
+            color: AppColors.avatarSecondary,
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.check_circle_outline_rounded,
+              size: 18,
+              color: AppColors.avatarSecondary,
+            ),
+            const SizedBox(width: AppSpacing.x2),
+            Text(
+              'Mark as Completed',
+              style: AppTypography.labelField(context).copyWith(
+                color: AppColors.avatarSecondary,
                 fontSize: 15,
               ),
             ),

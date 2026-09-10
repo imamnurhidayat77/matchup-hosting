@@ -9,6 +9,7 @@ import '../../../core/theme/dark_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/app_avatar.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/asset_image.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_tappable.dart';
 import '../../../core/widgets/error_retry.dart';
@@ -281,12 +282,11 @@ class _SummaryCard extends StatelessWidget {
           ClipRRect(
             borderRadius: BorderRadius.circular(AppRadius.input),
             child: activity.coverImageUrl != null
-                ? Image.asset(
-                    activity.coverImageUrl!,
+                ? AssetImageWithFallback(
+                    imagePath: activity.coverImageUrl!,
                     width: 72,
                     height: 72,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => _thumbPlaceholder(),
                   )
                 : _thumbPlaceholder(),
           ),
@@ -577,9 +577,9 @@ class _ParticipantRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // Avatar
+          // Avatar — backend photo when present, initials otherwise.
           AppAvatar(
-            assetPath: 'assets/images/discovery/avatars/${item.avatarAsset}',
+            imageUrl: item.avatarUrl,
             name: item.name,
             size: AppAvatarSize.md,
           ),

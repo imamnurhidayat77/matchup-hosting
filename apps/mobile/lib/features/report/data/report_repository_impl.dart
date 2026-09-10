@@ -1,7 +1,8 @@
 import 'report_repository.dart';
 
-/// In-memory [ReportRepository] — always succeeds after a short delay.
-/// Used in development when [Env.useRemoteApi] is false.
+/// Offline-only [ReportRepository]. Reads are N/A; writes throw.
+/// The app **always** talks to the live backend for reports — a
+/// report must never be faked as submitted.
 class LocalReportRepository implements ReportRepository {
   @override
   Future<void> submit({
@@ -10,7 +11,9 @@ class LocalReportRepository implements ReportRepository {
     required String reason,
     String? details,
   }) async {
-    // Simulate network latency so the loading state is visible in tests.
-    await Future<void>.delayed(const Duration(milliseconds: 600));
+    throw StateError(
+      'ReportRepository.submit() requires a live backend — no offline '
+      'fallback is provided.',
+    );
   }
 }

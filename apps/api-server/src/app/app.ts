@@ -12,6 +12,8 @@ import { listPublicActivityTeasersHandler } from '../modules/activities/activiti
 import { swipesRouter } from '../modules/swipes/swipes.routes.js';
 import { notificationsRouter } from '../modules/notifications/notifications.routes.js';
 import { devicesRouter } from '../modules/devices/devices.routes.js';
+import { placesRouter } from '../modules/places/places.routes.js';
+import { reportsRouter } from '../modules/reports/reports.routes.js';
 
 export function createApp(){
     const app = express();
@@ -53,6 +55,8 @@ export function createApp(){
     app.use('/api/swipes', swipesRouter);
     app.use('/api/notifications', notificationsRouter);
     app.use('/api/devices', devicesRouter);
+    app.use('/api/places', placesRouter);
+    app.use('/api/reports', reportsRouter);
     
     return app;
 }

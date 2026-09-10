@@ -3,6 +3,7 @@ import {
   bootstrapUser,
   getPublicUserProfile,
   getUserByAuthUid,
+  mintCustomToken,
   updateUserProfile,
   type SkillLevel,
   type UpdateUserProfileInput,
@@ -129,6 +130,39 @@ export async function bootstrapUserHandler(req: Request, res: Response) {
         },
       });
     }
+
+    return res.status(500).json({
+      ok: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message,
+      },
+    });
+  }
+}
+
+export async function getCustomTokenHandler(req: Request, res: Response) {
+  try {
+    const authUid = req.auth?.uid;
+
+    if (!authUid) {
+      return res.status(401).json({
+        ok: false,
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'Authenticated user is required',
+        },
+      });
+    }
+
+    const customToken = await mintCustomToken(authUid);
+
+    return res.status(200).json({
+      ok: true,
+      data: { customToken },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
 
     return res.status(500).json({
       ok: false,

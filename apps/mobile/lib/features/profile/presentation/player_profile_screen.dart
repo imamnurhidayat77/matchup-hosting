@@ -11,6 +11,7 @@ import '../../../core/theme/dark_colors.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_icon.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/asset_image.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
@@ -118,12 +119,11 @@ class _ProfileContent extends StatelessWidget {
                         color: context.colors.primaryLight,
                       ),
                       clipBehavior: Clip.antiAlias,
-                      child: user.avatarAsset != null
-                          ? Image.asset(
-                              user.avatarAsset!,
+                      child: (user.avatarUrl ?? user.avatarAsset) != null
+                          ? AssetImageWithFallback(
+                              imagePath:
+                                  user.avatarUrl ?? user.avatarAsset!,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, _, _) =>
-                                  _AvatarFallback(name: user.displayName),
                             )
                           : _AvatarFallback(name: user.displayName),
                     ),
@@ -304,8 +304,12 @@ class _ProfileContent extends StatelessWidget {
                           size: 18,
                           color: AppColors.textOnPrimary,
                         ),
-                        onPressed: () =>
-                            context.push('/chat/${user.displayName}'),
+                        // Direct messages aren't supported yet — the
+                        // backend's chat is per-activity, not per-user.
+                        // Disable the button until DMs land. Wired to
+                        // a TODO marker so it's easy to find when
+                        // adding `/api/dm/:uid` later.
+                        onPressed: null,
                       ),
                       const SizedBox(height: AppSpacing.x3),
                       AppButton.secondary(
@@ -317,6 +321,7 @@ class _ProfileContent extends StatelessWidget {
                         ),
                         onPressed: () => ReportUserSheet.show(
                           context,
+                          userId: user.id,
                           userName: user.displayName,
                         ),
                       ),

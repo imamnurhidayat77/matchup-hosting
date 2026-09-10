@@ -18,6 +18,7 @@ Current implemented domains:
 - swipes
 - notifications
 - devices
+- reports
 
 ## Base URL
 
@@ -111,6 +112,7 @@ Frontend auth flow:
 
 - Register and sign-in should be handled by Firebase Auth on the frontend.
 - After Firebase Auth returns an ID token, the frontend should call `POST /api/users/me` to create or load the backend user profile.
+- Native SDKs (RTDB realtime chat) sign in with a custom token from `POST /api/users/custom-token` — see "Realtime chat" below.
 
 ### `POST /api/users/me`
 
@@ -536,6 +538,98 @@ Errors:
 - `400 EMPTY_INPUT` if `activityId` is blank
 - `403 FORBIDDEN` if the authenticated user is not the activity host or a participant
 - `404 NOT_FOUND` if activity does not exist
+
+### Realtime chat
+
+Writes always go through `POST /api/chat/messages` (stored in RTDB
+at `activityChats/{activityId}/messages/{messageId}`). Live updates
+are delivered by subscribing directly to that RTDB path with the
+Firebase SDK — the mobile chat screen does this and falls back to
+polling `GET /api/chat/:activityId/messages` every 3 seconds when
+Firebase isn't configured.
+
+The SDK must be signed in as the real user or the listener gets
+`permission-denied` under the RTDB rules (see
+`infra/firebase/database.rules.json`, client writes denied —
+backend only). Mint the sign-in token here:
+
+### `POST /api/users/custom-token`
+
+Mints a short-lived Firebase custom token for the authenticated
+user. The mobile app signs the native SDK in with
+`FirebaseAuth.signInWithCustomToken` so RTDB listeners are
+authenticated.
+
+Authentication:
+
+- Requires `Authorization: Bearer <firebase-id-token>`
+
+Success `200`:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "customToken": "eyJhbGciOi..."
+  }
+}
+```
+
+Errors:
+
+- `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
+
+---
+
+## Reports
+
+### `POST /api/reports`
+
+Files a moderation report against a user or an activity. Reports land
+in the `reports` Firestore collection with status `pending` for later
+moderation.
+
+Request body:
+
+```json
+{
+  "targetId": "activity-id-or-uid",
+  "targetType": "activity",
+  "reason": "Spam / Fake activity",
+  "details": "Optional free-form context"
+}
+```
+
+Allowed `targetType` values:
+
+- `user`
+- `activity`
+
+Authentication:
+
+- Requires `Authorization: Bearer <firebase-id-token>`
+- `reporterId` is derived from the verified Firebase Auth user
+- Users cannot report themselves
+
+Success `201`:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "reportId": "generated-report-id"
+  }
+}
+```
+
+Errors:
+
+- `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
+- `400 INVALID_INPUT` if `targetId` or `reason` are not strings
+- `400 INVALID_INPUT` if `targetType` is not `user` or `activity`
+- `400 INVALID_INPUT` if reporting yourself, or reason/details exceed length limits
+- `400 EMPTY_INPUT` if `targetId` or `reason` are blank
+- `404 NOT_FOUND` if the reported user or activity does not exist
 
 ---
 

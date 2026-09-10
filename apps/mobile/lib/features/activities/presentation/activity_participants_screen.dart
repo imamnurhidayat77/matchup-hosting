@@ -7,6 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/widgets/app_avatar.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/pressable_scale.dart';
@@ -30,6 +31,39 @@ final _participantsProvider = FutureProvider.autoDispose
         activityTitle: activity?.title ?? 'this activity',
       );
     });
+
+/// Polls the backend's `/api/presence/:uid` for each participant in
+/// the given list. Emits the subset that's currently `online`.
+///
+/// Polls every 30s (per [RemotePresenceRepository.watchOnline]); the
+/// presence state is server-side authoritative, so a half-minute
+/// cadence is more than fast enough for a roster badge.
+///
+/// IMPORTANT: the `uids` argument MUST be a stable list instance
+/// across rebuilds. `List ==` is identity-based, so passing a freshly
+/// built `.toList()` from `build()` creates a *different* family
+/// instance every frame → resubscribe → fetch → rebuild, forever.
+/// Always pass the output of [_rosterUidsProvider] below, which
+/// Riverpod memoizes until the roster itself changes.
+final _onlineUidsProvider = StreamProvider.autoDispose
+    .family<Set<String>, List<String>>((ref, uids) {
+      return ref.watch(presenceRepositoryProvider).watchOnline(uids);
+    });
+
+/// Memoized uid list for [_onlineUidsProvider]. A plain `Provider`
+/// caches its value until its dependencies change, so every `build`
+/// observes the *same* list instance and the stream family is
+/// subscribed exactly once.
+final _rosterUidsProvider =
+    Provider.autoDispose.family<List<String>, String>((ref, activityId) {
+  final roster =
+      ref.watch(_participantsProvider(activityId)).valueOrNull?.roster ??
+          const [];
+  return roster
+      .map((p) => p.userId)
+      .where((id) => id.isNotEmpty)
+      .toList(growable: false);
+});
 
 class ActivityParticipantsScreen extends ConsumerWidget {
   final String activityId;
@@ -57,6 +91,13 @@ class ActivityParticipantsScreen extends ConsumerWidget {
               ? 0.0
               : (roster.length / capacity).clamp(0.0, 1.0);
 
+          // Watch online state for the roster. The uid list comes from
+          // the memoized [_rosterUidsProvider] (stable instance!) — never
+          // build it inline here, or the stream resubscribes every frame.
+          final uids = ref.watch(_rosterUidsProvider(activityId));
+          final onlineUids = ref.watch(_onlineUidsProvider(uids)).valueOrNull ??
+              const <String>{};
+
           return Column(
             children: [
               _CapacitySummary(
@@ -64,6 +105,7 @@ class ActivityParticipantsScreen extends ConsumerWidget {
                 joined: roster.length,
                 capacity: capacity,
                 fillRatio: fillRatio,
+                onlineCount: onlineUids.length,
               ),
               Expanded(
                 child: ListView.separated(
@@ -76,7 +118,13 @@ class ActivityParticipantsScreen extends ConsumerWidget {
                   itemCount: roster.length,
                   separatorBuilder: (_, _) =>
                       const SizedBox(height: AppSpacing.x3),
-                  itemBuilder: (_, i) => _ParticipantCard(item: roster[i]),
+                  itemBuilder: (_, i) {
+                    final p = roster[i];
+                    return _ParticipantCard(
+                      item: p,
+                      isOnline: onlineUids.contains(p.userId),
+                    );
+                  },
                 ),
               ),
             ],
@@ -93,12 +141,14 @@ class _CapacitySummary extends StatelessWidget {
     required this.joined,
     required this.capacity,
     required this.fillRatio,
+    required this.onlineCount,
   });
 
   final String activityTitle;
   final int joined;
   final int capacity;
   final double fillRatio;
+  final int onlineCount;
 
   @override
   Widget build(BuildContext context) {
@@ -141,6 +191,33 @@ class _CapacitySummary extends StatelessWidget {
               ),
             ],
           ),
+          // Online-now chip. Only renders when the polling stream
+          // has produced a non-zero count — avoids flashing "0
+          // online" during the first poll cycle.
+          if (onlineCount > 0) ...[
+            const SizedBox(height: AppSpacing.x2),
+            Row(
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: AppColors.success,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.x2),
+                Text(
+                  onlineCount == 1
+                      ? '1 person online now'
+                      : '$onlineCount people online now',
+                  style: AppTypography.bodySmall(context).copyWith(
+                    color: context.colors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: AppSpacing.x2),
           ClipRRect(
             borderRadius: BorderRadius.circular(AppRadius.xs),
@@ -164,8 +241,9 @@ class _CapacitySummary extends StatelessWidget {
 }
 
 class _ParticipantCard extends StatelessWidget {
-  const _ParticipantCard({required this.item});
+  const _ParticipantCard({required this.item, required this.isOnline});
   final ActivityParticipant item;
+  final bool isOnline;
 
   @override
   Widget build(BuildContext context) {
@@ -186,13 +264,41 @@ class _ParticipantCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(AppRadius.lg),
-              child: Image.asset(
-                'assets/images/discovery/avatars/${item.avatarAsset}',
-                width: 44,
-                height: 44,
-                fit: BoxFit.cover,
+            // Avatar + online dot overlay
+            SizedBox(
+              width: 44,
+              height: 44,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(AppRadius.lg),
+                    // Prefer the backend photo URL when the user has
+                    // one; otherwise AppAvatar renders their initials.
+                    child: AppAvatar(
+                      imageUrl: item.avatarUrl,
+                      name: item.name,
+                      size: AppAvatarSize.md,
+                    ),
+                  ),
+                  if (isOnline)
+                    Positioned(
+                      right: -2,
+                      bottom: -2,
+                      child: Container(
+                        width: 14,
+                        height: 14,
+                        decoration: BoxDecoration(
+                          color: AppColors.success,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: context.colors.surface,
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
             const SizedBox(width: AppSpacing.x3),

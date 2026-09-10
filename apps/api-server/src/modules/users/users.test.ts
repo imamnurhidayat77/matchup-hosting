@@ -11,6 +11,7 @@ vi.mock('./users.service.js', () => {
     getUserByAuthUid: vi.fn(),
     updateUserProfile: vi.fn(),
     getPublicUserProfile: vi.fn(),
+    mintCustomToken: vi.fn().mockResolvedValue('custom-token-1'),
   };
 });
 
@@ -498,6 +499,42 @@ describe('users routes', () => {
       const app = createApp();
 
       const response = await request(app).get('/api/users/test-uid-1/profile');
+
+      expect(response.status).toBe(500);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: 'Unknown error',
+        },
+      });
+    });
+  });
+
+  describe('POST /api/users/custom-token', () => {
+    it('when authenticated => expected 200 with custom token', async () => {
+      const app = createApp();
+
+      const response = await request(app).post('/api/users/custom-token').send({});
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        ok: true,
+        data: {
+          customToken: 'custom-token-1',
+        },
+      });
+      expect(usersService.mintCustomToken).toHaveBeenCalledWith('test-uid-1');
+    });
+
+    it('when service throws unknown error => expected 500 w/ INTERNAL_ERROR', async () => {
+      vi.mocked(usersService.mintCustomToken).mockRejectedValueOnce(
+        new Error('Unknown error'),
+      );
+
+      const app = createApp();
+
+      const response = await request(app).post('/api/users/custom-token').send({});
 
       expect(response.status).toBe(500);
       expect(response.body).toEqual({

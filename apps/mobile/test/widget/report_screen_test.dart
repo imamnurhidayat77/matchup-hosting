@@ -14,6 +14,9 @@ class _FakeReportRepository implements ReportRepository {
   String? lastReason;
   String? lastDetails;
 
+  /// When true, [submit] throws to simulate a backend/network failure.
+  bool shouldThrow = false;
+
   @override
   Future<void> submit({
     required String targetId,
@@ -26,6 +29,7 @@ class _FakeReportRepository implements ReportRepository {
     lastTargetType = targetType;
     lastReason = reason;
     lastDetails = details;
+    if (shouldThrow) throw Exception('submission failed');
   }
 }
 
@@ -65,7 +69,11 @@ void main() {
     ) async {
       await pumpSheet(
         tester,
-        (context) => ReportUserSheet.show(context, userName: 'Jamal Osei'),
+        (context) => ReportUserSheet.show(
+          context,
+          userId: 'user-7',
+          userName: 'Jamal Osei',
+        ),
       );
 
       expect(find.text('Report User'), findsOneWidget);
@@ -78,7 +86,11 @@ void main() {
     testWidgets('warns when submitting without a reason', (tester) async {
       final fake = await pumpSheet(
         tester,
-        (context) => ReportUserSheet.show(context, userName: 'Jamal Osei'),
+        (context) => ReportUserSheet.show(
+          context,
+          userId: 'user-7',
+          userName: 'Jamal Osei',
+        ),
       );
 
       await tester.tap(find.text('Submit Report'));
@@ -90,10 +102,16 @@ void main() {
       expect(find.text('Report User'), findsOneWidget);
     });
 
-    testWidgets('submits the selected reason and closes', (tester) async {
+    testWidgets('submits the backend uid, not the display name, and closes', (
+      tester,
+    ) async {
       final fake = await pumpSheet(
         tester,
-        (context) => ReportUserSheet.show(context, userName: 'Jamal Osei'),
+        (context) => ReportUserSheet.show(
+          context,
+          userId: 'user-7',
+          userName: 'Jamal Osei',
+        ),
       );
 
       await tester.tap(find.text('Harassment'));
@@ -102,11 +120,41 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(fake.calls, 1);
-      expect(fake.lastTargetId, 'Jamal Osei');
+      expect(fake.lastTargetId, 'user-7');
       expect(fake.lastTargetType, ReportTargetType.user);
       expect(fake.lastReason, 'Harassment');
       expect(find.text('Report User'), findsNothing);
       expect(find.text('Report submitted. Thank you.'), findsOneWidget);
+    });
+
+    testWidgets('shows an error and stays open when submission fails', (
+      tester,
+    ) async {
+      final fake = await pumpSheet(
+        tester,
+        (context) => ReportUserSheet.show(
+          context,
+          userId: 'user-7',
+          userName: 'Jamal Osei',
+        ),
+      );
+      fake.shouldThrow = true;
+
+      await tester.tap(find.text('Harassment'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Submit Report'));
+      await tester.pumpAndSettle();
+
+      expect(fake.calls, 1);
+      // Sheet stays open and no success is claimed.
+      expect(find.text('Report User'), findsOneWidget);
+      expect(
+        find.text(
+          'Could not submit report. Check your connection and try again.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Report submitted. Thank you.'), findsNothing);
     });
   });
 
@@ -114,8 +162,11 @@ void main() {
     testWidgets('renders the activity title and reasons', (tester) async {
       await pumpSheet(
         tester,
-        (context) =>
-            ReportActivitySheet.show(context, activityTitle: 'Morning Run'),
+        (context) => ReportActivitySheet.show(
+          context,
+          activityId: 'act-3',
+          activityTitle: 'Morning Run',
+        ),
       );
 
       expect(find.text('Report Activity'), findsOneWidget);
@@ -124,11 +175,16 @@ void main() {
       expect(find.text('Submit Report'), findsOneWidget);
     });
 
-    testWidgets('submits the selected reason and closes', (tester) async {
+    testWidgets('submits the backend id, not the title, and closes', (
+      tester,
+    ) async {
       final fake = await pumpSheet(
         tester,
-        (context) =>
-            ReportActivitySheet.show(context, activityTitle: 'Morning Run'),
+        (context) => ReportActivitySheet.show(
+          context,
+          activityId: 'act-3',
+          activityTitle: 'Morning Run',
+        ),
       );
 
       await tester.tap(find.text('Spam / Fake activity'));
@@ -137,11 +193,40 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(fake.calls, 1);
-      expect(fake.lastTargetId, 'Morning Run');
+      expect(fake.lastTargetId, 'act-3');
       expect(fake.lastTargetType, ReportTargetType.activity);
       expect(fake.lastReason, 'Spam / Fake activity');
       expect(find.text('Report Activity'), findsNothing);
       expect(find.text('Report submitted. Thank you.'), findsOneWidget);
+    });
+
+    testWidgets('shows an error and stays open when submission fails', (
+      tester,
+    ) async {
+      final fake = await pumpSheet(
+        tester,
+        (context) => ReportActivitySheet.show(
+          context,
+          activityId: 'act-3',
+          activityTitle: 'Morning Run',
+        ),
+      );
+      fake.shouldThrow = true;
+
+      await tester.tap(find.text('Spam / Fake activity'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Submit Report'));
+      await tester.pumpAndSettle();
+
+      expect(fake.calls, 1);
+      expect(find.text('Report Activity'), findsOneWidget);
+      expect(
+        find.text(
+          'Could not submit report. Check your connection and try again.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Report submitted. Thank you.'), findsNothing);
     });
   });
 }

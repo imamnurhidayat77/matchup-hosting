@@ -7,16 +7,21 @@ class ActivityParticipant {
   const ActivityParticipant({
     required this.userId,
     required this.name,
-    required this.avatarAsset,
+    this.avatarAsset,
     required this.skillLevel,
     required this.joinedAt,
     required this.isOrganizer,
     this.isCheckedIn = false,
+    this.avatarUrl,
   });
 
   final String userId;
   final String name;
-  final String avatarAsset;
+
+  /// Bundled asset filename (e.g. `'avatar_1.png'`) for legacy payloads
+  /// only. Always null for live backend data — renderers must prefer
+  /// [avatarUrl] and fall back to initials, never to a stock face.
+  final String? avatarAsset;
   final String skillLevel;
   final DateTime joinedAt;
   final bool isOrganizer;
@@ -24,4 +29,8 @@ class ActivityParticipant {
   /// Whether the host has recorded this participant as checked in at the
   /// venue. Surfaced on the Manage Activity screen's roster.
   final bool isCheckedIn;
+
+  /// Remote photo URL from the backend profile (`photoUrl`), if the user
+  /// uploaded one. Takes precedence over [avatarAsset] at render time.
+  final String? avatarUrl;
 }

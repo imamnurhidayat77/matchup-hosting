@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/providers/repository_providers.dart';
 import '../../../core/services/location_service.dart';
+import '../../../core/storage/secure_token_store.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
@@ -19,21 +21,72 @@ import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
+import '../../activities/domain/activity_model.dart';
+import '../../activities/domain/activity_participant.dart';
+import '../data/typing_repository.dart';
 import '../domain/chat_message.dart';
 import 'chat_attachment_sheet.dart';
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
-final _messagesProvider = FutureProvider.autoDispose
+/// Real-time message stream for [id] (the activity id).
+///
+/// Wraps `ChatRepository.watchMessages` in a [StreamProvider] so the chat
+/// screen can `ref.watch` it and rebuild on every new message. With the
+/// remote implementation, the stream is backed by Firebase RTDB
+/// (`activityChats/{id}/messages`); when Firebase isn't configured, the
+/// remote falls back to HTTP polling every 3 seconds.
+final _messagesStreamProvider = StreamProvider.autoDispose
     .family<List<ChatMessage>, String>((ref, id) {
-      return ref.watch(chatRepositoryProvider).messages(id);
+      return ref.watch(chatRepositoryProvider).watchMessages(id);
     });
+
+/// Fetches the activity for the chat header. Returns the full
+/// [ActivityModel] (which carries the title and the participant
+/// roster — both of which the header needs to render the subtitle
+/// and the typing display).
+final _activityProvider = FutureProvider.autoDispose
+    .family<ActivityModel?, String>((ref, id) {
+      return ref.watch(activityRepositoryProvider).byId(id);
+    });
+
+/// Fetches the participant roster for the chat. Used to populate
+/// [otherUids] for the typing display so the screen polls the right
+/// uids instead of a hardcoded demo list.
+final _participantsProvider = FutureProvider.autoDispose
+    .family<List<ActivityParticipant>, String>((ref, activityId) {
+      return ref.watch(activityRepositoryProvider).participants(activityId);
+    });
+
+/// Polls `GET /api/typing/:activityId/:uid` for every member of the
+/// chat and emits the subset that's currently typing.
+///
+/// [otherUids] is the list of participants *excluding* the current
+/// user — the chat screen filters the activity's participants down
+/// before calling. The polling cadence is 2 seconds
+/// (per [RemoteTypingRepository.watchTyping]).
+///
+/// Keyed on a record `(activityId, otherUids)` so the cache is
+/// re-used when only the input list changes (typical when a new
+/// participant joins).
+final _typingUidsProvider = StreamProvider.autoDispose
+    .family<Set<String>, ({String activityId, List<String> otherUids})>(
+        (ref, args) {
+  return ref.watch(typingRepositoryProvider).watchTyping(
+        activityId: args.activityId,
+        uids: args.otherUids,
+      );
+});
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
 class ChatScreen extends ConsumerStatefulWidget {
-  const ChatScreen({super.key, required this.activityTitle});
-  final String activityTitle;
+  /// Backend activity id — the screen uses this to look up the
+  /// activity (for its title and participants) and to hit every
+  /// `/api/chat/{id}/...` endpoint. The route `/chat/:id` is
+  /// responsible for passing the real id, not the title.
+  const ChatScreen({super.key, required this.activityId});
+  final String activityId;
 
   @override
   ConsumerState<ChatScreen> createState() => _ChatScreenState();
@@ -45,23 +98,118 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _focusNode = FocusNode();
   bool _hasText = false;
 
-  String get _id => widget.activityTitle;
+  /// Tracks whether we've already announced `_id` as "I'm typing" to
+  /// the backend. Flips to `true` on first keystroke and back to
+  /// `false` when we send or stop typing.
+  bool _isAnnouncedTyping = false;
+
+  /// Debounce timer for the "I'm typing" announcement. We wait 500ms
+  /// after the first keystroke before POSTing — typing a one-word
+  /// reply shouldn't fire a write for every letter.
+  Timer? _typingDebounce;
+
+  /// Stops the typing announcement after 3s of no further keystrokes.
+  /// Mirrors the WhatsApp / iMessage pattern so the server-side
+  /// typing row gets cleared even if the user backgrounds the app
+  /// mid-sentence.
+  Timer? _typingStopTimer;
+
+  String get _id => widget.activityId;
+
+  /// How long after the last keystroke to keep the typing indicator
+  /// alive before automatically clearing it.
+  static const Duration _typingStopAfter = Duration(seconds: 3);
+
+  /// Debounce before announcing "I'm typing" to the backend.
+  static const Duration _typingDebounceAfter = Duration(milliseconds: 500);
 
   @override
   void initState() {
     super.initState();
-    _msgController.addListener(() {
-      final has = _msgController.text.trim().isNotEmpty;
-      if (has != _hasText) setState(() => _hasText = has);
-    });
+    // Capture the typing repository before any dispose can happen —
+    // `ref.read` is illegal inside `dispose()` once the element is
+    // deactivated (Riverpod throws "Cannot use ref after the widget
+    // was disposed").
+    _typingRepo = ref.read(typingRepositoryProvider);
+    _msgController.addListener(_onInputChanged);
   }
+
+  TypingRepository? _typingRepo;
 
   @override
   void dispose() {
+    _typingDebounce?.cancel();
+    _typingStopTimer?.cancel();
+    _msgController.removeListener(_onInputChanged);
     _msgController.dispose();
     _scrollController.dispose();
     _focusNode.dispose();
+    // Best-effort: clear the typing row when leaving the chat so
+    // other users don't see "Sarah is typing..." stuck on forever.
+    // Uses the repository captured in `initState` — never `ref`.
+    final repo = _typingRepo;
+    if (repo != null) {
+      unawaited(repo.setTyping(activityId: _id, isTyping: false));
+    }
     super.dispose();
+  }
+
+  /// Called on every keystroke. Coalesces rapid input into a single
+  /// "I'm typing" announcement, and schedules an automatic stop after
+  /// 3s of silence.
+  void _onInputChanged() {
+    final has = _msgController.text.trim().isNotEmpty;
+    if (has != _hasText) {
+      // Only `setState` when the visible "send button enabled" state
+      // actually changes — not on every keystroke.
+      setState(() => _hasText = has);
+    }
+    if (!has) {
+      // Field emptied (either sent or backspaced) → stop the
+      // announcement immediately.
+      _typingDebounce?.cancel();
+      _typingStopTimer?.cancel();
+      if (_isAnnouncedTyping) {
+        _isAnnouncedTyping = false;
+        unawaited(
+          ref
+              .read(typingRepositoryProvider)
+              .setTyping(activityId: _id, isTyping: false),
+        );
+      }
+      return;
+    }
+
+    // Schedule a "start typing" announcement if we haven't already.
+    if (!_isAnnouncedTyping) {
+      _typingDebounce?.cancel();
+      _typingDebounce = Timer(_typingDebounceAfter, () {
+        if (!mounted) return;
+        if (!_isAnnouncedTyping && _msgController.text.trim().isNotEmpty) {
+          _isAnnouncedTyping = true;
+          unawaited(
+            ref
+                .read(typingRepositoryProvider)
+                .setTyping(activityId: _id, isTyping: true),
+          );
+        }
+      });
+    }
+
+    // (Re)arm the auto-stop timer — if the user pauses for 3s, the
+    // server should know they stopped.
+    _typingStopTimer?.cancel();
+    _typingStopTimer = Timer(_typingStopAfter, () {
+      if (!mounted) return;
+      if (_isAnnouncedTyping) {
+        _isAnnouncedTyping = false;
+        unawaited(
+          ref
+              .read(typingRepositoryProvider)
+              .setTyping(activityId: _id, isTyping: false),
+        );
+      }
+    });
   }
 
   Future<void> _send() async {
@@ -69,11 +217,36 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (text.isEmpty) return;
     HapticFeedback.lightImpact();
     _msgController.clear();
+    // Stop the typing indicator immediately — the message itself
+    // proves the user finished typing. The listener in _onInputChanged
+    // will see the empty field and *also* try to clear, but the
+    // repository's `setTyping` is idempotent so the duplicate write
+    // is harmless.
+    _typingDebounce?.cancel();
+    _typingStopTimer?.cancel();
+    if (_isAnnouncedTyping) {
+      _isAnnouncedTyping = false;
+      unawaited(
+        ref
+            .read(typingRepositoryProvider)
+            .setTyping(activityId: _id, isTyping: false),
+      );
+    }
     try {
       await ref.read(chatRepositoryProvider).send(activityId: _id, text: text);
-      ref.invalidate(_messagesProvider(_id));
+      // The new RTDB / polling listener will pick up the message
+      // automatically — no invalidate needed.
       _scrollToBottom();
-    } catch (_) {}
+    } catch (_) {
+      if (!mounted) return;
+      // Restore the draft so the user doesn't lose what they typed.
+      _msgController.text = text;
+      AppSnackbar.show(
+        context,
+        message: 'Could not send message. Check your connection and try again.',
+        variant: AppSnackbarVariant.error,
+      );
+    }
   }
 
   void _scrollToBottom() {
@@ -111,7 +284,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       await ref
           .read(chatRepositoryProvider)
           .sendImage(activityId: _id, imagePath: picked.path);
-      ref.invalidate(_messagesProvider(_id));
+      // New message will arrive via the RTDB / polling stream.
       _scrollToBottom();
     } catch (_) {
       if (!mounted) return;
@@ -142,7 +315,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         latitude: position.latitude,
         longitude: position.longitude,
       );
-      ref.invalidate(_messagesProvider(_id));
+      // New message will arrive via the RTDB / polling stream.
       _scrollToBottom();
     } catch (_) {
       if (!mounted) return;
@@ -156,12 +329,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Fetch the activity once on first build to get the title for the
+    // header. Subsequent rebuilds reuse the cached value; refresh
+    // is automatic via Riverpod's invalidation if the user navigates
+    // back to the chat.
+    final activityAsync = ref.watch(_activityProvider(widget.activityId));
+    final title = activityAsync.valueOrNull?.title ?? 'Chat';
+
     return AppScaffold(
       showHomeIndicator: false,
       backgroundColor: context.colors.background,
       body: Column(
         children: [
-          _Header(title: widget.activityTitle),
+          _Header(title: title, activityId: widget.activityId),
           _MatchBanner(),
           Expanded(
             child: _MessageList(
@@ -184,12 +364,53 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
 // ─── Header ──────────────────────────────────────────────────────────────────
 
-class _Header extends StatelessWidget {
-  const _Header({required this.title});
+class _Header extends ConsumerWidget {
+  const _Header({required this.title, required this.activityId});
   final String title;
+  final String activityId;
+
+  /// Maps a backend uid to a friendly display name. Used by the typing
+  /// indicator so "alex is typing..." reads as "Alex is typing..."
+  /// rather than the raw auth uid. Populated from the participants
+  /// roster; falls back to the uid for unknown senders.
+  String _displayName(ActivityParticipant p) {
+    final n = p.name.trim();
+    if (n.isEmpty || n == p.userId) return p.userId;
+    // First name only — "Alex Mercer" → "Alex"
+    final first = n.split(RegExp(r'\s+')).first;
+    return first.isEmpty ? n : first;
+  }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Exclude self from the typing poll — no "you are typing…"
+    // indicator needed. Both lists below come from memoized providers
+    // (stable instances!) so the typing stream subscribes exactly once
+    // — never build the uid list inline here.
+    final myUid = ref.watch(_myUidProvider).valueOrNull;
+    final otherUids = ref.watch(
+      _chatOtherUidsProvider((activityId: activityId, myUid: myUid)),
+    );
+    final participants =
+        ref.watch(_participantsProvider(activityId)).valueOrNull ??
+            const <ActivityParticipant>[];
+
+    // Watch the typing stream for the real participant uids.
+    final typing = ref
+        .watch(_typingUidsProvider(
+            (activityId: activityId, otherUids: otherUids)))
+        .valueOrNull ??
+        const <String>{};
+
+    // Build a uid → name lookup from the roster so we can show
+    // "Alex is typing…" instead of "alex is typing…".
+    final nameByUid = <String, String>{
+      for (final p in participants)
+        if (p.userId != myUid) p.userId: _displayName(p),
+    };
+
+    final subtitle = _buildSubtitle(typing, nameByUid, participants.length);
+
     return Container(
       color: context.colors.surface,
       padding: const EdgeInsets.fromLTRB(
@@ -226,7 +447,7 @@ class _Header extends StatelessWidget {
           ),
           const SizedBox(width: AppSpacing.x3),
 
-          // Title + members
+          // Title + members / typing
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -238,11 +459,20 @@ class _Header extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  'Alex, Marcus, Sarah, +5 others',
-                  style: AppTypography.metaSub(context),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  child: Text(
+                    subtitle,
+                    key: ValueKey(subtitle),
+                    style: typing.isNotEmpty
+                        ? AppTypography.metaSub(context).copyWith(
+                            color: context.colors.primaryOnSurface,
+                            fontStyle: FontStyle.italic,
+                          )
+                        : AppTypography.metaSub(context),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ],
             ),
@@ -276,7 +506,70 @@ class _Header extends StatelessWidget {
       ),
     );
   }
+
+  /// Builds the subtitle string — either a "X is typing..." message
+  /// or a static members line. Names are resolved from the roster
+  /// (passed in as [nameByUid]).
+  String _buildSubtitle(
+    Set<String> typing,
+    Map<String, String> nameByUid,
+    int totalParticipants,
+  ) {
+    if (typing.isNotEmpty) {
+      final names = typing
+          .map((uid) => nameByUid[uid] ?? uid)
+          .toList(growable: false);
+      if (names.length == 1) return '${names.first} is typing…';
+      if (names.length == 2) {
+        return '${names[0]} and ${names[1]} are typing…';
+      }
+      return '${names.length} people are typing…';
+    }
+    if (totalParticipants == 0) return 'Just you';
+    if (totalParticipants == 1) return 'Just you';
+    if (totalParticipants == 2) {
+      final first = nameByUid.values.isNotEmpty
+          ? nameByUid.values.first
+          : '1 other';
+      return 'You and $first';
+    }
+    final shown = nameByUid.values.take(3).join(', ');
+    final more = totalParticipants - 4; // shown 3 + me
+    return more > 0
+        ? '$shown, +$more others'
+        : 'You, $shown';
+  }
 }
+
+/// Resolves the current user's Firebase auth uid from secure storage.
+/// Used to filter "self" out of the typing display so we don't show
+/// "You are typing…" to ourselves.
+final _myUidProvider = FutureProvider<String?>((ref) async {
+  return SecureTokenStore.instance.readUserId();
+});
+
+/// Memoized "other participants" uid list for the typing indicator.
+///
+/// Same identity-stability contract as `_rosterUidsProvider` in the
+/// participants screen: `_typingUidsProvider` is a stream family keyed
+/// on this list, and a freshly built list every `build` would
+/// resubscribe → fetch → rebuild in an infinite loop. A plain
+/// `Provider` caches until the roster or uid changes, so subscribers
+/// observe one stable instance.
+final _chatOtherUidsProvider = Provider.autoDispose
+    .family<List<String>, ({String activityId, String? myUid})>((
+      ref,
+      args,
+    ) {
+  final roster =
+      ref.watch(_participantsProvider(args.activityId)).valueOrNull ??
+          const <ActivityParticipant>[];
+  return roster
+      .where((p) => p.userId != args.myUid)
+      .map((p) => p.userId)
+      .where((id) => id.isNotEmpty)
+      .toList(growable: false);
+});
 
 // ─── Match banner ─────────────────────────────────────────────────────────────
 
@@ -446,12 +739,12 @@ class _MessageList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(_messagesProvider(id));
+    final async = ref.watch(_messagesStreamProvider(id));
     return async.when(
       loading: () => const SkeletonList(count: 5),
       error: (_, _) => ErrorRetry(
         message: 'Could not load messages.',
-        onRetry: () => ref.invalidate(_messagesProvider(id)),
+        onRetry: () => ref.invalidate(_messagesStreamProvider(id)),
       ),
       data: (messages) {
         if (messages.isEmpty) {
@@ -561,6 +854,7 @@ class _Bubble extends StatelessWidget {
                   width: 36,
                   child: item.showAvatar
                       ? AppAvatar(
+                          imageUrl: msg.senderAvatarUrl,
                           assetPath: msg.senderAvatarAsset,
                           name: msg.senderName,
                           size: AppAvatarSize.sm,

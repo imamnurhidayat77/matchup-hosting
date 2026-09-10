@@ -11,19 +11,29 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/widgets/app_avatar.dart';
 import '../../../core/widgets/app_icon.dart';
+import '../../../core/widgets/asset_image.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../../activities/domain/activity_model.dart';
+import '../../activities/domain/activity_participant.dart';
 import '../../report/presentation/report_activity_sheet.dart';
+import 'widgets/venue_map_card.dart';
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 final _activityDetailProvider = FutureProvider.autoDispose
     .family<ActivityModel?, String>((ref, id) {
       return ref.watch(activityRepositoryProvider).byId(id);
+    });
+
+/// Live roster for the avatar stack. Rendered faces always come from
+/// this provider — never from bundled stock photos.
+final _rosterProvider = FutureProvider.autoDispose
+    .family<List<ActivityParticipant>, String>((ref, activityId) {
+      return ref.watch(activityRepositoryProvider).participants(activityId);
     });
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
@@ -99,12 +109,18 @@ class _DetailBody extends ConsumerStatefulWidget {
 
 class _DetailBodyState extends ConsumerState<_DetailBody> {
   bool _joining = false;
+
+  /// Tracks a just-sent join request locally so the button flips to
+  /// "pending" immediately. Initialised from the backend viewer context
+  /// (`joinRequestStatus`) for requests sent on another device/session.
+  bool _requestPending = false;
   final ScrollController _scrollController = ScrollController();
   bool _hasMoreBelow = true;
 
   @override
   void initState() {
     super.initState();
+    _requestPending = widget.activity.hasPendingRequest;
     _scrollController.addListener(_updateFadeVisibility);
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _updateFadeVisibility(),
@@ -131,6 +147,21 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     HapticFeedback.mediumImpact();
     setState(() => _joining = true);
     try {
+      // Approval-gated activities file a join request instead of
+      // joining outright; withdrawing a pending request goes through
+      // leave (the backend cancels it server-side).
+      if (widget.activity.requiresApproval && !_requestPending) {
+        await ref.read(activityRepositoryProvider).requestJoin(widget.activityId);
+        if (!mounted) return;
+        HapticFeedback.heavyImpact();
+        setState(() => _requestPending = true);
+        AppSnackbar.show(
+          context,
+          message: 'Request sent! The host will review it soon.',
+          variant: AppSnackbarVariant.success,
+        );
+        return;
+      }
       await ref.read(activityRepositoryProvider).join(widget.activityId);
       if (!mounted) return;
       HapticFeedback.heavyImpact();
@@ -144,7 +175,9 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       if (!mounted) return;
       AppSnackbar.show(
         context,
-        message: 'Could not join. Please try again.',
+        message: widget.activity.requiresApproval && !_requestPending
+            ? 'Could not send request. Please try again.'
+            : 'Could not join. Please try again.',
         variant: AppSnackbarVariant.error,
       );
     } finally {
@@ -169,6 +202,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       bottomBar: _ActionBar(
         activity: widget.activity,
         joining: _joining,
+        requestPending: _requestPending,
         onDislike: () => Navigator.of(context).maybePop(),
         onJoin: _onJoin,
       ),
@@ -232,6 +266,12 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                       const SizedBox(height: AppSpacing.x3),
                       _MetaCard(activity: a),
                       const SizedBox(height: AppSpacing.x5),
+                      // Venue map only when the activity carries
+                      // coordinates — older rows may not have them.
+                      if (a.latitude != null && a.longitude != null) ...[
+                        VenueMapCard(activity: a),
+                        const SizedBox(height: AppSpacing.x5),
+                      ],
                       Text(
                         'About this Activity',
                         style: AppTypography.titleMedium(context),
@@ -272,12 +312,11 @@ class _Hero extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // Cover image
+          // Cover image (bundled asset or remote Storage URL)
           activity.coverImageUrl != null
-              ? Image.asset(
-                  activity.coverImageUrl!,
+              ? AssetImageWithFallback(
+                  imagePath: activity.coverImageUrl!,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => _placeholder(),
                 )
               : _placeholder(),
 
@@ -477,7 +516,6 @@ class _HostCard extends StatelessWidget {
       child: Row(
         children: [
           AppAvatar(
-            assetPath: 'assets/images/discovery/avatars/avatar_alex.png',
             name: hostName,
             size: AppAvatarSize.sm,
           ),
@@ -685,63 +723,80 @@ class _ParticipantsSection extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.x3),
-        _ParticipantAvatars(count: activity.participantCount),
+        _ParticipantAvatars(activityId: activity.id),
       ],
     );
   }
 }
 
 /// Overlapping participant avatars with a `+N` overflow badge.
-class _ParticipantAvatars extends StatelessWidget {
-  const _ParticipantAvatars({required this.count});
-  final int count;
+///
+/// Faces come from the live roster (`activityRepository.participants`):
+/// backend photo when the user has one, initials otherwise. While the
+/// roster loads or fails, nothing fake is shown.
+class _ParticipantAvatars extends ConsumerWidget {
+  const _ParticipantAvatars({required this.activityId});
+  final String activityId;
 
   static const double _size = 32;
   static const double _step = 22;
   static const int _maxVisible = 4;
 
-  static const _faces = [
-    'assets/images/discovery/avatars/avatar_1.png',
-    'assets/images/discovery/avatars/avatar_2.png',
-    'assets/images/discovery/avatars/avatar_3.png',
-    'assets/images/discovery/avatars/avatar_alex.png',
-  ];
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final roster = ref.watch(_rosterProvider(activityId));
+
+    return roster.when(
+      loading: () => const SizedBox(height: _size),
+      error: (_, _) => const SizedBox(height: _size),
+      data: (members) {
+        if (members.isEmpty) {
+          return Text(
+            'No one has joined yet',
+            style: AppTypography.metaSub(context),
+          );
+        }
+        final visible = members.take(_maxVisible).toList();
+        final overflow = members.length - visible.length;
+        return _AvatarStack(
+          members: visible,
+          overflow: overflow,
+        );
+      },
+    );
+  }
+}
+
+/// Overlapping avatar row shared by the roster-backed stacks.
+class _AvatarStack extends StatelessWidget {
+  const _AvatarStack({required this.members, required this.overflow});
+  final List<ActivityParticipant> members;
+  final int overflow;
 
   @override
   Widget build(BuildContext context) {
-    final visible = count.clamp(0, _maxVisible);
-    final overflow = count - visible;
-    final slots = visible + (overflow > 0 ? 1 : 0);
-
-    if (slots == 0) {
-      return Text(
-        'No one has joined yet',
-        style: AppTypography.metaSub(context),
-      );
-    }
+    final slots = members.length + (overflow > 0 ? 1 : 0);
 
     return SizedBox(
-      height: _size,
-      width: _step * (slots - 1) + _size,
+      height: _ParticipantAvatars._size,
+      width: _ParticipantAvatars._step * (slots - 1) +
+          _ParticipantAvatars._size,
       child: Stack(
         children: [
-          for (var i = 0; i < visible; i++)
+          for (var i = 0; i < members.length; i++)
             Positioned(
-              left: i * _step,
+              left: i * _ParticipantAvatars._step,
               child: _Ring(
-                child: Image.asset(
-                  _faces[i % _faces.length],
-                  width: _size,
-                  height: _size,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) =>
-                      ColoredBox(color: context.colors.avatarNeutral),
+                child: AppAvatar(
+                  imageUrl: members[i].avatarUrl,
+                  name: members[i].name,
+                  size: AppAvatarSize.sm,
                 ),
               ),
             ),
           if (overflow > 0)
             Positioned(
-              left: visible * _step,
+              left: members.length * _ParticipantAvatars._step,
               child: _Ring(
                 child: ColoredBox(
                   color: context.colors.border,
@@ -791,6 +846,7 @@ class _ReportButton extends StatelessWidget {
     return PressableScale(
       onTap: () => ReportActivitySheet.show(
         context,
+        activityId: activity.id,
         activityTitle: activity.title,
       ),
       child: Container(
@@ -828,17 +884,27 @@ class _ActionBar extends StatelessWidget {
   const _ActionBar({
     required this.activity,
     required this.joining,
+    required this.requestPending,
     required this.onDislike,
     required this.onJoin,
   });
   final ActivityModel activity;
   final bool joining;
+
+  /// A sent-but-undecided join request. Renders a disabled pill so the
+  /// user knows the host still has to act.
+  final bool requestPending;
   final VoidCallback onDislike;
   final VoidCallback onJoin;
 
   @override
   Widget build(BuildContext context) {
-    final canJoin = !activity.isFull;
+    final canJoin = !activity.isFull && !requestPending;
+    final joinLabel = requestPending
+        ? 'Request pending'
+        : activity.requiresApproval
+            ? 'Request to Join'
+            : (canJoin ? 'Join Game' : 'Activity Full');
 
     return Container(
       padding: const EdgeInsets.fromLTRB(
@@ -883,7 +949,9 @@ class _ActionBar extends StatelessWidget {
           Expanded(
             child: Semantics(
               button: true,
-              label: canJoin ? 'Join Game' : 'Activity is full',
+              label: requestPending
+                  ? 'Join request pending'
+                  : (canJoin ? 'Join Game' : 'Activity is full'),
               child: PressableScale(
                 onTap: canJoin ? onJoin : null,
                 child: Container(
@@ -908,7 +976,7 @@ class _ActionBar extends StatelessWidget {
                           ),
                         )
                       : Text(
-                          canJoin ? 'Join Game' : 'Activity Full',
+                          joinLabel,
                           style: AppTypography.buttonPrimary.copyWith(
                             color: AppColors.textOnPrimary,
                           ),

@@ -1,5 +1,5 @@
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
-import { firestore } from '../../database/firebase.js';
+import { auth, firestore } from '../../database/firebase.js';
 
 export type BootstrapUserInput = {
   authUid: string;
@@ -10,6 +10,11 @@ export type BootstrapUserResult = {
   authUid: string;
   email: string;
   created: boolean;
+};
+
+export type SportRatingAggregate = {
+  average: number;
+  count: number;
 };
 
 export type UserRecord = {
@@ -26,6 +31,8 @@ export type UserRecord = {
   preferredSports?: string[];
   preferredLocations?: string[];
   profileCompleted?: boolean;
+  ratingBySport?: Record<string, SportRatingAggregate>;
+  totalRatingCount?: number;
 };
 
 export type SkillLevel = 'beginner' | 'intermediate' | 'advanced' | 'any';
@@ -50,6 +57,8 @@ export type PublicUserProfile = {
   preferredSports?: string[];
   preferredLocations?: string[];
   profileCompleted?: boolean;
+  ratingBySport?: Record<string, SportRatingAggregate>;
+  totalRatingCount?: number;
 };
 
 function normalizeEmail(email: string): string {
@@ -71,6 +80,32 @@ function assertStringArray(value: unknown, fieldName: string): string[] {
   }
 
   return value;
+}
+
+function assertRatingBySport(value: unknown): Record<string, SportRatingAggregate> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error('Invalid user record: ratingBySport must be an object');
+  }
+
+  const result: Record<string, SportRatingAggregate> = {};
+
+  for (const [sport, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+      throw new Error(`Invalid user record: ratingBySport.${sport} must be an object`);
+    }
+
+    const { average, count } = entry as Record<string, unknown>;
+
+    if (typeof average !== 'number' || typeof count !== 'number') {
+      throw new Error(
+        `Invalid user record: ratingBySport.${sport} must have numeric average and count`,
+      );
+    }
+
+    result[sport] = { average, count };
+  }
+
+  return result;
 }
 
 function mapUserDoc(userDoc: FirebaseFirestore.DocumentSnapshot): UserRecord | null {
@@ -129,6 +164,12 @@ function mapUserDoc(userDoc: FirebaseFirestore.DocumentSnapshot): UserRecord | n
     ...(typeof data.profileCompleted === 'boolean'
       ? { profileCompleted: data.profileCompleted }
       : {}),
+    ...(data.ratingBySport !== undefined
+      ? { ratingBySport: assertRatingBySport(data.ratingBySport) }
+      : {}),
+    ...(typeof data.totalRatingCount === 'number'
+      ? { totalRatingCount: data.totalRatingCount }
+      : {}),
   };
 }
 
@@ -142,6 +183,8 @@ function toPublicUserProfile(user: UserRecord): PublicUserProfile {
     ...(user.preferredSports !== undefined ? { preferredSports: user.preferredSports } : {}),
     ...(user.preferredLocations !== undefined ? { preferredLocations: user.preferredLocations } : {}),
     ...(user.profileCompleted !== undefined ? { profileCompleted: user.profileCompleted } : {}),
+    ...(user.ratingBySport !== undefined ? { ratingBySport: user.ratingBySport } : {}),
+    ...(user.totalRatingCount !== undefined ? { totalRatingCount: user.totalRatingCount } : {}),
   };
 }
 
@@ -209,6 +252,16 @@ export async function bootstrapUser(input: BootstrapUserInput): Promise<Bootstra
       created: true,
     };
   });
+}
+
+export async function mintCustomToken(authUid: string): Promise<string> {
+  const normalizedAuthUid = authUid.trim();
+
+  if (!normalizedAuthUid) {
+    throw new Error('authUid is required');
+  }
+
+  return auth.createCustomToken(normalizedAuthUid);
 }
 
 export async function getUserByAuthUid(authUid: string): Promise<UserRecord | null> {
