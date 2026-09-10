@@ -678,10 +678,15 @@ Success `201`:
 {
   "ok": true,
   "data": {
-    "reportId": "generated-report-id"
+    "reportId": "generated-report-id",
+    "autoHidden": false
   }
 }
 ```
+
+`autoHidden` is true when the report pushed the target over the
+auto-hide threshold (3 distinct reporters) and the activity was
+flipped to `removed` pending human review.
 
 Errors:
 
@@ -691,6 +696,46 @@ Errors:
 - `400 INVALID_INPUT` if reporting yourself, or reason/details exceed length limits
 - `400 EMPTY_INPUT` if `targetId` or `reason` are blank
 - `404 NOT_FOUND` if the reported user or activity does not exist
+
+### `GET /api/reports` (admin)
+
+Triage-board listing, newest first. Requires an admin uid —
+comma-separated `ADMIN_UIDS` in the api-server `.env`
+(e.g. `ADMIN_UIDS=uid1,uid2`; empty denies everyone) —
+`403 FORBIDDEN` otherwise.
+
+Query params: `status=pending|resolved|dismissed` (optional),
+`limit` 1–100 (default 50).
+
+Success `200` — `data` is an array of:
+
+```json
+{
+  "id": "report-id",
+  "reporter": "Display Name",
+  "reporterAvatarSeed": "uid",
+  "target": "Sunday Run",
+  "targetType": "activity",
+  "reason": "Spam / Fake activity",
+  "category": "Spam",
+  "activityTitle": "Sunday Run",
+  "sport": "Running",
+  "status": "Pending",
+  "createdAt": "2026-09-10T12:00:00.000Z",
+  "adminNote": "optional",
+  "resolvedAt": "optional-iso"
+}
+```
+
+### `POST /api/reports/:id/resolve` (admin)
+
+Marks a pending report `resolved` with an optional admin note.
+Body: `{ "note": "optional, max 500 chars" }`. Success `200`.
+`404 NOT_FOUND` for unknown ids, `409 CONFLICT` when already triaged.
+
+### `POST /api/reports/:id/dismiss` (admin)
+
+Same contract as resolve, but marks the report `dismissed`.
 
 ---
 

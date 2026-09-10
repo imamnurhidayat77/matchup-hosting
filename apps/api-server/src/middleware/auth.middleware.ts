@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
-import { auth } from '../database/firebase.js'
+import { auth } from '../database/firebase.js';
+import { adminUids } from '../config/env.js';
 
 
 export async function requireAuth(
@@ -47,4 +48,37 @@ export async function requireAuth(
             },
         });
     }
+}
+
+/**
+ * Admin gate for triage routes (report list/resolve/dismiss). Must run
+ * after [requireAuth] — returns 401 without a verified uid, 403 when
+ * the uid is not in `ADMIN_UIDS`. An empty allowlist denies everyone
+ * (fail-closed) so the routes are safe by default.
+ */
+export function requireAdmin(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+) {
+    const uid = req.auth?.uid;
+    if (!uid) {
+        return res.status(401).json({
+            ok: false,
+            error: {
+                code: 'UNAUTHORIZED',
+                message: 'Authenticated user is required',
+            },
+        });
+    }
+    if (!adminUids().includes(uid)) {
+        return res.status(403).json({
+            ok: false,
+            error: {
+                code: 'FORBIDDEN',
+                message: 'Admin access is required',
+            },
+        });
+    }
+    next();
 }

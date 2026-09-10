@@ -3,9 +3,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('./reports.service.js', () => {
     return {
-        submitReport: vi.fn().mockResolvedValue({ reportId: 'report-1' }),
+        submitReport: vi
+            .fn()
+            .mockResolvedValue({ reportId: 'report-1', autoHidden: false }),
+        listReports: vi.fn().mockResolvedValue([]),
+        resolveReport: vi.fn().mockResolvedValue(undefined),
+        dismissReport: vi.fn().mockResolvedValue(undefined),
     };
 });
+
+let adminPass = true;
 
 vi.mock('../../middleware/auth.middleware.js', () => {
     return {
@@ -16,8 +23,22 @@ vi.mock('../../middleware/auth.middleware.js', () => {
             };
             next();
         }),
+        requireAdmin: vi.fn((req, res, next) => {
+            if (adminPass) {
+                next();
+                return;
+            }
+            res.status(403).json({
+                ok: false,
+                error: { code: 'FORBIDDEN', message: 'Admin access is required' },
+            });
+        }),
     };
 });
+
+export function __setAdminPass(value: boolean) {
+    adminPass = value;
+}
 
 import { createApp } from '../../app/app.js';
 import * as reportsService from './reports.service.js';
@@ -43,6 +64,7 @@ describe('reports routes', () => {
                 ok: true,
                 data: {
                     reportId: 'report-1',
+                    autoHidden: false,
                 },
             });
             expect(reportsService.submitReport).toHaveBeenCalledWith({
@@ -219,5 +241,109 @@ describe('reports routes', () => {
                 },
             });
         });
+    });
+});
+
+describe('triage routes (admin)', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        __setAdminPass(true);
+    });
+
+    it('GET /api/reports lists with status filter', async () => {
+        const app = createApp();
+
+        const response = await request(app).get('/api/reports?status=pending&limit=10');
+
+        expect(response.status).toBe(200);
+        expect(reportsService.listReports).toHaveBeenCalledWith({
+            status: 'pending',
+            limit: 10,
+        });
+    });
+
+    it('GET /api/reports rejects a bad status', async () => {
+        const app = createApp();
+
+        const response = await request(app).get('/api/reports?status=archived');
+
+        expect(response.status).toBe(400);
+    });
+
+    it('GET /api/reports returns 403 for non-admins', async () => {
+        __setAdminPass(false);
+        const app = createApp();
+
+        const response = await request(app).get('/api/reports');
+
+        expect(response.status).toBe(403);
+        expect(reportsService.listReports).not.toHaveBeenCalled();
+    });
+
+    it('POST /api/reports/:id/resolve forwards note', async () => {
+        const app = createApp();
+
+        const response = await request(app)
+            .post('/api/reports/r-1/resolve')
+            .send({ note: 'User warned' });
+
+        expect(response.status).toBe(200);
+        expect(reportsService.resolveReport).toHaveBeenCalledWith({
+            reportId: 'r-1',
+            adminUid: 'test-uid-1',
+            note: 'User warned',
+        });
+    });
+
+    it('POST /api/reports/:id/dismiss works without a note', async () => {
+        const app = createApp();
+
+        const response = await request(app)
+            .post('/api/reports/r-2/dismiss')
+            .send({});
+
+        expect(response.status).toBe(200);
+        expect(reportsService.dismissReport).toHaveBeenCalledWith({
+            reportId: 'r-2',
+            adminUid: 'test-uid-1',
+        });
+    });
+
+    it('POST /api/reports/:id/resolve maps missing to 404', async () => {
+        vi.mocked(reportsService.resolveReport).mockRejectedValueOnce(
+            new Error('Report not found'),
+        );
+        const app = createApp();
+
+        const response = await request(app)
+            .post('/api/reports/r-9/resolve')
+            .send({});
+
+        expect(response.status).toBe(404);
+    });
+
+    it('POST /api/reports/:id/resolve maps triaged to 409', async () => {
+        vi.mocked(reportsService.resolveReport).mockRejectedValueOnce(
+            new Error('Report is no longer pending'),
+        );
+        const app = createApp();
+
+        const response = await request(app)
+            .post('/api/reports/r-9/resolve')
+            .send({});
+
+        expect(response.status).toBe(409);
+    });
+
+    it('POST /api/reports/:id/dismiss returns 403 for non-admins', async () => {
+        __setAdminPass(false);
+        const app = createApp();
+
+        const response = await request(app)
+            .post('/api/reports/r-2/dismiss')
+            .send({});
+
+        expect(response.status).toBe(403);
+        expect(reportsService.dismissReport).not.toHaveBeenCalled();
     });
 });

@@ -17,6 +17,10 @@ const EnvSchema = z.object({
   FIREBASE_STORAGE_BUCKET: z
     .string()
     .regex(/^[a-z0-9][a-z0-9._-]*[a-z0-9]$/, 'FIREBASE_STORAGE_BUCKET must be a valid bucket name'),
+  // Comma-separated Firebase auth uids allowed onto admin-only routes
+  // (report triage). Empty = nobody is admin. Team members add their
+  // uid here; no console custom-claims step needed for the demo.
+  ADMIN_UIDS: z.string().default(''),
 });
 
 const parsed = EnvSchema.safeParse(process.env);
@@ -27,3 +31,10 @@ if (!parsed.success) {
 }
 
 export const env = parsed.data;
+
+/** Firebase auth uids allowed onto admin-only routes. */
+export function adminUids(): string[] {
+    return env.ADMIN_UIDS.split(',')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+}

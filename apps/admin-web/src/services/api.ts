@@ -19,16 +19,31 @@ export interface ApiFailure {
 }
 export type ApiResponse<T> = ApiSuccess<T> | ApiFailure;
 
+/**
+ * Firebase ID token for admin-only routes, stored by hand (see
+ * reportsService header comment). Attached as a Bearer token when
+ * present; mock mode never needs it.
+ */
+function adminIdToken(): string | null {
+  try {
+    return localStorage.getItem('admin_id_token');
+  } catch {
+    return null;
+  }
+}
+
 export async function apiFetch<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<ApiResponse<T>> {
   const url = `${BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;
+  const token = adminIdToken();
   try {
     const response = await fetch(url, {
       ...init,
       headers: {
         'Content-Type': 'application/json',
+        ...(token != null && token !== '' ? { Authorization: `Bearer ${token}` } : {}),
         ...(init.headers ?? {}),
       },
     });
