@@ -9,6 +9,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/asset_image.dart';
 import '../../../core/widgets/app_tab_bar.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/error_retry.dart';
@@ -390,12 +391,11 @@ class _CompactCard extends StatelessWidget {
               ClipRRect(
                 borderRadius: BorderRadius.circular(AppRadius.input),
                 child: activity.coverImageUrl != null
-                    ? Image.asset(
-                        activity.coverImageUrl!,
+                    ? AssetImageWithFallback(
+                        imagePath: activity.coverImageUrl!,
                         width: 72,
                         height: 72,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => _ThumbFallback(),
                       )
                     : _ThumbFallback(),
               ),

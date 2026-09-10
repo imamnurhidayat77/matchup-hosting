@@ -5,6 +5,7 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/theme/dark_colors.dart';
 import '../../../../core/widgets/app_icon.dart';
+import '../../../../core/widgets/asset_image.dart';
 import '../../domain/activity_model.dart';
 
 /// Discovery swipe-deck card — a Tinder-style card that does NOT fill the
@@ -73,7 +74,10 @@ class _HeroImage extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           if (activity.coverImageUrl != null)
-            Image.asset(activity.coverImageUrl!, fit: BoxFit.cover)
+            AssetImageWithFallback(
+              imagePath: activity.coverImageUrl!,
+              fit: BoxFit.cover,
+            )
           else
             const _CoverPlaceholder(),
 
@@ -115,35 +119,38 @@ class _HeroImage extends StatelessWidget {
             ),
           ),
 
-          // Distance pill — dark translucent, top-right.
-          Positioned(
-            top: AppSpacing.x3,
-            right: AppSpacing.x3,
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(12, 8, 14, 8),
-              decoration: BoxDecoration(
-                color: const Color(0xCC0F172A),
-                borderRadius: AppRadius.pillR,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  AppIcon(
-                    AppIcons.mapPin,
-                    size: AppIconSize.sm,
-                    color: AppColors.textOnPrimary,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    '${activity.distanceKm.toStringAsFixed(1)} km away',
-                    style: AppTypography.chipLabel(
-                      context,
-                    ).copyWith(color: AppColors.textOnPrimary),
-                  ),
-                ],
+          // Distance pill — dark translucent, top-right. Hidden when
+          // the distance is unknown (0 means "no GPS fix", not
+          // "at the venue") so we never show a misleading 0.0 km.
+          if (activity.distanceKm > 0)
+            Positioned(
+              top: AppSpacing.x3,
+              right: AppSpacing.x3,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(12, 8, 14, 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xCC0F172A),
+                  borderRadius: AppRadius.pillR,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AppIcon(
+                      AppIcons.mapPin,
+                      size: AppIconSize.sm,
+                      color: AppColors.textOnPrimary,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '${activity.distanceKm.toStringAsFixed(1)} km away',
+                      style: AppTypography.chipLabel(
+                        context,
+                      ).copyWith(color: AppColors.textOnPrimary),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
         ],
       ),
     );

@@ -13,7 +13,8 @@ import 'package:matchup_mobile/features/discovery/data/activity_repository.dart'
 import 'package:matchup_mobile/features/discovery/presentation/discovery_screen.dart';
 import 'package:matchup_mobile/features/notifications/data/notification_repository.dart';
 import 'package:matchup_mobile/features/notifications/domain/app_notification.dart';
-import 'package:matchup_mobile/features/profile/data/user_repository_impl.dart';
+import 'package:matchup_mobile/features/profile/data/user_repository.dart';
+import 'package:matchup_mobile/features/profile/domain/user_model.dart';
 import 'package:matchup_mobile/features/preferences/presentation/get_to_know_1_screen.dart';
 import 'package:matchup_mobile/features/preferences/presentation/get_to_know_2_screen.dart';
 import 'package:matchup_mobile/features/preferences/presentation/get_to_know_3_screen.dart';
@@ -23,6 +24,8 @@ class _MockActivityRepository extends Mock implements ActivityRepository {}
 
 class _MockNotificationRepository extends Mock
     implements NotificationRepository {}
+
+class _MockUserRepository extends Mock implements UserRepository {}
 
 /// A single short-copy fixture. `discovery_card.dart`'s info chips have a
 /// pre-existing overflow with the wordier copy `DummyActivityRepository`
@@ -103,27 +106,44 @@ void main() {
 
     final activityRepo = _MockActivityRepository();
     final notifRepo = _MockNotificationRepository();
+    final userRepo = _MockUserRepository();
     when(
       () => activityRepo.feed(
         limit: any(named: 'limit'),
         offset: any(named: 'offset'),
+      filter: any(named: 'filter'),
       ),
     ).thenAnswer((_) async => [_activityFixture()]);
     when(
       () => notifRepo.all(),
     ).thenAnswer((_) async => const <AppNotification>[]);
+    // GetToKnow3Screen._onNext() calls userRepositoryProvider.
+    // updateProfile — mock it to succeed synchronously. (Previously this
+    // used LocalUserRepository, which now throws NO_BACKEND since dummy
+    // data was removed.)
+    when(
+      () => userRepo.updateProfile(
+        displayName: any(named: 'displayName'),
+        bio: any(named: 'bio'),
+        location: any(named: 'location'),
+        email: any(named: 'email'),
+        phone: any(named: 'phone'),
+        dateOfBirth: any(named: 'dateOfBirth'),
+        heightCm: any(named: 'heightCm'),
+        weightKg: any(named: 'weightKg'),
+        goal: any(named: 'goal'),
+        sports: any(named: 'sports'),
+      ),
+    ).thenAnswer(
+      (_) async => UserModel(id: 'me', displayName: 'Test User'),
+    );
 
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           activityRepositoryProvider.overrideWithValue(activityRepo),
           notificationRepositoryProvider.overrideWithValue(notifRepo),
-          // GetToKnow3Screen._onNext() calls userRepositoryProvider.
-          // updateProfile — the default provider reads Env.useRemoteApi
-          // (USE_REMOTE_API=true in .env.example) and hits network with a
-          // long timeout + endless saving spinner, timing out pumpAndSettle.
-          // LocalUserRepository completes synchronously instead.
-          userRepositoryProvider.overrideWithValue(LocalUserRepository()),
+          userRepositoryProvider.overrideWithValue(userRepo),
         ],
         child: MaterialApp.router(routerConfig: router),
       ),

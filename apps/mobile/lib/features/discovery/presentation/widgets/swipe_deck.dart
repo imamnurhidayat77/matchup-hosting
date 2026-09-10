@@ -165,8 +165,14 @@ class _SwipeDeckState extends State<SwipeDeck> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final items = widget.activities;
     final top = items[widget.topIndex];
-    final next = items[(widget.topIndex + 1).clamp(0, items.length - 1)];
-    final afterNext = items[(widget.topIndex + 2).clamp(0, items.length - 1)];
+    // Background peeks render ONLY when a real next card exists. The old
+    // `.clamp()` trick aliased them to the top card itself on the last
+    // index — so swiping the final card away revealed a ghost copy of
+    // itself behind, looking like the deck never ends.
+    final next =
+        widget.topIndex + 1 < items.length ? items[widget.topIndex + 1] : null;
+    final afterNext =
+        widget.topIndex + 2 < items.length ? items[widget.topIndex + 2] : null;
 
     final dragX = _drag.dx;
     final absDrag = dragX.abs();
@@ -197,26 +203,28 @@ class _SwipeDeckState extends State<SwipeDeck> with TickerProviderStateMixin {
         return Stack(
           alignment: Alignment.center,
           children: [
-            Transform.translate(
-              offset: Offset(0, afterOffset),
-              child: Transform.scale(
-                scale: afterScale,
-                child: Opacity(
-                  opacity: afterOpacity,
-                  child: sized(DiscoveryCard(activity: afterNext)),
+            if (afterNext != null)
+              Transform.translate(
+                offset: Offset(0, afterOffset),
+                child: Transform.scale(
+                  scale: afterScale,
+                  child: Opacity(
+                    opacity: afterOpacity,
+                    child: sized(DiscoveryCard(activity: afterNext)),
+                  ),
                 ),
               ),
-            ),
-            Transform.translate(
-              offset: Offset(0, nextOffset),
-              child: Transform.scale(
-                scale: nextScale,
-                child: Opacity(
-                  opacity: nextOpacity,
-                  child: sized(DiscoveryCard(activity: next)),
+            if (next != null)
+              Transform.translate(
+                offset: Offset(0, nextOffset),
+                child: Transform.scale(
+                  scale: nextScale,
+                  child: Opacity(
+                    opacity: nextOpacity,
+                    child: sized(DiscoveryCard(activity: next)),
+                  ),
                 ),
               ),
-            ),
             Semantics(
               label:
                   'Activity card. Swipe right to like, left to pass. '

@@ -4,7 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 class ActivityFormData {
   final String title;
   final String sportType;
-  final String? coverImageBase64;
+
+  /// Local file path of the cover image picked by the user, if any.
+  /// Stored as a path (not base64) so we don't blow up the form draft
+  /// on every keystroke. The actual upload to Firebase Storage
+  /// happens in `_submit()` and produces a public URL the backend can
+  /// fetch.
+  final String? coverImagePath;
   final DateTime? selectedDate;
   final String location;
   final String description;
@@ -21,10 +27,14 @@ class ActivityFormData {
   /// Captured on step 2 of the wizard and surfaced in the live preview.
   final String visibility;
 
+  /// Backend join policy: 'open' (instant join) or 'approval' (host
+  /// must approve each request). Matches `ActivityRecord.joinPolicy`.
+  final String joinPolicy;
+
   const ActivityFormData({
     this.title = '',
     this.sportType = 'Basketball',
-    this.coverImageBase64,
+    this.coverImagePath,
     this.selectedDate,
     this.location = '',
     this.description = '',
@@ -34,12 +44,13 @@ class ActivityFormData {
     this.price,
     this.durationMinutes = 120,
     this.visibility = 'Public',
+    this.joinPolicy = 'open',
   });
 
   ActivityFormData copyWith({
     String? title,
     String? sportType,
-    String? coverImageBase64,
+    String? coverImagePath,
     DateTime? selectedDate,
     String? location,
     String? description,
@@ -49,11 +60,12 @@ class ActivityFormData {
     String? price,
     int? durationMinutes,
     String? visibility,
+    String? joinPolicy,
   }) {
     return ActivityFormData(
       title: title ?? this.title,
       sportType: sportType ?? this.sportType,
-      coverImageBase64: coverImageBase64 ?? this.coverImageBase64,
+      coverImagePath: coverImagePath ?? this.coverImagePath,
       selectedDate: selectedDate ?? this.selectedDate,
       location: location ?? this.location,
       description: description ?? this.description,
@@ -63,6 +75,7 @@ class ActivityFormData {
       price: price ?? this.price,
       durationMinutes: durationMinutes ?? this.durationMinutes,
       visibility: visibility ?? this.visibility,
+      joinPolicy: joinPolicy ?? this.joinPolicy,
     );
   }
 
@@ -70,7 +83,7 @@ class ActivityFormData {
     return {
       'title': title,
       'sportType': sportType,
-      'coverImageBase64': coverImageBase64,
+      'coverImagePath': coverImagePath,
       'selectedDate': selectedDate?.toIso8601String(),
       'location': location,
       'description': description,
@@ -80,6 +93,7 @@ class ActivityFormData {
       'price': price,
       'durationMinutes': durationMinutes,
       'visibility': visibility,
+      'joinPolicy': joinPolicy,
     };
   }
 
@@ -87,7 +101,7 @@ class ActivityFormData {
     return ActivityFormData(
       title: json['title'] as String? ?? '',
       sportType: json['sportType'] as String? ?? 'Basketball',
-      coverImageBase64: json['coverImageBase64'] as String?,
+      coverImagePath: json['coverImagePath'] as String?,
       selectedDate: json['selectedDate'] != null
           ? DateTime.parse(json['selectedDate'] as String)
           : null,
@@ -99,6 +113,7 @@ class ActivityFormData {
       price: json['price'] as String?,
       durationMinutes: json['durationMinutes'] as int? ?? 120,
       visibility: json['visibility'] as String? ?? 'Public',
+      joinPolicy: json['joinPolicy'] as String? ?? 'open',
     );
   }
 }
@@ -120,8 +135,8 @@ class FormDataNotifier extends StateNotifier<ActivityFormData> {
     state = state.copyWith(sportType: sportType);
   }
 
-  void setCoverImage(String? base64) {
-    state = state.copyWith(coverImageBase64: base64);
+  void setCoverImage(String? path) {
+    state = state.copyWith(coverImagePath: path);
   }
 
   void setSelectedDate(DateTime? date) {
@@ -158,6 +173,10 @@ class FormDataNotifier extends StateNotifier<ActivityFormData> {
 
   void setVisibility(String visibility) {
     state = state.copyWith(visibility: visibility);
+  }
+
+  void setJoinPolicy(String joinPolicy) {
+    state = state.copyWith(joinPolicy: joinPolicy);
   }
 
   void reset() {

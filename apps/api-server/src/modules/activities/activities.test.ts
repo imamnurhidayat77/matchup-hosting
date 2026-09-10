@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('./activities.service.js', () => {
     return {
         createActivity: vi.fn().mockResolvedValue({ activityId: 'activity-1' }),
+        enrichActivityWithHostProfile: vi.fn((activity) => Promise.resolve(activity)),
         attachViewerActivityContext: vi.fn((activity) => Promise.resolve({
             ...activity,
             mySwipeDecision: 'join',
@@ -23,6 +24,10 @@ vi.mock('./activity-participants.service.js', () => {
         joinActivity: vi.fn().mockResolvedValue(undefined),
         getParticipants: vi.fn(),
         leaveActivity: vi.fn().mockResolvedValue(undefined),
+        requestToJoin: vi.fn().mockResolvedValue(undefined),
+        listJoinRequests: vi.fn(),
+        approveJoinRequest: vi.fn().mockResolvedValue(undefined),
+        declineJoinRequest: vi.fn().mockResolvedValue(undefined),
     };
 });
 
@@ -31,6 +36,10 @@ vi.mock('../notifications/notifications.service.js', () => {
         createNotification: vi.fn().mockResolvedValue({ notificationId: 'notification-1' }),
     };
 });
+
+vi.mock('./discover.service.js', () => ({
+    listDiscoverActivities: vi.fn(),
+}));
 
 vi.mock('../../middleware/auth.middleware.js', () => {
     return {
@@ -48,6 +57,7 @@ import { createApp } from '../../app/app.js';
 import * as activitiesService from './activities.service.js';
 import * as activityParticipantsService from './activity-participants.service.js';
 import * as notificationsService from '../notifications/notifications.service.js';
+import * as discoverService from './discover.service.js';
 
 describe('activities routes', () => {
     describe('POST /api/activities', () => {
@@ -747,6 +757,7 @@ describe('activities routes', () => {
             'Activity is not open for joining',
             'Activity is full',
             'User already joined this activity',
+            'This activity requires host approval — request to join instead',
         ])('when service rejects with %s => expected 409 w/ CONFLICT', async (message) => {
             vi.mocked(activityParticipantsService.joinActivity).mockRejectedValueOnce(
                 new Error(message),
@@ -981,6 +992,102 @@ describe('activities routes', () => {
         });
     });
 
+    describe('GET /api/activities?discover=1', () => {
+        beforeEach(() => {
+            vi.clearAllMocks();
+        });
+
+        it('routes the discover=1 query to the discover pipeline', async () => {
+            const baseAct = {
+                activityId: 'activity-1',
+                hostId: 'host-1',
+                title: 'Evening Futsal',
+                sportType: 'Futsal',
+                description: 'Casual 5v5',
+                locationName: 'Auckland Domain',
+                latitude: -36.86,
+                longitude: 174.77,
+                geohash: 'rckq31v',
+                startTime: '2026-09-09T04:00:00.000Z',
+                skillLevel: 'intermediate',
+                capacity: 10,
+                participantCount: 4,
+                status: 'open',
+                hostProfile: null,
+            } as const;
+            const enriched = {
+                ...baseAct,
+                mySwipeDecision: null,
+                isParticipant: false,
+                isHost: false,
+            };
+            vi.mocked(discoverService.listDiscoverActivities as never)
+                .mockResolvedValueOnce([enriched]);
+
+            const app = createApp();
+            const response = await request(app).get(
+                '/api/activities?discover=1&nearLat=-36.86&nearLng=174.77&radiusKm=20&sportFilters=Futsal:intermediate',
+            );
+
+            expect(response.status).toBe(200);
+            // The controller enriches host profiles and attaches viewer
+            // context exactly like the legacy feed path (both mocked).
+            expect(response.body.data).toEqual([
+                { ...enriched, mySwipeDecision: 'join', isParticipant: true, isHost: false },
+            ]);
+            expect(discoverService.listDiscoverActivities).toHaveBeenCalledWith({
+                limit: 20,
+                viewerUid: 'test-uid-1',
+                discover: {
+                    near: { latitude: -36.86, longitude: 174.77, radiusKm: 20 },
+                    sportFilters: [{ sport: 'Futsal', skill: 'intermediate' }],
+                },
+            });
+        });
+
+        it('rejects malformed sportFilters => expected 400 INVALID_INPUT', async () => {
+            const app = createApp();
+            const response = await request(app).get(
+                '/api/activities?discover=1&sportFilters=Futsal',
+            );
+            expect(response.status).toBe(400);
+            expect(response.body.error?.code).toBe('INVALID_INPUT');
+        });
+
+        it('forwards includeSwiped to the discover pipeline', async () => {
+            vi.mocked(discoverService.listDiscoverActivities as never)
+                .mockResolvedValueOnce([]);
+            const app = createApp();
+            const response = await request(app).get(
+                '/api/activities?discover=1&includeSwiped=true',
+            );
+            expect(response.status).toBe(200);
+            expect(discoverService.listDiscoverActivities).toHaveBeenCalledWith({
+                limit: 20,
+                viewerUid: 'test-uid-1',
+                discover: { sportFilters: [], includeSwiped: true },
+            });
+        });
+
+        it('rejects bad includeSwiped => expected 400 INVALID_INPUT', async () => {
+            const app = createApp();
+            const response = await request(app).get(
+                '/api/activities?discover=1&includeSwiped=yes',
+            );
+            expect(response.status).toBe(400);
+            expect(response.body.error?.code).toBe('INVALID_INPUT');
+        });
+
+        it('rejects bad geo values => expected 400 INVALID_INPUT', async () => {
+            const app = createApp();
+            const response = await request(app).get(
+                '/api/activities?discover=1&nearLat=999&nearLng=0&radiusKm=10',
+            );
+            expect(response.status).toBe(400);
+            expect(response.body.error?.code).toBe('INVALID_INPUT');
+        });
+    });
+
     describe('GET /api/public/activities', () => {
         beforeEach(() => {
             vi.clearAllMocks();
@@ -1184,6 +1291,293 @@ describe('activities routes', () => {
         });
     });
 });
+
+    describe('POST /api/activities/:activityId/join-requests', () => {
+        beforeEach(() => {
+            vi.clearAllMocks();
+        });
+
+        it('when request is valid => expected 201 with pending status', async () => {
+            const app = createApp();
+
+            const response = await request(app)
+                .post('/api/activities/activity-1/join-requests')
+                .send({});
+
+            expect(response.status).toBe(201);
+            expect(response.body).toEqual({
+                ok: true,
+                data: {
+                    activityId: 'activity-1',
+                    uid: 'test-uid-1',
+                    status: 'pending',
+                },
+            });
+            expect(activityParticipantsService.requestToJoin).toHaveBeenCalledWith(
+                'activity-1',
+                'test-uid-1',
+            );
+        });
+
+        it('when activityId is blank => expected 400 w/ EMPTY_INPUT', async () => {
+            const app = createApp();
+
+            const response = await request(app)
+                .post('/api/activities/%20%20/join-requests')
+                .send({});
+
+            expect(response.status).toBe(400);
+            expect(response.body).toEqual({
+                ok: false,
+                error: {
+                    code: 'EMPTY_INPUT',
+                    message: 'activityId is required',
+                },
+            });
+            expect(activityParticipantsService.requestToJoin).not.toHaveBeenCalled();
+        });
+
+        it.each([
+            'Activity is not open for joining',
+            'User already joined this activity',
+            'The host is already in this activity',
+            'Join request already pending',
+            'This activity does not require approval — join directly',
+        ])('when service rejects with %s => expected 409 w/ CONFLICT', async (message) => {
+            vi.mocked(activityParticipantsService.requestToJoin).mockRejectedValueOnce(
+                new Error(message),
+            );
+
+            const app = createApp();
+
+            const response = await request(app)
+                .post('/api/activities/activity-1/join-requests')
+                .send({});
+
+            expect(response.status).toBe(409);
+            expect(response.body).toEqual({
+                ok: false,
+                error: {
+                    code: 'CONFLICT',
+                    message,
+                },
+            });
+        });
+
+        it('when activity is not found => expected 404 w/ NOT_FOUND', async () => {
+            vi.mocked(activityParticipantsService.requestToJoin).mockRejectedValueOnce(
+                new Error('Activity not found'),
+            );
+
+            const app = createApp();
+
+            const response = await request(app)
+                .post('/api/activities/activity-1/join-requests')
+                .send({});
+
+            expect(response.status).toBe(404);
+            expect(response.body).toEqual({
+                ok: false,
+                error: {
+                    code: 'NOT_FOUND',
+                    message: 'Activity not found',
+                },
+            });
+        });
+    });
+
+    describe('GET /api/activities/:activityId/join-requests', () => {
+        beforeEach(() => {
+            vi.clearAllMocks();
+        });
+
+        it('when caller is host => expected 200 with pending requests', async () => {
+            vi.mocked(activitiesService.getActivityById).mockResolvedValueOnce({
+                activityId: 'activity-1',
+                hostId: 'test-uid-1',
+            } as never);
+            vi.mocked(activityParticipantsService.listJoinRequests).mockResolvedValueOnce([
+                {
+                    requestId: 'other-user',
+                    uid: 'other-user',
+                    activityId: 'activity-1',
+                    status: 'pending',
+                    profile: null,
+                } as never,
+            ]);
+
+            const app = createApp();
+
+            const response = await request(app).get('/api/activities/activity-1/join-requests');
+
+            expect(response.status).toBe(200);
+            expect(response.body.ok).toBe(true);
+            expect(activityParticipantsService.listJoinRequests).toHaveBeenCalledWith('activity-1');
+        });
+
+        it('when caller is not host => expected 403 w/ FORBIDDEN', async () => {
+            vi.mocked(activitiesService.getActivityById).mockResolvedValueOnce({
+                activityId: 'activity-1',
+                hostId: 'host-uid-1',
+            } as never);
+
+            const app = createApp();
+
+            const response = await request(app).get('/api/activities/activity-1/join-requests');
+
+            expect(response.status).toBe(403);
+            expect(response.body).toEqual({
+                ok: false,
+                error: {
+                    code: 'FORBIDDEN',
+                    message: 'Only the activity host can view join requests',
+                },
+            });
+            expect(activityParticipantsService.listJoinRequests).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('POST /api/activities/:activityId/join-requests/:uid/approve', () => {
+        beforeEach(() => {
+            vi.clearAllMocks();
+        });
+
+        it('when request is valid => expected 200 with approved status', async () => {
+            const app = createApp();
+
+            const response = await request(app)
+                .post('/api/activities/activity-1/join-requests/other-user/approve')
+                .send({});
+
+            expect(response.status).toBe(200);
+            expect(response.body).toEqual({
+                ok: true,
+                data: {
+                    activityId: 'activity-1',
+                    uid: 'other-user',
+                    status: 'approved',
+                },
+            });
+            expect(activityParticipantsService.approveJoinRequest).toHaveBeenCalledWith(
+                'activity-1',
+                'other-user',
+                'test-uid-1',
+            );
+        });
+
+        it('when request is missing => expected 404 w/ NOT_FOUND', async () => {
+            vi.mocked(activityParticipantsService.approveJoinRequest).mockRejectedValueOnce(
+                new Error('Join request not found'),
+            );
+
+            const app = createApp();
+
+            const response = await request(app)
+                .post('/api/activities/activity-1/join-requests/other-user/approve')
+                .send({});
+
+            expect(response.status).toBe(404);
+            expect(response.body).toEqual({
+                ok: false,
+                error: {
+                    code: 'NOT_FOUND',
+                    message: 'Join request not found',
+                },
+            });
+        });
+
+        it('when actor is not host => expected 403 w/ FORBIDDEN', async () => {
+            vi.mocked(activityParticipantsService.approveJoinRequest).mockRejectedValueOnce(
+                new Error('Only the activity host can decide join requests'),
+            );
+
+            const app = createApp();
+
+            const response = await request(app)
+                .post('/api/activities/activity-1/join-requests/other-user/approve')
+                .send({});
+
+            expect(response.status).toBe(403);
+            expect(response.body).toEqual({
+                ok: false,
+                error: {
+                    code: 'FORBIDDEN',
+                    message: 'Only the activity host can decide join requests',
+                },
+            });
+        });
+
+        it('when activity filled up meanwhile => expected 409 w/ CONFLICT', async () => {
+            vi.mocked(activityParticipantsService.approveJoinRequest).mockRejectedValueOnce(
+                new Error('Activity is full'),
+            );
+
+            const app = createApp();
+
+            const response = await request(app)
+                .post('/api/activities/activity-1/join-requests/other-user/approve')
+                .send({});
+
+            expect(response.status).toBe(409);
+            expect(response.body).toEqual({
+                ok: false,
+                error: {
+                    code: 'CONFLICT',
+                    message: 'Activity is full',
+                },
+            });
+        });
+    });
+
+    describe('POST /api/activities/:activityId/join-requests/:uid/decline', () => {
+        beforeEach(() => {
+            vi.clearAllMocks();
+        });
+
+        it('when request is valid => expected 200 with declined status', async () => {
+            const app = createApp();
+
+            const response = await request(app)
+                .post('/api/activities/activity-1/join-requests/other-user/decline')
+                .send({});
+
+            expect(response.status).toBe(200);
+            expect(response.body).toEqual({
+                ok: true,
+                data: {
+                    activityId: 'activity-1',
+                    uid: 'other-user',
+                    status: 'declined',
+                },
+            });
+            expect(activityParticipantsService.declineJoinRequest).toHaveBeenCalledWith(
+                'activity-1',
+                'other-user',
+                'test-uid-1',
+            );
+        });
+
+        it('when request is missing => expected 404 w/ NOT_FOUND', async () => {
+            vi.mocked(activityParticipantsService.declineJoinRequest).mockRejectedValueOnce(
+                new Error('Join request not found'),
+            );
+
+            const app = createApp();
+
+            const response = await request(app)
+                .post('/api/activities/activity-1/join-requests/other-user/decline')
+                .send({});
+
+            expect(response.status).toBe(404);
+            expect(response.body).toEqual({
+                ok: false,
+                error: {
+                    code: 'NOT_FOUND',
+                    message: 'Join request not found',
+                },
+            });
+        });
+    });
 
 /*
 ########################################################################  

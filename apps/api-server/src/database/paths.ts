@@ -52,6 +52,22 @@ export function activityParticipantDocPath (activityId: string, uid: string): st
     return `${activityParticipantsCollectionPath(activityId)}/${uid}`;
 }
 
+export function activityJoinRequestsCollectionPath(activityId: string): string {
+    return `${activityDocPath(activityId)}/joinRequests`;
+}
+
+export function activityJoinRequestDocPath(activityId: string, uid: string): string {
+    return `${activityJoinRequestsCollectionPath(activityId)}/${uid}`;
+}
+
+export function activityRatingsCollectionPath(activityId: string): string {
+    return `${activityDocPath(activityId)}/ratings`;
+}
+
+export function activityRatingDocPath(activityId: string, raterUid: string): string {
+    return `${activityRatingsCollectionPath(activityId)}/${raterUid}`;
+}
+
 export function swipeDecisionsCollectionPath(uid: string): string {
     return `${COLLECTIONS.swipes}/${uid}/${SUBCOLLECTIONS.decisions}`;
 }

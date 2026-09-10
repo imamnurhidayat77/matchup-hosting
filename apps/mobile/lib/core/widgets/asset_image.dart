@@ -1,17 +1,28 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_spacing.dart';
 import '../theme/dark_colors.dart';
+import 'skeleton.dart';
+
+/// True when [path] points at a remote resource rather than a bundled
+/// asset. Shared by widgets that accept "asset path or URL" image
+/// references (covers, avatars).
+bool isRemoteImage(String? path) =>
+    path != null &&
+    (path.startsWith('http://') || path.startsWith('https://'));
 
 /// Image widget that gracefully falls back to a default placeholder when the
-/// requested asset is missing or fails to load.
+/// requested image is missing or fails to load.
 ///
-/// Used across activity detail / list screens so that a missing cover image or
-/// avatar never breaks the layout — instead a neutral branded placeholder is
-/// shown.
+/// Accepts a bundled asset path (`assets/...`) or a remote URL (Firebase
+/// Storage download URL from `ActivityRecord.coverImageUrl` /
+/// `UserRecord.photoUrl`). Used across activity detail / list screens so
+/// that a missing cover image or avatar never breaks the layout — instead
+/// a neutral branded placeholder is shown.
 class AssetImageWithFallback extends StatelessWidget {
   const AssetImageWithFallback({
     super.key,
-    required this.assetPath,
+    required this.imagePath,
     this.width,
     this.height,
     this.fit = BoxFit.cover,
@@ -22,8 +33,9 @@ class AssetImageWithFallback extends StatelessWidget {
     this.isAvatar = false,
   });
 
-  /// Path to the asset image (e.g. `assets/images/discovery/covers/foo.png`).
-  final String assetPath;
+  /// Bundled asset path (e.g. `assets/images/discovery/covers/foo.png`)
+  /// or remote `http(s)` URL.
+  final String imagePath;
   final double? width;
   final double? height;
   final BoxFit fit;
@@ -53,14 +65,42 @@ class AssetImageWithFallback extends StatelessWidget {
             icon: placeholderIcon,
           );
 
-    final image = Image.asset(
-      assetPath,
-      width: width,
-      height: height,
-      fit: fit,
-      semanticLabel: semanticLabel,
-      errorBuilder: (context, error, stackTrace) => placeholder,
-    );
+    // Remote images stream in over the network: show the branded shimmer
+    // sweep while bytes arrive, then cross-fade the photo in. Bundled
+    // assets resolve synchronously, so they render directly with no
+    // loader (and no animation that could perturb golden tests).
+    final image = isRemoteImage(imagePath)
+        ? Image.network(
+            imagePath,
+            width: width,
+            height: height,
+            fit: fit,
+            semanticLabel: semanticLabel,
+            loadingBuilder: (context, child, progress) => progress == null
+                ? child
+                : SkeletonBox(
+                    width: width,
+                    height: height ?? 200,
+                    radius: isAvatar ? (width ?? height ?? 44) / 2 : 0,
+                  ),
+            frameBuilder: (context, child, frame, sync) {
+              if (sync) return child;
+              return AnimatedOpacity(
+                opacity: frame == null ? 0 : 1,
+                duration: AppDurations.base,
+                child: child,
+              );
+            },
+            errorBuilder: (context, error, stackTrace) => placeholder,
+          )
+        : Image.asset(
+            imagePath,
+            width: width,
+            height: height,
+            fit: fit,
+            semanticLabel: semanticLabel,
+            errorBuilder: (context, error, stackTrace) => placeholder,
+          );
 
     if (borderRadius != null) {
       return ClipRRect(borderRadius: borderRadius!, child: image);

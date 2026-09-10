@@ -169,6 +169,42 @@ class _LoggingInterceptor extends Interceptor {
   }
 }
 
+// ─── Response envelope ────────────────────────────────────────────────────────
+//
+// Every api-server endpoint wraps its payload in `{ok: true, data: T}` on
+// success and `{ok: false, error: {code, message}}` on failure. Dio
+// exposes the whole decoded body as `Response.data`, so repositories
+// must unwrap `.data` before parsing — parsing the envelope itself is
+// the #1 cause of "empty screen with a healthy backend".
+
+/// Returns the `data` payload of an api-server envelope.
+///
+/// If [body] is already the raw payload (no `data` key — e.g. a hand-
+/// built mock in a test), it is returned as-is so callers stay
+/// agnostic.
+Object? apiData(Object? body) {
+  if (body is Map && body['data'] != null) return body['data'];
+  return body;
+}
+
+/// Unwraps an enveloped object payload into a JSON map, or `null` when
+/// the payload is missing / not a map.
+Map<String, dynamic>? apiDataMap(Object? body) {
+  final data = apiData(body);
+  return data is Map<String, dynamic>
+      ? data
+      : data is Map
+          ? Map<String, dynamic>.from(data)
+          : null;
+}
+
+/// Unwraps an enveloped list payload. Returns an empty list when the
+/// payload is missing / not a list.
+List<dynamic> apiDataList(Object? body) {
+  final data = apiData(body);
+  return data is List ? data : const [];
+}
+
 // ─── Domain error types ───────────────────────────────────────────────────────
 
 class ApiException implements Exception {
@@ -184,12 +220,15 @@ class ApiException implements Exception {
 
   factory ApiException.fromDio(DioException err) {
     final status = err.response?.statusCode;
-    final serverMsg = err.response?.data is Map
-        ? (err.response!.data as Map)['message'] as String?
-        : null;
-    final serverCode = err.response?.data is Map
-        ? (err.response!.data as Map)['code'] as String?
-        : null;
+    // Error bodies are enveloped as `{ok: false, error: {code,
+    // message}}`; fall back to top-level `message`/`code` for
+    // non-enveloped payloads (e.g. Firebase REST errors).
+    final body = err.response?.data;
+    final errBody = body is Map ? body['error'] : null;
+    final serverMsg = (errBody is Map ? errBody['message'] : null) as String? ??
+        (body is Map ? body['message'] as String? : null);
+    final serverCode = (errBody is Map ? errBody['code'] : null) as String? ??
+        (body is Map ? body['code'] as String? : null);
 
     return switch (err.type) {
       DioExceptionType.connectionTimeout ||

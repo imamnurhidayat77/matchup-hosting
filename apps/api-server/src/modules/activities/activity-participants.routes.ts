@@ -1,9 +1,21 @@
 import { Router } from 'express';
 import { requireAuth } from '../../middleware/auth.middleware.js';
-import { joinActivityHandler, leaveActivityHandler, getParticipantsHandler } from './activity-participants.controller.js';
+import {
+    approveJoinRequestHandler,
+    declineJoinRequestHandler,
+    joinActivityHandler,
+    leaveActivityHandler,
+    getParticipantsHandler,
+    listJoinRequestsHandler,
+    requestJoinActivityHandler,
+} from './activity-participants.controller.js';
 
 export const activityParticipantsRouter = Router();
 
 activityParticipantsRouter.post('/:activityId/participants', requireAuth, joinActivityHandler);
 activityParticipantsRouter.get('/:activityId/participants', requireAuth, getParticipantsHandler);
 activityParticipantsRouter.delete('/:activityId/participants/:uid', requireAuth, leaveActivityHandler);
+activityParticipantsRouter.post('/:activityId/join-requests', requireAuth, requestJoinActivityHandler);
+activityParticipantsRouter.get('/:activityId/join-requests', requireAuth, listJoinRequestsHandler);
+activityParticipantsRouter.post('/:activityId/join-requests/:uid/approve', requireAuth, approveJoinRequestHandler);
+activityParticipantsRouter.post('/:activityId/join-requests/:uid/decline', requireAuth, declineJoinRequestHandler);

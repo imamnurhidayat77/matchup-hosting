@@ -42,6 +42,7 @@ void main() {
         () => mock.feed(
           limit: any(named: 'limit'),
           offset: any(named: 'offset'),
+        filter: any(named: 'filter'),
         ),
       ).thenAnswer((_) async => activities);
 
@@ -68,6 +69,7 @@ void main() {
         () => mock.feed(
           limit: any(named: 'limit'),
           offset: any(named: 'offset'),
+        filter: any(named: 'filter'),
         ),
       ).thenThrow(Exception('Network failure'));
 
@@ -94,6 +96,7 @@ void main() {
           () => mock.feed(
             limit: any(named: 'limit'),
             offset: any(named: 'offset'),
+          filter: any(named: 'filter'),
           ),
         ).thenAnswer((_) async => <ActivityModel>[]);
 
@@ -108,33 +111,8 @@ void main() {
     );
   });
 
-  group('DummyActivityRepository integration (no mocks)', () {
-    test('should complete full create → join → joinedByUser flow', () async {
-      final container = ProviderContainer(
-        overrides: [useRemoteApiProvider.overrideWithValue(false)],
-      );
-      addTearDown(container.dispose);
-
-      final repo = container.read(activityRepositoryProvider);
-
-      // Create a new activity
-      final created = await repo.create(
-        title: 'Integration Test Activity',
-        sportType: 'Soccer',
-        location: 'Test Venue',
-        dateTime: DateTime.now().add(const Duration(days: 2)),
-        maxParticipants: 8,
-        skillLevel: 'Beginner',
-        fee: 0,
-      );
-      expect(created.title, 'Integration Test Activity');
-
-      // Join it
-      await repo.join(created.id);
-
-      // Verify it appears in joined list
-      final joined = await repo.joinedByUser('me');
-      expect(joined.any((a) => a.id == created.id), isTrue);
-    });
-  });
+  // Note: tests for the dummy in-memory activity repository were
+  // removed when the local seed was emptied — see PR that dropped
+  // dummy data in favour of the live backend. The contract tests
+  // above (with explicit mocks) are the canonical coverage.
 }

@@ -2,6 +2,7 @@ import { firestore } from '../../database/firebase.js';
 import { Timestamp } from 'firebase-admin/firestore';
 import {
     activityDocPath,
+    activityJoinRequestDocPath,
     activityParticipantDocPath,
 } from '../../database/paths.js';
 import {
@@ -15,6 +16,18 @@ import {
 
 export type ActivityStatus = 'open' | 'full' | 'cancelled' | 'completed' | 'removed';
 export type ActivitySkillLevel = 'beginner' | 'intermediate' | 'advanced' | 'any';
+
+/**
+ * How new members get in. `open` keeps the legacy behaviour (instant
+ * join); `approval` parks the user in a pending join request the host
+ * must approve. Defaults to `open` for documents written before the
+ * field existed.
+ */
+export type ActivityJoinPolicy = 'open' | 'approval';
+
+export function isJoinPolicy(value: unknown): value is ActivityJoinPolicy {
+    return value === 'open' || value === 'approval';
+}
 
 export type CreateActivityInput = {
     hostId: string;
@@ -31,6 +44,7 @@ export type CreateActivityInput = {
     skillLevel: ActivitySkillLevel;
     capacity: number;
     coverImageUrl?: string;
+    joinPolicy?: ActivityJoinPolicy;
 };
 
 export type UpdateActivityStatusInput = {
@@ -55,6 +69,7 @@ export type UpdateActivityInput = {
     skillLevel?: ActivitySkillLevel;
     capacity?: number;
     coverImageUrl?: string;
+    joinPolicy?: ActivityJoinPolicy;
 };
 
 export type ActivityRecord = {
@@ -74,10 +89,21 @@ export type ActivityRecord = {
     participantCount: number;
     status: ActivityStatus;
     coverImageUrl?: string;
+    joinPolicy?: ActivityJoinPolicy;
     cancelledAt?: FirebaseFirestore.Timestamp;
     cancelledBy?: string;
     createdAt: FirebaseFirestore.Timestamp;
     updatedAt: FirebaseFirestore.Timestamp;
+};
+/**
+ * One "I want sport X at skill Y" entry from the mobile filter sheet.
+ * Bundled into a single query parameter: `sportFilters=Sport:skill`
+ * (comma-separated). `skill=any` matches every row for that sport
+ * server-side and is a no-op filter.
+ */
+export type SportSkillFilter = {
+    sport: string;
+    skill: ActivitySkillLevel | 'any';
 };
 
 export type ListActivitiesFilters = {
@@ -85,6 +111,29 @@ export type ListActivitiesFilters = {
     sportType?: string;
     skillLevel?: ActivitySkillLevel;
     limit: number;
+    /** When set, ranked by preference match first, then proximity,
+     *  then soonest start time, then newest created. */
+    discover?: {
+        near?: { latitude: number; longitude: number; radiusKm: number };
+        /** Inclusive start-time lower bound (ISO). */
+        startAfter?: string;
+        /** Inclusive start-time upper bound (ISO). */
+        startBefore?: string;
+        /** Sport+skill entries — empty means no sport filter. */
+        sportFilters: SportSkillFilter[];
+        /** Set of activityIds the viewer has already swiped on.
+         *  Omit to skip the filter (e.g. for "Start over"). */
+        excludeActivityIds?: string[];
+        /** When true, passed cards are kept in the results while
+         *  right-swiped (joined) cards stay excluded — a join is
+         *  permanent and the game lives on in My Games. Backs the
+         *  mobile "Start over" action. */
+        includeSwiped?: boolean;
+    };
+    /** Authenticated viewer's uid — required whenever `discover` is
+     *  set, so the pipeline can resolve `excludeActivityIds` from the
+     *  swipes collection if the caller didn't pass them. */
+    viewerUid?: string;
 };
 
 export type ActivityWithId = ActivityRecord & {
@@ -92,10 +141,18 @@ export type ActivityWithId = ActivityRecord & {
     hostProfile: PublicUserProfile | null;
 };
 
+export type JoinRequestStatus = 'none' | 'pending' | 'approved' | 'declined';
+
 export type ActivityViewerContext = {
     mySwipeDecision: SwipeDecision | null;
     isParticipant: boolean;
     isHost: boolean;
+    /**
+     * The viewer's join-request state for approval-gated activities.
+     * Always `none` for open activities (or when no request exists) so
+     * clients can branch on a single field.
+     */
+    joinRequestStatus: JoinRequestStatus;
 };
 
 export type ActivityWithViewerContext = ActivityWithId & ActivityViewerContext;
@@ -133,6 +190,7 @@ export async function createActivity(input: CreateActivityInput): Promise<{ acti
     const skillLevel = input.skillLevel;
     const capacity = input.capacity;
     const coverImageUrl = input.coverImageUrl?.trim();
+    const joinPolicy = input.joinPolicy ?? 'open';
 
     if (!hostId) throw new Error('hostId is required');
     if (!title) throw new Error('title is required');
@@ -152,6 +210,10 @@ export async function createActivity(input: CreateActivityInput): Promise<{ acti
 
     if (!['beginner', 'intermediate', 'advanced', 'any'].includes(skillLevel)) {
         throw new Error('skillLevel is invalid');
+    }
+
+    if (!isJoinPolicy(joinPolicy)) {
+        throw new Error('joinPolicy must be open or approval');
     }
 
     if (!Number.isInteger(capacity) || capacity <= 0) {
@@ -178,6 +240,7 @@ export async function createActivity(input: CreateActivityInput): Promise<{ acti
         participantCount: 0,
         status: 'open',
         ...(coverImageUrl ? { coverImageUrl } : {}),
+        joinPolicy,
         createdAt: now,
         updatedAt: now,
     });
@@ -220,12 +283,17 @@ export async function listActivities(
         query = query.where('skillLevel', '==', filters.skillLevel);
     }
 
-    const snap = await query
-        .orderBy('createdAt', 'desc')
-        .limit(filters.limit)
-        .get();
+    // NOTE: no server-side orderBy here on purpose. `where(status) +
+    // orderBy(createdAt)` needs a composite Firestore index; sorting the
+    // (already small, limit-capped-at-50) result set in memory keeps the
+    // endpoint working with zero index ops. If the collection grows
+    // large, create the composite index and restore orderBy+limit.
+    const snap = await query.get();
 
-    const activities = snap.docs.map(mapActivityDoc);
+    const activities = snap.docs
+        .map(mapActivityDoc)
+        .sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis())
+        .slice(0, filters.limit);
 
     return Promise.all(activities.map(enrichActivityWithHostProfile));
 }
@@ -237,14 +305,18 @@ export async function listPublicActivityTeasers(
         throw new Error('limit must be an integer between 1 and 20');
     }
 
+    // NOTE: same as listActivities — in-memory sort avoids the
+    // composite-index requirement for `where(status) +
+    // orderBy(createdAt)`.
     const snap = await firestore
         .collection('activities')
         .where('status', '==', 'open')
-        .orderBy('createdAt', 'desc')
-        .limit(limit)
         .get();
 
-    const activities = snap.docs.map(mapActivityDoc);
+    const activities = snap.docs
+        .map(mapActivityDoc)
+        .sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis())
+        .slice(0, limit);
 
     return activities.map((activity) => ({
         activityId: activity.activityId,
@@ -344,6 +416,13 @@ export async function updateActivity(input: UpdateActivityInput): Promise<void> 
     if (input.startTime !== undefined) updates.startTime = input.startTime.trim();
     if (input.endTime !== undefined) updates.endTime = input.endTime.trim();
     if (input.coverImageUrl !== undefined) updates.coverImageUrl = input.coverImageUrl.trim();
+    if (input.joinPolicy !== undefined) {
+        if (!isJoinPolicy(input.joinPolicy)) {
+            throw new Error('joinPolicy must be open or approval');
+        }
+
+        updates.joinPolicy = input.joinPolicy;
+    }
 
     if (input.skillLevel !== undefined){
         if(
@@ -397,7 +476,7 @@ export async function updateActivity(input: UpdateActivityInput): Promise<void> 
 
 }
 
-async function enrichActivityWithHostProfile(
+export async function enrichActivityWithHostProfile(
     activity: ActivityBaseWithId,
 ): Promise<ActivityWithId> {
     const hostProfile = await getPublicUserProfile(activity.hostId);
@@ -418,15 +497,25 @@ export async function getViewerActivityContext(
         throw new Error('uid is required');
     }
 
-    const [swipe, participantSnap] = await Promise.all([
+    const [swipe, participantSnap, requestSnap] = await Promise.all([
         getSwipeDecision(normalizedUid, activity.activityId),
         firestore.doc(activityParticipantDocPath(activity.activityId, normalizedUid)).get(),
+        firestore.doc(activityJoinRequestDocPath(activity.activityId, normalizedUid)).get(),
     ]);
+
+    const requestData = requestSnap.exists ? requestSnap.data() : undefined;
+    const joinRequestStatus: JoinRequestStatus =
+        requestData?.status === 'pending' ||
+        requestData?.status === 'approved' ||
+        requestData?.status === 'declined'
+            ? requestData.status
+            : 'none';
 
     return {
         mySwipeDecision: swipe?.decision ?? null,
         isParticipant: participantSnap.exists,
         isHost: activity.hostId === normalizedUid,
+        joinRequestStatus,
     };
 }
 
@@ -519,6 +608,7 @@ function mapActivityDoc(activityDoc: FirebaseFirestore.DocumentSnapshot): Activi
         participantCount: data.participantCount,
         status: data.status as ActivityStatus,
         ...(typeof data.coverImageUrl === 'string' ? { coverImageUrl: data.coverImageUrl } : {}),
+        joinPolicy: isJoinPolicy(data.joinPolicy) ? data.joinPolicy : 'open',
         ...(data.cancelledAt !== undefined
             ? { cancelledAt: data.cancelledAt as FirebaseFirestore.Timestamp }
             : {}),

@@ -52,9 +52,13 @@ void main() {
       routes: [
         GoRoute(path: '/messages', builder: (_, _) => const MessagesScreen()),
         GoRoute(
-          path: '/chat/:title',
+          // The real router uses `:id` (activity id) — see
+          // `app/router.dart`. The test placeholder renders the raw
+          // id so the assertion can verify the right activity was
+          // selected.
+          path: '/chat/:id',
           builder: (_, state) =>
-              Scaffold(body: Text('Chat ${state.pathParameters['title']}')),
+              Scaffold(body: Text('Chat ${state.pathParameters['id']}')),
         ),
         GoRoute(
           path: '/notifications',
@@ -87,9 +91,11 @@ void main() {
       tester,
     ) async {
       await pumpScreen(tester);
+      // Tap the second conversation (id = '2'). The route now uses
+      // the activity id rather than the display name.
       await tester.tap(find.text('Marcus Vance'));
       await tester.pumpAndSettle();
-      expect(find.text('Chat Marcus Vance'), findsOneWidget);
+      expect(find.text('Chat 2'), findsOneWidget);
     });
 
     testWidgets('should filter conversations as the search query changes', (

@@ -2,12 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:mocktail/mocktail.dart';
 
 import 'package:matchup_mobile/core/providers/repository_providers.dart';
-import 'package:matchup_mobile/features/auth/data/auth_repository_impl.dart';
+import 'package:matchup_mobile/features/auth/data/auth_repository.dart';
 import 'package:matchup_mobile/features/auth/recovery/forgot_password_screen.dart';
 import 'package:matchup_mobile/features/auth/recovery/new_password_screen.dart';
 import 'package:matchup_mobile/features/auth/recovery/otp_verification_screen.dart';
+
+class _MockAuthRepository extends Mock implements AuthRepository {}
+
+/// Shared mock auth repo — stubbed per-test below (success paths).
+/// LocalAuthRepository can no longer be used here: it throws NO_BACKEND
+/// for every method since dummy data was removed.
+final _mockAuth = _MockAuthRepository();
 
 Future<void> _pumpRouter(
   WidgetTester tester, {
@@ -17,12 +25,7 @@ Future<void> _pumpRouter(
   final router = GoRouter(initialLocation: initialLocation, routes: routes);
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [
-        // Default authRepositoryProvider reads Env.useRemoteApi (needs
-        // dotenv-loaded .env) and would hit Firebase network in tests —
-        // LocalAuthRepository always succeeds with short delays instead.
-        authRepositoryProvider.overrideWithValue(LocalAuthRepository()),
-      ],
+      overrides: [authRepositoryProvider.overrideWithValue(_mockAuth)],
       child: MaterialApp.router(routerConfig: router),
     ),
   );
@@ -60,6 +63,9 @@ void main() {
     ) async {
       await tester.binding.setSurfaceSize(const Size(600, 1000));
       addTearDown(() => tester.binding.setSurfaceSize(null));
+      when(
+        () => _mockAuth.forgotPassword(email: any(named: 'email')),
+      ).thenAnswer((_) async {});
 
       await _pumpRouter(
         tester,
@@ -113,6 +119,12 @@ void main() {
       (tester) async {
         await tester.binding.setSurfaceSize(const Size(600, 1000));
         addTearDown(() => tester.binding.setSurfaceSize(null));
+        when(
+          () => _mockAuth.verifyOtp(
+            email: any(named: 'email'),
+            code: any(named: 'code'),
+          ),
+        ).thenAnswer((_) async {});
 
         await _pumpRouter(
           tester,

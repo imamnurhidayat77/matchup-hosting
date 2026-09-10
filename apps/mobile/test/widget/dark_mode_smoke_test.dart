@@ -112,6 +112,7 @@ void main() {
         () => activityRepo.feed(
           limit: any(named: 'limit'),
           offset: any(named: 'offset'),
+        filter: any(named: 'filter'),
         ),
       ).thenAnswer((_) async => [_activityFixture()]);
       when(
@@ -244,6 +245,7 @@ void main() {
           () => activityRepo.feed(
             limit: any(named: 'limit'),
             offset: any(named: 'offset'),
+          filter: any(named: 'filter'),
           ),
         ).thenAnswer((_) async => [_activityFixture()]);
         when(

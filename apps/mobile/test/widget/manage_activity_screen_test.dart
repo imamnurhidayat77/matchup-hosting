@@ -18,9 +18,15 @@ void main() {
   setUp(() {
     repo = _MockActivityRepository();
     when(() => repo.cancel(any())).thenAnswer((_) async {});
+    when(() => repo.joinRequests(any())).thenAnswer((_) async => []);
+    when(() => repo.approveJoinRequest(any(), any())).thenAnswer((_) async {});
+    when(() => repo.declineJoinRequest(any(), any())).thenAnswer((_) async {});
   });
 
-  ActivityModel activity({ActivityStatus status = ActivityStatus.available}) {
+  ActivityModel activity({
+    ActivityStatus status = ActivityStatus.available,
+    String joinPolicy = 'open',
+  }) {
     return ActivityModel(
       id: '5',
       title: 'Thursday Night Volleyball',
@@ -34,6 +40,7 @@ void main() {
       participantCount: 5,
       hostName: 'Noor Haddad',
       status: status,
+      joinPolicy: joinPolicy,
     );
   }
 
@@ -122,6 +129,45 @@ void main() {
         await tester.pumpAndSettle();
 
         verify(() => repo.cancel('5')).called(1);
+      },
+    );
+
+    testWidgets(
+      'should list pending join requests with approve/decline actions',
+      (tester) async {
+        when(() => repo.byId('5')).thenAnswer(
+          (_) async => activity(joinPolicy: 'approval'),
+        );
+        when(() => repo.participants('5')).thenAnswer((_) async => []);
+        when(() => repo.joinRequests('5')).thenAnswer(
+          (_) async => [
+            ActivityParticipant(
+              userId: 'u9',
+              name: 'Pending Petra',
+              avatarAsset: 'avatar_1.png',
+              skillLevel: 'Beginner',
+              joinedAt: DateTime.now(),
+              isOrganizer: false,
+            ),
+          ],
+        );
+
+        await pumpScreen(tester);
+        await tester.scrollUntilVisible(
+          find.text('Join requests (1)'),
+          300,
+          scrollable: find.byType(Scrollable).first,
+        );
+
+        expect(find.text('Join requests (1)'), findsOneWidget);
+        expect(find.text('Pending Petra'), findsOneWidget);
+        expect(find.text('Approve'), findsOneWidget);
+        expect(find.text('Decline'), findsOneWidget);
+
+        await tester.tap(find.text('Approve'));
+        await tester.pumpAndSettle();
+
+        verify(() => repo.approveJoinRequest('5', 'u9')).called(1);
       },
     );
 

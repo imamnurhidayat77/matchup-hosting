@@ -4,44 +4,15 @@ import '../../../core/network/api_client.dart';
 import '../domain/calendar_event.dart';
 import 'calendar_repository.dart';
 
+/// Offline-only calendar store. Reads return empty, writes no-op.
 class LocalCalendarRepository implements CalendarRepository {
-  final List<CalendarEvent> _events = [
-    CalendarEvent(
-      id: '1',
-      activityId: '1',
-      title: 'Saturday 5v5 Basketball',
-      start: DateTime.now().add(const Duration(days: 1, hours: 2)),
-      end: DateTime.now().add(const Duration(days: 1, hours: 4)),
-      location: 'Central Park Court B, NY',
-    ),
-    CalendarEvent(
-      id: '2',
-      activityId: '3',
-      title: 'Tennis Singles Sunday',
-      start: DateTime.now().add(const Duration(days: 4)),
-      end: DateTime.now().add(const Duration(days: 4, hours: 2)),
-      location: 'Auckland Domain Tennis Centre',
-    ),
-    CalendarEvent(
-      id: '3',
-      activityId: '2',
-      title: 'Sunset Basketball 5v5',
-      start: DateTime.now().add(const Duration(days: 3, hours: 4)),
-      end: DateTime.now().add(const Duration(days: 3, hours: 6)),
-      location: 'Brooklyn Public Courts',
-    ),
-  ];
-
   @override
   Future<List<CalendarEvent>> upcoming({int days = 30}) async {
-    await Future.delayed(const Duration(milliseconds: 50));
-    return List.unmodifiable(_events);
+    return const <CalendarEvent>[];
   }
 
   @override
-  Future<void> addToDeviceCalendar(CalendarEvent event) async {
-    await Future.delayed(const Duration(milliseconds: 50));
-  }
+  Future<void> addToDeviceCalendar(CalendarEvent event) async {}
 }
 
 class RemoteCalendarRepository implements CalendarRepository {
@@ -59,7 +30,7 @@ class RemoteCalendarRepository implements CalendarRepository {
         '/calendar/upcoming',
         queryParameters: {'days': days},
       );
-      return (res.data as List).map(_parse).toList();
+      return apiDataList(res.data).map(_parse).toList();
     } catch (e, st) {
       debugPrint('[RemoteCalendarRepository] $e\n$st');
       return _fallback.upcoming(days: days);

@@ -1,21 +1,22 @@
 import 'auth_repository.dart';
 
-/// In-memory [AuthRepository] — always succeeds, no network required.
-/// Produces deterministic dummy tokens so the rest of the app
-/// (routing, profile loading, SecureTokenStore) behaves identically to
-/// the real backend path.
+/// Stub [AuthRepository] used as a graceful-degradation fallback when
+/// the live Firebase REST endpoint is unreachable.
+///
+/// Every method throws — there's no fake "sign in with anything"
+/// behaviour. The production app **always** uses
+/// [RemoteAuthRepository]; this class only exists so the provider
+/// has a non-null value when the env flag is flipped (and so unit
+/// tests can override the binding with a mock).
 class LocalAuthRepository implements AuthRepository {
   @override
   Future<AuthResult> signIn({
     required String email,
     required String password,
   }) async {
-    await Future<void>.delayed(const Duration(milliseconds: 600));
-    // Any email/password succeeds — matches the pre-existing UX.
-    return const AuthResult(
-      accessToken: 'dummy_access_token',
-      refreshToken: 'dummy_refresh_token',
-      userId: 'demo_user_001',
+    throw const AuthException(
+      'Sign-in requires a live backend. Check your connection and try again.',
+      code: 'NO_BACKEND',
     );
   }
 
@@ -25,29 +26,26 @@ class LocalAuthRepository implements AuthRepository {
     required String email,
     required String password,
   }) async {
-    await Future<void>.delayed(const Duration(milliseconds: 800));
-    return const AuthResult(
-      accessToken: 'dummy_access_token',
-      refreshToken: 'dummy_refresh_token',
-      userId: 'me',
+    throw const AuthException(
+      'Registration requires a live backend. Check your connection and try again.',
+      code: 'NO_BACKEND',
     );
   }
 
   @override
   Future<void> forgotPassword({required String email}) async {
-    await Future<void>.delayed(const Duration(milliseconds: 700));
+    throw const AuthException(
+      'Password reset requires a live backend.',
+      code: 'NO_BACKEND',
+    );
   }
 
   @override
   Future<void> verifyOtp({required String email, required String code}) async {
-    await Future<void>.delayed(const Duration(milliseconds: 600));
-    // Dummy: any 6-digit code is valid except all-zeros (simulate wrong code).
-    if (code == '000000') {
-      throw const AuthException(
-        'Incorrect code. Please try again.',
-        code: 'INVALID_OTP',
-      );
-    }
+    throw const AuthException(
+      'OTP verification requires a live backend.',
+      code: 'NO_BACKEND',
+    );
   }
 
   @override
@@ -55,7 +53,10 @@ class LocalAuthRepository implements AuthRepository {
     required String email,
     required String newPassword,
   }) async {
-    await Future<void>.delayed(const Duration(milliseconds: 700));
+    throw const AuthException(
+      'Password reset requires a live backend.',
+      code: 'NO_BACKEND',
+    );
   }
 
   @override

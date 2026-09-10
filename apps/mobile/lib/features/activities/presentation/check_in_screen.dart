@@ -8,6 +8,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/asset_image.dart';
 import '../../../core/widgets/app_tappable.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/pressable_scale.dart';
@@ -248,12 +249,11 @@ class _Hero extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Cover image
+        // Cover image (bundled asset or remote Storage URL)
         activity.coverImageUrl != null
-            ? Image.asset(
-                activity.coverImageUrl!,
+            ? AssetImageWithFallback(
+                imagePath: activity.coverImageUrl!,
                 fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => _placeholder(),
               )
             : _placeholder(),
 

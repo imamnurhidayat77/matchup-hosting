@@ -305,7 +305,9 @@ class _ConversationList extends ConsumerWidget {
             padding: const EdgeInsets.only(bottom: AppSpacing.x3),
             child: _ConversationCard(
               conversation: filtered[i],
-              onTap: () => context.push('/chat/${filtered[i].name}'),
+              // `filtered[i].id` is the activity id (per the local
+              // seed and the backend contract for `/conversations`).
+              onTap: () => context.push('/chat/${filtered[i].id}'),
             ),
           ),
         );

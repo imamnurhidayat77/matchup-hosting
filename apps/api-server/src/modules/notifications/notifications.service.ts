@@ -13,6 +13,7 @@ export type NotificationType =
     | 'activity_left'
     | 'participant_removed'
     | 'chat_message'
+    | 'join_request'
     | 'system';
 
 export type CreateNotificationInput = {
@@ -48,9 +49,10 @@ function assertNotificationType(type: unknown): asserts type is NotificationType
         type !== 'activity_left' &&
         type !== 'participant_removed' &&
         type !== 'chat_message' &&
+        type !== 'join_request' &&
         type !== 'system'
     ) {
-        throw new Error('type must be activity_reminder, activity_interest, activity_joined, activity_cancelled, activity_left, participant_removed, chat_message, or system');
+        throw new Error('type must be activity_reminder, activity_interest, activity_joined, activity_cancelled, activity_left, participant_removed, chat_message, join_request, or system');
     }
 }
 

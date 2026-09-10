@@ -335,13 +335,17 @@ GoRouter buildRouter(Ref ref) {
           // '!keyReservation.contains(key)' on double-tap/race; modal sheets
           // sidestep that because they live in an Overlay, not a Page.
           GoRoute(
-            path: '/chat/:title',
+            // Uses the *activity id* (not title) so backend calls —
+            // `/api/chat/{id}/messages`, `/api/typing/{id}/:uid`, the
+            // RTDB `activityChats/{id}` ref — all hit real rows.
+            // The screen fetches the activity to display the title.
+            path: '/chat/:id',
             pageBuilder: (_, state) {
-              final title = state.pathParameters['title'] ?? 'Chat';
+              final id = state.pathParameters['id'] ?? '';
               return appPage(
                 state,
-                ChatScreen(activityTitle: title),
-                key: ValueKey('chat-$title'),
+                ChatScreen(activityId: id),
+                key: ValueKey('chat-$id'),
               );
             },
           ),

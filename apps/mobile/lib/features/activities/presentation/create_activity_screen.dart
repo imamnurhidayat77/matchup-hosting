@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/providers/repository_providers.dart';
+import '../../../core/utils/geohash.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
@@ -21,6 +22,8 @@ import '../../discovery/presentation/widgets/discovery_card.dart';
 import '../domain/activity_model.dart';
 import 'create/components/image_picker_modal.dart';
 import 'create/providers/form_data_provider.dart';
+import '../domain/place_suggestion.dart';
+import 'widgets/venue_field.dart';
 import 'create/providers/image_upload_provider.dart';
 
 /// Two-step create-activity wizard with a live preview.
@@ -53,6 +56,7 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
   final _locationController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _priceController = TextEditingController(text: '0.00');
+  PlaceSuggestion? _venue;
   static final _picker = ImagePicker();
 
   int _step = _stepSetup;
@@ -354,11 +358,20 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
     final data = ref.read(formDataProvider);
 
     setState(() => _submitting = true);
+    // Pick a venue's coords if the user selected one, else default to
+    // central Auckland (the seed-data centre). Computed inside the
+    // try block so the variables are in scope for the create() call
+    // further down.
+    final pickedVenue = _venue;
+    final double pickedLat = pickedVenue?.latitude ?? -36.8485;
+    final double pickedLng = pickedVenue?.longitude ?? 174.7633;
+    final String pickedGeohash = geohashEncode(pickedLat, pickedLng);
     try {
       await ref
           .read(activityRepositoryProvider)
           .create(
             title: data.title.trim(),
+            description: data.description.trim(),
             sportType: data.sportType,
             location: data.location.trim(),
             dateTime:
@@ -366,10 +379,11 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
                 DateTime.now().add(const Duration(hours: 2)),
             maxParticipants: data.maxParticipants,
             skillLevel: data.skillLevel,
-            fee: data.feeType == 1
-                ? double.tryParse(_priceController.text.trim()) ?? 0
-                : 0.0,
+            latitude: pickedLat,
+            longitude: pickedLng,
+            geohash: pickedGeohash,
             durationMinutes: data.durationMinutes,
+            joinPolicy: data.joinPolicy,
           );
       _form.reset();
       ref.read(imageUploadProvider.notifier).reset();
@@ -561,31 +575,17 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
           ),
         ),
 
-        // Location.
-        _SettingCard(
-          icon: Icons.place_outlined,
-          label: 'Location',
-          value: TextField(
-            controller: _locationController,
-            style: _inputStyle(context),
-            cursorColor: AppColors.primary,
-            decoration: _dec(context, 'Riverside Court, Jakarta'),
-            onChanged: _form.setLocation,
-          ),
-          trailing: data.location.isEmpty
-              ? null
-              : AppTappable(
-                  onTap: () {
-                    _locationController.clear();
-                    _form.setLocation('');
-                  },
-                  semanticLabel: 'Clear location',
-                  child: Icon(
-                    Icons.close_rounded,
-                    size: 18,
-                    color: context.colors.textTertiary,
-                  ),
-                ),
+        // Location — venue picker with OSM map. Picking a venue
+        // populates both the local `_venue` state (so we get
+        // accurate lat/lng on submit) AND the form's location
+        // string (so the `_setupError` validator treats the
+        // setup step as complete).
+        VenueField(
+          value: _venue,
+          onSuggestionSelected: (s) {
+            setState(() => _venue = s);
+            _form.setLocation(s.label);
+          },
         ),
 
         // Max participants.
@@ -641,8 +641,6 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
         const SizedBox(height: AppSpacing.x4),
 
         // Skill level — a select field (opens the same picker as Sport).
-        _FieldLabel('Skill Level'),
-        const SizedBox(height: _kLabelGap),
         _SelectField(
           value: data.skillLevel,
           onTap: () => _showOptionPicker(
@@ -655,8 +653,6 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
         const SizedBox(height: AppSpacing.x4),
 
         // Entry — two selectable choice cards.
-        _FieldLabel('Entry'),
-        const SizedBox(height: _kLabelGap),
         Row(
           children: [
             Expanded(

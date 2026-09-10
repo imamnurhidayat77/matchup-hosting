@@ -78,15 +78,25 @@ void main() {
       expect(find.text('Player not found.'), findsOneWidget);
     });
 
-    testWidgets('should push chat when Message is tapped', (tester) async {
-      when(() => userRepo.byId('James')).thenAnswer(
-        (_) async => const UserModel(id: 'james', displayName: 'James Wilson'),
-      );
-      await pumpScreen(tester);
+    testWidgets(
+      'should keep Send Message disabled until DMs are supported',
+      (tester) async {
+        when(() => userRepo.byId('James')).thenAnswer(
+          (_) async =>
+              const UserModel(id: 'james', displayName: 'James Wilson'),
+        );
+        await pumpScreen(tester);
 
-      await tester.tap(find.text('Send Message'));
-      await tester.pumpAndSettle();
-      expect(find.text('Chat'), findsOneWidget);
-    });
+        // The button is rendered but disabled — tapping it should not
+        // navigate anywhere. DMs need a dedicated backend endpoint.
+        final sendButton = find.text('Send Message');
+        expect(sendButton, findsOneWidget);
+        // `Widget.enabled` is false for an AppButton built with
+        // `onPressed: null`, so the tap is a no-op.
+        await tester.tap(sendButton);
+        await tester.pumpAndSettle();
+        expect(find.text('Chat'), findsNothing);
+      },
+    );
   });
 }

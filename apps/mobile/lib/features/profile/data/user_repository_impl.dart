@@ -2,122 +2,26 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_client.dart';
-import '../../../core/storage/secure_token_store.dart';
 import '../../ratings/domain/rating_models.dart';
 import '../domain/user_model.dart';
 import 'user_repository.dart';
 
 
+/// Offline-only user store. Same contract as
+/// [LocalActivityRepository]: every read returns empty data, every
+/// write throws. The app **always** talks to the live backend.
 class LocalUserRepository implements UserRepository {
-  UserModel _me = UserModel(
-    id: 'me',
-    displayName: 'Alex Mercer',
-    avatarAsset: 'assets/images/discovery/avatars/avatar_alex.png',
-    rating: 4.9,
-    bio: 'Love weekend runs and pickup basketball.',
-    location: 'Auckland, NZ',
-    activitiesCount: 24,
-    hostedCount: 8,
-    sports: const [
-      (sport: 'Basketball', level: 'Intermediate'),
-      (sport: 'Running', level: 'Beginner'),
-    ],
-    ratingBySport: const {
-      'Basketball': SportRatingSummary(average: 4.9, count: 12),
-      'Running': SportRatingSummary(average: 4.7, count: 5),
-      'Tennis': SportRatingSummary(average: 4.6, count: 3),
-    },
-    totalRatingCount: 20,
-    email: 'alex.mercer@email.com',
-    phone: '+64 21 555 0173',
-    dateOfBirth: DateTime(1996, 3, 29),
-    heightCm: 181,
-    weightKg: 76,
-    goal: 'Stay active with new sports',
-  );
-
-  static const _users = <UserModel>[
-    UserModel(
-      id: 'james',
-      displayName: 'James Wilson',
-      avatarAsset: 'assets/images/discovery/avatars/host_james.png',
-      rating: 4.9,
-      bio: 'Weekend warrior. Organizing pickup games since 2019.',
-      location: 'New York, NY',
-      activitiesCount: 24,
-      hostedCount: 8,
-      sports: [
-        (sport: 'Basketball', level: 'Intermediate'),
-        (sport: 'Tennis', level: 'Advanced'),
-      ],
-      ratingBySport: {
-        'Basketball': SportRatingSummary(average: 4.9, count: 32),
-        'Tennis': SportRatingSummary(average: 4.8, count: 14),
-      },
-      totalRatingCount: 46,
-    ),
-    UserModel(
-      id: 'sarah',
-      displayName: 'Sarah Chen',
-      avatarAsset: 'assets/images/discovery/avatars/sarah_c.png',
-      rating: 4.7,
-      location: 'Auckland, NZ',
-      activitiesCount: 12,
-      hostedCount: 3,
-      sports: [
-        (sport: 'Tennis', level: 'Intermediate'),
-        (sport: 'Volleyball', level: 'Beginner'),
-      ],
-      ratingBySport: {
-        'Tennis': SportRatingSummary(average: 4.7, count: 9),
-        'Volleyball': SportRatingSummary(average: 4.6, count: 4),
-      },
-      totalRatingCount: 13,
-    ),
-    UserModel(
-      id: 'mike',
-      displayName: 'Mike Chen',
-      avatarAsset: 'assets/images/discovery/avatars/mike_c.png',
-      rating: 4.5,
-      location: 'Auckland, NZ',
-      activitiesCount: 18,
-      hostedCount: 5,
-      sports: [(sport: 'Tennis', level: 'Advanced')],
-      ratingBySport: {
-        'Tennis': SportRatingSummary(average: 4.5, count: 22),
-      },
-      totalRatingCount: 22,
-    ),
-    UserModel(
-      id: 'lisa',
-      displayName: 'Lisa Park',
-      avatarAsset: 'assets/images/discovery/avatars/lisa_p.png',
-      rating: 4.8,
-      location: 'Auckland, NZ',
-      activitiesCount: 30,
-      hostedCount: 12,
-      sports: [
-        (sport: 'Volleyball', level: 'Advanced'),
-        (sport: 'Basketball', level: 'Beginner'),
-      ],
-      ratingBySport: {
-        'Volleyball': SportRatingSummary(average: 4.8, count: 18),
-        'Basketball': SportRatingSummary(average: 4.4, count: 6),
-      },
-      totalRatingCount: 24,
-    ),
-  ];
-
   @override
-  Future<UserModel> me() async => _me;
+  Future<UserModel> me() async {
+    throw StateError(
+      'UserRepository.me() requires a live backend — no offline '
+      'fallback is provided.',
+    );
+  }
 
   @override
   Future<UserModel?> byId(String id) async {
-    if (id == _me.id || id == _me.displayName) return _me;
-    return _users.cast<UserModel?>().firstWhere(
-      (u) => u?.id == id || u?.displayName == id,
-      orElse: () => null,
-    );
+    return null;
   }
 
   @override
@@ -133,19 +37,10 @@ class LocalUserRepository implements UserRepository {
     String? goal,
     List<({String sport, String level})>? sports,
   }) async {
-    _me = _me.copyWith(
-      displayName: displayName,
-      bio: bio,
-      location: location,
-      email: email,
-      phone: phone,
-      dateOfBirth: dateOfBirth,
-      heightCm: heightCm,
-      weightKg: weightKg,
-      goal: goal,
-      sports: sports,
+    throw StateError(
+      'UserRepository.updateProfile() requires a live backend — no '
+      'offline fallback is provided.',
     );
-    return _me;
   }
 }
 
@@ -160,13 +55,12 @@ class RemoteUserRepository implements UserRepository {
   @override
   Future<UserModel> me() async {
     try {
-      final userId = await SecureTokenStore.instance.readUserId();
-      if (userId == null || userId.isEmpty) {
-        debugPrint('[RemoteUserRepository.me] no stored userId — falling back');
-        return _fallback.me();
-      }
-      final res = await _client.dio.get('/users/$userId');
-      return _parse(res.data as Map<String, dynamic>) ?? await _fallback.me();
+      // `/users/me` is the canonical "current authenticated user" endpoint.
+      // The auth middleware resolves the uid from the Bearer token, so we
+      // don't need to pass an id — passing the auth uid would have hit the
+      // public-profile route instead and returned a smaller payload.
+      final res = await _client.dio.get('/users/me');
+      return _parse(apiDataMap(res.data)) ?? await _fallback.me();
     } on DioException catch (e) {
       debugPrint('[RemoteUserRepository.me] DioException ${e.response?.statusCode}: ${e.message}');
       return _fallback.me();
@@ -179,8 +73,9 @@ class RemoteUserRepository implements UserRepository {
   @override
   Future<UserModel?> byId(String id) async {
     try {
-      final res = await _client.dio.get('/users/$id');
-      return _parse(res.data as Map<String, dynamic>);
+      // Public profile route is `/users/:uid/profile` per the backend.
+      final res = await _client.dio.get('/users/$id/profile');
+      return _parse(apiDataMap(res.data));
     } catch (_) {
       return _fallback.byId(id);
     }
@@ -200,25 +95,33 @@ class RemoteUserRepository implements UserRepository {
     List<({String sport, String level})>? sports,
   }) async {
     try {
+      // The backend's `editableProfileFields` is strict — any other key
+      // returns INVALID_INPUT. The mobile model has more fields than the
+      // backend currently persists (`email`, `phone`, `heightCm`,
+      // `weightKg`, `goal`); we intentionally omit them from the PATCH
+      // body until backend support lands. The local fallback still records
+      // them in memory so the Edit Profile screen keeps working offline.
+      //
+      // Mapping:
+      //   - `location`  → `preferredLocations[0]` (backend stores an array)
+      //   - `sports`    → `preferredSports` (array of sport name strings,
+      //                  level pairs are dropped — the backend doesn't have
+      //                  a per-sport level concept yet)
       final res = await _client.dio.patch(
         '/users/me',
         data: {
-          'display_name': ?displayName,
-          'bio': ?bio,
-          'location': ?location,
-          'email': ?email,
-          'phone': ?phone,
-          'date_of_birth': dateOfBirth?.toIso8601String(),
-          'height_cm': ?heightCm,
-          'weight_kg': ?weightKg,
-          'goal': ?goal,
-          if (sports != null)
-            'sports': sports
-                .map((s) => {'sport': s.sport, 'level': s.level})
-                .toList(),
+          if (displayName != null && displayName.isNotEmpty)
+            'displayName': displayName,
+          if (bio != null && bio.isNotEmpty) 'bio': bio,
+          if (location != null && location.isNotEmpty)
+            'preferredLocations': [location],
+          if (dateOfBirth != null)
+            'dateOfBirth': dateOfBirth.toIso8601String().split('T').first,
+          if (sports != null && sports.isNotEmpty)
+            'preferredSports': sports.map((s) => s.sport).toList(),
         },
       );
-      return _parse(res.data as Map<String, dynamic>) ?? await _fallback.me();
+      return _parse(apiDataMap(res.data)) ?? await _fallback.me();
     } catch (_) {
       return _fallback.updateProfile(
         displayName: displayName,
@@ -237,31 +140,52 @@ class RemoteUserRepository implements UserRepository {
 
   UserModel? _parse(Map<String, dynamic>? json) {
     if (json == null) return null;
-    return UserModel(
-      id: json['id']?.toString() ?? '',
-      displayName: json['display_name'] as String? ?? '',
-      avatarAsset: json['avatar_asset'] as String?,
-      avatarUrl: json['avatar_url'] as String?,
-      rating: (json['rating'] as num?)?.toDouble(),
-      bio: json['bio'] as String?,
-      location: json['location'] as String?,
-      activitiesCount: json['activities_count'] as int? ?? 0,
-      hostedCount: json['hosted_count'] as int? ?? 0,
-      sports:
-          (json['sports'] as List<dynamic>?)
+    // Backend returns `preferredSports` as a list of sport-name strings.
+    // The mobile model expects a list of `(sport, level)` records where
+    // level is used to render the per-sport badge on the profile screen.
+    // We map the bare name with an empty level so existing UI still
+    // renders the chip — full per-sport levels aren't persisted yet.
+    final preferredSports = json['preferredSports'] as List<dynamic>?;
+    final mappedSports = preferredSports != null
+        ? preferredSports
+              .map((sport) => (sport: sport.toString(), level: ''))
+              .toList()
+        : (json['sports'] as List<dynamic>?)
               ?.map(
                 (e) => (
-                  sport: e['sport'] as String? ?? '',
-                  level: e['level'] as String? ?? '',
+                  sport: e['sport']?.toString() ?? '',
+                  level: e['level']?.toString() ?? '',
                 ),
               )
-              .toList() ??
-          const [],
-      ratingBySport: _parseRatingBySport(json['rating_by_sport']),
-      totalRatingCount: (json['total_rating_count'] as num?)?.toInt() ?? 0,
+              .toList();
+
+    return UserModel(
+      id: json['id']?.toString() ?? json['authUid']?.toString() ?? '',
+      displayName: json['displayName'] as String? ??
+          json['display_name'] as String? ??
+          '',
+      avatarAsset: json['avatar_asset'] as String?,
+      avatarUrl: json['avatarUrl'] as String? ?? json['avatar_url'] as String?,
+      rating: (json['rating'] as num?)?.toDouble(),
+      bio: json['bio'] as String?,
+      location: (json['preferredLocations'] as List?)?.isNotEmpty == true
+          ? (json['preferredLocations'] as List).first.toString()
+          : json['location'] as String?,
+      activitiesCount: json['activities_count'] as int? ?? 0,
+      hostedCount: json['hosted_count'] as int? ?? 0,
+      sports: mappedSports ?? const [],
+      ratingBySport: _parseRatingBySport(
+        json['ratingBySport'] ?? json['rating_by_sport'],
+      ),
+      totalRatingCount:
+          (json['totalRatingCount'] as num?)?.toInt() ??
+          (json['total_rating_count'] as num?)?.toInt() ??
+          0,
       email: json['email'] as String?,
       phone: json['phone'] as String?,
-      dateOfBirth: json['date_of_birth'] != null
+      dateOfBirth: json['dateOfBirth'] != null
+          ? DateTime.tryParse(json['dateOfBirth'] as String)
+          : json['date_of_birth'] != null
           ? DateTime.tryParse(json['date_of_birth'] as String)
           : null,
       heightCm: json['height_cm'] as int?,
