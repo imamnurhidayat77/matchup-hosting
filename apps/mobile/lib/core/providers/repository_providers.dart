@@ -7,6 +7,7 @@ import '../../features/calendar/data/calendar_repository.dart';
 import '../../features/calendar/data/calendar_repository_impl.dart';
 import '../../features/chat/data/chat_repository.dart';
 import '../../features/chat/data/chat_repository_impl.dart';
+import '../../features/chat/data/dm_repository.dart';
 import '../../features/chat/data/local_typing_repository.dart';
 import '../../features/chat/data/remote_typing_repository.dart';
 import '../../features/chat/data/typing_repository.dart';
@@ -89,6 +90,12 @@ final chatRepositoryProvider = Provider<ChatRepository>((ref) {
   final remote = ref.watch(useRemoteApiProvider);
   if (remote) return RemoteChatRepository();
   return LocalChatRepository();
+});
+
+/// 1-on-1 direct messages (`/api/dm/:uid/...`). Remote-only by design
+/// (like chat, there is no offline fallback) — always the live repo.
+final dmRepositoryProvider = Provider<DmRepository>((ref) {
+  return RemoteDmRepository();
 });
 
 /// "X is typing…" indicator for activity chats. The remote flavour

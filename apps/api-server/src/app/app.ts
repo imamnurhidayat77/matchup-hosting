@@ -7,6 +7,7 @@ import { usersRouter } from '../modules/users/users.routes.js';
 import { presenceRouter } from '../modules/presence/presence.routes.js';
 import { typingRouter } from '../modules/typing/typing.routes.js';
 import { chatRouter } from '../modules/chat/chat.routes.js';
+import { dmRouter } from '../modules/dm/dm.routes.js';
 import { activitiesRouter } from '../modules/activities/activities.routes.js';
 import { listPublicActivityTeasersHandler } from '../modules/activities/activities.controller.js';
 import { swipesRouter } from '../modules/swipes/swipes.routes.js';
@@ -51,6 +52,7 @@ export function createApp(){
     app.use('/api/presence', presenceRouter);
     app.use('/api/typing', typingRouter);
     app.use('/api/chat', chatRouter);
+    app.use('/api/dm', dmRouter);
     app.use('/api/activities', activitiesRouter);
     app.use('/api/swipes', swipesRouter);
     app.use('/api/notifications', notificationsRouter);

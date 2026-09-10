@@ -1,18 +1,21 @@
 import { Timestamp } from 'firebase-admin/firestore';
-import { firestore } from '../../database/firebase.js';
+import { firestore, messaging } from '../../database/firebase.js';
 import {
     userNotificationDocPath,
     userNotificationsCollectionPath,
 } from '../../database/paths.js';
+import { deleteDevice, listDevices } from '../devices/devices.service.js';
 
 export type NotificationType =
     | 'activity_reminder'
     | 'activity_interest'
     | 'activity_joined'
     | 'activity_cancelled'
+    | 'activity_completed'
     | 'activity_left'
     | 'participant_removed'
     | 'chat_message'
+    | 'dm_message'
     | 'join_request'
     | 'system';
 
@@ -46,13 +49,15 @@ function assertNotificationType(type: unknown): asserts type is NotificationType
         type !== 'activity_interest' &&
         type !== 'activity_joined' &&
         type !== 'activity_cancelled' &&
+        type !== 'activity_completed' &&
         type !== 'activity_left' &&
         type !== 'participant_removed' &&
         type !== 'chat_message' &&
+        type !== 'dm_message' &&
         type !== 'join_request' &&
         type !== 'system'
     ) {
-        throw new Error('type must be activity_reminder, activity_interest, activity_joined, activity_cancelled, activity_left, participant_removed, chat_message, join_request, or system');
+        throw new Error('type must be activity_reminder, activity_interest, activity_joined, activity_cancelled, activity_completed, activity_left, participant_removed, chat_message, join_request, or system');
     }
 }
 
@@ -157,9 +162,90 @@ export async function createNotification(
 
     await notificationRef.set(record);
 
+    // Bridge the in-app feed to the OS: deliver an FCM push without
+    // blocking the caller (chat sends stay fast). Failures are
+    // swallowed — the Firestore record above is the source of truth
+    // and the app also polls/realtimes it.
+    deliverPush({
+        recipientUid,
+        title,
+        body,
+        type,
+        ...(typeof input.activityId === 'string' && input.activityId.trim()
+            ? { activityId: input.activityId.trim() }
+            : {}),
+        ...(typeof input.senderUid === 'string' && input.senderUid.trim()
+            ? { senderUid: input.senderUid.trim() }
+            : {}),
+    }).catch(() => undefined);
+
     return {
         notificationId: notificationRef.id,
     };
+}
+
+/**
+ * Sends an FCM push for an already-persisted notification. Best-effort
+ * by contract: resolves `{ delivered }` and never throws, so callers
+ * can fire-and-forget it after writing the Firestore record.
+ *
+ * Dead tokens (`registration-token-not-registered`,
+ * `invalid-registration-token`) are pruned from the device registry
+ * so rotations/uninstalls stop costing a send on every notification.
+ */
+export async function deliverPush(input: {
+    recipientUid: string;
+    title: string;
+    body: string;
+    type: NotificationType;
+    activityId?: string;
+    senderUid?: string;
+}): Promise<{ delivered: number }> {
+    try {
+        const devices = await listDevices(input.recipientUid);
+        const byToken = new Map<string, string>();
+        for (const d of devices) {
+            const token = d.fcmToken?.trim();
+            if (token && !byToken.has(token)) byToken.set(token, d.deviceId);
+        }
+        if (byToken.size === 0) return { delivered: 0 };
+
+        const tokens = [...byToken.keys()];
+        const data: Record<string, string> = { type: input.type };
+        if (input.activityId) data.activityId = input.activityId;
+        if (input.senderUid) data.senderUid = input.senderUid;
+
+        const batch = await messaging.sendEachForMulticast({
+            tokens,
+            notification: { title: input.title, body: input.body },
+            data,
+            android: { priority: 'high' as const },
+        });
+
+        let delivered = batch.successCount;
+        // Prune dead tokens one by one; each prune is independent.
+        await Promise.all(
+            batch.responses.map((r, i) => {
+                if (r.success) return Promise.resolve();
+                const code = r.error?.code ?? '';
+                if (
+                    code !== 'messaging/registration-token-not-registered' &&
+                    code !== 'messaging/invalid-registration-token'
+                ) {
+                    return Promise.resolve();
+                }
+                const deviceId = byToken.get(tokens[i]!);
+                if (!deviceId) return Promise.resolve();
+                return deleteDevice(input.recipientUid, deviceId).catch(
+                    () => undefined,
+                );
+            }),
+        );
+
+        return { delivered };
+    } catch {
+        return { delivered: 0 };
+    }
 }
 
 export async function listNotifications(

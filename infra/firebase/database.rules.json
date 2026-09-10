@@ -20,6 +20,17 @@
     "presence": {
       ".read": "auth != null",
       ".write": false
+    },
+    "dmChats": {
+      "$threadId": {
+        "messages": {
+          ".read": "auth != null",
+          ".write": false,
+          "$messageId": {
+            ".validate": "newData.hasChildren(['senderId', 'text', 'timestamp']) && newData.child('senderId').isString() && newData.child('text').isString() && newData.child('timestamp').isNumber()"
+          }
+        }
+      }
     }
   }
 }

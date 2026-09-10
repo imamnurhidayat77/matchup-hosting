@@ -37,6 +37,7 @@ import '../features/profile/presentation/profile_screen.dart';
 import '../features/profile/presentation/edit_profile_screen.dart';
 import '../features/profile/presentation/player_profile_screen.dart';
 import '../features/chat/presentation/chat_screen.dart';
+import '../features/chat/presentation/dm_screen.dart';
 import '../features/chat/presentation/messages_screen.dart';
 import 'app_shell.dart';
 
@@ -104,8 +105,14 @@ CustomTransitionPage<void> appPage(
 
 // ─── Builder ─────────────────────────────────────────────────────────────────
 
+/// Root navigator key — lets notification taps and other app-level
+/// triggers navigate without a widget context (see `_PushRouter` in
+/// `app.dart`, which resolves its context from this key).
+final rootNavigatorKey = GlobalKey<NavigatorState>();
+
 GoRouter buildRouter(Ref ref) {
   return GoRouter(
+    navigatorKey: rootNavigatorKey,
     initialLocation: '/splash',
     refreshListenable: _AuthListenable(ref),
     redirect: (context, state) {
@@ -346,6 +353,21 @@ GoRouter buildRouter(Ref ref) {
                 state,
                 ChatScreen(activityId: id),
                 key: ValueKey('chat-$id'),
+              );
+            },
+          ),
+          GoRoute(
+            // 1-on-1 thread with another user. Peer display name rides
+            // along as route `extra` (falls back to a generic label on
+            // cold-start push taps where no name is available).
+            path: '/dm/:uid',
+            pageBuilder: (_, state) {
+              final uid = state.pathParameters['uid'] ?? '';
+              final name = state.extra is String ? state.extra as String : null;
+              return appPage(
+                state,
+                DmScreen(otherUid: uid, peerName: name),
+                key: ValueKey('dm-$uid'),
               );
             },
           ),

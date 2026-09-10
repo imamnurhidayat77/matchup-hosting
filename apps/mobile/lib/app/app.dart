@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +10,9 @@ import '../core/theme/app_spacing.dart';
 import '../core/theme/app_typography.dart';
 import '../core/theme/dark_colors.dart';
 import '../core/theme/theme_controller.dart';
+import '../core/widgets/app_snackbar.dart';
+import '../features/notifications/services/push_notification_service.dart';
+import '../features/notifications/services/push_routing.dart';
 import 'router.dart';
 
 /// Cached GoRouter instance. Using a provider ensures the router is
@@ -31,6 +36,9 @@ class MatchUpApp extends ConsumerWidget {
       themeMode: mode,
       routerConfig: router,
       builder: (context, child) {
+        // Routes notification taps / foreground banners (see
+        // PushNotificationService streams) into the navigator.
+        final routedChild = _PushRouter(child: child ?? const SizedBox.shrink());
         // Match Figma / CSS line-height semantics:
         //  - leadingDistribution.even splits the extra leading equally
         //    above and below each line (Flutter default is proportional to
@@ -45,7 +53,7 @@ class MatchUpApp extends ConsumerWidget {
             applyHeightToLastDescent: false,
             leadingDistribution: TextLeadingDistribution.even,
           ),
-          child: child ?? const SizedBox.shrink(),
+          child: routedChild,
         );
       },
     );
@@ -388,4 +396,80 @@ class MatchUpApp extends ConsumerWidget {
       extensions: const [AppColorTokens.dark],
     );
   }
+}
+
+// ─── Push routing ─────────────────────────────────────────────────────────────
+
+/// Subscribes to [PushNotificationService] streams and turns them into
+/// navigation + foreground snackbars:
+///
+/// * System-tray taps (background/killed) → deep-link via [routeForPush].
+/// * Foreground messages → snackbar with a View action (the OS does not
+///   banner these itself).
+///
+/// Context comes from [rootNavigatorKey] so this works without being
+/// under any particular screen. Taps landing on auth-gated routes while
+/// logged out simply hit the router's existing redirect to /welcome.
+class _PushRouter extends StatefulWidget {
+  const _PushRouter({required this.child});
+  final Widget child;
+
+  @override
+  State<_PushRouter> createState() => _PushRouterState();
+}
+
+class _PushRouterState extends State<_PushRouter> {
+  StreamSubscription<PushPayload>? _openedSub;
+  StreamSubscription<PushPayload>? _foregroundSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _openedSub =
+        PushNotificationService.onNotificationOpened.listen(_open);
+    _foregroundSub =
+        PushNotificationService.onForegroundMessage.listen(_banner);
+  }
+
+  @override
+  void dispose() {
+    _openedSub?.cancel();
+    _foregroundSub?.cancel();
+    super.dispose();
+  }
+
+  void _open(PushPayload payload) {
+    final route = routeForPush(payload);
+    if (route == null || !mounted) return;
+    // Defer a frame so taps arriving mid-transition don't race the
+    // navigator.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final ctx = rootNavigatorKey.currentContext;
+      if (ctx == null) return;
+      GoRouter.of(ctx).go(route);
+    });
+  }
+
+  void _banner(PushPayload payload) {
+    if (!mounted) return;
+    final ctx = rootNavigatorKey.currentContext;
+    if (ctx == null) return;
+    final route = routeForPush(payload);
+    AppSnackbar.show(
+      ctx,
+      message: payload.title ?? 'New notification',
+      variant: AppSnackbarVariant.info,
+      actionLabel: route == null ? null : 'View',
+      onAction: route == null
+          ? null
+          : () {
+              final c = rootNavigatorKey.currentContext;
+              if (c != null) GoRouter.of(c).go(route);
+            },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

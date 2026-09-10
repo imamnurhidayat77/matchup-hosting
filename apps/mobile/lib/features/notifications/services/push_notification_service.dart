@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/device_repository.dart';
 import '../domain/device_record.dart';
+import 'push_routing.dart';
 
 /// Wraps Firebase Cloud Messaging setup so the rest of the app doesn't
 /// have to know whether Firebase has been initialised or not.
@@ -39,6 +40,28 @@ class PushNotificationService {
   static const String _deviceIdPrefsKey = 'push_notification_device_id';
 
   bool _initialised = false;
+
+  /// Taps on system-tray notifications (background/killed + the cold-
+  /// start message). The app shell routes these via [routeForPush].
+  /// Broadcast so tests and future listeners can attach freely.
+  static final StreamController<PushPayload> _openedController =
+      StreamController<PushPayload>.broadcast();
+  static Stream<PushPayload> get onNotificationOpened =>
+      _openedController.stream;
+
+  /// Foreground messages (the OS does not banner these). The app shell
+  /// surfaces a snackbar with a View action from this stream.
+  static final StreamController<PushPayload> _foregroundController =
+      StreamController<PushPayload>.broadcast();
+  static Stream<PushPayload> get onForegroundMessage =>
+      _foregroundController.stream;
+
+  /// Test hook — pushes a payload through the opened stream without
+  /// Firebase. Production path is the FCM listeners below.
+  @visibleForTesting
+  static void debugEmitOpened(PushPayload payload) {
+    if (!_openedController.isClosed) _openedController.add(payload);
+  }
 
   /// Initialises Firebase Messaging, requests permission, and registers
   /// the current device with the backend's `/api/devices` endpoint.
@@ -94,13 +117,43 @@ class PushNotificationService {
       });
 
       // Foreground messages. The OS will not display a notification
-      // automatically when the app is in the foreground — this is where
-      // a project would surface a snackbar via a global navigator key.
+      // automatically when the app is in the foreground — parsed
+      // payloads go to [onForegroundMessage] so the app shell can
+      // surface a snackbar with a View action.
       FirebaseMessaging.onMessage.listen((RemoteMessage message) {
         debugPrint(
           '[PushNotificationService] Foreground message: '
           '${message.notification?.title ?? message.data}',
         );
+        final payload = PushPayload.parse(
+          message.data,
+          title: message.notification?.title,
+        );
+        if (payload != null && !_foregroundController.isClosed) {
+          _foregroundController.add(payload);
+        }
+      });
+
+      // Taps on system-tray notifications (app backgrounded), plus the
+      // cold-start message when the app was killed.
+      FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+        final payload = PushPayload.parse(
+          message.data,
+          title: message.notification?.title,
+        );
+        if (payload != null && !_openedController.isClosed) {
+          _openedController.add(payload);
+        }
+      });
+      FirebaseMessaging.instance.getInitialMessage().then((message) {
+        if (message == null) return;
+        final payload = PushPayload.parse(
+          message.data,
+          title: message.notification?.title,
+        );
+        if (payload != null && !_openedController.isClosed) {
+          _openedController.add(payload);
+        }
       });
     } catch (e, st) {
       // Any failure here means FCM is unavailable for this session.
