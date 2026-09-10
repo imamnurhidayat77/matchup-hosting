@@ -35,6 +35,35 @@ class StorageService {
     required String localPath,
     required String folder,
   }) async {
+    final basename = localPath.split('/').last;
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    return _put(
+      localPath: localPath,
+      storagePath: 'uploads/$folder/$timestamp-$basename',
+    );
+  }
+
+  /// Uploads [localPath] to an explicit Storage [storagePath] (no
+  /// `uploads/` prefix) and returns both the path and its download
+  /// URL. Used for flows where the backend validates path ownership
+  /// (`PATCH /users/me/photo` requires `users/{uid}/profile/…`,
+  /// activity covers require `activities/{id}/cover/…`).
+  Future<({String path, String downloadUrl})?> uploadToPath({
+    required String localPath,
+    required String storagePath,
+  }) async {
+    final downloadUrl = await _put(
+      localPath: localPath,
+      storagePath: storagePath,
+    );
+    if (downloadUrl == null) return null;
+    return (path: storagePath, downloadUrl: downloadUrl);
+  }
+
+  Future<String?> _put({
+    required String localPath,
+    required String storagePath,
+  }) async {
     if (!_isFirebaseReady()) {
       debugPrint(
         '[StorageService] Firebase not initialised — skipping upload',
@@ -50,10 +79,7 @@ class StorageService {
       }
 
       final basename = localPath.split('/').last;
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final ref = FirebaseStorage.instance.ref(
-        'uploads/$folder/$timestamp-$basename',
-      );
+      final ref = FirebaseStorage.instance.ref(storagePath);
 
       final uploadTask = await ref.putFile(
         file,
@@ -69,7 +95,7 @@ class StorageService {
 
       return await ref.getDownloadURL();
     } catch (e, st) {
-      debugPrint('[StorageService.uploadImage] $e\n$st');
+      debugPrint('[StorageService._put] $e\n$st');
       return null;
     }
   }

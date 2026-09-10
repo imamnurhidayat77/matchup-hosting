@@ -4,9 +4,10 @@ abstract class UserRepository {
   Future<UserModel> me();
   Future<UserModel?> byId(String id);
 
-  /// Uploads a new profile photo from [localPath] (image_picker output),
-  /// persists the download URL via `PATCH /users/me`, and returns the
-  /// updated user. Throws when the upload or the patch fails.
+  /// Uploads a new profile photo from [localPath] (image_picker output)
+  /// to `users/{uid}/profile/…`, persists it via
+  /// `PATCH /users/me/photo`, and returns the updated user. Throws
+  /// when the upload or the patch fails.
   Future<UserModel> uploadAvatar({required String localPath});
   Future<UserModel> updateProfile({
     String? displayName,

@@ -86,15 +86,23 @@ ready. No code deploy is needed for the switch-over.
 
 ## 4. Publish the Storage rules
 
-Photo uploads (chat attachments, profile avatars) write to
-`uploads/…` via the Firebase SDK, which — unlike the backend's
-Admin SDK — must pass security rules. Publish
-[`storage.rules`](./storage.rules) from the console
-(**Storage → Rules**) or with:
+Photo uploads go through the Firebase SDK, which — unlike the
+backend's Admin SDK — must pass security rules. The canonical
+rules live at the repo root ([`storage.rules`](../../storage.rules),
+wired via [`firebase.json`](../../firebase.json)) and cover:
+
+- `users/{uid}/profile/…` — profile avatars (owner-only write,
+  images ≤ 5 MB)
+- `activities/{activityId}/cover/…` — activity covers (host-only
+  write, images ≤ 8 MB)
+- `uploads/chat-attachments/…` — chat photo attachments
+  (signed-in write, images ≤ 8 MB)
+
+Publish from the console (**Storage → Rules**) or with:
 
 ```bash
 firebase deploy --only storage
 ```
 
-Without this step every upload fails with `permission-denied`
-(the app then shows an error snackbar instead of a fake success).
+Without this step uploads fail with `permission-denied` (the app
+then shows an error snackbar instead of a fake success).

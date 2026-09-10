@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/services/storage_service.dart';
+import '../../../core/storage/secure_token_store.dart';
 import '../../ratings/domain/rating_models.dart';
 import '../domain/user_model.dart';
 import 'user_repository.dart';
@@ -149,18 +150,24 @@ class RemoteUserRepository implements UserRepository {
 
   @override
   Future<UserModel> uploadAvatar({required String localPath}) async {
-    // Storage first: the backend persists text only, so the photo
-    // travels as a download URL (same pattern as chat attachments).
-    final uploadedUrl = await StorageService.instance.uploadImage(
+    // The backend (`PATCH /users/me/photo`) requires the Storage path
+    // to be `users/{uid}/profile/…` and stores both path and URL.
+    final uid = await SecureTokenStore.instance.readUserId();
+    if (uid == null || uid.isEmpty) {
+      throw StateError('No signed-in user for profile photo upload.');
+    }
+    final basename = localPath.split('/').last;
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final uploaded = await StorageService.instance.uploadToPath(
       localPath: localPath,
-      folder: 'profile-photos',
+      storagePath: 'users/$uid/profile/$timestamp-$basename',
     );
-    if (uploadedUrl == null || uploadedUrl.isEmpty) {
+    if (uploaded == null || uploaded.downloadUrl.isEmpty) {
       throw StateError('Profile photo upload failed.');
     }
     final res = await _client.dio.patch(
-      '/users/me',
-      data: {'photoUrl': uploadedUrl},
+      '/users/me/photo',
+      data: {'photoPath': uploaded.path, 'photoUrl': uploaded.downloadUrl},
     );
     final updated = _parse(apiDataMap(res.data));
     if (updated == null) {
