@@ -1,6 +1,8 @@
 import type { Request, Response } from 'express';
 import {
+    listDmConversations,
     listDmMessages,
+    markDmThreadRead,
     resolveThread,
     sendDmMessage,
 } from './dm.service.js';
@@ -114,6 +116,43 @@ export async function sendDmHandler(
             const status = code === 'EMPTY_INPUT' ? 400 : 400;
             return res.status(status).json(errorBody(code, message));
         }
+        return res.status(500).json(errorBody('INTERNAL_ERROR', message));
+    }
+}
+
+/** `GET /api/dm/conversations` — viewer's DM inbox, newest first. */
+export async function listConversationsHandler(req: Request, res: Response) {
+    try {
+        const viewerUid = req.auth?.uid;
+        if (!viewerUid) {
+            return res.status(401).json(errorBody('UNAUTHORIZED', 'Authenticated user is required'));
+        }
+        const rows = await listDmConversations(viewerUid);
+        return res.status(200).json({ ok: true, data: rows });
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        return res.status(500).json(errorBody('INTERNAL_ERROR', message));
+    }
+}
+
+/** `POST /api/dm/:uid/read` — clear the unread badge for one thread. */
+export async function markThreadReadHandler(
+    req: Request<DmPeerParams>,
+    res: Response,
+) {
+    try {
+        const viewerUid = req.auth?.uid;
+        const peer = peerUid(req);
+        if (!viewerUid) {
+            return res.status(401).json(errorBody('UNAUTHORIZED', 'Authenticated user is required'));
+        }
+        if (peer === null) {
+            return res.status(400).json(errorBody('INVALID_INPUT', 'peer uid is required'));
+        }
+        await markDmThreadRead(viewerUid, peer);
+        return res.status(200).json({ ok: true, data: { peerUid: peer } });
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
         return res.status(500).json(errorBody('INTERNAL_ERROR', message));
     }
 }

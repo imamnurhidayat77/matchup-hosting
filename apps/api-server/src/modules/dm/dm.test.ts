@@ -7,6 +7,8 @@ vi.mock('./dm.service.js', () => ({
     sendDmMessage: vi
         .fn()
         .mockResolvedValue({ messageId: 'm-1', conversationId: 'a_b' }),
+    listDmConversations: vi.fn().mockResolvedValue([]),
+    markDmThreadRead: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../../middleware/auth.middleware.js', () => ({
@@ -85,5 +87,42 @@ describe('dm routes', () => {
         const response = await request(app).get('/api/dm/ghost/thread');
 
         expect(response.status).toBe(404);
+    });
+});
+
+describe('dm inbox routes', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it('GET /api/dm/conversations lists the inbox', async () => {
+        vi.mocked(dmService.listDmConversations).mockResolvedValue([
+            {
+                peerUid: 'peer-1',
+                displayName: 'Peer One',
+                lastText: 'hey',
+                lastTimestamp: 123,
+                lastSenderId: 'peer-1',
+                unreadCount: 2,
+            },
+        ]);
+        const app = createApp();
+        const response = await request(app).get('/api/dm/conversations');
+
+        expect(response.status).toBe(200);
+        expect(response.body.data).toHaveLength(1);
+        expect(dmService.listDmConversations).toHaveBeenCalledWith('test-uid-1');
+    });
+
+    it('POST /api/dm/:uid/read clears the badge', async () => {
+        vi.mocked(dmService.markDmThreadRead).mockResolvedValue(undefined);
+        const app = createApp();
+        const response = await request(app).post('/api/dm/peer-1/read').send({});
+
+        expect(response.status).toBe(200);
+        expect(dmService.markDmThreadRead).toHaveBeenCalledWith(
+            'test-uid-1',
+            'peer-1',
+        );
     });
 });

@@ -13,6 +13,7 @@ import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../../tour/presentation/tour_anchors.dart';
 import '../domain/activity_model.dart';
+import '../data/remote_activity_repository.dart';
 import '../domain/discovery_filter.dart';
 import '../domain/swipe_decision.dart';
 import 'widgets/discovery_actions.dart';
@@ -95,7 +96,9 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
     super.dispose();
   }
 
-  Future<void> _load() async {
+  /// Manual refresh (header button) bypasses the cache and always
+  /// shows the skeleton; every other caller serves cache-first.
+  Future<void> _load({bool forceRefresh = false}) async {
     // Merge the session "show swiped" choice into the user filter so a
     // single object travels to the repo. `copyWith` keeps the stored
     // provider value pristine — "Start over" must not permanently flip
@@ -111,7 +114,17 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
     // the new feed arrives, which reads as "the tap did nothing".
     if (mounted && !_isLoading) setState(() => _isLoading = true);
     try {
-      final list = await ref.read(activityRepositoryProvider).feed(filter: filter);
+      final repo = ref.read(activityRepositoryProvider);
+      // Cache-hit serves instantly (tab switches dispose this State,
+      // so without the repo cache every return trip replays HTTP +
+      // GPS behind the skeleton). When we know the hit is fresh, kick
+      // a silent background refresh afterwards so the deck still
+      // converges without ever flashing the skeleton.
+      final remote = repo is RemoteActivityRepository ? repo : null;
+      final wasFresh =
+          !forceRefresh && (remote?.isFeedFresh(filter: filter) ?? false);
+      final list =
+          await repo.feed(filter: filter, forceRefresh: forceRefresh);
       if (!mounted) return;
       // Never re-deal a card the user already swiped: the backend
       // attaches `mySwipeDecision` per activity for the signed-in
@@ -122,41 +135,84 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
       // state) so the choice survives tab switches, which dispose this
       // State and would otherwise force another "Start over" tap on
       // every return.
-      final includeSwiped = ref.read(_includeSwipedProvider);
-      setState(() {
-        // Committed games (joined or hosted) are taken from the raw
-        // feed BEFORE deck filtering — they anchor the time-clash
-        // check below and never enter the deck themselves.
-        final committed = list
-            .where((a) => a.isParticipant || a.isHost)
-            .toList();
-        _activities = list.where((a) {
-          // Joined/hosted games live in My Games — never re-deal
-          // them in Discover, not on reload, not even on "Start
-          // over".
-          if (a.isParticipant || a.isHost) return false;
-          // A right-swipe (join) is permanent: a joined game never
-          // re-enters the deck. It lives on in My Games instead.
-          if (a.mySwipeDecision == 'join') return false;
-          // "Start over" re-deals passes; otherwise only unseen cards.
-          return includeSwiped || a.mySwipeDecision == null;
-        }).toList();
-        // Drop anything time-clashing with a committed game — no
-        // point dealing a card they can't attend.
-        if (committed.isNotEmpty) {
-          _activities = _activities.where((a) {
-            return !committed.any((b) =>
-                b.id != a.id &&
-                a.dateTime.isBefore(b.endTime) &&
-                b.dateTime.isBefore(a.endTime));
-          }).toList();
-        }
-        _topIndex = 0;
-        _isLoading = false;
-        _hasActiveFilter = !filter.isEmpty;
-      });
+      _applyDeck(list, filter);
+      // Silent background refresh when the render above came from a
+      // fresh cache entry: the deck converges to live data without
+      // ever flashing the skeleton. Skipped on cold loads (nothing
+      // cached — the fetch above already went to the network).
+      if (wasFresh && remote != null) {
+        unawaited(_refreshSilently(remote, filter));
+      }
     } catch (_) {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  /// Builds [_activities] from a raw feed inside setState. Shared by
+  /// [_load] (skeleton path) and [_refreshSilently] (no-skeleton path
+  /// that preserves the user's swipe position).
+  void _applyDeck(List<ActivityModel> list, DiscoveryFilter filter) {
+    // Never re-deal a card the user already swiped: the backend
+    // attaches `mySwipeDecision` per activity for the signed-in
+    // viewer. Cards swiped this session are already skipped via
+    // `_topIndex`, so this only matters across launches/restarts.
+    // "Start over" opts back into the full deck via
+    // [_includeSwipedProvider] — a session-lived provider (not widget
+    // state) so the choice survives tab switches, which dispose this
+    // State and would otherwise force another "Start over" tap on
+    // every return.
+    final includeSwiped = ref.read(_includeSwipedProvider);
+    setState(() {
+      // Committed games (joined or hosted) are taken from the raw
+      // feed BEFORE deck filtering — they anchor the time-clash
+      // check below and never enter the deck themselves.
+      final committed = list
+          .where((a) => a.isParticipant || a.isHost)
+          .toList();
+      _activities = list.where((a) {
+        // Joined/hosted games live in My Games — never re-deal
+        // them in Discover, not on reload, not even on "Start
+        // over".
+        if (a.isParticipant || a.isHost) return false;
+        // A right-swipe (join) is permanent: a joined game never
+        // re-enters the deck. It lives on in My Games instead.
+        if (a.mySwipeDecision == 'join') return false;
+        // "Start over" re-deals passes; otherwise only unseen cards.
+        return includeSwiped || a.mySwipeDecision == null;
+      }).toList();
+      // Drop anything time-clashing with a committed game — no
+      // point dealing a card they can't attend.
+      if (committed.isNotEmpty) {
+        _activities = _activities.where((a) {
+          return !committed.any((b) =>
+              b.id != a.id &&
+              a.dateTime.isBefore(b.endTime) &&
+              b.dateTime.isBefore(a.endTime));
+        }).toList();
+      }
+      _topIndex = 0;
+      _isLoading = false;
+      _hasActiveFilter = !filter.isEmpty;
+    });
+  }
+
+  /// Re-fetches bypassing the cache and swaps the deck silently — no
+  /// skeleton, and the swipe position is preserved so a mid-deck user
+  /// is never yanked back to the top. No-op when the fresh feed is
+  /// identical or the user already started swiping.
+  Future<void> _refreshSilently(
+    RemoteActivityRepository repo,
+    DiscoveryFilter filter,
+  ) async {
+    try {
+      final fresh = await repo.feed(filter: filter, forceRefresh: true);
+      if (!mounted || _topIndex > 0) return;
+      final sameIds = fresh.map((a) => a.id).join(',') ==
+          _activities.map((a) => a.id).join(',');
+      if (sameIds) return;
+      _applyDeck(fresh, filter);
+    } catch (_) {
+      // Silent path — stale deck simply stays.
     }
   }
 
@@ -177,6 +233,11 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
         decision: liked ? SwipeDecision.join : SwipeDecision.pass,
       ),
     );
+
+    // Drop cached feeds so a just-swiped card can't be re-dealt from
+    // a stale entry within the TTL window (e.g. tab switch → back).
+    final repo = ref.read(activityRepositoryProvider);
+    if (repo is RemoteActivityRepository) repo.invalidateFeed();
 
     if (liked && next < _activities.length) {
       Future.delayed(const Duration(milliseconds: 420), () {
@@ -241,6 +302,11 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
                 // is active — tells the user the deck is filtered
                 // without taking up header space.
                 showDot: _hasActiveFilter,
+              ),
+              HomeHeaderAction(
+                icon: Icons.refresh_rounded,
+                semanticLabel: 'Refresh',
+                onTap: () => _load(forceRefresh: true),
               ),
               HomeHeaderAction(
                 icon: Icons.notifications_none_rounded,

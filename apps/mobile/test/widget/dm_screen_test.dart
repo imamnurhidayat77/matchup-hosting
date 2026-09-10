@@ -27,6 +27,17 @@ class _FakeDmRepo implements DmRepository {
       List.unmodifiable(_messages);
 
   @override
+  Future<List<ChatConversation>> conversations() async => const [];
+
+  @override
+  Stream<List<ChatConversation>> watchConversations() async* {
+    yield const [];
+  }
+
+  @override
+  Future<void> markRead(String otherUid) async {}
+
+  @override
   Future<ChatMessage> send({required String otherUid, required String text}) async {
     sent.add(text);
     final m = ChatMessage(

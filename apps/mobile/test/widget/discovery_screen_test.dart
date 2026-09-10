@@ -73,6 +73,7 @@ void main() {
         limit: any(named: 'limit'),
         offset: any(named: 'offset'),
         filter: any(named: 'filter'),
+        forceRefresh: any(named: 'forceRefresh'),
       ),
     ).thenAnswer((_) async => _fixtures());
     when(
@@ -189,6 +190,7 @@ void main() {
             limit: any(named: 'limit'),
             offset: any(named: 'offset'),
             filter: any(named: 'filter'),
+            forceRefresh: any(named: 'forceRefresh'),
           ),
         ).thenAnswer((_) async => [_fixtures().first]);
 
@@ -214,6 +216,7 @@ void main() {
             limit: any(named: 'limit'),
             offset: any(named: 'offset'),
             filter: any(named: 'filter'),
+            forceRefresh: any(named: 'forceRefresh'),
           ),
           // Small delay so the in-between loading frame is observable:
           // with an instant mock the reload resolves before the next
@@ -253,6 +256,7 @@ void main() {
             limit: any(named: 'limit'),
             offset: any(named: 'offset'),
             filter: any(named: 'filter'),
+            forceRefresh: any(named: 'forceRefresh'),
           ),
         ).thenAnswer((_) async => swiped);
 
@@ -314,6 +318,7 @@ void main() {
             limit: any(named: 'limit'),
             offset: any(named: 'offset'),
             filter: any(named: 'filter'),
+            forceRefresh: any(named: 'forceRefresh'),
           ),
         ).thenAnswer((_) async => swiped);
 
@@ -351,6 +356,7 @@ void main() {
             limit: any(named: 'limit'),
             offset: any(named: 'offset'),
             filter: filter.copyWith(includeSwiped: true),
+            forceRefresh: any(named: 'forceRefresh'),
           ),
         ).called(1);
       },
@@ -368,6 +374,7 @@ void main() {
             limit: any(named: 'limit'),
             offset: any(named: 'offset'),
             filter: any(named: 'filter'),
+            forceRefresh: any(named: 'forceRefresh'),
           ),
         ).thenAnswer((_) async => [_fixtures().first]);
 
@@ -391,6 +398,7 @@ void main() {
             limit: any(named: 'limit'),
             offset: any(named: 'offset'),
             filter: any(named: 'filter'),
+            forceRefresh: any(named: 'forceRefresh'),
           ),
         ).thenAnswer((_) async => joined);
 
@@ -416,6 +424,7 @@ void main() {
             limit: any(named: 'limit'),
             offset: any(named: 'offset'),
             filter: any(named: 'filter'),
+            forceRefresh: any(named: 'forceRefresh'),
           ),
         ).thenAnswer(
           (_) async => [
@@ -464,6 +473,7 @@ void main() {
             limit: any(named: 'limit'),
             offset: any(named: 'offset'),
             filter: any(named: 'filter'),
+            forceRefresh: any(named: 'forceRefresh'),
           ),
         ).thenAnswer(
           (_) async => [
@@ -494,6 +504,7 @@ void main() {
             limit: any(named: 'limit'),
             offset: any(named: 'offset'),
             filter: any(named: 'filter'),
+            forceRefresh: any(named: 'forceRefresh'),
           ),
         ).called(1);
 
@@ -517,6 +528,7 @@ void main() {
             limit: any(named: 'limit'),
             offset: any(named: 'offset'),
             filter: newFilter,
+            forceRefresh: any(named: 'forceRefresh'),
           ),
         ).called(1);
       },
@@ -536,6 +548,7 @@ void main() {
             limit: any(named: 'limit'),
             offset: any(named: 'offset'),
             filter: any(named: 'filter'),
+            forceRefresh: any(named: 'forceRefresh'),
           ),
         ).thenAnswer((_) async {
           await Future<void>.delayed(const Duration(milliseconds: 100));
@@ -598,9 +611,42 @@ void main() {
             limit: any(named: 'limit'),
             offset: any(named: 'offset'),
             filter: filter,
+            forceRefresh: any(named: 'forceRefresh'),
           ),
         ).called(1);
       },
     );
+
+    testWidgets('should force-refresh the deck when Refresh is tapped', (
+      tester,
+    ) async {
+      await pumpDiscovery(tester);
+
+      // Deck rendered from the initial load.
+      expect(find.text('Saturday Basketball'), findsOneWidget);
+
+      await tester.tap(find.bySemanticsLabel('Refresh'));
+      await tester.pumpAndSettle();
+
+      // Initial load (forceRefresh: false) + manual refresh (true).
+      verify(
+        () => activityRepo.feed(
+          limit: any(named: 'limit'),
+          offset: any(named: 'offset'),
+          filter: any(named: 'filter'),
+          forceRefresh: false,
+        ),
+      ).called(1);
+      verify(
+        () => activityRepo.feed(
+          limit: any(named: 'limit'),
+          offset: any(named: 'offset'),
+          filter: any(named: 'filter'),
+          forceRefresh: true,
+        ),
+      ).called(1);
+      // Deck still renders after the refresh round-trip.
+      expect(find.text('Saturday Basketball'), findsOneWidget);
+    });
   });
 }

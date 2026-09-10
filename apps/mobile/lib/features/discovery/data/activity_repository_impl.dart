@@ -21,6 +21,7 @@ class LocalActivityRepository implements ActivityRepository {
     int limit = 20,
     int offset = 0,
     DiscoveryFilter? filter,
+    bool forceRefresh = false,
   }) async {
     await _delay();
     return const <ActivityModel>[];

@@ -17,6 +17,7 @@ export const SUBCOLLECTIONS = {
 export const RTDB_PATHS = {
     activityChats: 'activityChats',
     dmChats: 'dmChats',
+    userDMs: 'userDMs',
     typing: 'typing',
     presence: 'presence'
 } as const;
@@ -117,6 +118,15 @@ export function dmChatPath(uidA: string, uidB: string): string {
 
 export function dmMessagesPath(uidA: string, uidB: string): string {
   return `${dmChatPath(uidA, uidB)}/messages`;
+}
+
+/** Inbox metadata for one user's DM threads: `userDMs/{uid}/{peerUid}`. */
+export function userDmInboxPath(uid: string): string {
+  return `${RTDB_PATHS.userDMs}/${uid.trim()}`;
+}
+
+export function userDmEntryPath(uid: string, peerUid: string): string {
+  return `${userDmInboxPath(uid)}/${peerUid.trim()}`;
 }
 
 export function typingPath(activityId: string, uid: string): string {

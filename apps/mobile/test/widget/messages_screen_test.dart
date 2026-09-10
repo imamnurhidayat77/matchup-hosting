@@ -6,6 +6,7 @@ import 'package:mocktail/mocktail.dart';
 
 import 'package:matchup_mobile/core/providers/repository_providers.dart';
 import 'package:matchup_mobile/features/chat/data/chat_repository.dart';
+import 'package:matchup_mobile/features/chat/data/dm_repository.dart';
 import 'package:matchup_mobile/features/chat/domain/chat_message.dart';
 import 'package:matchup_mobile/features/notifications/data/notification_repository.dart';
 import 'package:matchup_mobile/features/notifications/domain/app_notification.dart';
@@ -15,6 +16,52 @@ class _MockChatRepository extends Mock implements ChatRepository {}
 
 class _MockNotificationRepository extends Mock
     implements NotificationRepository {}
+
+class _FakeDmRepository implements DmRepository {
+  _FakeDmRepository({List<ChatConversation>? threads})
+      : _threads = List.of(threads ?? []);
+
+  final List<ChatConversation> _threads;
+
+  @override
+  Future<List<ChatConversation>> conversations() async =>
+      List.unmodifiable(_threads);
+
+  @override
+  Stream<List<ChatConversation>> watchConversations() async* {
+    yield List.unmodifiable(_threads);
+  }
+
+  @override
+  Future<void> markRead(String otherUid) async {}
+
+  @override
+  Stream<List<ChatMessage>> watchMessages(String otherUid) async* {
+    yield const [];
+  }
+
+  @override
+  Future<List<ChatMessage>> messages(String otherUid, {int limit = 50}) async =>
+      const [];
+
+  @override
+  Future<ChatMessage> send({
+    required String otherUid,
+    required String text,
+  }) async {
+    throw UnimplementedError();
+  }
+}
+
+const _dmThreads = [
+  ChatConversation(
+    id: 'u-9',
+    name: 'Sam Rivera',
+    lastMessage: 'see you there',
+    time: '5m ago',
+    unreadCount: 2,
+  ),
+];
 
 List<ChatConversation> _fixtures() => const [
   ChatConversation(
@@ -117,6 +164,86 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('No results'), findsOneWidget);
+    });
+
+    group('Direct tab', () {
+      Future<void> pumpWithDm(
+        WidgetTester tester, {
+        List<ChatConversation> threads = _dmThreads,
+      }) async {
+        final router = GoRouter(
+          initialLocation: '/messages',
+          routes: [
+            GoRoute(
+              path: '/messages',
+              builder: (_, _) => const MessagesScreen(),
+            ),
+            GoRoute(
+              path: '/chat/:id',
+              builder: (_, state) =>
+                  Scaffold(body: Text('Chat ${state.pathParameters['id']}')),
+            ),
+            GoRoute(
+              path: '/dm/:uid',
+              builder: (_, state) =>
+                  Scaffold(body: Text('DM ${state.pathParameters['uid']}')),
+            ),
+            GoRoute(
+              path: '/notifications',
+              builder: (_, _) => const Scaffold(body: Text('Notifications')),
+            ),
+          ],
+        );
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              chatRepositoryProvider.overrideWithValue(chatRepo),
+              notificationRepositoryProvider.overrideWithValue(notifRepo),
+              dmRepositoryProvider.overrideWithValue(
+                _FakeDmRepository(threads: threads),
+              ),
+            ],
+            child: MaterialApp.router(routerConfig: router),
+          ),
+        );
+        await tester.pumpAndSettle();
+      }
+
+      testWidgets('should list DM threads with unread', (tester) async {
+        await pumpWithDm(tester);
+
+        // Groups tab by default — switch to Direct.
+        await tester.tap(find.text('Direct'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Sam Rivera'), findsOneWidget);
+        expect(find.text('see you there'), findsOneWidget);
+        // Group fixtures stay on the other tab.
+        expect(find.text('Friendly 5v5 Basketball'), findsNothing);
+      });
+
+      testWidgets('should open the DM thread on tap', (tester) async {
+        await pumpWithDm(tester);
+
+        await tester.tap(find.text('Direct'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Sam Rivera'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('DM u-9'), findsOneWidget);
+      });
+
+      testWidgets('should show an empty state with no threads', (
+        tester,
+      ) async {
+        await pumpWithDm(tester, threads: const []);
+
+        await tester.tap(find.text('Direct'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('No direct messages'), findsOneWidget);
+      });
     });
   });
 }

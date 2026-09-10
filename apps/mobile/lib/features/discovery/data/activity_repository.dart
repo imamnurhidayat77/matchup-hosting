@@ -11,10 +11,14 @@ abstract class ActivityRepository {
   /// to `GET /api/activities?discover=1&...` for the ranked pipeline.
   /// When null or empty, falls back to the regular feed path so the
   /// "no filter" case stays cheap.
+  ///
+  /// Implementations may serve a short-TTL in-memory cache; pass
+  /// [forceRefresh] to skip it (filter changes, manual refresh).
   Future<List<ActivityModel>> feed({
     int limit = 20,
     int offset = 0,
     DiscoveryFilter? filter,
+    bool forceRefresh = false,
   });
 
   Future<ActivityModel?> byId(String id);

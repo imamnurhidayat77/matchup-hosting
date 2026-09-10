@@ -23,6 +23,13 @@ final _conversationsProvider =
       return ref.watch(chatRepositoryProvider).conversations();
     });
 
+/// 1-on-1 threads, re-emitted on every inbox change so unread badges
+/// update while the inbox sits open.
+final _dmConversationsProvider =
+    StreamProvider.autoDispose<List<ChatConversation>>((ref) {
+      return ref.watch(dmRepositoryProvider).watchConversations();
+    });
+
 final _unreadNotifCountProvider = FutureProvider.autoDispose<int>((ref) async {
   final all = await ref.watch(notificationRepositoryProvider).all();
   return all.where((n) => n.unread).length;
@@ -40,6 +47,9 @@ class MessagesScreen extends ConsumerStatefulWidget {
 class _MessagesScreenState extends ConsumerState<MessagesScreen> {
   final _searchController = TextEditingController();
   String _query = '';
+
+  /// 0 = group (activity) chats, 1 = direct messages.
+  int _tab = 0;
 
   @override
   void dispose() {
@@ -108,8 +118,22 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
           ),
           const SizedBox(height: AppSpacing.x4),
 
+          // ── Groups / Direct toggle ───────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x5),
+            child: _InboxTabs(
+              tab: _tab,
+              onSelect: (i) => setState(() => _tab = i),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.x3),
+
           // ── Conversation list ────────────────────────────────────────
-          Expanded(child: _ConversationList(query: _query)),
+          Expanded(
+            child: _tab == 0
+                ? _ConversationList(query: _query)
+                : _DmConversationList(query: _query),
+          ),
         ],
       ),
     );
@@ -256,6 +280,128 @@ class _SearchBar extends StatelessWidget {
 }
 
 // ─── Conversation list ────────────────────────────────────────────────────────
+
+/// Groups / Direct segmented toggle.
+class _InboxTabs extends StatelessWidget {
+  const _InboxTabs({required this.tab, required this.onSelect});
+  final int tab;
+  final ValueChanged<int> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: context.colors.surfaceMuted,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+      ),
+      child: Row(
+        children: [
+          _InboxTab(label: 'Groups', selected: tab == 0, onTap: () => onSelect(0)),
+          _InboxTab(label: 'Direct', selected: tab == 1, onTap: () => onSelect(1)),
+        ],
+      ),
+    );
+  }
+}
+
+class _InboxTab extends StatelessWidget {
+  const _InboxTab({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: PressableScale(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.x2),
+          decoration: BoxDecoration(
+            color: selected ? context.colors.surface : Colors.transparent,
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+            boxShadow: selected ? AppShadows.card : null,
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: AppTypography.labelField(context).copyWith(
+              color: selected
+                  ? context.colors.textPrimary
+                  : context.colors.textSecondary,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 1-on-1 threads reusing the group card (peer uid as id, `isGroup`
+/// false). Taps open `/dm/:uid`; the thread screen clears the badge
+/// on open and invalidates this provider on exit.
+class _DmConversationList extends ConsumerWidget {
+  const _DmConversationList({required this.query});
+  final String query;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(_dmConversationsProvider);
+    return async.when(
+      loading: () => const SkeletonList(count: 3),
+      error: (_, _) => ErrorRetry(
+        message: 'Could not load direct messages.',
+        onRetry: () => ref.invalidate(_dmConversationsProvider),
+      ),
+      data: (all) {
+        final filtered = query.isEmpty
+            ? all
+            : all
+                .where(
+                  (c) =>
+                      c.name.toLowerCase().contains(query.toLowerCase()) ||
+                      c.lastMessage.toLowerCase().contains(
+                        query.toLowerCase(),
+                      ),
+                )
+                .toList();
+
+        if (filtered.isEmpty) {
+          return EmptyState(
+            icon: Icons.chat_bubble_outline_rounded,
+            title: query.isEmpty ? 'No direct messages' : 'No results',
+            subtitle: query.isEmpty
+                ? 'Visit a player profile and say hi.'
+                : 'No direct messages match "$query".',
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.x5,
+            0,
+            AppSpacing.x5,
+            AppSpacing.x6,
+          ),
+          itemCount: filtered.length,
+          itemBuilder: (_, i) => Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.x3),
+            child: _ConversationCard(
+              conversation: filtered[i],
+              onTap: () => context.push('/dm/${filtered[i].id}'),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
 
 class _ConversationList extends ConsumerWidget {
   const _ConversationList({required this.query});

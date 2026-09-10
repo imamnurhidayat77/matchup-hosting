@@ -36,11 +36,55 @@ class RemoteActivityRepository implements ActivityRepository {
 
   static const _base = '/activities';
 
+  /// Short-TTL in-memory feed cache. Tab switches dispose the Discover
+  /// state, so without this every return trip replays HTTP +
+  /// GPS behind the skeleton. See [FeedCache].
+  final FeedCache<List<ActivityModel>> _feedCache = FeedCache();
+
+  /// Detail + roster caches (same TTL policy). Detail screens mount on
+  /// every card tap, and roster/chat polling re-reads them — without
+  /// this each open costs 1–2 HTTP round trips. Cleared on any write
+  /// (join/leave/cancel/status/requests/create) so mutations never
+  /// read stale.
+  final FeedCache<ActivityModel?> _byIdCache = FeedCache();
+  final FeedCache<List<ActivityParticipant>> _participantsCache =
+      FeedCache();
+
+  void _invalidateDetails() {
+    _byIdCache.invalidateAll();
+    _participantsCache.invalidateAll();
+  }
+
+  /// True when a fresh (unexpired) cache entry exists — lets screens
+  /// render instantly, then decide about a silent background refresh.
+  bool isFeedFresh({DiscoveryFilter? filter, int limit = 20, int offset = 0}) =>
+      _feedCache.isFresh(
+        FeedCache.keyFor(filter: filter, limit: limit, offset: offset),
+      );
+
+  /// Drops cached feeds (whole map, or one filter). Called after a
+  /// swipe is persisted so a just-swiped card can't be re-dealt from
+  /// a stale entry within the TTL window.
+  void invalidateFeed({DiscoveryFilter? filter, int limit = 20, int offset = 0}) {
+    if (filter == null) {
+      _feedCache.invalidateAll();
+    } else {
+      _feedCache.remove(
+        FeedCache.keyFor(filter: filter, limit: limit, offset: offset),
+      );
+    }
+  }
+
+  void _storeFeed(String key, List<ActivityModel> items) {
+    _feedCache.put(key, items);
+  }
+
   @override
   Future<List<ActivityModel>> feed({
     int limit = 20,
     int offset = 0,
     DiscoveryFilter? filter,
+    bool forceRefresh = false,
   }) async {
     debugPrint(
       '[RemoteActivityRepository.feed] filter=$filter isEmpty=${filter?.isEmpty} '
@@ -48,6 +92,14 @@ class RemoteActivityRepository implements ActivityRepository {
       'datePreset=${filter?.datePreset} '
       'maxDistanceKm=${filter?.maxDistanceKm} limit=$limit',
     );
+    final key = FeedCache.keyFor(filter: filter, limit: limit, offset: offset);
+    if (!forceRefresh) {
+      final hit = _feedCache.get(key);
+      if (hit != null) {
+        debugPrint('[RemoteActivityRepository.feed] cache HIT (${hit.length})');
+        return hit;
+      }
+    }
     if (filter != null && !filter.isEmpty) {
       try {
         final res = await _discoverFeed(filter, limit);
@@ -55,6 +107,7 @@ class RemoteActivityRepository implements ActivityRepository {
           '[RemoteActivityRepository.feed] discover returned '
           '${res.length} activities',
         );
+        _storeFeed(key, res);
         return res;
       } catch (e, st) {
         debugPrint(
@@ -74,7 +127,9 @@ class RemoteActivityRepository implements ActivityRepository {
         '[RemoteActivityRepository.feed] legacy: ${res.statusCode} count=${activities.length} '
         'uri=${res.requestOptions.uri}',
       );
-      return _withDistances(activities);
+      final withDistances = await _withDistances(activities);
+      _storeFeed(key, withDistances);
+      return withDistances;
     } catch (e, st) {
       debugPrint('[RemoteActivityRepository.feed] $e\n$st');
       return _fallback.feed(limit: limit, offset: offset);
@@ -163,9 +218,15 @@ class RemoteActivityRepository implements ActivityRepository {
 
   @override
   Future<ActivityModel?> byId(String id) async {
+    final hit = _byIdCache.get(id);
+    if (hit != null) return hit;
+    // Nulls are not cached: a missing activity may appear later, and
+    // caching null would hide it for the whole TTL window.
     try {
       final res = await _client.dio.get('$_base/$id');
-      return _parse(apiDataMap(res.data));
+      final parsed = _parse(apiDataMap(res.data));
+      if (parsed != null) _byIdCache.put(id, parsed);
+      return parsed;
     } catch (e, st) {
       debugPrint('[RemoteActivityRepository.byId] $e\n$st');
       return _fallback.byId(id);
@@ -252,6 +313,7 @@ class RemoteActivityRepository implements ActivityRepository {
     String? coverImageUrl,
     String joinPolicy = 'open',
   }) async {
+    _invalidateDetails();
     try {
       final res = await _client.dio.post(
         _base,
@@ -328,6 +390,7 @@ class RemoteActivityRepository implements ActivityRepository {
   @override
   Future<void> join(String activityId) async {
     try {
+      _invalidateDetails();
       // Backend route is `POST /api/activities/:activityId/participants`.
       // The previous `$_base/$activityId/join` returned 404 because that
       // sub-path doesn't exist on the backend.
@@ -341,6 +404,7 @@ class RemoteActivityRepository implements ActivityRepository {
   @override
   Future<void> requestJoin(String activityId) async {
     try {
+      _invalidateDetails();
       await _client.dio.post('$_base/$activityId/join-requests');
     } catch (e, st) {
       debugPrint('[RemoteActivityRepository.requestJoin] $e\n$st');
@@ -365,6 +429,7 @@ class RemoteActivityRepository implements ActivityRepository {
   @override
   Future<void> approveJoinRequest(String activityId, String uid) async {
     try {
+      _invalidateDetails();
       await _client.dio.post('$_base/$activityId/join-requests/$uid/approve');
     } catch (e, st) {
       debugPrint('[RemoteActivityRepository.approveJoinRequest] $e\n$st');
@@ -375,6 +440,7 @@ class RemoteActivityRepository implements ActivityRepository {
   @override
   Future<void> declineJoinRequest(String activityId, String uid) async {
     try {
+      _invalidateDetails();
       await _client.dio.post('$_base/$activityId/join-requests/$uid/decline');
     } catch (e, st) {
       debugPrint('[RemoteActivityRepository.declineJoinRequest] $e\n$st');
@@ -399,6 +465,7 @@ class RemoteActivityRepository implements ActivityRepository {
   @override
   Future<void> leave(String activityId) async {
     try {
+      _invalidateDetails();
       // Backend route is `DELETE /api/activities/:activityId/participants/:uid`.
       // The `uid` is the *current* user (you can only remove yourself, or
       // the host can remove you — both are encoded server-side).
@@ -413,6 +480,7 @@ class RemoteActivityRepository implements ActivityRepository {
   @override
   Future<void> cancel(String activityId) async {
     try {
+      _invalidateDetails();
       // Cancel maps to the host-only status update endpoint
       // `PATCH /api/activities/:activityId/status` with `{ status: 'cancelled' }`.
       // The dedicated `/cancel` sub-path doesn't exist on the backend.
@@ -429,6 +497,7 @@ class RemoteActivityRepository implements ActivityRepository {
   @override
   Future<void> updateStatus(String activityId, String status) async {
     try {
+      _invalidateDetails();
       await _client.dio.patch(
         '$_base/$activityId/status',
         data: {'status': status},
@@ -465,12 +534,16 @@ class RemoteActivityRepository implements ActivityRepository {
 
   @override
   Future<List<ActivityParticipant>> participants(String activityId) async {
+    final hit = _participantsCache.get(activityId);
+    if (hit != null) return hit;
     try {
       final res = await _client.dio.get('$_base/$activityId/participants');
-      return apiDataList(res.data)
+      final parsed = apiDataList(res.data)
           .whereType<Map<String, dynamic>>()
           .map(_parseParticipant)
           .toList();
+      _participantsCache.put(activityId, parsed);
+      return parsed;
     } catch (e, st) {
       debugPrint('[RemoteActivityRepository.participants] $e\n$st');
       return _fallback.participants(activityId);
@@ -556,4 +629,64 @@ class RemoteActivityRepository implements ActivityRepository {
   Future<String> _readMyUid() async {
     return (await SecureTokenStore.instance.readUserId()) ?? '';
   }
+}
+
+/// Short-TTL in-memory feed cache, extracted as its own class so the
+/// TTL/eviction logic is unit-testable without HTTP or GPS.
+///
+/// Keys cover the full filter ([keyFor]) so filter changes and
+/// "Start over" always miss. The clock is injectable for tests.
+class FeedCache<T> {
+  FeedCache({
+    DateTime Function()? clock,
+    this.ttl = const Duration(seconds: 60),
+    this.maxEntries = 20,
+  }) : _clock = clock ?? DateTime.now;
+
+  /// Cache key — full filter identity plus paging.
+  static String keyFor({
+    required DiscoveryFilter? filter,
+    required int limit,
+    required int offset,
+  }) =>
+      '${filter.hashCode}:$limit:$offset';
+
+  final Duration ttl;
+  final int maxEntries;
+  final DateTime Function() _clock;
+  final Map<String, _FeedCacheEntry<T>> _entries = {};
+
+  T? get(String key) {
+    final hit = _entries[key];
+    if (hit == null) return null;
+    if (_clock().difference(hit.cachedAt) >= ttl) {
+      _entries.remove(key);
+      return null;
+    }
+    return hit.items;
+  }
+
+  bool isFresh(String key) => get(key) != null;
+
+  void put(String key, T items) {
+    _entries[key] = _FeedCacheEntry(items, _clock());
+    while (_entries.length > maxEntries) {
+      _entries.remove(_entries.keys.first);
+    }
+  }
+
+  void remove(String key) => _entries.remove(key);
+
+  void invalidateAll() => _entries.clear();
+
+  @visibleForTesting
+  int get length => _entries.length;
+}
+
+/// One cached feed entry — the final list (distances already filled)
+/// plus the time it was stored, for TTL checks.
+class _FeedCacheEntry<T> {
+  const _FeedCacheEntry(this.items, this.cachedAt);
+  final T items;
+  final DateTime cachedAt;
 }

@@ -36,6 +36,17 @@ class _DmScreenState extends ConsumerState<DmScreen> {
   bool _sending = false;
 
   @override
+  void initState() {
+    super.initState();
+    // Clear the badge right away (fire-and-forget); the inbox list
+    // refreshes underneath via its RTDB watch.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(dmRepositoryProvider).markRead(widget.otherUid);
+    });
+  }
+
+  @override
   void dispose() {
     _controller.dispose();
     _scroll.dispose();

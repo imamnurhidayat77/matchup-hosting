@@ -21,10 +21,23 @@ String dmThreadId(String uidA, String uidB) {
 /// Minimal scope: text messages only (no images/locations), realtime
 /// via RTDB with HTTP polling fallback — same shape as the group chat
 /// repository so a future merge is mechanical.
+///
+/// Inbox rows reuse [ChatConversation] (`id` = peer uid, `isGroup` =
+/// false) so the messages screen renders them with the same cards.
 abstract class DmRepository {
   Stream<List<ChatMessage>> watchMessages(String otherUid);
   Future<List<ChatMessage>> messages(String otherUid, {int limit = 50});
   Future<ChatMessage> send({required String otherUid, required String text});
+
+  /// Inbox threads, newest first, with peer names + unread badges.
+  Future<List<ChatConversation>> conversations();
+
+  /// [conversations] re-emitted on every RTDB inbox change (plus HTTP
+  /// polling fallback), so badges update while the inbox sits open.
+  Stream<List<ChatConversation>> watchConversations();
+
+  /// Clears the unread badge for one thread. Best-effort.
+  Future<void> markRead(String otherUid);
 }
 
 /// HTTP + RTDB implementation against `/api/dm/:uid/...`.
@@ -76,6 +89,76 @@ class RemoteDmRepository implements DmRepository {
       debugPrint('[RemoteDmRepository.messages] $e\n$st');
       return const [];
     }
+  }
+
+  @override
+  Future<List<ChatConversation>> conversations() async {
+    try {
+      final res = await _client.dio.get('/dm/conversations');
+      final rows = apiDataList(res.data);
+      return [
+        for (final e in rows)
+          if (e is Map<String, dynamic>) _parseThread(e),
+      ];
+    } catch (e, st) {
+      debugPrint('[RemoteDmRepository.conversations] $e\n$st');
+      return const [];
+    }
+  }
+
+  @override
+  Stream<List<ChatConversation>> watchConversations() async* {
+    // RTDB inbox node drives refetches; the HTTP list carries the
+    // enriched peer names the raw entries lack.
+    try {
+      await RtdbAuthService.instance.ensureSignedIn();
+      final myUid = await _myUid();
+      final ref = FirebaseDatabase.instance.ref('userDMs/$myUid');
+      await for (final _ in ref.onValue) {
+        yield await conversations();
+      }
+      return;
+    } catch (e, st) {
+      debugPrint('[RemoteDmRepository.watchConversations] RTDB failed: $e\n$st');
+    }
+    while (true) {
+      yield await conversations();
+      await Future<void>.delayed(const Duration(seconds: 10));
+    }
+  }
+
+  @override
+  Future<void> markRead(String otherUid) async {
+    try {
+      await _client.dio.post('/dm/$otherUid/read');
+    } catch (e, st) {
+      debugPrint('[RemoteDmRepository.markRead] $e\n$st');
+    }
+  }
+
+  ChatConversation _parseThread(Map<String, dynamic> json) {
+    final peerUid = json['peerUid']?.toString() ?? '';
+    final displayName = json['displayName']?.toString().trim() ?? '';
+    final ms = json['lastTimestamp'];
+    final sentAt = ms is num
+        ? DateTime.fromMillisecondsSinceEpoch(ms.toInt())
+        : null;
+    return ChatConversation(
+      id: peerUid,
+      name: displayName.isNotEmpty ? displayName : peerUid,
+      lastMessage: json['lastText']?.toString() ?? '',
+      time: sentAt == null ? '' : _relativeTime(sentAt),
+      unreadCount: (json['unreadCount'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  String _relativeTime(DateTime sentAt) {
+    final diff = DateTime.now().difference(sentAt);
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inHours < 1) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays == 1) return 'Yesterday';
+    return '${diff.inDays}d ago';
   }
 
   @override
