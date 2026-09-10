@@ -342,7 +342,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       body: Column(
         children: [
           _Header(title: title, activityId: widget.activityId),
-          _MatchBanner(),
+          _MatchBanner(activity: activityAsync.valueOrNull),
           Expanded(
             child: _MessageList(
               id: _id,
@@ -573,9 +573,52 @@ final _chatOtherUidsProvider = Provider.autoDispose
 
 // ─── Match banner ─────────────────────────────────────────────────────────────
 
-class _MatchBanner extends StatelessWidget {
+/// Game-context card pinned above the message list. The **Check In**
+/// button only appears inside the check-in window (30 minutes before
+/// the scheduled start until the activity end) — the same policy as
+/// [CheckInScreen]. A 30s ticker re-evaluates the window so the
+/// button materialises while the user sits in chat.
+class _MatchBanner extends StatefulWidget {
+  const _MatchBanner({required this.activity});
+  final ActivityModel? activity;
+
+  /// Check-in window shared with the check-in screen: opens 30
+  /// minutes before start, closes at the activity end.
+  static bool checkInOpen(DateTime now, DateTime start, DateTime end) {
+    return !now.isBefore(start.subtract(const Duration(minutes: 30))) &&
+        !now.isAfter(end);
+  }
+
+  @override
+  State<_MatchBanner> createState() => _MatchBannerState();
+}
+
+class _MatchBannerState extends State<_MatchBanner> {
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final activity = widget.activity;
+    final inWindow = activity != null &&
+        _MatchBanner.checkInOpen(
+          DateTime.now(),
+          activity.dateTime,
+          activity.endTime,
+        );
     return Container(
       margin: const EdgeInsets.fromLTRB(
         AppSpacing.x4,
@@ -597,7 +640,7 @@ class _MatchBanner extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // TODAY badge
+                // Day badge — TODAY when the game is today.
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.x3,
@@ -608,7 +651,7 @@ class _MatchBanner extends StatelessWidget {
                     borderRadius: BorderRadius.circular(AppRadius.pill),
                   ),
                   child: Text(
-                    'TODAY',
+                    _bannerDayLabel(activity?.dateTime),
                     style: AppTypography.badgeSport(context).copyWith(
                       color: AppColors.textOnPrimary,
                       letterSpacing: 0.5,
@@ -617,12 +660,14 @@ class _MatchBanner extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.x2),
                 Text(
-                  'Prospect Park Courts',
+                  activity?.location ?? 'Prospect Park Courts',
                   style: AppTypography.titleMedium(context),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Kickoff at 5:30 PM',
+                  activity == null
+                      ? 'Kickoff at 5:30 PM'
+                      : _bannerKickoffLabel(activity.dateTime),
                   style: AppTypography.metaSub(context),
                 ),
               ],
@@ -630,33 +675,59 @@ class _MatchBanner extends StatelessWidget {
           ),
           const SizedBox(width: AppSpacing.x3),
 
-          // Check In button
-          Semantics(
-            button: true,
-            label: 'Check in to this activity',
-            child: PressableScale(
-              onTap: () {},
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.x4,
-                  vertical: AppSpacing.x3,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(AppRadius.card),
-                  boxShadow: AppShadows.glowPrimary,
-                ),
-                child: Text(
-                  'Check In',
-                  style: AppTypography.buttonPrimary.copyWith(fontSize: 15),
+          // Check In button — only inside the check-in window.
+          // Null check first so `activity` promotes for `.id` below.
+          if (activity != null && inWindow)
+            Semantics(
+              button: true,
+              label: 'Check in to this activity',
+              child: PressableScale(
+                onTap: () => context.push('/check-in/${activity.id}'),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.x4,
+                    vertical: AppSpacing.x3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(AppRadius.card),
+                    boxShadow: AppShadows.glowPrimary,
+                  ),
+                  child: Text(
+                    'Check In',
+                    style:
+                        AppTypography.buttonPrimary.copyWith(fontSize: 15),
+                  ),
                 ),
               ),
             ),
-          ),
         ],
       ),
     );
   }
+}
+
+/// 'TODAY' when [dateTime] is today, otherwise the 3-letter weekday.
+/// Null-safe: falls back to 'TODAY' to preserve the previous static UI.
+String _bannerDayLabel(DateTime? dateTime) {
+  if (dateTime == null) return 'TODAY';
+  final now = DateTime.now();
+  if (now.year == dateTime.year &&
+      now.month == dateTime.month &&
+      now.day == dateTime.day) {
+    return 'TODAY';
+  }
+  const days = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+  return days[(dateTime.weekday - 1) % 7];
+}
+
+/// 'Kickoff at 5:30 PM' without pulling in intl for one label.
+String _bannerKickoffLabel(DateTime dateTime) {
+  final h24 = dateTime.hour;
+  final h = h24 % 12 == 0 ? 12 : h24 % 12;
+  final m = dateTime.minute.toString().padLeft(2, '0');
+  final ap = h24 < 12 ? 'AM' : 'PM';
+  return 'Kickoff at $h:$m $ap';
 }
 
 // ─── Message list ─────────────────────────────────────────────────────────────

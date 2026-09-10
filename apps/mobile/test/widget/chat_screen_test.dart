@@ -206,5 +206,51 @@ void main() {
 
       expect(find.text('Open Chat'), findsOneWidget);
     });
+
+    testWidgets(
+      'should show the Check In button inside the check-in window',
+      (tester) async {
+        // Starts in 10 minutes — inside the 30-minute window.
+        final soon = testActivity();
+        when(() => activityRepo.byId(any())).thenAnswer(
+          (_) async => ActivityModel(
+            id: soon.id,
+            title: soon.title,
+            sportType: soon.sportType,
+            description: soon.description,
+            location: soon.location,
+            distanceKm: soon.distanceKm,
+            dateTime: DateTime.now().add(const Duration(minutes: 10)),
+            skillLevel: soon.skillLevel,
+            capacity: soon.capacity,
+            participantCount: soon.participantCount,
+            hostName: soon.hostName,
+          ),
+        );
+
+        await pumpScreen(tester);
+        // Extra frames for the route transition + activity future
+        // so the banner rebuilds with the window evaluation.
+        for (var i = 0; i < 6; i++) {
+          await tester.pump(const Duration(milliseconds: 300));
+        }
+
+        // NOTE: asserted by text — the explicit Semantics label merges
+        // with the child 'Check In' text node, so bySemanticsLabel
+        // does not match even though the button (and its a11y label)
+        // are in the tree.
+        expect(find.text('Check In'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'should hide the Check In button outside the check-in window',
+      (tester) async {
+        // Default testActivity starts tomorrow — far outside the window.
+        await pumpScreen(tester);
+
+        expect(find.text('Check In'), findsNothing);
+      },
+    );
   });
 }
