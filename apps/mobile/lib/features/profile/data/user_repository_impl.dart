@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_client.dart';
+import '../../../core/services/storage_service.dart';
 import '../../ratings/domain/rating_models.dart';
 import '../domain/user_model.dart';
 import 'user_repository.dart';
@@ -22,6 +23,14 @@ class LocalUserRepository implements UserRepository {
   @override
   Future<UserModel?> byId(String id) async {
     return null;
+  }
+
+  @override
+  Future<UserModel> uploadAvatar({required String localPath}) {
+    throw StateError(
+      'UserRepository.uploadAvatar() requires a live backend — no offline '
+      'fallback is provided.',
+    );
   }
 
   @override
@@ -138,6 +147,28 @@ class RemoteUserRepository implements UserRepository {
     }
   }
 
+  @override
+  Future<UserModel> uploadAvatar({required String localPath}) async {
+    // Storage first: the backend persists text only, so the photo
+    // travels as a download URL (same pattern as chat attachments).
+    final uploadedUrl = await StorageService.instance.uploadImage(
+      localPath: localPath,
+      folder: 'profile-photos',
+    );
+    if (uploadedUrl == null || uploadedUrl.isEmpty) {
+      throw StateError('Profile photo upload failed.');
+    }
+    final res = await _client.dio.patch(
+      '/users/me',
+      data: {'photoUrl': uploadedUrl},
+    );
+    final updated = _parse(apiDataMap(res.data));
+    if (updated == null) {
+      throw StateError('Profile photo update was not acknowledged.');
+    }
+    return updated;
+  }
+
   UserModel? _parse(Map<String, dynamic>? json) {
     if (json == null) return null;
     // Backend returns `preferredSports` as a list of sport-name strings.
@@ -171,8 +202,14 @@ class RemoteUserRepository implements UserRepository {
       location: (json['preferredLocations'] as List?)?.isNotEmpty == true
           ? (json['preferredLocations'] as List).first.toString()
           : json['location'] as String?,
-      activitiesCount: json['activities_count'] as int? ?? 0,
-      hostedCount: json['hosted_count'] as int? ?? 0,
+      activitiesCount:
+          (json['activitiesCount'] as num?)?.toInt() ??
+          (json['activities_count'] as num?)?.toInt() ??
+          0,
+      hostedCount:
+          (json['hostedCount'] as num?)?.toInt() ??
+          (json['hosted_count'] as num?)?.toInt() ??
+          0,
       sports: mappedSports ?? const [],
       ratingBySport: _parseRatingBySport(
         json['ratingBySport'] ?? json['rating_by_sport'],

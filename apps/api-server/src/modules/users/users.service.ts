@@ -21,6 +21,12 @@ export type UserRecord = {
   authUid: string;
   email: string;
   createdAt: FirebaseFirestore.Timestamp;
+  /**
+   * Computed on read (never stored): participations and hosted
+   * activities. Absent when the counts could not be computed.
+   */
+  activitiesCount?: number;
+  hostedCount?: number;
   updatedAt?: FirebaseFirestore.Timestamp;
   displayName?: string;
   photoPath?: string;
@@ -50,6 +56,8 @@ export type UpdateUserProfileInput = {
 
 export type PublicUserProfile = {
   authUid: string;
+  activitiesCount?: number;
+  hostedCount?: number;
   displayName?: string;
   photoUrl?: string;
   bio?: string;
@@ -182,6 +190,8 @@ function mapUserDoc(userDoc: FirebaseFirestore.DocumentSnapshot): UserRecord | n
 function toPublicUserProfile(user: UserRecord): PublicUserProfile {
   return {
     authUid: user.authUid,
+    ...(user.activitiesCount !== undefined ? { activitiesCount: user.activitiesCount } : {}),
+    ...(user.hostedCount !== undefined ? { hostedCount: user.hostedCount } : {}),
     ...(user.displayName !== undefined ? { displayName: user.displayName } : {}),
     ...(user.photoUrl !== undefined ? { photoUrl: user.photoUrl } : {}),
     ...(user.bio !== undefined ? { bio: user.bio } : {}),
@@ -278,8 +288,49 @@ export async function getUserByAuthUid(authUid: string): Promise<UserRecord | nu
   }
 
   const userDoc = await firestore.collection('users').doc(normalizedAuthUid).get();
+  const user = mapUserDoc(userDoc);
 
-  return mapUserDoc(userDoc);
+  if (!user) {
+    return null;
+  }
+
+  const counts = await countUserActivities(normalizedAuthUid);
+
+  return {
+    ...user,
+    ...counts,
+  };
+}
+
+/**
+ * Counts participations (`participants` collection group, by `uid`)
+ * and hosted activities (`activities` by `hostId`). The host is never
+ * a participant row, so the two counts are disjoint.
+ *
+ * Falls back to zeros when the aggregation cannot run — notably when
+ * the `participants/uid` collection-group index has not been created
+ * yet (see `infra/firebase/firestore.indexes.json`). The profile then
+ * shows zeros instead of failing outright, and heals once the index
+ * exists.
+ */
+export async function countUserActivities(
+  authUid: string,
+): Promise<{ activitiesCount: number; hostedCount: number }> {
+  const zero = { activitiesCount: 0, hostedCount: 0 };
+
+  try {
+    const [joinedSnap, hostedSnap] = await Promise.all([
+      firestore.collectionGroup('participants').where('uid', '==', authUid).count().get(),
+      firestore.collection('activities').where('hostId', '==', authUid).count().get(),
+    ]);
+
+    return {
+      activitiesCount: joinedSnap.data().count,
+      hostedCount: hostedSnap.data().count,
+    };
+  } catch {
+    return zero;
+  }
 }
 
 export async function updateUserProfile(

@@ -62,3 +62,39 @@ still send and load, but arrive up to 3 seconds late.
 Also set `FIREBASE_DATABASE_URL` in `apps/api-server/.env` (see
 `docs/setup/environment-variables.md`) — the backend needs it to
 reach the same database.
+
+## 3. Create the Firestore index for profile stats
+
+The profile's Joined count queries the `participants` collection
+group by `uid`, which needs a dedicated index. Create it in one
+click here (logged in as a project owner):
+
+```text
+https://console.firebase.google.com/v1/r/project/matchup-cs734/firestore/indexes?create_exemption=ClNwcm9qZWN0cy9tYXRjaHVwLWNzNzM0L2RhdGFiYXNlcy8oZGVmYXVsdCkvY29sbGVjdGlvbkdyb3Vwcy9wYXJ0aWNpcGFudHMvZmllbGRzL3VpZBACGgcKA3VpZBAB
+```
+
+or deploy the checked-in definition:
+
+```bash
+firebase deploy --only firestore:indexes
+```
+
+The definition lives in [`firestore.indexes.json`](./firestore.indexes.json).
+Until the index finishes building, profile stats gracefully show
+`0` instead of failing; they populate automatically once it is
+ready. No code deploy is needed for the switch-over.
+
+## 4. Publish the Storage rules
+
+Photo uploads (chat attachments, profile avatars) write to
+`uploads/…` via the Firebase SDK, which — unlike the backend's
+Admin SDK — must pass security rules. Publish
+[`storage.rules`](./storage.rules) from the console
+(**Storage → Rules**) or with:
+
+```bash
+firebase deploy --only storage
+```
+
+Without this step every upload fails with `permission-denied`
+(the app then shows an error snackbar instead of a fake success).

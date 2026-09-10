@@ -15,6 +15,7 @@ import '../../../core/theme/theme_controller.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_tappable.dart';
 import '../../../core/widgets/asset_image.dart';
+import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../../notifications/services/push_notification_service.dart';
 import '../../tour/presentation/tour_controller.dart';
@@ -118,8 +119,11 @@ class ProfileScreen extends ConsumerWidget {
           Expanded(
             child: profileAsync.when(
               loading: () => const SkeletonList(count: 6),
-              error: (_, _) => const Center(
-                child: Text('Could not load profile.'),
+              error: (_, _) => Center(
+                child: ErrorRetry(
+                  message: 'Could not load profile.',
+                  onRetry: () => ref.invalidate(myProfileProvider),
+                ),
               ),
               data: (user) => ListView(
                 padding: const EdgeInsets.fromLTRB(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/providers/profile_providers.dart';
@@ -14,6 +15,7 @@ import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_tappable.dart';
 import '../../../core/widgets/app_text_field.dart';
+import '../../../core/widgets/asset_image.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../domain/user_model.dart';
@@ -39,6 +41,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
   DateTime? _dob;
   bool _loading = false;
+  bool _uploadingPhoto = false;
   bool _initialised = false;
   bool _dirty = false;
 
@@ -181,6 +184,41 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     }
   }
 
+  /// Picks a gallery photo, uploads it, and persists the URL as the
+  /// profile photo. Independent from the text-field save flow — the
+  /// photo applies immediately so the preview below is always real.
+  Future<void> _changePhoto() async {
+    if (_uploadingPhoto) return;
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1024,
+      imageQuality: 85,
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _uploadingPhoto = true);
+    try {
+      await ref
+          .read(userRepositoryProvider)
+          .uploadAvatar(localPath: picked.path);
+      ref.invalidate(myProfileProvider);
+      if (!mounted) return;
+      AppSnackbar.show(
+        context,
+        message: 'Profile photo updated.',
+        variant: AppSnackbarVariant.success,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      AppSnackbar.show(
+        context,
+        message: 'Could not update photo. Please try again.',
+        variant: AppSnackbarVariant.error,
+      );
+    } finally {
+      if (mounted) setState(() => _uploadingPhoto = false);
+    }
+  }
+
   Future<bool> _confirmDiscard() async {
     if (!_dirty) return true;
     final discard = await AppDialog.confirm(
@@ -288,7 +326,13 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // Avatar
-                        Center(child: _AvatarBlock(user: user)),
+                        Center(
+                          child: _AvatarBlock(
+                            user: user,
+                            isUploading: _uploadingPhoto,
+                            onTap: _changePhoto,
+                          ),
+                        ),
                         const SizedBox(height: AppSpacing.x5),
 
                         // Personal info card
@@ -625,74 +669,107 @@ class _SectionCard extends StatelessWidget {
 // ─── Avatar block ─────────────────────────────────────────────────────────────
 
 class _AvatarBlock extends StatelessWidget {
-  const _AvatarBlock({required this.user});
+  const _AvatarBlock({
+    required this.user,
+    required this.isUploading,
+    required this.onTap,
+  });
   final UserModel user;
+  final bool isUploading;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            // Avatar with blue ring (matches profile screen)
-            Container(
-              width: 96,
-              height: 96,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: context.colors.primaryOnSurface,
-                  width: 3,
-                ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(2),
-                child: ClipOval(
-                  child: user.avatarAsset != null
-                      ? Image.asset(user.avatarAsset!, fit: BoxFit.cover)
-                      : Container(
-                          color: context.colors.primarySoft,
-                          child: Icon(
-                            Icons.person,
-                            size: 48,
-                            color: context.colors.primaryOnSurface,
-                          ),
-                        ),
-                ),
-              ),
-            ),
-            // Camera badge
-            Positioned(
-              right: 2,
-              bottom: 2,
-              child: Container(
-                padding: const EdgeInsets.all(7),
+    final photo = user.avatarUrl ?? user.avatarAsset;
+
+    return PressableScale(
+      onTap: isUploading ? null : onTap,
+      child: Column(
+        children: [
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // Avatar with blue ring (matches profile screen).
+              // Backend photo URL first, bundled asset for legacy
+              // payloads, person placeholder when neither exists.
+              Container(
+                width: 96,
+                height: 96,
                 decoration: BoxDecoration(
-                  color: AppColors.primary,
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: AppColors.textOnPrimary,
-                    width: 2,
+                    color: context.colors.primaryOnSurface,
+                    width: 3,
                   ),
                 ),
-                child: const Icon(
-                  Icons.camera_alt_rounded,
-                  size: 14,
-                  color: AppColors.textOnPrimary,
+                child: Padding(
+                  padding: const EdgeInsets.all(2),
+                  child: ClipOval(
+                    child: photo != null
+                        ? AssetImageWithFallback(
+                            imagePath: photo,
+                            fit: BoxFit.cover,
+                            isAvatar: true,
+                          )
+                        : Container(
+                            color: context.colors.primarySoft,
+                            child: Icon(
+                              Icons.person,
+                              size: 48,
+                              color: context.colors.primaryOnSurface,
+                            ),
+                          ),
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.x2),
-        Text(
-          'Change Photo',
-          style: AppTypography.chipLabel(context).copyWith(
-            color: context.colors.primaryOnSurface,
+              // Upload progress covers the avatar while uploading.
+              if (isUploading)
+                Positioned.fill(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: context.colors.surface.withValues(alpha: 0.6),
+                    ),
+                    alignment: Alignment.center,
+                    child: const SizedBox(
+                      width: 28,
+                      height: 28,
+                      child: CircularProgressIndicator(strokeWidth: 3),
+                    ),
+                  ),
+                ),
+              // Camera badge
+              Positioned(
+                right: 2,
+                bottom: 2,
+                child: Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: AppColors.textOnPrimary,
+                      width: 2,
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.camera_alt_rounded,
+                    size: 14,
+                    color: AppColors.textOnPrimary,
+                  ),
+                ),
+              ),
+            ],
           ),
-        ),
-      ],
+          const SizedBox(height: AppSpacing.x2),
+          Text(
+            isUploading ? 'Uploading…' : 'Change Photo',
+            style: AppTypography.chipLabel(context).copyWith(
+              color: context.colors.primaryOnSurface,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

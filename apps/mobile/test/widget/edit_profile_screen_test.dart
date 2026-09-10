@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -120,6 +121,42 @@ void main() {
         ),
       ).called(1);
     });
+
+    testWidgets(
+      'tapping Change Photo uploads the picked image and shows success',
+      (tester) async {
+        // Mock the image_picker platform channel (verified against
+        // image_picker_platform_interface: channel
+        // 'plugins.flutter.io/image_picker', method 'pickImage'
+        // returning the picked file path).
+        const pickerChannel = MethodChannel(
+          'plugins.flutter.io/image_picker',
+        );
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(pickerChannel, (call) async {
+              return '/tmp/picked-avatar.jpg';
+            });
+        addTearDown(
+          () => TestDefaultBinaryMessengerBinding
+              .instance
+              .defaultBinaryMessenger
+              .setMockMethodCallHandler(pickerChannel, null),
+        );
+        when(
+          () => userRepo.uploadAvatar(localPath: any(named: 'localPath')),
+        ).thenAnswer((_) async => _fixture());
+
+        await pumpScreen(tester);
+
+        await tester.tap(find.text('Change Photo'));
+        await tester.pumpAndSettle();
+
+        verify(
+          () => userRepo.uploadAvatar(localPath: '/tmp/picked-avatar.jpg'),
+        ).called(1);
+        expect(find.text('Profile photo updated.'), findsOneWidget);
+      },
+    );
 
     testWidgets(
       'should prompt to discard unsaved changes when back is tapped',

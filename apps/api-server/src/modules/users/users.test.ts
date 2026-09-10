@@ -288,6 +288,38 @@ describe('users routes', () => {
       });
     });
 
+    it('when photoUrl is provided => expected 200 and forwarded trimmed', async () => {
+      vi.mocked(usersService.updateUserProfile).mockResolvedValueOnce({
+        authUid: 'test-uid-1',
+        email: 'user@example.com',
+        photoUrl: 'https://example.com/avatar.png',
+        profileCompleted: false,
+        createdAt: {
+          toDate: () => new Date('2026-08-18T00:00:00Z'),
+        } as never,
+      });
+
+      const app = createApp();
+
+      const response = await request(app)
+        .patch('/api/users/me')
+        .send({
+          photoUrl: ' https://example.com/avatar.png ',
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({
+        ok: true,
+        data: {
+          authUid: 'test-uid-1',
+          photoUrl: 'https://example.com/avatar.png',
+        },
+      });
+      expect(usersService.updateUserProfile).toHaveBeenCalledWith('test-uid-1', {
+        photoUrl: 'https://example.com/avatar.png',
+      });
+    });
+
     it('when request body is empty => expected 400 w/ EMPTY_INPUT', async () => {
       const app = createApp();
 
