@@ -13,6 +13,7 @@ import {
     getSwipeDecision,
     type SwipeDecision,
 } from '../swipes/swipes.service.js';
+import { sweepExpiredActivities } from './activity-lifecycle.service.js';
 
 export type ActivityStatus = 'open' | 'full' | 'cancelled' | 'completed' | 'removed';
 export type ActivitySkillLevel = 'beginner' | 'intermediate' | 'advanced' | 'any';
@@ -278,6 +279,10 @@ export async function getActivityById(activityId: string): Promise<ActivityWithI
 export async function listActivities(
     filters: ListActivitiesFilters,
 ): Promise<ActivityWithId[]> {
+    // Best-effort expiry sweep — fire-and-forget so a slow/stuck
+    // sweep never adds latency to the read path. See
+    // `activity-lifecycle.service.ts` for the full driver story.
+    sweepExpiredActivities().catch(() => undefined);
     let query: FirebaseFirestore.Query = firestore.collection('activities');
 
     if (filters.status !== undefined) {

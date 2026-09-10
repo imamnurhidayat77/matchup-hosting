@@ -124,6 +124,7 @@ class RemoteNotificationRepository implements NotificationRepository {
       case 'activity' ||
             'activity_reminder' ||
             'activity_cancelled' ||
+            'activity_completed' ||
             'activity_left':
         return NotificationType.activity;
       case 'request' ||

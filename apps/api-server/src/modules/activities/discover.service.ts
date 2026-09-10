@@ -4,6 +4,7 @@ import type {
     ListActivitiesFilters,
 } from './activities.service.js';
 import { listSwipeDecisions } from '../swipes/swipes.service.js';
+import { sweepExpiredActivities } from './activity-lifecycle.service.js';
 import { geohashCover, geohashEncode, geohashNeighbors, haversineKm } from './geohash.js';
 
 /**
@@ -137,6 +138,9 @@ export async function listDiscoverActivities(
     if (!viewerUid) {
         throw new Error('discover requires viewerUid so swipes can be excluded');
     }
+
+    // Best-effort expiry sweep — fire-and-forget, never blocks.
+    sweepExpiredActivities().catch(() => undefined);
 
     const base = firestore.collection('activities');
     const { query } = buildQuery(base, { ...filters, status: 'open' });
