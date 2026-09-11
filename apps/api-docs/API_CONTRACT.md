@@ -212,7 +212,9 @@ Editable fields:
 - `dateOfBirth`
 - `skillLevel`
 - `preferredSports`
+- `sportSkillLevels` (per-sport skill map, e.g. `{ "Tennis": "intermediate" }`)
 - `preferredLocations`
+- `joinReason` (onboarding answer — stored on the private profile, never exposed publicly)
 
 Non-editable through this route:
 
@@ -232,7 +234,9 @@ Request body:
   "dateOfBirth": "2000-01-01",
   "skillLevel": "intermediate",
   "preferredSports": ["futsal", "badminton"],
-  "preferredLocations": ["Auckland"]
+  "sportSkillLevels": { "futsal": "intermediate", "badminton": "beginner" },
+  "preferredLocations": ["Auckland"],
+  "joinReason": "Stay active with new sports"
 }
 ```
 
@@ -277,6 +281,8 @@ Errors:
 - `400 INVALID_INPUT` if string fields are not strings
 - `400 INVALID_INPUT` if `skillLevel` is invalid
 - `400 INVALID_INPUT` if `preferredSports` or `preferredLocations` are not string arrays
+- `400 INVALID_INPUT` if `sportSkillLevels` is not a sport-name → level map
+- `400 INVALID_INPUT` if `joinReason` is not a string
 - `404 NOT_FOUND` if user profile does not exist
 
 ### `PATCH /api/users/me/photo`

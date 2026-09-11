@@ -36,8 +36,12 @@ export type UserRecord = {
   dateOfBirth?: string;
   skillLevel?: SkillLevel;
   preferredSports?: string[];
+  /** Per-sport skill levels, e.g. `{ Tennis: 'intermediate' }`. */
+  sportSkillLevels?: Record<string, SkillLevel>;
   preferredLocations?: string[];
   profileCompleted?: boolean;
+  /** Onboarding answer: why the user joined MatchUp. Private. */
+  joinReason?: string;
   ratingBySport?: Record<string, SportRatingAggregate>;
   totalRatingCount?: number;
 };
@@ -51,7 +55,9 @@ export type UpdateUserProfileInput = {
   dateOfBirth?: string;
   skillLevel?: SkillLevel;
   preferredSports?: string[];
+  sportSkillLevels?: Record<string, SkillLevel>;
   preferredLocations?: string[];
+  joinReason?: string;
 };
 
 export type PublicUserProfile = {
@@ -63,6 +69,7 @@ export type PublicUserProfile = {
   bio?: string;
   skillLevel?: SkillLevel;
   preferredSports?: string[];
+  sportSkillLevels?: Record<string, SkillLevel>;
   preferredLocations?: string[];
   profileCompleted?: boolean;
   ratingBySport?: Record<string, SportRatingAggregate>;
@@ -93,6 +100,28 @@ function assertStringArray(value: unknown, fieldName: string): string[] {
   }
 
   return value;
+}
+
+function assertSportSkillLevels(value: unknown): Record<string, SkillLevel> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error('Invalid user record: sportSkillLevels must be an object');
+  }
+
+  const result: Record<string, SkillLevel> = {};
+
+  for (const [sport, level] of Object.entries(value as Record<string, unknown>)) {
+    if (!sport.trim()) {
+      throw new Error('Invalid user record: sportSkillLevels keys must be non-empty strings');
+    }
+    if (!isSkillLevel(level)) {
+      throw new Error(
+        `Invalid user record: sportSkillLevels.${sport} must be beginner, intermediate, advanced, or any`,
+      );
+    }
+    result[sport] = level;
+  }
+
+  return result;
 }
 
 function assertRatingBySport(value: unknown): Record<string, SportRatingAggregate> {
@@ -172,8 +201,14 @@ function mapUserDoc(userDoc: FirebaseFirestore.DocumentSnapshot): UserRecord | n
     ...(data.preferredSports !== undefined
       ? { preferredSports: assertStringArray(data.preferredSports, 'preferredSports') }
       : {}),
+    ...(data.sportSkillLevels !== undefined
+      ? { sportSkillLevels: assertSportSkillLevels(data.sportSkillLevels) }
+      : {}),
     ...(data.preferredLocations !== undefined
       ? { preferredLocations: assertStringArray(data.preferredLocations, 'preferredLocations') }
+      : {}),
+    ...(typeof data.joinReason === 'string'
+      ? { joinReason: data.joinReason }
       : {}),
     ...(typeof data.profileCompleted === 'boolean'
       ? { profileCompleted: data.profileCompleted }
@@ -197,6 +232,7 @@ function toPublicUserProfile(user: UserRecord): PublicUserProfile {
     ...(user.bio !== undefined ? { bio: user.bio } : {}),
     ...(user.skillLevel !== undefined ? { skillLevel: user.skillLevel } : {}),
     ...(user.preferredSports !== undefined ? { preferredSports: user.preferredSports } : {}),
+    ...(user.sportSkillLevels !== undefined ? { sportSkillLevels: user.sportSkillLevels } : {}),
     ...(user.preferredLocations !== undefined ? { preferredLocations: user.preferredLocations } : {}),
     ...(user.profileCompleted !== undefined ? { profileCompleted: user.profileCompleted } : {}),
     ...(user.ratingBySport !== undefined ? { ratingBySport: user.ratingBySport } : {}),
@@ -382,11 +418,59 @@ export async function updateUserProfile(
 export async function getPublicUserProfile(authUid: string): Promise<PublicUserProfile | null> {
   const user = await getUserByAuthUid(authUid);
 
+  if (user) {
+    return toPublicUserProfile(user);
+  }
+
+  // Fallback: mobile profile routes navigate by display name
+  // (`/player-profile/:name`), so a name that matches no uid is
+  // retried as an exact displayName lookup. Single-field equality —
+  // automatic index, no composite needed. First match wins; display
+  // names are not guaranteed unique.
+  const byName = await getUserByDisplayName(authUid);
+  if (!byName) {
+    return null;
+  }
+
+  return toPublicUserProfile(byName);
+}
+
+/**
+ * Exact-match lookup by display name. Used only as a fallback when a
+ * uid lookup misses (see above) — never as a primary key.
+ */
+export async function getUserByDisplayName(
+  displayName: string,
+): Promise<UserRecord | null> {
+  const normalized = displayName.trim();
+  if (!normalized) {
+    throw new Error('displayName is required');
+  }
+
+  const snap = await firestore
+    .collection('users')
+    .where('displayName', '==', normalized)
+    .limit(1)
+    .get();
+
+  if (snap.empty) {
+    return null;
+  }
+
+  // QueryDocumentSnapshot satisfies the DocumentSnapshot shape
+  // mapUserDoc expects (users are keyed by authUid, so `.id` is it).
+  const firstDoc = snap.docs[0];
+  if (!firstDoc) {
+    return null;
+  }
+  const user = mapUserDoc(firstDoc);
+
   if (!user) {
     return null;
   }
 
-  return toPublicUserProfile(user);
+  const counts = await countUserActivities(user.authUid);
+  return { ...user, ...counts };
 }
 
 export async function updateUserPhoto(

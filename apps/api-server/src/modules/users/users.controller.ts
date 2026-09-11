@@ -21,7 +21,9 @@ const editableProfileFields = [
   'dateOfBirth',
   'skillLevel',
   'preferredSports',
+  'sportSkillLevels',
   'preferredLocations',
+  'joinReason',
 ] as const;
 
 function isSkillLevel(value: unknown): value is SkillLevel {
@@ -43,6 +45,15 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string');
 }
 
+function isSportSkillLevels(value: unknown): value is Record<string, SkillLevel> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+  return Object.entries(value as Record<string, unknown>).every(
+    ([sport, level]) => sport.trim().length > 0 && isSkillLevel(level),
+  );
+}
+
 function buildProfileInput(body: Record<string, unknown>): UpdateUserProfileInput {
   const input: UpdateUserProfileInput = {};
 
@@ -58,6 +69,14 @@ function buildProfileInput(body: Record<string, unknown>): UpdateUserProfileInpu
 
   if (isStringArray(body.preferredSports)) {
     input.preferredSports = body.preferredSports.map((sport) => sport.trim()).filter(Boolean);
+  }
+
+  if (isSportSkillLevels(body.sportSkillLevels)) {
+    input.sportSkillLevels = body.sportSkillLevels;
+  }
+
+  if (typeof body.joinReason === 'string' && body.joinReason.trim()) {
+    input.joinReason = body.joinReason.trim();
   }
 
   if (isStringArray(body.preferredLocations)) {
@@ -290,6 +309,26 @@ export async function updateMyUserProfileHandler(req: Request, res: Response) {
         error: {
           code: 'INVALID_INPUT',
           message: 'preferredSports must be a string array',
+        },
+      });
+    }
+
+    if (body.sportSkillLevels !== undefined && !isSportSkillLevels(body.sportSkillLevels)) {
+      return res.status(400).json({
+        ok: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'sportSkillLevels must map sport names to beginner, intermediate, advanced, or any',
+        },
+      });
+    }
+
+    if (body.joinReason !== undefined && typeof body.joinReason !== 'string') {
+      return res.status(400).json({
+        ok: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'joinReason must be a string',
         },
       });
     }

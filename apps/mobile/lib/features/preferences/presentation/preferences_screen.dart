@@ -3,10 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/providers/preferences_provider.dart';
+import '../../../core/providers/profile_providers.dart';
+import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/pill_buttons.dart';
 import 'widgets/preference_types.dart';
 import 'widgets/preferences_distance_card.dart';
@@ -132,6 +135,34 @@ class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
     _price = PricePreference.both;
   });
 
+  /// Applies locally, then syncs the sport picks to the backend profile
+  /// so they survive reinstalls and seed Discover on other devices.
+  /// A sync failure keeps the local result and still navigates — the
+  /// next Apply retries the sync.
+  Future<void> _onApply() async {
+    _applyToProviders();
+    if (_selected.isNotEmpty) {
+      try {
+        await ref.read(userRepositoryProvider).updateProfile(
+              sports: [
+                for (final e in _selected.entries)
+                  (sport: e.key, level: e.value.label),
+              ],
+            );
+        ref.invalidate(myProfileProvider);
+      } catch (_) {
+        if (!mounted) return;
+        AppSnackbar.show(
+          context,
+          message: 'Filters applied locally — could not sync to your profile.',
+          variant: AppSnackbarVariant.error,
+        );
+      }
+    }
+    if (!mounted) return;
+    context.go('/discovery');
+  }
+
   @override
   Widget build(BuildContext context) {
     _initFromProviders();
@@ -207,10 +238,7 @@ class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
                   label: _selectedCount == 0
                       ? 'Show all activities'
                       : 'Apply Filters',
-                  onPressed: () {
-                    _applyToProviders();
-                    context.go('/discovery');
-                  },
+                  onPressed: _onApply,
                 ),
                 const SizedBox(height: AppSpacing.x2),
                 Text(

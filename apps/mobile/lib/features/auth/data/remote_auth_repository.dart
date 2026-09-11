@@ -111,6 +111,10 @@ class RemoteAuthRepository implements AuthRepository {
       await _ensureBackendProfile(
         result,
         email: email.trim().toLowerCase(),
+        // The bootstrap only stores authUid + email — without this the
+        // sign-up name would live solely in Firebase Auth until the
+        // user edits their profile.
+        displayName: name.trim(),
       );
 
       return result;
@@ -176,6 +180,7 @@ class RemoteAuthRepository implements AuthRepository {
   Future<void> _ensureBackendProfile(
     AuthResult result, {
     String? email,
+    String? displayName,
   }) async {
     try {
       await Future.wait([
@@ -189,6 +194,12 @@ class RemoteAuthRepository implements AuthRepository {
           'email': ?email,
         },
       );
+      if (displayName != null && displayName.isNotEmpty) {
+        await _api.dio.patch(
+          '/users/me',
+          data: {'displayName': displayName},
+        );
+      }
     } catch (e) {
       debugPrint('[RemoteAuthRepository] backend profile ensure failed: $e');
     }

@@ -20,5 +20,6 @@ abstract class UserRepository {
     int? weightKg,
     String? goal,
     List<({String sport, String level})>? sports,
+    String? joinReason,
   });
 }

@@ -46,12 +46,57 @@ class LocalUserRepository implements UserRepository {
     int? weightKg,
     String? goal,
     List<({String sport, String level})>? sports,
+    String? joinReason,
   }) async {
     throw StateError(
       'UserRepository.updateProfile() requires a live backend — no '
       'offline fallback is provided.',
     );
   }
+}
+
+/// Normalises a UI skill label ('Beginner') to the backend wire value
+/// ('beginner'). Returns null when there is no usable level, so the
+/// caller can omit it instead of persisting a bogus value.
+String? wireSkillLevel(String level) {
+  final v = level.trim().toLowerCase();
+  return switch (v) {
+    'beginner' || 'intermediate' || 'advanced' || 'any' => v,
+    _ => null,
+  };
+}
+
+/// Most frequent wire level across [sports]; ties resolve to the
+/// first-seen level. Null when no sport carries a usable level.
+String? dominantSkillLevel(List<({String sport, String level})> sports) {
+  final counts = <String, int>{};
+  final order = <String>[];
+  for (final s in sports) {
+    final wire = wireSkillLevel(s.level);
+    if (wire == null) continue;
+    counts[wire] = (counts[wire] ?? 0) + 1;
+    if (!order.contains(wire)) order.add(wire);
+  }
+  String? best;
+  var bestCount = 0;
+  for (final wire in order) {
+    if (counts[wire]! > bestCount) {
+      best = wire;
+      bestCount = counts[wire]!;
+    }
+  }
+  return best;
+}
+
+/// Maps a backend wire level ('beginner') back to the UI label
+/// ('Beginner') used by the sport preference providers.
+String labelSkillLevel(String? wire) {
+  return switch (wire?.trim().toLowerCase()) {
+    'beginner' => 'Beginner',
+    'advanced' => 'Advanced',
+    'any' => 'Any',
+    _ => 'Intermediate',
+  };
 }
 
 class RemoteUserRepository implements UserRepository {
@@ -103,6 +148,7 @@ class RemoteUserRepository implements UserRepository {
     int? weightKg,
     String? goal,
     List<({String sport, String level})>? sports,
+    String? joinReason,
   }) async {
     try {
       // The backend's `editableProfileFields` is strict — any other key
@@ -114,9 +160,21 @@ class RemoteUserRepository implements UserRepository {
       //
       // Mapping:
       //   - `location`  → `preferredLocations[0]` (backend stores an array)
-      //   - `sports`    → `preferredSports` (array of sport name strings,
-      //                  level pairs are dropped — the backend doesn't have
-      //                  a per-sport level concept yet)
+      //   - `sports`    → `preferredSports` (sport names) +
+      //                  `sportSkillLevels` (per-sport wire levels) +
+      //                  `skillLevel` (dominant level — feeds the
+      //                  profile-completed check and the public profile)
+      //   - `joinReason`→ `joinReason` (onboarding answer, private)
+      final dominant = sports != null && sports.isNotEmpty
+          ? dominantSkillLevel(sports)
+          : null;
+      final levelEntries = sports != null
+          ? [
+              for (final s in sports)
+                if (wireSkillLevel(s.level) != null)
+                  MapEntry(s.sport, wireSkillLevel(s.level)!),
+            ]
+          : const <MapEntry<String, String>>[];
       final res = await _client.dio.patch(
         '/users/me',
         data: {
@@ -129,6 +187,11 @@ class RemoteUserRepository implements UserRepository {
             'dateOfBirth': dateOfBirth.toIso8601String().split('T').first,
           if (sports != null && sports.isNotEmpty)
             'preferredSports': sports.map((s) => s.sport).toList(),
+          if (levelEntries.isNotEmpty)
+            'sportSkillLevels': Map.fromEntries(levelEntries),
+          if (dominant case final skill) 'skillLevel': skill,
+          if (joinReason != null && joinReason.trim().isNotEmpty)
+            'joinReason': joinReason.trim(),
         },
       );
       return _parse(apiDataMap(res.data)) ?? await _fallback.me();
@@ -144,6 +207,7 @@ class RemoteUserRepository implements UserRepository {
         weightKg: weightKg,
         goal: goal,
         sports: sports,
+        joinReason: joinReason,
       );
     }
   }
@@ -178,16 +242,25 @@ class RemoteUserRepository implements UserRepository {
 
   UserModel? _parse(Map<String, dynamic>? json) {
     if (json == null) return null;
-    // Backend returns `preferredSports` as a list of sport-name strings.
-    // The mobile model expects a list of `(sport, level)` records where
-    // level is used to render the per-sport badge on the profile screen.
-    // We map the bare name with an empty level so existing UI still
-    // renders the chip — full per-sport levels aren't persisted yet.
+    // Backend returns `preferredSports` as a list of sport-name strings
+    // plus `sportSkillLevels` (`{ Tennis: 'intermediate' }`) with the
+    // per-sport wire levels. The mobile model expects a list of
+    // `(sport, level)` records where level is used to render the
+    // per-sport badge on the profile screen — levels map back to UI
+    // labels, falling back to '' (renders the bare chip) when unknown.
     final preferredSports = json['preferredSports'] as List<dynamic>?;
+    final skillMap = json['sportSkillLevels'] as Map?;
     final mappedSports = preferredSports != null
-        ? preferredSports
-              .map((sport) => (sport: sport.toString(), level: ''))
-              .toList()
+        ? preferredSports.map((sport) {
+            final name = sport.toString();
+            final wire = skillMap?[name]?.toString();
+            return (
+              sport: name,
+              level: wire != null && wire.isNotEmpty
+                  ? labelSkillLevel(wire)
+                  : '',
+            );
+          }).toList()
         : (json['sports'] as List<dynamic>?)
               ?.map(
                 (e) => (
@@ -218,6 +291,8 @@ class RemoteUserRepository implements UserRepository {
           (json['hosted_count'] as num?)?.toInt() ??
           0,
       sports: mappedSports ?? const [],
+      skillLevel: json['skillLevel'] as String? ??
+          json['skill_level'] as String?,
       ratingBySport: _parseRatingBySport(
         json['ratingBySport'] ?? json['rating_by_sport'],
       ),

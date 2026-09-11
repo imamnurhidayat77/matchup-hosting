@@ -1,13 +1,17 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/network/api_client.dart';
+import '../../../core/providers/preferences_provider.dart';
 import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/home_header.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
@@ -87,7 +91,58 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
       },
       fireImmediately: false,
     );
-    _load();
+    // Seed the session filter from saved sport prefs (onboarding picks)
+    // before the first load, then deal the deck.
+    _seedDefaultFilter().then((_) {
+      if (mounted) _load();
+    });
+  }
+
+  /// Seeds the session filter from the user's saved sport preferences so
+  /// onboarding picks apply to Discover by default. Only fills an EMPTY
+  /// user filter — an explicit Apply/Reset in the Filter screen is never
+  /// overwritten mid-session.
+  Future<void> _seedDefaultFilter() async {
+    if (!ref.read(discoveryFilterProvider).isEmpty) return;
+    var prefs = ref.read(sportPreferencesProvider);
+    if (prefs.isEmpty) {
+      // Cross-device: local prefs are per-install. Hydrate once from the
+      // backend profile, then keep them locally.
+      try {
+        final me = await ref.read(userRepositoryProvider).me();
+        if (!mounted) return;
+        if (me.sports.isNotEmpty) {
+          final hydrated = {
+            for (final s in me.sports)
+              s.sport: s.level.isNotEmpty ? s.level : 'Intermediate',
+          };
+          ref.read(sportPreferencesProvider.notifier).setAll(hydrated);
+          prefs = hydrated;
+        }
+      } catch (_) {
+        // Offline — fall through with whatever local prefs exist.
+      }
+    }
+    if (prefs.isEmpty) return;
+    ref.read(discoveryFilterProvider.notifier).state = DiscoveryFilter(
+      sportSkills: [
+        for (final e in prefs.entries)
+          DiscoverySportSkill(sport: e.key, skill: _discoverySkill(e.value)),
+      ],
+      maxDistanceKm: ref.read(distanceFilterProvider),
+    );
+  }
+
+  /// Maps a saved skill label ('Beginner', …) to the filter enum.
+  /// Unknown/empty levels become `any` — the sport still filters,
+  /// just without a skill restriction.
+  DiscoverySkillLevel _discoverySkill(String label) {
+    return switch (label.trim().toLowerCase()) {
+      'beginner' => DiscoverySkillLevel.beginner,
+      'intermediate' => DiscoverySkillLevel.intermediate,
+      'advanced' => DiscoverySkillLevel.advanced,
+      _ => DiscoverySkillLevel.any,
+    };
   }
 
   @override
@@ -220,6 +275,16 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
     if (_topIndex >= _activities.length) return;
     HapticFeedback.lightImpact();
     final activity = _activities[_topIndex];
+    final needsApproval = activity.joinPolicy == 'approval';
+
+    // Approval-gated games file a join request (awaited — the pending
+    // screen would lie if the request failed) instead of the instant
+    // match flow. Everything else keeps the existing path below.
+    if (liked && needsApproval) {
+      unawaited(_requestAndShowPending(activity));
+      return;
+    }
+
     final next = _topIndex + 1;
     setState(() => _topIndex = next);
 
@@ -244,6 +309,69 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
         if (mounted) context.go('/match/${activity.id}');
       });
     }
+  }
+
+  /// Files the join request, records the swipe decision, advances past
+  /// the card, and opens the pending screen. On failure the card stays
+  /// put with an error snackbar — navigating anyway would promise a
+  /// request that was never sent. The one exception is a duplicate
+  /// request (409 "already pending"): she is already in the queue, so
+  /// the pending screen is the truth and is shown instead of an error.
+  Future<void> _requestAndShowPending(ActivityModel activity) async {
+    try {
+      await ref.read(activityRepositoryProvider).requestJoin(activity.id);
+    } catch (e) {
+      if (!mounted) return;
+      if (_isAlreadyPending(e)) {
+        _openPending(activity);
+        return;
+      }
+      AppSnackbar.show(
+        context,
+        message: _joinErrorMessage(e),
+        variant: AppSnackbarVariant.error,
+      );
+      return;
+    }
+    if (!mounted) return;
+    _openPending(activity);
+  }
+
+  /// Records the swipe, advances past the card, and opens the pending
+  /// screen. Shared by the fresh-request and already-pending paths.
+  void _openPending(ActivityModel activity) {
+    unawaited(
+      ref.read(swipesRepositoryProvider).save(
+        activityId: activity.id,
+        decision: SwipeDecision.join,
+      ),
+    );
+    final repo = ref.read(activityRepositoryProvider);
+    if (repo is RemoteActivityRepository) repo.invalidateFeed();
+    setState(() => _topIndex += 1);
+    HapticFeedback.heavyImpact();
+    context.go('/request-sent/${activity.id}');
+  }
+
+  /// True when the backend rejected the request as a duplicate of an
+  /// existing pending one (409 + the backend's exact message). The
+  /// message match is deliberate: other 409s (full, already joined)
+  /// must stay errors.
+  bool _isAlreadyPending(Object e) {
+    return e is DioException &&
+        e.error is ApiException &&
+        (e.error as ApiException).statusCode == 409 &&
+        (e.error as ApiException).userMessage ==
+            'Join request already pending';
+  }
+
+  /// Prefers the backend's own message (full, not open, …) over the
+  /// generic fallback so failures explain themselves.
+  String _joinErrorMessage(Object e) {
+    if (e is DioException && e.error is ApiException) {
+      return (e.error as ApiException).userMessage;
+    }
+    return 'Could not send the request. Please try again.';
   }
 
   void _dislike() => _swipeOut(false);
@@ -373,7 +501,12 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
                   const SizedBox(width: AppSpacing.x6),
                   DiscoveryAction.info(onTap: _openDetails),
                   const SizedBox(width: AppSpacing.x6),
-                  DiscoveryAction.join(onTap: _like),
+                  // Approval-gated games get the Request variant so
+                  // the cost of the swipe is visible upfront.
+                  if (_activities[_topIndex].joinPolicy == 'approval')
+                    DiscoveryAction.request(onTap: _like)
+                  else
+                    DiscoveryAction.join(onTap: _like),
                 ],
               ),
             ),

@@ -406,6 +406,72 @@ describe('users routes', () => {
       });
     });
 
+    it('when sportSkillLevels has an invalid level => expected 400 w/ INVALID_INPUT', async () => {
+      const app = createApp();
+
+      const response = await request(app)
+        .patch('/api/users/me')
+        .send({
+          sportSkillLevels: { Tennis: 'expert' },
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message:
+            'sportSkillLevels must map sport names to beginner, intermediate, advanced, or any',
+        },
+      });
+    });
+
+    it('when joinReason is not a string => expected 400 w/ INVALID_INPUT', async () => {
+      const app = createApp();
+
+      const response = await request(app)
+        .patch('/api/users/me')
+        .send({
+          joinReason: 123,
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'joinReason must be a string',
+        },
+      });
+    });
+
+    it('when onboarding fields are valid => forwards them to updateUserProfile', async () => {
+      vi.mocked(usersService.updateUserProfile).mockResolvedValueOnce({
+        authUid: 'test-uid-1',
+        email: 'user@example.com',
+        createdAt: { toDate: () => new Date('2026-08-18T00:00:00Z') } as never,
+      });
+
+      const app = createApp();
+
+      const response = await request(app)
+        .patch('/api/users/me')
+        .send({
+          joinReason: ' Stay active with new sports ',
+          preferredSports: ['Tennis'],
+          sportSkillLevels: { Tennis: 'intermediate' },
+          skillLevel: 'intermediate',
+        });
+
+      expect(response.status).toBe(200);
+      expect(usersService.updateUserProfile).toHaveBeenCalledWith('test-uid-1', {
+        joinReason: 'Stay active with new sports',
+        preferredSports: ['Tennis'],
+        sportSkillLevels: { Tennis: 'intermediate' },
+        skillLevel: 'intermediate',
+      });
+    });
+
     it('when user is not found => expected 404 w/ NOT_FOUND', async () => {
       vi.mocked(usersService.updateUserProfile).mockRejectedValueOnce(
         new Error('User not found'),
