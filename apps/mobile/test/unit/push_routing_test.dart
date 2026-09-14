@@ -1,5 +1,22 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:matchup_mobile/features/notifications/domain/app_notification.dart';
 import 'package:matchup_mobile/features/notifications/services/push_routing.dart';
+
+AppNotification _notif({
+  String backendType = 'system',
+  String? activityId,
+  String? senderUid,
+}) {
+  return AppNotification(
+    id: 'n-1',
+    title: 'T',
+    createdAt: DateTime(2026, 9, 1),
+    type: NotificationType.system,
+    backendType: backendType,
+    activityId: activityId,
+    senderUid: senderUid,
+  );
+}
 
 void main() {
   group('PushPayload.parse', () {
@@ -82,6 +99,43 @@ void main() {
     test('dm_message without sender falls back to feed', () {
       expect(
         routeForPush(const PushPayload(type: 'dm_message')),
+        '/notifications',
+      );
+    });
+  });
+
+  group('routeForNotification', () {
+    test('feed and tray taps agree per backend type', () {
+      expect(
+        routeForNotification(_notif(backendType: 'chat_message', activityId: 'a-1')),
+        '/chat/a-1',
+      );
+      expect(
+        routeForNotification(_notif(backendType: 'dm_message', senderUid: 'u-9')),
+        '/dm/u-9',
+      );
+      expect(
+        routeForNotification(
+            _notif(backendType: 'activity_completed', activityId: 'a-2')),
+        '/past-activity/a-2/review',
+      );
+      expect(
+        routeForNotification(_notif(backendType: 'join_request', activityId: 'a-3')),
+        '/manage-activity/a-3',
+      );
+      // Same display type, different screens: activity_joined goes to
+      // detail while join_request goes to manage.
+      expect(
+        routeForNotification(
+            _notif(backendType: 'activity_joined', activityId: 'a-4')),
+        '/activity/a-4',
+      );
+    });
+
+    test('falls back to the feed without a target', () {
+      expect(routeForNotification(_notif()), '/notifications');
+      expect(
+        routeForNotification(_notif(backendType: 'chat_message')),
         '/notifications',
       );
     });
