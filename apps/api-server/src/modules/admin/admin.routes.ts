@@ -2,9 +2,12 @@ import { Router } from 'express';
 import { requireAuth, requireAdmin } from '../../middleware/auth.middleware.js';
 import { adminMembersRouter } from './members.routes.js';
 import { adminActivitiesRouter } from './activities.routes.js';
+import { adminAppealsRouter } from './appeals.routes.js';
 import { adminBroadcastsRouter } from './broadcasts.routes.js';
 import { adminSportsRouter } from './sports.routes.js';
 import { adminTemplatesRouter } from './templates.routes.js';
+import { adminAnalyticsRouter } from './analytics.routes.js';
+import { getDashboardHandler } from './analytics.controller.js';
 
 /**
  * Admin API namespace (`/api/admin/*`). Every sub-router enforces
@@ -27,8 +30,16 @@ adminRouter.get('/me', requireAuth, requireAdmin, (req, res) => {
     });
 });
 
+adminRouter.get(
+    '/dashboard',
+    requireAuth,
+    requireAdmin,
+    getDashboardHandler,
+);
 adminRouter.use('/members', adminMembersRouter);
 adminRouter.use('/activities', adminActivitiesRouter);
+adminRouter.use('/appeals', adminAppealsRouter);
 adminRouter.use('/broadcasts', adminBroadcastsRouter);
 adminRouter.use('/sports', adminSportsRouter);
 adminRouter.use('/templates', adminTemplatesRouter);
+adminRouter.use('/analytics', adminAnalyticsRouter);

@@ -10,6 +10,7 @@ import { chatRouter } from '../modules/chat/chat.routes.js';
 import { dmRouter } from '../modules/dm/dm.routes.js';
 import { activitiesRouter } from '../modules/activities/activities.routes.js';
 import { adminRouter } from '../modules/admin/admin.routes.js';
+import { appealsRouter } from '../modules/appeals/appeals.routes.js';
 import { listPublicActivityTeasersHandler } from '../modules/activities/activities.controller.js';
 import { swipesRouter } from '../modules/swipes/swipes.routes.js';
 import { notificationsRouter } from '../modules/notifications/notifications.routes.js';
@@ -60,6 +61,7 @@ export function createApp(){
     app.use('/api/devices', devicesRouter);
     app.use('/api/places', placesRouter);
     app.use('/api/reports', reportsRouter);
+    app.use('/api/appeals', appealsRouter);
     app.use('/api/admin', adminRouter);
     
     return app;
