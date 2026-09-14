@@ -12,6 +12,30 @@ vi.mock('./reports.service.js', () => {
     };
 });
 
+vi.mock('../notifications/notifications.service.js', () => {
+    return {
+        createNotification: vi.fn().mockResolvedValue({ notificationId: 'n-1' }),
+        renderTemplate: vi.fn().mockResolvedValue(null),
+        displayNameOf: vi.fn().mockResolvedValue(''),
+    };
+});
+
+// Controller reads the report doc best-effort for the reporter notice —
+// keep it hermetic (no network) with a missing doc.
+vi.mock('../../database/firebase.js', () => {
+    return {
+        firestore: {
+            collection: vi.fn().mockReturnValue({
+                doc: vi.fn().mockReturnValue({
+                    get: vi.fn().mockResolvedValue({ exists: false }),
+                }),
+            }),
+        },
+        auth: {},
+        rtdb: {},
+    };
+});
+
 let adminPass = true;
 
 vi.mock('../../middleware/auth.middleware.js', () => {

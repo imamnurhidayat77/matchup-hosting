@@ -8,10 +8,15 @@ vi.mock('../../database/firebase.js', () => ({
 
 vi.mock('../notifications/notifications.service.js', () => ({
     createNotification: vi.fn().mockResolvedValue({ notificationId: 'n-1' }),
+    renderTemplate: vi.fn().mockResolvedValue(null),
+    displayNameOf: vi.fn().mockResolvedValue(''),
 }));
 
 import { firestore } from '../../database/firebase.js';
-import { createNotification } from '../notifications/notifications.service.js';
+import {
+    createNotification,
+    renderTemplate,
+} from '../notifications/notifications.service.js';
 import {
     decideAppeal,
     listAppeals,
@@ -182,6 +187,21 @@ describe('decideAppeal', () => {
         });
         await decideAppeal('ap-1', 'approved', 'admin-1', null);
         expect(activityStore.get('act-1')).toMatchObject({ status: 'open' });
+    });
+
+    it('prefers template copy over the built-in wording', async () => {
+        mockDb({ 'ap-1': appealRow() });
+        vi.mocked(renderTemplate).mockResolvedValueOnce({
+            title: 'Templated title',
+            body: 'Templated body',
+        });
+        await decideAppeal('ap-1', 'approved', 'admin-1', 'note');
+        expect(createNotification).toHaveBeenCalledWith(
+            expect.objectContaining({
+                title: 'Templated title',
+                body: 'Templated body',
+            }),
+        );
     });
 
     it('rejecting records the note without side effects', async () => {

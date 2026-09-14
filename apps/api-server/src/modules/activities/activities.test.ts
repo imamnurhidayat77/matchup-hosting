@@ -36,6 +36,8 @@ vi.mock('./activity-participants.service.js', () => {
 vi.mock('../notifications/notifications.service.js', () => {
     return {
         createNotification: vi.fn().mockResolvedValue({ notificationId: 'notification-1' }),
+        renderTemplate: vi.fn().mockResolvedValue(null),
+        displayNameOf: vi.fn().mockResolvedValue(''),
     };
 });
 
