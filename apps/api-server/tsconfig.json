@@ -45,6 +45,7 @@
   "exclude": [
     "dist",
     "node_modules",
+    "vitest.config.ts",
     "src/modules/auth-dev-only",
     "src/**/*.test.ts"
   ]
