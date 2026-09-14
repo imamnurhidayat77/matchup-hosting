@@ -69,6 +69,12 @@ jobs:
           cache: true
       - name: Install dependencies
         run: flutter pub get
+      - name: Seed .env for analyze/test
+        # `.env` is gitignored but listed as a Flutter asset, so a fresh
+        # checkout has no `.env` and `flutter analyze` reports
+        # `asset_does_not_exist`. Seed it from the committed example when
+        # missing; real developer overrides stay untouched (`cp -n`).
+        run: cp -n .env.example .env || true
       - name: Analyze
         run: flutter analyze
       - name: Test

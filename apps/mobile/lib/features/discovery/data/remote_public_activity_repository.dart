@@ -39,7 +39,7 @@ class RemotePublicActivityRepository implements PublicActivityRepository {
         queryParameters: {'limit': limit},
       );
       final data = res.data;
-      if (data is! List) return _fallback.teasers(limit: limit);
+      if (data is! List) return await _fallback.teasers(limit: limit);
       return data
           .whereType<Map<String, dynamic>>()
           .map(ActivityModel.fromJson)

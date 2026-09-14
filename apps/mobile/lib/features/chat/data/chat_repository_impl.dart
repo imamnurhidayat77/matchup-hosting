@@ -327,7 +327,7 @@ class RemoteChatRepository implements ChatRepository {
         folder: 'chat-attachments/$activityId',
       );
       if (uploadedUrl == null) {
-        return _fallback.sendImage(
+        return await _fallback.sendImage(
           activityId: activityId,
           imagePath: imagePath,
         );
