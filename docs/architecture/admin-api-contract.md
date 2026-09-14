@@ -91,6 +91,11 @@ per-recipient best-effort.
 
 Future source of truth for the mobile pickers (still hardcoded client-side).
 
+Public read mirror: `GET /api/public/sports` (no auth — config is
+non-sensitive) returns enabled rows without counts; mobile onboarding,
+filter, and create/edit screens select per-surface subsets and keep
+bundled fallbacks offline.
+
 ## Notification templates (`notificationTemplates` collection, seeded)
 
 | Method & path | Notes |

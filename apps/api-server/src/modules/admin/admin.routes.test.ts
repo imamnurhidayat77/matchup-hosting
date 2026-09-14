@@ -160,6 +160,45 @@ describe('admin routes', () => {
         expect(sportsService.replaceSports).toHaveBeenCalledWith([]);
     });
 
+    it('GET /api/public/sports returns enabled rows without counts', async () => {
+        vi.mocked(sportsService.listSports).mockResolvedValue([
+            {
+                id: 'tennis',
+                name: 'Tennis',
+                emoji: '🎾',
+                enabled: true,
+                showInFilter: true,
+                showInOnboarding: true,
+                canHost: true,
+                sortOrder: 1,
+                activityCount: 7,
+            },
+            {
+                id: 'cricket',
+                name: 'Cricket',
+                emoji: '🏏',
+                enabled: false,
+                showInFilter: false,
+                showInOnboarding: false,
+                canHost: false,
+                sortOrder: 2,
+                activityCount: 0,
+            },
+        ] as never);
+        const response = await request(createApp()).get('/api/public/sports');
+        expect(response.status).toBe(200);
+        expect(response.body.data).toHaveLength(1);
+        expect(response.body.data[0]).toEqual({
+            id: 'tennis',
+            name: 'Tennis',
+            emoji: '🎾',
+            showInFilter: true,
+            showInOnboarding: true,
+            canHost: true,
+            sortOrder: 1,
+        });
+    });
+
     it('PATCH /api/admin/sports/:id maps boolean violation to 400', async () => {
         vi.mocked(sportsService.updateSport).mockRejectedValue(
             new Error('enabled must be a boolean'),
