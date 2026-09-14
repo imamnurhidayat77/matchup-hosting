@@ -382,7 +382,7 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
                   child: ListView.separated(
                     shrinkWrap: true,
                     itemCount: options.length,
-                    separatorBuilder: (_, __) =>
+                    separatorBuilder: (_, _) =>
                         const SizedBox(height: AppSpacing.x2),
                     itemBuilder: (context, index) {
                       final opt = options[index];
