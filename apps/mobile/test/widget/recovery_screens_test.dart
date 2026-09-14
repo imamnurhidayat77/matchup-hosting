@@ -7,8 +7,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:matchup_mobile/core/providers/repository_providers.dart';
 import 'package:matchup_mobile/features/auth/data/auth_repository.dart';
 import 'package:matchup_mobile/features/auth/recovery/forgot_password_screen.dart';
-import 'package:matchup_mobile/features/auth/recovery/new_password_screen.dart';
-import 'package:matchup_mobile/features/auth/recovery/otp_verification_screen.dart';
+import 'package:matchup_mobile/features/auth/recovery/reset_link_sent_screen.dart';
 
 class _MockAuthRepository extends Mock implements AuthRepository {}
 
@@ -33,6 +32,8 @@ Future<void> _pumpRouter(
 }
 
 void main() {
+  setUp(() => reset(_mockAuth));
+
   group('ForgotPasswordScreen', () {
     testWidgets('should show a validation error for an invalid email', (
       tester,
@@ -52,20 +53,53 @@ void main() {
       );
 
       await tester.enterText(find.byType(TextField), 'not-an-email');
-      await tester.tap(find.text('Send Code'));
+      await tester.tap(find.text('Send Reset Link'));
       await tester.pumpAndSettle();
 
       expect(find.text('Enter a valid email address'), findsOneWidget);
     });
 
-    testWidgets('should push otp-verification with the email once submitted', (
-      tester,
-    ) async {
+    testWidgets(
+      'should push reset-link-sent with the email once submitted',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(600, 1000));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        when(
+          () => _mockAuth.forgotPassword(email: any(named: 'email')),
+        ).thenAnswer((_) async {});
+
+        await _pumpRouter(
+          tester,
+          initialLocation: '/forgot-password',
+          routes: [
+            GoRoute(
+              path: '/forgot-password',
+              builder: (_, _) => const ForgotPasswordScreen(),
+            ),
+            GoRoute(
+              path: '/reset-link-sent',
+              builder: (_, state) =>
+                  Scaffold(body: Text('Reset link for ${state.extra}')),
+            ),
+          ],
+        );
+
+        await tester.enterText(find.byType(TextField), 'jordan@example.com');
+        await tester.tap(find.text('Send Reset Link'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 1000));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Reset link for jordan@example.com'), findsOneWidget);
+      },
+    );
+
+    testWidgets('should show an error when sending fails', (tester) async {
       await tester.binding.setSurfaceSize(const Size(600, 1000));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       when(
         () => _mockAuth.forgotPassword(email: any(named: 'email')),
-      ).thenAnswer((_) async {});
+      ).thenThrow(const AuthException('Account not found.'));
 
       await _pumpRouter(
         tester,
@@ -76,153 +110,78 @@ void main() {
             builder: (_, _) => const ForgotPasswordScreen(),
           ),
           GoRoute(
-            path: '/otp-verification',
-            builder: (_, state) =>
-                Scaffold(body: Text('OTP for ${state.extra}')),
+            path: '/reset-link-sent',
+            builder: (_, _) => const Scaffold(body: Text('Reset link sent')),
           ),
         ],
       );
 
       await tester.enterText(find.byType(TextField), 'jordan@example.com');
-      await tester.tap(find.text('Send Code'));
+      await tester.tap(find.text('Send Reset Link'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 1000));
       await tester.pumpAndSettle();
 
-      expect(find.text('OTP for jordan@example.com'), findsOneWidget);
+      // Stays on the form and surfaces the backend message.
+      expect(find.text('Account not found.'), findsOneWidget);
+      expect(find.text('Reset link sent'), findsNothing);
     });
   });
 
-  group('OtpVerificationScreen', () {
+  group('ResetLinkSentScreen', () {
     testWidgets('should display the email passed via extra', (tester) async {
       await tester.binding.setSurfaceSize(const Size(600, 1000));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
       await _pumpRouter(
         tester,
-        initialLocation: '/otp-verification',
+        initialLocation: '/reset-link-sent',
         routes: [
           GoRoute(
-            path: '/otp-verification',
+            path: '/reset-link-sent',
             builder: (_, _) =>
-                const OtpVerificationScreen(email: 'jordan@example.com'),
+                const ResetLinkSentScreen(email: 'jordan@example.com'),
           ),
         ],
       );
 
       expect(find.textContaining('jordan@example.com'), findsOneWidget);
       expect(find.text('Check Your Email'), findsOneWidget);
+      expect(find.text('Back to Sign In'), findsOneWidget);
     });
 
-    testWidgets(
-      'should push new-password once the correct 6-digit code is entered',
-      (tester) async {
-        await tester.binding.setSurfaceSize(const Size(600, 1000));
-        addTearDown(() => tester.binding.setSurfaceSize(null));
-        when(
-          () => _mockAuth.verifyOtp(
-            email: any(named: 'email'),
-            code: any(named: 'code'),
+    testWidgets('should resend the link and start the cooldown', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(600, 1000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      when(
+        () => _mockAuth.forgotPassword(email: any(named: 'email')),
+      ).thenAnswer((_) async {});
+
+      await _pumpRouter(
+        tester,
+        initialLocation: '/reset-link-sent',
+        routes: [
+          GoRoute(
+            path: '/reset-link-sent',
+            builder: (_, _) =>
+                const ResetLinkSentScreen(email: 'jordan@example.com'),
           ),
-        ).thenAnswer((_) async {});
+        ],
+      );
 
-        await _pumpRouter(
-          tester,
-          initialLocation: '/otp-verification',
-          routes: [
-            GoRoute(
-              path: '/otp-verification',
-              builder: (_, _) =>
-                  const OtpVerificationScreen(email: 'jordan@example.com'),
-            ),
-            GoRoute(
-              path: '/new-password',
-              builder: (_, state) =>
-                  Scaffold(body: Text('New password for ${state.extra}')),
-            ),
-          ],
-        );
+      await tester.tap(find.text('Resend'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pumpAndSettle();
 
-        final boxes = find.byType(TextField);
-        expect(boxes, findsNWidgets(6));
-        const code = '123456';
-        for (var i = 0; i < 6; i++) {
-          await tester.enterText(boxes.at(i), code[i]);
-        }
-        await tester.pump();
-        await tester.tap(find.text('Verify'));
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 800));
-        await tester.pumpAndSettle();
-
-        expect(
-          find.text('New password for jordan@example.com'),
-          findsOneWidget,
-        );
-      },
-    );
-  });
-
-  group('NewPasswordScreen', () {
-    testWidgets(
-      'should disable the submit button until requirements and match are satisfied',
-      (tester) async {
-        await tester.binding.setSurfaceSize(const Size(600, 1000));
-        addTearDown(() => tester.binding.setSurfaceSize(null));
-
-        await _pumpRouter(
-          tester,
-          initialLocation: '/new-password',
-          routes: [
-            GoRoute(
-              path: '/new-password',
-              builder: (_, _) => const NewPasswordScreen(),
-            ),
-          ],
-        );
-
-        final fields = find.byType(TextField);
-        expect(fields, findsNWidgets(2));
-
-        await tester.enterText(fields.at(0), 'weak');
-        await tester.pumpAndSettle();
-        expect(find.text('Weak'), findsOneWidget);
-
-        await tester.enterText(fields.at(0), 'StrongPass1');
-        await tester.enterText(fields.at(1), 'Mismatch1');
-        await tester.pumpAndSettle();
-
-        expect(find.text('Passwords do not match.'), findsOneWidget);
-      },
-    );
-
-    testWidgets(
-      'should show requirement checklist items as met once satisfied',
-      (tester) async {
-        await tester.binding.setSurfaceSize(const Size(600, 1000));
-        addTearDown(() => tester.binding.setSurfaceSize(null));
-
-        await _pumpRouter(
-          tester,
-          initialLocation: '/new-password',
-          routes: [
-            GoRoute(
-              path: '/new-password',
-              builder: (_, _) => const NewPasswordScreen(),
-            ),
-          ],
-        );
-
-        expect(find.text('At least 8 characters'), findsOneWidget);
-        expect(find.text('Contains an uppercase letter'), findsOneWidget);
-        expect(find.text('Contains a number'), findsOneWidget);
-
-        final fields = find.byType(TextField);
-        await tester.enterText(fields.at(0), 'StrongPass1');
-        await tester.pumpAndSettle();
-
-        expect(find.text('Strong'), findsOneWidget);
-      },
-    );
+      verify(
+        () => _mockAuth.forgotPassword(email: 'jordan@example.com'),
+      ).called(1);
+      // Cooldown replaces the resend affordance with a countdown.
+      expect(find.textContaining('Resend link in'), findsOneWidget);
+      expect(find.text('Resend'), findsNothing);
+    });
   });
 }

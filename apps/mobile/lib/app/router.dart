@@ -12,8 +12,7 @@ import '../features/auth/presentation/onboarding_screen.dart';
 import '../features/auth/presentation/splash_screen.dart';
 import '../features/auth/presentation/welcome_screen.dart';
 import '../features/auth/recovery/forgot_password_screen.dart';
-import '../features/auth/recovery/new_password_screen.dart';
-import '../features/auth/recovery/otp_verification_screen.dart';
+import '../features/auth/recovery/reset_link_sent_screen.dart';
 import '../features/appeals/presentation/suspended_screen.dart';
 import '../features/calendar/presentation/calendar_screen.dart';
 import '../features/discovery/presentation/discovery_screen.dart';
@@ -54,8 +53,7 @@ const _publicPaths = {
   '/login',
   '/register',
   '/forgot-password',
-  '/otp-verification',
-  '/new-password',
+  '/reset-link-sent',
 };
 
 // ─── AuthNotifier → Listenable bridge ────────────────────────────────────────
@@ -171,24 +169,13 @@ GoRouter buildRouter(Ref ref) {
         builder: (_, _) => const ForgotPasswordScreen(),
       ),
       GoRoute(
-        path: '/otp-verification',
+        path: '/reset-link-sent',
         pageBuilder: (_, state) {
           final email = state.extra as String? ?? '';
           return appPage(
             state,
-            OtpVerificationScreen(email: email),
-            key: ValueKey('otp-$email'),
-          );
-        },
-      ),
-      GoRoute(
-        path: '/new-password',
-        pageBuilder: (_, state) {
-          final email = state.extra as String? ?? '';
-          return appPage(
-            state,
-            NewPasswordScreen(email: email),
-            key: ValueKey('new-password-$email'),
+            ResetLinkSentScreen(email: email),
+            key: ValueKey('reset-link-sent-$email'),
           );
         },
       ),

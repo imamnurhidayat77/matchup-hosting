@@ -33,18 +33,12 @@ abstract class AuthRepository {
     required String password,
   });
 
-  /// Sends a one-time password to [email] for password reset.
+  /// Sends a password-reset email to [email] via Firebase
+  /// (`sendOobCode` with `PASSWORD_RESET`). The email contains a link
+  /// that opens a Firebase-hosted page where the user sets a new
+  /// password — there is no in-app OTP step. Throws [AuthException]
+  /// when the send fails (unknown address, no connection, …).
   Future<void> forgotPassword({required String email});
-
-  /// Verifies the 6-digit [code] sent to [email].
-  /// Throws [AuthException] on wrong code.
-  Future<void> verifyOtp({required String email, required String code});
-
-  /// Resets the password after OTP verification succeeds.
-  Future<void> resetPassword({
-    required String email,
-    required String newPassword,
-  });
 
   /// Invalidates the current session on the server.
   Future<void> signOut();
