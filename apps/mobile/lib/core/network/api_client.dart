@@ -118,6 +118,16 @@ class _AuthInterceptor extends Interceptor {
     DioException err,
     ErrorInterceptorHandler handler,
   ) async {
+    // Suspension signal: never retried, never refreshed — broadcast so
+    // the UI gates to the suspended interstitial. Tokens are kept (the
+    // user needs them to file and track an appeal).
+    final body = err.response?.data;
+    final errBody = body is Map ? body['error'] : null;
+    final code = (errBody is Map ? errBody['code'] : null) as String?;
+    if (err.response?.statusCode == 403 && code == 'ACCOUNT_SUSPENDED') {
+      SessionEvents.instance.notifySuspended();
+      return handler.next(err);
+    }
     if (err.response?.statusCode == 401 &&
         err.requestOptions.headers[_retriedHeader] == null) {
       final outcome = await _sharedRefresh();
@@ -380,6 +390,12 @@ class ApiException implements Exception {
   final String userMessage;
   final String? code;
 
+  /// True when the backend reports a suspended account (403 +
+  /// `ACCOUNT_SUSPENDED`). Distinct from other 403s (e.g. host-only
+  /// actions) — drives the global suspended gate, not an error toast.
+  bool get isAccountSuspended =>
+      statusCode == 403 && code == 'ACCOUNT_SUSPENDED';
+
   factory ApiException.fromDio(DioException err) {
     final status = err.response?.statusCode;
     // Error bodies are enveloped as `{ok: false, error: {code,
@@ -405,15 +421,17 @@ class ApiException implements Exception {
       ),
       _ => ApiException(
         statusCode: status,
-        userMessage: serverMsg ?? _defaultMessage(status),
+        userMessage: serverMsg ?? _defaultMessage(status, code: serverCode),
         code: serverCode,
       ),
     };
   }
 
-  static String _defaultMessage(int? status) => switch (status) {
+  static String _defaultMessage(int? status, {String? code}) => switch (status) {
     400 => 'Invalid request. Please check your input.',
     401 => 'Session expired. Please sign in again.',
+    403 when code == 'ACCOUNT_SUSPENDED' =>
+      'Your account has been suspended.',
     403 => 'You don\'t have permission to do this.',
     404 => 'The requested resource was not found.',
     429 => 'Too many requests. Please wait a moment.',

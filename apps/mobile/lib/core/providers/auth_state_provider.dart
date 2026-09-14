@@ -1,14 +1,16 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../auth/session_events.dart';
+import '../network/api_client.dart';
 import '../services/rtdb_auth_service.dart';
 import '../storage/secure_token_store.dart';
 
 // ─── Domain ──────────────────────────────────────────────────────────────────
 
-enum AuthStatus { unknown, authenticated, unauthenticated }
+enum AuthStatus { unknown, authenticated, unauthenticated, suspended }
 
 class AuthState {
   const AuthState({this.status = AuthStatus.unknown, this.userId});
@@ -20,6 +22,7 @@ class AuthState {
 
   bool get isAuthenticated => status == AuthStatus.authenticated;
   bool get isUnknown => status == AuthStatus.unknown;
+  bool get isSuspended => status == AuthStatus.suspended;
 
   AuthState copyWith({AuthStatus? status, String? userId}) =>
       AuthState(status: status ?? this.status, userId: userId ?? this.userId);
@@ -40,14 +43,24 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
       await _store.clearAll();
       state = AuthState.unauthenticated;
     });
+    // Fired by the API layer on 403 ACCOUNT_SUSPENDED. Tokens are KEPT —
+    // the user needs them to file and track an appeal — the router gates
+    // to the suspended interstitial instead.
+    _suspendedSub = SessionEvents.instance.onSuspended.listen((_) {
+      if (state.status == AuthStatus.authenticated) {
+        state = state.copyWith(status: AuthStatus.suspended);
+      }
+    });
   }
 
   final _store = SecureTokenStore.instance;
   late final StreamSubscription<void> _expirySub;
+  late final StreamSubscription<void> _suspendedSub;
 
   @override
   void dispose() {
     _expirySub.cancel();
+    _suspendedSub.cancel();
     super.dispose();
   }
 
@@ -90,6 +103,29 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
     // Drop the SDK session too so the next account doesn't inherit it.
     unawaited(RtdbAuthService.instance.signOut());
     state = AuthState.unauthenticated;
+  }
+
+  /// Re-checks a suspension (the interstitial's "Check again" action).
+  /// A 200 means the account was reactivated → back to authenticated.
+  /// 403-suspended, network errors, or anything else → stay suspended
+  /// (never log out on a transient failure).
+  Future<bool> refreshSuspension() async {
+    try {
+      await ApiClient.instance.dio.get('/users/me');
+      state = state.copyWith(status: AuthStatus.authenticated);
+      return true;
+    } on DioException catch (e) {
+      final code = e.response?.statusCode;
+      final errBody = e.response?.data;
+      final errMap = errBody is Map ? errBody['error'] : null;
+      final errCode = errMap is Map ? errMap['code'] : null;
+      if (code == 403 && errCode == 'ACCOUNT_SUSPENDED') {
+        state = state.copyWith(status: AuthStatus.suspended);
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
   }
 }
 

@@ -47,7 +47,9 @@ Frontend maps `removed ⇄ Flagged` and computes `Full` live
 A suspended account gets `403 { code: ACCOUNT_SUSPENDED }` on every
 gated request (distinct from generic `FORBIDDEN`, e.g. host-only
 actions). Tokens stay valid on purpose so the account can still reach
-the suspension-safe appeals endpoints below.
+the suspension-safe appeals endpoints below. Mobile gates to a
+`/suspended` interstitial on that code and re-probes with
+`GET /api/users/me` ("Check again": 200 = reactivated).
 
 ## Appeals (`appeals` collection)
 
@@ -62,7 +64,8 @@ the suspension-safe appeals endpoints below.
 Double decisions are 409. Every decision also sends the appellant a
 `system` notification (their only channel back while suspended).
 Frontend maps `suspension ⇄ Suspension`,
-`activity_removal ⇄ Activity Removal`, etc.
+`activity_removal ⇄ Activity Removal`, etc. Mobile mirrors the flow in
+`features/appeals` (interstitial + one-shot form + status + re-probe).
 
 ## Broadcasts (`broadcasts` collection)
 

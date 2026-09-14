@@ -30,6 +30,7 @@ import '../../features/notifications/data/notification_repository.dart';
 import '../../features/notifications/data/presence_repository.dart';
 import '../../features/notifications/data/remote_device_repository.dart';
 import '../../features/notifications/data/remote_presence_repository.dart';
+import '../../features/appeals/data/appeal_repository.dart';
 import '../../features/profile/data/user_repository_impl.dart';
 import '../../features/profile/data/user_repository.dart';
 import '../../features/ratings/data/ratings_repository.dart';
@@ -162,6 +163,14 @@ final ratingsRepositoryProvider = Provider<RatingsRepository>((ref) {
   final remote = ref.watch(useRemoteApiProvider);
   if (remote) return RemoteRatingsRepository();
   return LocalRatingsRepository();
+});
+
+/// Suspension appeals. Remote-only by design — a "submitted" appeal that
+/// never reaches triage would be a lie, so there is no offline fallback.
+final appealRepositoryProvider = Provider<AppealRepository>((ref) {
+  final remote = ref.watch(useRemoteApiProvider);
+  if (remote) return RemoteAppealRepository();
+  return UnavailableAppealRepository();
 });
 
 /// Async provider of the discovery feed. Screens read this and render based
