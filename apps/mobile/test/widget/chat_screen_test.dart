@@ -258,8 +258,7 @@ void main() {
       expect(find.text('Report activity'), findsOneWidget);
     });
 
-    testWidgets(
-      'should hide the Check In button outside the check-in window',
+    testWidgets('should hide the Check In button outside the check-in window',
       (tester) async {
         // Default testActivity starts tomorrow — far outside the window.
         await pumpScreen(tester);
@@ -267,5 +266,39 @@ void main() {
         expect(find.text('Check In'), findsNothing);
       },
     );
+
+    testWidgets('should render a photo message inline, not as raw text', (
+      tester,
+    ) async {
+      final today = DateTime.now();
+      when(() => repo.watchMessages(any())).thenAnswer(
+        (_) => Stream.value([
+          ChatMessage(
+            id: 'img-1',
+            senderId: 'alex',
+            senderName: 'Alex',
+            // Backend shape: the download URL travels as the text.
+            text: 'https://firebasestorage.googleapis.com/v0/b/app/o/x?alt=media',
+            sentAt: DateTime(today.year, today.month, today.day, 9, 0),
+            imageUrl:
+                'https://firebasestorage.googleapis.com/v0/b/app/o/x?alt=media',
+          ),
+        ]),
+      );
+
+      await pumpScreen(tester);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // The raw URL must never leak into the bubble as text.
+      expect(
+        find.text(
+          'https://firebasestorage.googleapis.com/v0/b/app/o/x?alt=media',
+        ),
+        findsNothing,
+      );
+      // The bubble renders an image (network fetch fails in tests, so
+      // the broken-image fallback proves the image branch was taken).
+      expect(find.byIcon(Icons.broken_image_outlined), findsOneWidget);
+    });
   });
 }

@@ -35,6 +35,10 @@
 	<string>MatchUp adds activities you join to your calendar so you don't miss them.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>MatchUp uses your location so you can share it with your activity group chat.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>MatchUp uses the camera so you can take photos to share in chat.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>MatchUp accesses your photo library so you can share photos in chat.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

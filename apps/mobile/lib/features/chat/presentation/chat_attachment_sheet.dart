@@ -7,12 +7,12 @@ import '../../../core/theme/dark_colors.dart';
 import '../../../core/widgets/pressable_scale.dart';
 
 /// Result returned by [ChatAttachmentSheet] via `Navigator.pop`.
-enum ChatAttachmentChoice { photo, location }
+enum ChatAttachmentChoice { photo, camera, location }
 
 /// Bottom sheet for the chat composer's `+` button — same drag-handle /
 /// option-row shape as [ImagePickerModal] (`create/components`), scoped to
-/// the two attachment kinds `ChatScreen` supports: a photo upload or the
-/// sender's current location.
+/// the attachment kinds `ChatScreen` supports: a gallery photo, a fresh
+/// camera shot, or the sender's current location.
 class ChatAttachmentSheet extends StatelessWidget {
   const ChatAttachmentSheet({super.key});
 
@@ -66,10 +66,18 @@ class ChatAttachmentSheet extends StatelessWidget {
 
             _AttachmentOption(
               icon: Icons.photo_library_outlined,
-              label: 'Photo',
+              label: 'Gallery',
               color: AppColors.primary,
               onTap: () =>
                   Navigator.of(context).pop(ChatAttachmentChoice.photo),
+            ),
+            const SizedBox(height: AppSpacing.x3),
+            _AttachmentOption(
+              icon: Icons.camera_alt_outlined,
+              label: 'Camera',
+              color: AppColors.primary,
+              onTap: () =>
+                  Navigator.of(context).pop(ChatAttachmentChoice.camera),
             ),
             const SizedBox(height: AppSpacing.x3),
             _AttachmentOption(

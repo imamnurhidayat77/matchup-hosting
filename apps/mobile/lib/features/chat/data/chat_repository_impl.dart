@@ -245,6 +245,7 @@ class RemoteChatRepository implements ChatRepository {
       text: text,
       sentAt: _parseTimestamp(json['timestamp']) ?? DateTime.now(),
       isMine: isMine,
+      imageUrl: ChatMessage.imageUrlFromText(text),
     );
   }
 
@@ -341,6 +342,7 @@ class RemoteChatRepository implements ChatRepository {
         sentAt: sent.sentAt,
         isMine: true,
         imagePath: imagePath,
+        imageUrl: uploadedUrl,
       );
     } catch (e, st) {
       debugPrint('[RemoteChatRepository.sendImage] $e\n$st');
@@ -400,8 +402,9 @@ class RemoteChatRepository implements ChatRepository {
             if (msgs.isNotEmpty) {
               final last = msgs.last;
               final who = last.isMine ? 'You' : last.senderName;
+              var lastMessage = ChatMessage.previewText(last.text);
               lastMessage =
-                  last.text.length > 60 ? '${last.text.substring(0, 60)}…' : last.text;
+                  lastMessage.length > 60 ? '${lastMessage.substring(0, 60)}…' : lastMessage;
               lastMessage = '$who: $lastMessage';
               time = _relativeTime(last.sentAt);
             }
@@ -456,6 +459,7 @@ class RemoteChatRepository implements ChatRepository {
       text: text,
       sentAt: _parseTimestamp(json['timestamp']) ?? DateTime.now(),
       isMine: isMine,
+      imageUrl: ChatMessage.imageUrlFromText(text),
     );
   }
 }

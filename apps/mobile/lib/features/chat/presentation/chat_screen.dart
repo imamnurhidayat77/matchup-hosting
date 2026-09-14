@@ -267,18 +267,42 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (choice == null || !mounted) return;
     switch (choice) {
       case ChatAttachmentChoice.photo:
-        await _pickAndSendImage();
+        await _pickAndSendImage(ImageSource.gallery);
+      case ChatAttachmentChoice.camera:
+        await _pickAndSendImage(ImageSource.camera);
       case ChatAttachmentChoice.location:
         await _shareLocation();
     }
   }
 
-  Future<void> _pickAndSendImage() async {
-    final picked = await ImagePicker().pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 1600,
-      imageQuality: 85,
-    );
+  Future<void> _pickAndSendImage(ImageSource source) async {
+    final XFile? picked;
+    try {
+      picked = await ImagePicker().pickImage(
+        source: source,
+        maxWidth: 1600,
+        imageQuality: 85,
+      );
+    } on PlatformException {
+      // Permission denied (or no camera on the device).
+      if (!mounted) return;
+      AppSnackbar.show(
+        context,
+        message: source == ImageSource.camera
+            ? 'Could not access the camera. Check camera permissions and try again.'
+            : 'Could not access your photos. Check photo permissions and try again.',
+        variant: AppSnackbarVariant.error,
+      );
+      return;
+    } catch (_) {
+      if (!mounted) return;
+      AppSnackbar.show(
+        context,
+        message: 'Could not attach a photo. Please try again.',
+        variant: AppSnackbarVariant.error,
+      );
+      return;
+    }
     if (picked == null || !mounted) return;
     HapticFeedback.lightImpact();
     try {
@@ -1080,6 +1104,11 @@ class _Bubble extends StatelessWidget {
 /// Renders the payload inside a chat bubble — plain text by default, or a
 /// photo/location attachment when the message carries one (see
 /// [ChatMessage.isImage] / [ChatMessage.isLocation]).
+///
+/// Photos resolve local-first: a just-sent message renders from disk via
+/// [ChatMessage.imagePath]; anything parsed from the backend renders from
+/// the network via [ChatMessage.imageUrl]. Tapping a photo opens the
+/// full-screen viewer.
 class _BubbleContent extends StatelessWidget {
   const _BubbleContent({required this.msg, required this.isMine});
   final ChatMessage msg;
@@ -1088,22 +1117,14 @@ class _BubbleContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (msg.isImage) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        child: Image.file(
-          File(msg.imagePath!),
-          width: 200,
-          height: 200,
-          fit: BoxFit.cover,
-          errorBuilder: (_, _, _) => Container(
+      return PressableScale(
+        onTap: () => _ChatImageViewer.show(context, msg),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          child: _ChatImage(
+            msg: msg,
             width: 200,
             height: 200,
-            color: context.colors.surfaceMuted,
-            alignment: Alignment.center,
-            child: Icon(
-              Icons.broken_image_outlined,
-              color: context.colors.textTertiary,
-            ),
           ),
         ),
       );
@@ -1117,6 +1138,136 @@ class _BubbleContent extends StatelessWidget {
       msg.text,
       style: AppTypography.bodyReading(context).copyWith(
         color: isMine ? AppColors.textOnPrimary : context.colors.textPrimary,
+      ),
+    );
+  }
+}
+
+/// Single chat photo — local file when the message was just captured on
+/// this device, network image otherwise. Shared by the bubble and the
+/// full-screen viewer so both paths stay in sync.
+class _ChatImage extends StatelessWidget {
+  const _ChatImage({
+    required this.msg,
+    required this.width,
+    required this.height,
+    this.fit = BoxFit.cover,
+  });
+  final ChatMessage msg;
+  final double width;
+  final double height;
+  final BoxFit fit;
+
+  @override
+  Widget build(BuildContext context) {
+    final localPath = msg.imagePath;
+    if (localPath != null) {
+      return Image.file(
+        File(localPath),
+        width: width,
+        height: height,
+        fit: fit,
+        errorBuilder: (_, _, _) => _brokenImage(context),
+      );
+    }
+    return Image.network(
+      msg.imageUrl!,
+      width: width,
+      height: height,
+      fit: fit,
+      loadingBuilder: (context, child, progress) {
+        if (progress == null) return child;
+        return Container(
+          width: width,
+          height: height,
+          color: context.colors.surfaceMuted,
+          alignment: Alignment.center,
+          child: const SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        );
+      },
+      errorBuilder: (_, _, _) => _brokenImage(context),
+    );
+  }
+
+  Widget _brokenImage(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      color: context.colors.surfaceMuted,
+      alignment: Alignment.center,
+      child: Icon(
+        Icons.broken_image_outlined,
+        color: context.colors.textTertiary,
+      ),
+    );
+  }
+}
+
+/// Full-screen photo viewer behind a bubble tap: pinch-to-zoom via
+/// [InteractiveViewer], dark scrim, and a close button. Works for both
+/// local (just-sent) and remote (received) photos.
+class _ChatImageViewer extends StatelessWidget {
+  const _ChatImageViewer({required this.msg});
+  final ChatMessage msg;
+
+  static Future<void> show(BuildContext context, ChatMessage msg) {
+    return showDialog<void>(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (_) => _ChatImageViewer(msg: msg),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screen = MediaQuery.of(context).size;
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: EdgeInsets.zero,
+      child: Stack(
+        children: [
+          Center(
+            child: InteractiveViewer(
+              minScale: 1,
+              maxScale: 4,
+              child: _ChatImage(
+                msg: msg,
+                width: screen.width,
+                height: screen.height * 0.8,
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
+          Positioned(
+            top: MediaQuery.of(context).viewPadding.top + 8,
+            right: 16,
+            child: Semantics(
+              button: true,
+              label: 'Close photo',
+              child: PressableScale(
+                onTap: () => Navigator.of(context).pop(),
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: const BoxDecoration(
+                    color: Colors.black54,
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: const Icon(
+                    Icons.close_rounded,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
