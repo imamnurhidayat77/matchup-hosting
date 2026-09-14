@@ -8,6 +8,7 @@ import {
     updateActivityStatusHandler,
 } from './activities.controller.js';
 import { activityParticipantsRouter } from './activity-participants.routes.js';
+import { activityCheckInRouter } from './activity-checkin.routes.js';
 import { ratingsRouter } from '../ratings/ratings.routes.js';
 import { requireAuth } from '../../middleware/auth.middleware.js';
 
@@ -20,4 +21,5 @@ activitiesRouter.patch('/:activityId/cover', requireAuth, updateActivityCoverHan
 activitiesRouter.patch('/:activityId', requireAuth, updateActivityHandler);
 activitiesRouter.get('/:activityId', requireAuth, getActivityHandler);
 activitiesRouter.use('/', activityParticipantsRouter);
+activitiesRouter.use('/', activityCheckInRouter);
 activitiesRouter.use('/', ratingsRouter);

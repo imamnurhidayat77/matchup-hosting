@@ -1,12 +1,17 @@
 import express from 'express';
 import request from 'supertest';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// requireAdmin itself never touches Firebase, but importing the middleware
-// module pulls database/firebase.js — mock it so no Admin SDK init runs.
+// requireAdmin now reads Firestore `admins/{uid}` (plus the ADMIN_UIDS env
+// fallback). Mock the database module so no Admin SDK init runs.
+const docGet = vi.fn();
 vi.mock('../database/firebase.js', () => ({
     auth: { verifyIdToken: vi.fn() },
-    firestore: {},
+    firestore: {
+        collection: vi.fn(() => ({
+            doc: vi.fn(() => ({ get: docGet })),
+        })),
+    },
     rtdb: {},
 }));
 
@@ -14,18 +19,19 @@ import { requireAdmin } from './auth.middleware.js';
 
 /**
  * Fail-closed proof for the admin gate: with the default test env
- * (`ADMIN_UIDS` unset), EVERY authenticated uid is denied. Uses the real
- * middleware + real env parsing — no mocks — so this breaks loudly if
- * the allowlist ever defaults open.
+ * (`ADMIN_UIDS` unset) and no `admins/{uid}` doc, EVERY authenticated
+ * uid is denied. Uses the real middleware + real env parsing — no mocks
+ * on the gate logic itself — so this breaks loudly if the gate ever
+ * defaults open.
  */
-function createAdminApp() {
+function createAdminApp(uid: string | null) {
     const app = express();
     app.get('/admin-only', requireAdmin, (_req, res) => {
         res.status(200).json({ ok: true });
     });
     // Simulate requireAuth having run first.
     app.get('/admin-only-authed', (req, _res, next) => {
-        req.auth = { uid: 'some-user', token: {} as never };
+        if (uid !== null) req.auth = { uid, token: {} as never };
         next();
     }, requireAdmin, (_req, res) => {
         res.status(200).json({ ok: true });
@@ -34,8 +40,16 @@ function createAdminApp() {
 }
 
 describe('requireAdmin', () => {
+    beforeEach(() => {
+        docGet.mockReset();
+        // Default: no admins/{uid} doc.
+        docGet.mockResolvedValue({ exists: false });
+    });
+
     it('without prior auth => 401 UNAUTHORIZED', async () => {
-        const response = await request(createAdminApp()).get('/admin-only');
+        const response = await request(createAdminApp(null)).get(
+            '/admin-only-authed',
+        );
         expect(response.status).toBe(401);
         expect(response.body).toEqual({
             ok: false,
@@ -46,10 +60,34 @@ describe('requireAdmin', () => {
         });
     });
 
-    it('with non-allowlisted uid and empty ADMIN_UIDS => 403 FORBIDDEN', async () => {
-        const response = await request(createAdminApp()).get(
-            '/admin-only-authed',
-        );
+    it('with non-admin uid (no doc, empty ADMIN_UIDS) => 403 FORBIDDEN', async () => {
+        const response = await request(
+            createAdminApp('some-user'),
+        ).get('/admin-only-authed');
+        expect(response.status).toBe(403);
+        expect(response.body).toEqual({
+            ok: false,
+            error: {
+                code: 'FORBIDDEN',
+                message: 'Admin access is required',
+            },
+        });
+    });
+
+    it('with admins/{uid} doc => 200 (database grant, no .env needed)', async () => {
+        docGet.mockResolvedValue({ exists: true });
+        const response = await request(
+            createAdminApp('db-admin'),
+        ).get('/admin-only-authed');
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual({ ok: true });
+    });
+
+    it('with unreadable admins lookup => 403 FORBIDDEN (fail closed)', async () => {
+        docGet.mockRejectedValue(new Error('firestore down'));
+        const response = await request(
+            createAdminApp('some-user'),
+        ).get('/admin-only-authed');
         expect(response.status).toBe(403);
         expect(response.body).toEqual({
             ok: false,

@@ -44,3 +44,64 @@ describe('createApp', () => {
     });
   });
 });
+
+describe('unknown /api/* routes', () => {
+  it('GET unknown path returns the JSON 404 envelope (not Express HTML)', async () => {
+    const app = createApp();
+
+    const response = await request(app).get('/api/no-such-route');
+
+    expect(response.status).toBe(404);
+    expect(response.body).toEqual({
+      ok: false,
+      error: {
+        code: 'NOT_FOUND',
+        message: 'Not found',
+      },
+    });
+  });
+
+  it('POST unknown path returns the JSON 404 envelope', async () => {
+    const app = createApp();
+
+    const response = await request(app).post('/api/no-such-route').send({});
+
+    expect(response.status).toBe(404);
+    expect(response.body).toEqual({
+      ok: false,
+      error: {
+        code: 'NOT_FOUND',
+        message: 'Not found',
+      },
+    });
+  });
+
+  it('passes through the global rate limiter', async () => {
+    const app = createApp();
+
+    const response = await request(app).get('/api/no-such-route');
+
+    expect(response.status).toBe(404);
+    expect(response.headers['ratelimit-limit']).toBe('300');
+  });
+});
+
+describe('request body handling', () => {
+  it('malformed JSON returns the 400 envelope (not Express HTML)', async () => {
+    const app = createApp();
+
+    const response = await request(app)
+      .post('/api/no-such-route')
+      .set('Content-Type', 'application/json')
+      .send('{"broken":');
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      ok: false,
+      error: {
+        code: 'INVALID_INPUT',
+        message: 'Invalid JSON body',
+      },
+    });
+  });
+});

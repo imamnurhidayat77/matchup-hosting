@@ -62,6 +62,14 @@ export function activityJoinRequestDocPath(activityId: string, uid: string): str
     return `${activityJoinRequestsCollectionPath(activityId)}/${uid}`;
 }
 
+export function activityAttendanceCollectionPath(activityId: string): string {
+    return `${activityDocPath(activityId)}/attendance`;
+}
+
+export function activityAttendanceDocPath(activityId: string, uid: string): string {
+    return `${activityAttendanceCollectionPath(activityId)}/${uid}`;
+}
+
 export function activityRatingsCollectionPath(activityId: string): string {
     return `${activityDocPath(activityId)}/ratings`;
 }
