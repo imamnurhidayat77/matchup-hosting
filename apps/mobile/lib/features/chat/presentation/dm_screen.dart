@@ -31,10 +31,10 @@ final _peerProfileProvider = FutureProvider.autoDispose
 
 /// Minimal 1-on-1 direct-message thread.
 ///
-/// Text-only MVP: peer name header, realtime bubble list, composer.
-/// Opened from player profiles (`/dm/:uid`) and from `dm_message`
-/// push taps. Group-chat features (images, locations, typing) stay
-/// on [ChatScreen].
+/// Peer name header, realtime bubble list (text, photos, shared
+/// locations), composer with photo/location attachments, and a
+/// settings sheet (view profile, report user). Opened from player
+/// profiles (`/dm/:uid`) and from `dm_message` push taps.
 class DmScreen extends ConsumerStatefulWidget {
   const DmScreen({super.key, required this.otherUid, this.peerName});
 
@@ -528,7 +528,9 @@ class _DmSettingsSheet extends StatelessWidget {
             label: 'View profile',
             onTap: () {
               Navigator.of(context).pop();
-              context.push('/player-profile/$peerName');
+              // Uid route: exact match, safe for any display name
+              // (spaces, slashes, duplicates).
+              context.push('/player-profile/uid/$peerUid');
             },
           ),
           _DmSettingsRow(

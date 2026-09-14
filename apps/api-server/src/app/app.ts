@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { checkFirestoreConnection } from '../database/firebase.js';
+import { firestoreAuthHint, isFirestoreAuthError } from '../database/firestore-errors.js';
 import { corsOrigins } from '../config/env.js';
 import {
     AUTOCOMPLETE_RATE_LIMIT,
@@ -63,6 +64,11 @@ export function createApp(){
                 },
             })
         } catch (error) {
+            if (isFirestoreAuthError(error)) {
+                console.error(`[health] ${firestoreAuthHint()}`);
+            } else {
+                console.error('[health] Firestore unreachable:', error);
+            }
             res.status(503).json({
                 ok: false,
                 error: {

@@ -435,6 +435,19 @@ GoRouter buildRouter(Ref ref) {
               );
             },
           ),
+          GoRoute(
+            // Same screen by auth uid — exact and URL-safe. Preferred
+            // when the uid is known (e.g. personal-chat settings).
+            path: '/player-profile/uid/:uid',
+            pageBuilder: (_, state) {
+              final uid = state.pathParameters['uid'] ?? '';
+              return appPage(
+                state,
+                PlayerProfileScreen.byUid(userId: uid),
+                key: ValueKey('player-profile-uid-$uid'),
+              );
+            },
+          ),
         ],
       ),
     ],

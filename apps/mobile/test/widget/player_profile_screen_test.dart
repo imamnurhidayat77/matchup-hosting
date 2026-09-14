@@ -148,5 +148,43 @@ void main() {
       expect(find.text('Share profile'), findsOneWidget);
       expect(find.text('Report profile'), findsOneWidget);
     });
+
+    testWidgets('byUid constructor looks the profile up by auth uid', (
+      tester,
+    ) async {
+      when(() => userRepo.byId('u-9')).thenAnswer(
+        (_) async => const UserModel(
+          id: 'u-9',
+          displayName: 'Sam Rivera',
+          activitiesCount: 3,
+          hostedCount: 1,
+        ),
+      );
+
+      final router = GoRouter(
+        initialLocation: '/player-profile/uid/u-9',
+        routes: [
+          GoRoute(
+            path: '/player-profile/uid/:uid',
+            builder: (_, state) => PlayerProfileScreen.byUid(
+              userId: state.pathParameters['uid']!,
+            ),
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [userRepositoryProvider.overrideWithValue(userRepo)],
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Exact uid lookup — the display name is rendered from the
+      // loaded model, never from the URL.
+      verify(() => userRepo.byId('u-9')).called(greaterThanOrEqualTo(1));
+      expect(find.text('SAM RIVERA'), findsOneWidget);
+    });
   });
 }
