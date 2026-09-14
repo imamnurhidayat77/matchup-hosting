@@ -85,11 +85,12 @@ describe('chat routes', () => {
             });
 
             expect(response.status).toBe(400);
-            expect(response.body).toEqual({
+            expect(response.body).toMatchObject({
                 ok: false,
                 error: {
                     code: 'INVALID_INPUT',
-                    message: 'activityId and text must be strings',
+                    message: 'Invalid request body',
+                    details: { activityId: expect.any(Array) },
                 },
             });
         });
@@ -104,11 +105,12 @@ describe('chat routes', () => {
             });
 
             expect(response.status).toBe(400);
-            expect(response.body).toEqual({
+            expect(response.body).toMatchObject({
                 ok: false,
                 error: {
                     code: 'INVALID_INPUT',
-                    message: 'activityId and text must be strings',
+                    message: 'Invalid request body',
+                    details: { text: expect.any(Array) },
                 },
             });
         });
@@ -123,11 +125,12 @@ describe('chat routes', () => {
             });
 
             expect(response.status).toBe(400);
-            expect(response.body).toEqual({
+            expect(response.body).toMatchObject({
                 ok: false,
                 error: {
                     code: 'INVALID_INPUT',
-                    message: 'type must be text or system',
+                    message: 'Invalid request body',
+                    details: { type: expect.any(Array) },
                 },
             });
         });
@@ -141,17 +144,36 @@ describe('chat routes', () => {
                 name: 'text is blank',
                 body: { activityId: 'activity-1', text: '   ', type: 'text' },
             },
-        ])('when $name => expected 400 w/ EMPTY_INPUT', async ({ body }) => {
+        ])('when $name => expected 400 w/ INVALID_INPUT', async ({ body }) => {
             const app = createApp();
 
             const response = await request(app).post('/api/chat/messages').send(body);
 
             expect(response.status).toBe(400);
-            expect(response.body).toEqual({
+            expect(response.body).toMatchObject({
                 ok: false,
                 error: {
-                    code: 'EMPTY_INPUT',
-                    message: 'activityId and text are required',
+                    code: 'INVALID_INPUT',
+                    message: 'Invalid request body',
+                },
+            });
+        });
+
+        it('when text exceeds 2000 chars => expected 400 w/ INVALID_INPUT', async () => {
+            const app = createApp();
+
+            const response = await request(app).post('/api/chat/messages').send({
+                activityId: 'activity-1',
+                text: 'x'.repeat(2001),
+                type: 'text',
+            });
+
+            expect(response.status).toBe(400);
+            expect(response.body).toMatchObject({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    details: { text: expect.any(Array) },
                 },
             });
         });

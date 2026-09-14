@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import { getMessages, sendMessage } from './chat.service.js';
+import type { SendMessageInput } from './chat.schema.js';
 import { canAccessActivityChat } from '../activities/activity-participants.service.js';
 
 type GetMessagesParams = {
@@ -9,11 +10,10 @@ type GetMessagesParams = {
 export async function sendMessageHandler(req: Request, res: Response) {
     try {
         const senderId = req.auth?.uid;
-        const { activityId, text, type } = req.body as {
-            activityId?: unknown;
-            text?: unknown;
-            type?: unknown;
-        };
+        // Shape already enforced by `validateBody(sendMessageSchema)` —
+        // trimmed, non-blank, `type` defaulted. Only auth + membership
+        // remain for the controller to check.
+        const { activityId, text, type } = req.body as SendMessageInput;
 
         if(!senderId){
             return res.status(401).json({
@@ -21,38 +21,6 @@ export async function sendMessageHandler(req: Request, res: Response) {
                 error: {
                     code: 'UNAUTHORIZED',
                     message: 'Authenticated user is required',
-                },
-            });
-        }
-
-        if (typeof activityId !== 'string' ||
-            typeof text !== 'string'
-        ) {
-            return res.status(400).json({
-                ok: false,
-                error: {
-                    code: 'INVALID_INPUT',
-                    message: 'activityId and text must be strings',
-                },
-            });
-        }
-
-        if (type !== undefined && type !== 'text' && type !== 'system') {
-            return res.status(400).json({
-                ok: false,
-                error: {
-                    code: 'INVALID_INPUT',
-                    message: 'type must be text or system',
-                },
-            });
-        }
-
-        if (!activityId.trim() || !text.trim()) {
-            return res.status(400).json({
-                ok: false,
-                error: {
-                    code: 'EMPTY_INPUT',
-                    message: 'activityId and text are required',
                 },
             });
         }
@@ -73,7 +41,7 @@ export async function sendMessageHandler(req: Request, res: Response) {
             activityId,
             senderId,
             text,
-            type === undefined ? 'text' : type,
+            type,
         );
 
         return res.status(201).json({
