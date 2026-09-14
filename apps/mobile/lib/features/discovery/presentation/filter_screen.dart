@@ -9,6 +9,8 @@ import '../../../core/theme/dark_colors.dart';
 import '../../../core/widgets/app_icon.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_tappable.dart';
+import '../../../core/providers/repository_providers.dart';
+import '../../sports/domain/sport_config.dart';
 import '../domain/discovery_filter.dart';
 import 'discovery_screen.dart' show discoveryFilterProvider;
 
@@ -60,7 +62,7 @@ class FilterScreen extends ConsumerStatefulWidget {
 }
 
 class _FilterScreenState extends ConsumerState<FilterScreen> {
-  static const _sports = [
+  static const _fallbackSports = [
     'Basketball',
     'Tennis',
     'Soccer',
@@ -72,6 +74,12 @@ class _FilterScreenState extends ConsumerState<FilterScreen> {
     'Fitness',
     'Golf',
   ];
+
+  /// Admin-curated filter list; bundled fallback while loading/offline.
+  /// Refreshed on every build (build watches the provider); event
+  /// handlers read the last-built value via [_sports].
+  late List<String> _sportsLive = _fallbackSports;
+  List<String> get _sports => _sportsLive;
 
   /// Local working copy — written to the session provider on Apply.
   late DiscoveryFilter _draft;
@@ -206,6 +214,12 @@ class _FilterScreenState extends ConsumerState<FilterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Subscribe: a late-arriving server config rebuilds the list.
+    _sportsLive = pickSportNames(
+      ref.watch(sportsConfigProvider).valueOrNull ?? const [],
+      (s) => s.showInFilter,
+      _fallbackSports,
+    );
     return AppScaffold.sheet(
       title: 'Filters',
       trailingAction: 'Reset',
