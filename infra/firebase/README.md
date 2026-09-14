@@ -31,8 +31,11 @@ What they enforce:
 
 - `.read: auth != null` on `activityChats`, `typing`, `presence` —
   any signed-in user can subscribe.
-- `.write: false` everywhere — clients can never write directly;
-  all writes go through the backend, where membership is checked.
+- `.write: false` everywhere except `presence/$uid` — clients can
+  never write directly **except** arming their own offline
+  `onDisconnect` handler at `presence/{theirUid}` (`auth.uid == $uid`,
+  validated to `{state: online|offline, lastChanged: number}`);
+  all other writes go through the backend, where membership is checked.
   (The Admin SDK bypasses rules, so backend writes are unaffected.)
 
 Trade-off, stated openly: RTDB rules cannot query Firestore, so
