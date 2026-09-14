@@ -1,5 +1,6 @@
 import { Timestamp } from 'firebase-admin/firestore';
 import { firestore } from '../../database/firebase.js';
+import { TtlCache } from '../../utils/ttl-cache.js';
 
 /**
  * Admin-managed master sports list — the future source of truth for the
@@ -33,11 +34,28 @@ const FLAG_FIELDS = [
     'canHost',
 ] as const;
 
+/** 5-minute cache for the admin-curated sports list (see `listSports`). */
+const sportsCache = new TtlCache<SportView[]>(5 * 60 * 1000);
+
+/** For tests: force the next `listSports()` to refetch. */
+export function invalidateSportsCache(): void {
+    sportsCache.invalidate();
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null;
 }
 
 export async function listSports(): Promise<SportView[]> {
+    // Admin-curated config hit by every onboarding/filter/create surface:
+    // 1 collection read + N count queries per call without this. 5-minute
+    // TTL with invalidation on every mutation below — worst case an admin
+    // sees their own flag flip up to 5 minutes late on reads, while the
+    // mutation responses themselves always return fresh rows.
+    return sportsCache.getOrFill('all', fetchSports);
+}
+
+async function fetchSports(): Promise<SportView[]> {
     const snap = await firestore.collection('sports').get();
     const rows: SportView[] = [];
     for (const doc of snap.docs) {
@@ -152,6 +170,9 @@ export async function replaceSports(
         batch.set(col.doc(id), { ...record, updatedAt: Timestamp.now() }, { merge: true });
     }
     await batch.commit();
+    // Invalidate BEFORE the trailing listSports() so the mutation
+    // response itself carries fresh rows, not the pre-write cache.
+    invalidateSportsCache();
     return listSports();
 }export async function updateSport(
     id: string,
@@ -176,6 +197,7 @@ export async function replaceSports(
     const snap = await ref.get();
     if (!snap.exists) throw new Error('Sport not found');
     await ref.update(patch);
+    invalidateSportsCache();
     const rows = await listSports();
     const view = rows.find((r) => r.id === normalizedId);
     if (!view) throw new Error('Sport not found');

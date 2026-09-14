@@ -7,7 +7,12 @@ vi.mock('../../database/firebase.js', () => ({
 }));
 
 import { firestore } from '../../database/firebase.js';
-import { listSports, replaceSports, updateSport } from './sports.service.js';
+import {
+    invalidateSportsCache,
+    listSports,
+    replaceSports,
+    updateSport,
+} from './sports.service.js';
 
 function mockSports(docs: { id: string; data: Record<string, unknown> }[]) {
     const store = new Map(docs.map((d) => [d.id, d.data]));
@@ -67,6 +72,9 @@ function mockSports(docs: { id: string; data: Record<string, unknown> }[]) {
 
 beforeEach(() => {
     vi.clearAllMocks();
+    // The service caches listSports() for 5 minutes — drop it so each
+    // test's mock Firestore is actually read.
+    invalidateSportsCache();
 });
 
 describe('listSports', () => {
@@ -156,5 +164,30 @@ describe('replaceSports', () => {
         await expect(
             replaceSports([entry(), entry()]),
         ).rejects.toThrow('sports ids must be unique');
+    });
+});
+
+describe('listSports cache', () => {
+    it('serves repeat reads without touching Firestore', async () => {
+        mockSports([
+            { id: 'tennis', data: { name: 'Tennis', emoji: '🎾' } },
+        ]);
+        await listSports();
+        const calls = vi.mocked(firestore.collection).mock.calls.length;
+        expect(calls).toBeGreaterThan(0);
+        await listSports();
+        // No further collection reads — the second call is a cache hit.
+        expect(vi.mocked(firestore.collection).mock.calls.length).toBe(calls);
+    });
+
+    it('refetches after a mutation invalidates', async () => {
+        mockSports([
+            { id: 'golf', data: { name: 'Golf', emoji: '⛳', enabled: true } },
+        ]);
+        expect((await listSports())[0]).toMatchObject({ enabled: true });
+
+        const row = await updateSport('golf', { enabled: false });
+        expect(row.enabled).toBe(false);
+        expect((await listSports())[0]).toMatchObject({ enabled: false });
     });
 });
