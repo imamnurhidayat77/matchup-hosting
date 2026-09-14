@@ -86,10 +86,22 @@ conscious trade-off, not an oversight.
 ## A06 — Vulnerable & Outdated Components
 
 - Dependencies are pinned via lockfiles (`package-lock.json`, `pubspec.lock`).
-- CI installs with `npm ci` and runs the full backend suite on every
-  push/PR (`.github/workflows/ci.yml`).
-- Gap: no automated dependency-vulnerability scanning yet — recommended
-  next step is Dependabot + `npm audit` / `flutter pub outdated` in CI.
+- CI installs with `npm ci` and gates on `npm audit --omit=dev
+  --audit-level=high` (production tree — what ships) for both npm apps,
+  plus the full mobile analyze/test suite, on every push/PR
+  (`.github/workflows/ci.yml`).
+- Resolved in-repo: `js-yaml` + `nanoid` highs via `npm audit fix`;
+  `react-router-dom` 6.30 → 7.18 to clear the high open-redirect/SSR
+  advisories (admin usage is basic routing — `createBrowserRouter`,
+  `Link`, `useNavigate` — verified via lint + build).
+- Accepted risk (documented, not ignored): the remaining high is a
+  **dev-only** vite dev-server advisory (`server.fs.deny` bypass,
+  Windows paths), patchable only via a breaking vite 5→8 jump. Vite
+  never ships to browsers, so the gate scopes to `--omit=dev`; revisit
+  on the next planned toolchain upgrade.
+- Remaining gap: `flutter pub outdated` is not yet gated in CI (Dependabot
+  covers pub updates as PRs, but nothing fails the build on a stale
+  Flutter dep).
 
 ## A07 — Identification & Authentication Failures
 

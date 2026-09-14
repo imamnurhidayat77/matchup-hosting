@@ -27,7 +27,10 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund --legacy-peer-deps
       - name: Audit (fail on high/critical)
-        run: npm audit --audit-level=high
+        # Production tree only: devDependency findings (vite/esbuild
+        # dev-server advisories) never ship to browsers — see
+        # docs/security/owasp-top-10.md A06 for the accepted-risk note.
+        run: npm audit --omit=dev --audit-level=high
       - name: Lint
         run: npm run lint
       - name: Build
@@ -49,7 +52,8 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
       - name: Audit (fail on high/critical)
-        run: npm audit --audit-level=high
+        # Same production-tree scoping as admin-web (see above).
+        run: npm audit --omit=dev --audit-level=high
       - name: Test
         run: npm test
       - name: Coverage gate
