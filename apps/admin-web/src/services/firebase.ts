@@ -1,6 +1,5 @@
 /**
- * Firebase client for admin sign-in. Lazily initialised so mock mode
- * (`VITE_USE_MOCK_API=true`, the default) never needs Firebase env vars.
+ * Firebase client for admin sign-in. Lazily initialised.
  *
  * Required env (see `.env.example`):
  *   VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_PROJECT_ID

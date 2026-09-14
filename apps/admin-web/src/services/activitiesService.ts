@@ -1,9 +1,5 @@
 /**
- * Activities service.
- *
- * HOW TO SWITCH TO REAL API:
- *   Set VITE_USE_MOCK_API=false in .env (plus an admin Firebase ID token
- *   under `admin_id_token` in localStorage — see reportsService header).
+ * Activities service — database-backed (Firestore `activities` via api-server).
  *
  * Live endpoints (api-server, all admin-gated):
  *   GET   /api/admin/activities            → AdminActivityView[]
@@ -16,8 +12,7 @@
  *   Full is computed live (participants >= capacity), never written.
  */
 import { apiFetch } from './api';
-import { DUMMY_ACTIVITIES } from '../data/activitiesDummy';
-import type { AdminActivity, ActivityStatus } from '../data/activitiesDummy';
+import type { AdminActivity, ActivityStatus } from '../types/activities';
 
 export type { AdminActivity, ActivityStatus };
 
@@ -32,12 +27,9 @@ interface AdminActivityView {
   participantCount: number;
   hostId: string;
   hostDisplayName: string;
+  hostPhotoUrl?: string;
   createdAt: string | null;
 }
-
-const USE_MOCK = (import.meta.env.VITE_USE_MOCK_API ?? 'true') === 'true';
-const delay = <T,>(ms: number, v: T): Promise<T> =>
-  new Promise((r) => setTimeout(() => r(v), ms));
 
 function formatDateTime(iso: string | null): {
   scheduledDate: string;
@@ -79,6 +71,7 @@ function toAdminActivity(view: AdminActivityView): AdminActivity {
     skillLevel: 'All Levels',
     host: view.hostDisplayName || view.hostId.slice(0, 8),
     hostAvatarSeed: view.hostId,
+    photoUrl: view.hostPhotoUrl,
     hostRating: 0,
     hostGamesCount: 0,
     location: view.locationName,
@@ -110,7 +103,6 @@ function toBackendStatus(status: ActivityStatus): string {
 }
 
 export async function fetchActivities(): Promise<AdminActivity[]> {
-  if (USE_MOCK) return delay(350, DUMMY_ACTIVITIES);
   const res = await apiFetch<AdminActivityView[]>('/api/admin/activities');
   if (!res.ok) throw new Error(res.error.message);
   return res.data.map(toAdminActivity);
@@ -120,7 +112,6 @@ export async function updateActivityStatus(
   id: string,
   status: ActivityStatus,
 ): Promise<void> {
-  if (USE_MOCK) return delay(200, undefined);
   const res = await apiFetch<void>(
     `/api/admin/activities/${encodeURIComponent(id)}/status`,
     {
@@ -132,7 +123,6 @@ export async function updateActivityStatus(
 }
 
 export async function deleteActivity(id: string): Promise<void> {
-  if (USE_MOCK) return delay(200, undefined);
   const res = await apiFetch<void>(
     `/api/admin/activities/${encodeURIComponent(id)}`,
     { method: 'DELETE' },

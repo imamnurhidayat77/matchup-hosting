@@ -1,24 +1,17 @@
 /**
- * Dashboard service — single source of truth for all dashboard data fetches.
- *
- * HOW TO SWITCH TO REAL API:
- *   Set VITE_USE_MOCK_API=false in your .env file (and store an admin
- *   Firebase ID token under `admin_id_token` in localStorage — see
- *   reportsService header).
+ * Dashboard service — database-backed (Firestore aggregates + reports + activities).
  *
  * API contract (all admin-gated):
  *   GET  /api/admin/dashboard                  → DashboardView (headline numbers)
  *   GET  /api/admin/analytics?range=7d         → trend series
  *   GET  /api/admin/activities                 → activities table (first 8)
- *   Moderation queue → live reports triage board (same as ReportsPage):
- *   GET  /api/reports?status=pending              → ModerationItem[]
- *   POST /api/reports/:id/resolve { note? }       → void
- *   POST /api/reports/:id/dismiss { note? }       → void
+ *   GET  /api/reports?status=pending           → moderation queue
+ *   POST /api/reports/:id/resolve { note? }    → void
+ *   POST /api/reports/:id/dismiss { note? }    → void
  */
 import { fetchReports, reportAction } from './reportsService';
 import { fetchAnalytics } from './analyticsService';
 import { fetchActivities } from './activitiesService';
-import { DUMMY_DASHBOARD } from '../data/dashboardDummy';
 import type {
   ActivityRow,
   DashboardData,
@@ -35,12 +28,6 @@ interface DashboardView {
 }
 
 import { apiFetch } from './api';
-
-const USE_MOCK = (import.meta.env.VITE_USE_MOCK_API ?? 'true') === 'true';
-
-function delay<T>(ms: number, value: T): Promise<T> {
-  return new Promise((resolve) => setTimeout(() => resolve(value), ms));
-}
 
 function kpi(
   title: string,
@@ -59,7 +46,6 @@ function kpi(
 }
 
 export async function fetchDashboard(): Promise<DashboardData> {
-  if (USE_MOCK) return delay(400, DUMMY_DASHBOARD);
   const [stats, analytics, activities, moderationQueue] = await Promise.all([
     apiFetch<DashboardView>('/api/admin/dashboard').then((res) => {
       if (!res.ok) throw new Error(res.error.message);
@@ -90,10 +76,9 @@ export async function fetchDashboard(): Promise<DashboardData> {
         sport: a.sport,
         host: a.host,
         hostAvatarSeed: a.hostAvatarSeed,
+        photoUrl: a.photoUrl,
         participants: a.participants,
         capacity: a.capacity,
-        // MatchStatus has no Cancelled — a cancelled activity no longer
-        // circulates, so it surfaces as Flagged (needs-attention).
         status:
           a.status === 'Active' || a.status === 'Full' || a.status === 'Completed'
             ? a.status
@@ -105,8 +90,6 @@ export async function fetchDashboard(): Promise<DashboardData> {
 }
 
 export async function fetchModerationQueue(): Promise<ModerationItem[]> {
-  if (USE_MOCK) return delay(300, DUMMY_DASHBOARD.moderationQueue);
-  // Live: the moderation queue is the pending-reports triage board.
   const pending = await fetchReports('pending');
   return pending.map((r) => ({
     id: r.id,
@@ -127,6 +110,5 @@ export async function moderationAction(
   action: ModAction,
   note?: string,
 ): Promise<void> {
-  if (USE_MOCK) return delay(200, undefined);
   return reportAction(id, action, note);
 }

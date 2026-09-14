@@ -60,18 +60,17 @@ export function useReports() {
 
   useEffect(() => { load(); }, [load]);
 
-  const handleAction = useCallback(
-    async (id: string, action: ReportAction, note?: string) => {
-      const newStatus = STATUS_MAP[action];
-      dispatch({ type: 'UPDATE_STATUS', id, reportStatus: newStatus, note }); // optimistic
-      try {
-        await reportAction(id, action, note);
-      } catch {
-        load();
-      }
-    },
-    [load],
-  );
+  const handleAction = useCallback(async (id: string, action: ReportAction, note?: string) => {
+    const newStatus = STATUS_MAP[action];
+    // Persist first — only touch local state on success so a failed
+    // request can never masquerade as a resolved/dismissed report.
+    try {
+      await reportAction(id, action, note);
+    } catch (err) {
+      throw new Error(err instanceof Error ? err.message : 'Failed to update report');
+    }
+    dispatch({ type: 'UPDATE_STATUS', id, reportStatus: newStatus, note });
+  }, []);
 
   return {
     loading: state.status === 'idle' || state.status === 'loading',

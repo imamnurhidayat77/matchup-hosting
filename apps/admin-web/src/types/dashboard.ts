@@ -42,6 +42,7 @@ export interface ActivityRow {
   sport: string;
   host: string;
   hostAvatarSeed: string;
+  photoUrl?: string;
   participants: number;
   capacity: number;
   status: MatchStatus;

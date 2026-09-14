@@ -1,13 +1,10 @@
 /**
- * Auth service.
+ * Auth service — database-backed admin sign-in.
  *
- * Mock mode (`VITE_USE_MOCK_API=true`, default): demo credentials below.
- *
- * Live mode: Firebase email/password sign-in (same identity provider as
- * the mobile app — no custom password endpoint on the backend, by design).
- * After sign-in the Firebase ID token is sent as `Authorization: Bearer …`
- * and the caller's admin rights are proven via `GET /api/admin/me`
- * (403 unless the uid is in the backend `ADMIN_UIDS` allowlist).
+ * Firebase email/password sign-in (same identity provider as the mobile
+ * app). After sign-in the Firebase ID token is sent as
+ * `Authorization: Bearer …` and admin rights are proven via
+ * `GET /api/admin/me` (403 unless the uid is in backend `ADMIN_UIDS`).
  */
 import { signInWithEmailAndPassword, signOut as firebaseSignOut } from 'firebase/auth';
 import { apiFetch, clearAdminIdToken, setAdminIdToken } from './api';
@@ -19,6 +16,7 @@ export interface AdminUser {
   email: string;
   role: string;
   avatarSeed: string;
+  photoUrl?: string;
 }
 
 export interface AuthSession {
@@ -65,30 +63,7 @@ export function clearSession(): void {
   sessionStorage.removeItem(SESSION_KEY);
 }
 
-// ─── Dummy credentials ────────────────────────────────────────────────────────
-
-/**
- * Demo admin accounts — credentials are intentionally visible in the UI
- * so reviewers/testers can sign in without asking for credentials.
- * Remove this file from production deployments when real auth is wired.
- */
-export const DEMO_CREDENTIALS = [
-  {
-    email: 'admin@matchup.app',
-    password: 'Admin@2026',
-    user: {
-      id: 'admin-1',
-      name: 'Devon Lane',
-      email: 'admin@matchup.app',
-      role: 'Super Admin',
-      avatarSeed: 'Devon',
-    } satisfies AdminUser,
-  },
-] as const;
-
 // ─── Sign in ──────────────────────────────────────────────────────────────────
-
-const USE_MOCK = (import.meta.env.VITE_USE_MOCK_API ?? 'true') === 'true';
 
 export interface SignInResult {
   session: AuthSession;
@@ -106,30 +81,10 @@ export async function signIn(
   password: string,
   remember: boolean,
 ): Promise<AuthSession> {
-  if (USE_MOCK) {
-    await new Promise((r) => setTimeout(r, 600)); // simulate latency
-
-    const found = DEMO_CREDENTIALS.find(
-      (c) => c.email.toLowerCase() === email.toLowerCase() && c.password === password,
-    );
-    if (!found) {
-      throw new AuthError('Invalid email or password. Check the demo credentials below.');
-    }
-
-    const ttl = remember ? SESSION_TTL_REMEMBER : SESSION_TTL_DEFAULT;
-    const session: AuthSession = {
-      token: `mock_token_${found.user.id}_${Date.now()}`,
-      user: found.user,
-      expiresAt: Date.now() + ttl,
-    };
-    saveSession(session, remember);
-    return session;
-  }
-
-  // ── Real Firebase path ───────────────────────────────────────────────
   let idToken: string;
   let uid: string;
   let accountEmail: string;
+  let photoUrl: string | undefined;
   try {
     const credential = await signInWithEmailAndPassword(
       getFirebaseAuth(),
@@ -138,6 +93,7 @@ export async function signIn(
     );
     uid = credential.user.uid;
     accountEmail = credential.user.email ?? email.trim();
+    photoUrl = credential.user.photoURL ?? undefined;
     idToken = await credential.user.getIdToken();
   } catch {
     throw new AuthError('Invalid email or password.');
@@ -162,10 +118,11 @@ export async function signIn(
     token: idToken,
     user: {
       id: uid,
-      name: accountEmail.split('@')[0] ?? uid,
+      name: credentialName(accountEmail, uid),
       email: accountEmail,
       role: 'Admin',
       avatarSeed: uid,
+      photoUrl,
     },
     expiresAt: Date.now() + ttl,
   };
@@ -173,15 +130,18 @@ export async function signIn(
   return session;
 }
 
+function credentialName(email: string, uid: string): string {
+  const base = email.split('@')[0] ?? '';
+  return base.length > 0 ? base : uid;
+}
+
 export async function signOut(): Promise<void> {
   clearSession();
   clearAdminIdToken();
-  if (!USE_MOCK) {
-    // Best-effort Firebase sign-out — never blocks the UI.
-    try {
-      await firebaseSignOut(getFirebaseAuth());
-    } catch {
-      // Ignore.
-    }
+  // Best-effort Firebase sign-out — never blocks the UI.
+  try {
+    await firebaseSignOut(getFirebaseAuth());
+  } catch {
+    // Ignore.
   }
 }
