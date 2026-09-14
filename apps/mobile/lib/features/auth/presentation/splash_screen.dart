@@ -34,22 +34,28 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     );
     // 2200ms is well beyond AppDurations.emphasized (320ms) — deliberately
     // so. This isn't a UI transition being animated, it's the wordmark
-    // reveal + minimum splash dwell time while the session check runs in
-    // the background; the emphasized cap governs route/element motion, not
-    // a one-time brand moment shown once per cold start.
+    // reveal shown once per cold start; the emphasized cap governs
+    // route/element motion, not a one-time brand moment. Navigation
+    // itself does NOT wait for the full animation (see below).
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 2200),
     )..forward();
 
-    // Check session after minimum splash duration so animation completes.
-    Future.delayed(const Duration(milliseconds: 2000), _checkSessionAndRoute);
+    // Route as soon as the session check finishes, with only a short
+    // minimum dwell (800ms) for the brand moment — never a fixed 2s
+    // wait. checkSession() is just two secure-storage reads (no
+    // network), so on a warm device cold start now costs <1s instead
+    // of 2s+. Minimized-and-resumed apps never reach here at all: the
+    // OS keeps the process alive, so Flutter resumes the existing
+    // route with zero re-init.
+    Future.wait([
+      ref.read(authStateProvider.notifier).checkSession(),
+      Future.delayed(const Duration(milliseconds: 800)),
+    ]).then((_) => _routeBySession());
   }
 
-  Future<void> _checkSessionAndRoute() async {
-    if (!mounted) return;
-    await ref.read(authStateProvider.notifier).checkSession();
-
+  Future<void> _routeBySession() async {
     if (!mounted) return;
     final status = ref.read(authStatusProvider);
     if (status == AuthStatus.authenticated) {

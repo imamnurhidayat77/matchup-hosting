@@ -36,25 +36,29 @@ Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load environment variables
-  await Env.load();
-
-  await Hive.initFlutter();
-  await Hive.openBox(_draftBoxName);
-
-  // Initialise Firebase with the generated options (project
-  // matchup-cs734). Wrapped in try/catch so a failure here doesn't
-  // brick the app — chat falls back to HTTP polling and FCM is a
-  // no-op until Firebase is healthy.
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-  } catch (e, st) {
-    if (kDebugMode) {
-      debugPrint('[main] Firebase.initializeApp() failed: $e\n$st');
-    }
-  }
+  // These three inits are independent of each other (env file read,
+  // Hive box open, Firebase init), so run them concurrently — the old
+  // sequential awaits stacked ~1-2s of disk/plugin I/O in front of the
+  // first frame on every cold start for no reason.
+  await Future.wait([
+    Env.load(),
+    Hive.initFlutter().then((_) => Hive.openBox(_draftBoxName)),
+    (() async {
+      // Initialise Firebase with the generated options (project
+      // matchup-cs734). Wrapped in try/catch so a failure here doesn't
+      // brick the app — chat falls back to HTTP polling and FCM is a
+      // no-op until Firebase is healthy.
+      try {
+        await Firebase.initializeApp(
+          options: DefaultFirebaseOptions.currentPlatform,
+        );
+      } catch (e, st) {
+        if (kDebugMode) {
+          debugPrint('[main] Firebase.initializeApp() failed: $e\n$st');
+        }
+      }
+    })(),
+  ]);
 
   // Register the background handler before runApp so the engine keeps
   // the function reference alive in the background isolate.
