@@ -31,7 +31,8 @@ import '../../features/notifications/data/presence_repository.dart';
 import '../../features/notifications/data/remote_device_repository.dart';
 import '../../features/notifications/data/remote_presence_repository.dart';
 import '../../features/appeals/data/appeal_repository.dart';
-import '../../features/profile/data/user_repository_impl.dart';
+import '../../features/sports/data/sports_repository.dart';
+import '../../features/sports/domain/sport_config.dart';import '../../features/profile/data/user_repository_impl.dart';
 import '../../features/profile/data/user_repository.dart';
 import '../../features/ratings/data/ratings_repository.dart';
 import '../../features/ratings/data/ratings_repository_impl.dart';
@@ -171,6 +172,23 @@ final appealRepositoryProvider = Provider<AppealRepository>((ref) {
   final remote = ref.watch(useRemoteApiProvider);
   if (remote) return RemoteAppealRepository();
   return UnavailableAppealRepository();
+});
+
+/// Master sports config (`GET /api/public/sports`, no auth). Screens
+/// select per-surface subsets (onboarding / filter / hostable) and fall
+/// back to their bundled lists while loading or offline.
+final sportsRepositoryProvider = Provider<SportsRepository>((ref) {
+  final remote = ref.watch(useRemoteApiProvider);
+  if (remote) return RemoteSportsRepository();
+  return UnavailableSportsRepository();
+});
+
+final sportsConfigProvider = FutureProvider<List<SportConfig>>((ref) async {
+  try {
+    return await ref.watch(sportsRepositoryProvider).configs();
+  } catch (_) {
+    return const <SportConfig>[];
+  }
 });
 
 /// Async provider of the discovery feed. Screens read this and render based
