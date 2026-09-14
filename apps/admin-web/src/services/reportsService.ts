@@ -3,11 +3,9 @@
  *
  * HOW TO SWITCH TO REAL API:
  *   1. Set VITE_USE_MOCK_API=false in .env.
- *   2. Store a Firebase ID token of an admin uid (see api-server
- *      ADMIN_UIDS) in localStorage under `admin_id_token`, e.g. from
- *      the browser console after signing in with Firebase:
- *        localStorage.setItem('admin_id_token', '<id-token>')
- *   The token is sent as `Authorization: Bearer …` by apiFetch.
+ *   2. Sign in through the login page with a Firebase account whose uid is
+ *      in the backend `ADMIN_UIDS` allowlist — the Firebase ID token is
+ *      stored automatically and sent as `Authorization: Bearer …` by apiFetch.
  *
  * Live endpoints (api-server):
  *   GET  /api/reports?status=&limit=             → Report[]

@@ -20,15 +20,33 @@ export interface ApiFailure {
 export type ApiResponse<T> = ApiSuccess<T> | ApiFailure;
 
 /**
- * Firebase ID token for admin-only routes, stored by hand (see
- * reportsService header comment). Attached as a Bearer token when
- * present; mock mode never needs it.
+ * Firebase ID token for admin-only routes, stored by the auth service
+ * after Firebase sign-in. Attached as a Bearer token when present;
+ * mock mode never needs it.
  */
+const ADMIN_TOKEN_KEY = 'admin_id_token';
+
 function adminIdToken(): string | null {
   try {
-    return localStorage.getItem('admin_id_token');
+    return localStorage.getItem(ADMIN_TOKEN_KEY);
   } catch {
     return null;
+  }
+}
+
+export function setAdminIdToken(token: string): void {
+  try {
+    localStorage.setItem(ADMIN_TOKEN_KEY, token);
+  } catch {
+    // Storage unavailable — requests simply go unauthenticated.
+  }
+}
+
+export function clearAdminIdToken(): void {
+  try {
+    localStorage.removeItem(ADMIN_TOKEN_KEY);
+  } catch {
+    // Ignore.
   }
 }
 

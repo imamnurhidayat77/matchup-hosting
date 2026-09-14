@@ -1,27 +1,49 @@
-import { useState, useCallback } from 'react';
-import { DUMMY_NOTIF_TEMPLATES } from '../data/notifTemplatesDummy';
-import type { NotifTemplate } from '../data/notifTemplatesDummy';
+import { useState, useCallback, useEffect } from 'react';
+import { fetchTemplates, updateTemplate } from '../services/templatesService';
+import type { NotifTemplate } from '../services/templatesService';
 
 export function useNotifTemplates() {
-  const [templates, setTemplates] = useState<NotifTemplate[]>(DUMMY_NOTIF_TEMPLATES);
-  const [loading] = useState(false);
-  const [error] = useState<string | null>(null);
+  const [templates, setTemplates] = useState<NotifTemplate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleUpdate = useCallback((id: string, patch: Partial<NotifTemplate>) => {
-    setTemplates((prev) =>
-      prev.map((t) =>
-        t.id === id ? { ...t, ...patch, lastEditedAt: new Date().toISOString() } : t,
-      ),
-    );
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      setTemplates(await fetchTemplates());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load templates');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const handleToggle = useCallback((id: string) => {
-    setTemplates((prev) =>
-      prev.map((t) =>
-        t.id === id ? { ...t, enabled: !t.enabled, lastEditedAt: new Date().toISOString() } : t,
-      ),
-    );
-  }, []);
+  useEffect(() => {
+    load();
+  }, [load]);
 
-  return { loading, error, templates, handleUpdate, handleToggle };
+  const handleUpdate = useCallback(
+    async (id: string, patch: Partial<NotifTemplate>) => {
+      const allowed = {
+        ...(patch.title !== undefined ? { title: patch.title } : {}),
+        ...(patch.body !== undefined ? { body: patch.body } : {}),
+        ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
+      };
+      const updated = await updateTemplate(id, allowed);
+      setTemplates((prev) => prev.map((t) => (t.id === id ? updated : t)));
+    },
+    [],
+  );
+
+  const handleToggle = useCallback(
+    async (id: string) => {
+      const current = templates.find((t) => t.id === id);
+      if (!current) return;
+      await handleUpdate(id, { enabled: !current.enabled });
+    },
+    [templates, handleUpdate],
+  );
+
+  return { loading, error, templates, handleUpdate, handleToggle, reload: load };
 }
