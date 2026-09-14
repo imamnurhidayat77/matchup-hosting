@@ -10,7 +10,11 @@ import {
     requestToJoin,
 } from './activity-participants.service.js';
 import { getActivityById } from './activities.service.js';
-import { createNotification } from '../notifications/notifications.service.js';
+import {
+    createNotification,
+    displayNameOf,
+    renderTemplate,
+} from '../notifications/notifications.service.js';
 
 type ActivityParams = {
     activityId: string;
@@ -50,11 +54,20 @@ export async function joinActivityHandler(req: Request<ActivityParams>, res: Res
         const activity = await getActivityById(activityId);
 
         if (activity && activity.hostId !== uid) {
+            const template = await renderTemplate('activity.joined', {
+                participantName:
+                    (await displayNameOf(uid)) || 'Someone',
+                activityName: activity.title,
+                participantCount: String(activity.participantCount + 1),
+                capacity: String(activity.capacity),
+            });
             await createNotification({
                 recipientUid: activity.hostId,
                 type: 'activity_joined',
-                title: 'New participant',
-                body: 'Someone joined your activity',
+                title: template?.title ?? 'New participant',
+                body:
+                    template?.body ??
+                    'Someone joined your activity',
                 activityId,
                 senderUid: uid,
             });
@@ -210,16 +223,26 @@ export async function leaveActivityHandler(req: Request<LeaveActivityParams>, re
                 .filter((participantUid) => participantUid !== authUid);
 
             await Promise.all(
-                notificationRecipients.map((recipientUid) =>
-                    createNotification({
+                notificationRecipients.map(async (recipientUid) => {
+                    const template = await renderTemplate(
+                        'activity.cancelled',
+                        {
+                            activityName: activity.title,
+                            activityDate: activity.startTime,
+                            hostName: (await displayNameOf(authUid)) || 'The host',
+                        },
+                    );
+                    return createNotification({
                         recipientUid,
                         type: 'activity_cancelled',
-                        title: 'Activity cancelled',
-                        body: 'The host cancelled this activity',
+                        title: template?.title ?? 'Activity cancelled',
+                        body:
+                            template?.body ??
+                            'The host cancelled this activity',
                         activityId,
                         senderUid: authUid,
-                    }),
-                ),
+                    });
+                }),
             );
         }
 
