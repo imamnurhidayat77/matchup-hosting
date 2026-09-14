@@ -1,6 +1,7 @@
 // Payload carried by an FCM data message, mirrored from the backend's
 // `deliverPush` (`data: {type, activityId?}`). Pure parsing + routing
 // lives here so it is unit-testable without Firebase or widgets.
+import '../domain/app_notification.dart';
 
 class PushPayload {
   const PushPayload(
@@ -64,4 +65,19 @@ String? routeForPush(PushPayload payload) {
     default:
       return '/notifications';
   }
+}
+
+/// Deep-link route for a feed notification, reusing the push table so
+/// tray taps and feed taps always agree. Feed rows without a usable
+/// target fall back to the notifications screen itself (never null —
+/// the feed is already showing, so staying put is the honest default).
+String routeForNotification(AppNotification notif) {
+  return routeForPush(
+        PushPayload(
+          type: notif.backendType,
+          activityId: notif.activityId,
+          senderUid: notif.senderUid,
+        ),
+      ) ??
+      '/notifications';
 }

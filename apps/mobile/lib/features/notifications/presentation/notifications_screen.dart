@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
@@ -13,6 +14,7 @@ import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../domain/app_notification.dart';
+import '../services/push_routing.dart';
 
 // ─── UI extensions on NotificationType ───────────────────────────────────────
 
@@ -69,6 +71,17 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   Future<void> _markRead(String id) async {
     await ref.read(notificationRepositoryProvider).markRead(id);
     ref.invalidate(_notifProvider);
+  }
+
+  /// Marks the notification read, then deep-links to its screen.
+  /// `push` (not `go`) keeps the feed underneath so back returns here.
+  /// Taps without a usable target stay on the feed — still marked read.
+  Future<void> _openNotif(AppNotification notif) async {
+    await _markRead(notif.id);
+    if (!mounted) return;
+    final route = routeForNotification(notif);
+    if (route == '/notifications') return;
+    context.push(route);
   }
 
   @override
@@ -150,7 +163,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                         onDismiss: () => _markRead(notif.id),
                         child: _NotifCard(
                           item: notif,
-                          onTap: () => _markRead(notif.id),
+                          onTap: () => _openNotif(notif),
                         ),
                       ),
                     );
