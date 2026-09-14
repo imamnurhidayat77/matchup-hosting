@@ -65,6 +65,11 @@ jobs:
           java-version: '17'
       - uses: subosito/flutter-action@v2
         with:
+          # Pinned: golden reference images are only valid for the Flutter
+          # version that recorded them. Bump deliberately and re-record
+          # goldens (`flutter test --update-goldens test/golden/`) in the
+          # same change.
+          flutter-version: '3.44.8'
           channel: stable
           cache: true
       - name: Install dependencies

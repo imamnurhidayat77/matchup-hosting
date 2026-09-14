@@ -13,7 +13,10 @@
 //
 // Regenerate goldens after an intentional visual change:
 //   flutter test --update-goldens test/golden/core_widgets_golden_test.dart
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:matchup_mobile/core/theme/dark_colors.dart';
@@ -24,6 +27,25 @@ import 'package:matchup_mobile/core/widgets/app_text_field.dart';
 import 'package:matchup_mobile/core/widgets/empty_state.dart';
 import 'package:matchup_mobile/core/widgets/skeleton.dart';
 
+/// Loads every font family declared in pubspec.yaml into the test engine
+/// (mirrors what golden_toolkit's `loadAppFonts` does, using only
+/// flutter-bundled APIs). Without this, text falls back to OS system fonts
+/// (Helvetica on macOS, DejaVu Sans on Linux), which made these goldens
+/// pass locally but fail on CI. With the real TTF bytes loaded, shaping is
+/// byte-identical on every OS.
+Future<void> _loadAppFonts() async {
+  final manifest =
+      jsonDecode(await rootBundle.loadString('FontManifest.json'))
+          as List<dynamic>;
+  for (final family in manifest) {
+    final loader = FontLoader((family as Map)['family'] as String);
+    for (final font in (family['fonts'] as List<dynamic>)) {
+      loader.addFont(rootBundle.load((font as Map)['asset'] as String));
+    }
+    await loader.load();
+  }
+}
+
 /// Fixed light [ThemeData] registering [AppColorTokens.light] — goldens
 /// must render against a stable, explicit theme rather than whatever a
 /// bare `MaterialApp()` defaults to, so a theme change elsewhere can't
@@ -32,7 +54,10 @@ ThemeData _goldenTheme() {
   return ThemeData(
     useMaterial3: true,
     brightness: Brightness.light,
-    fontFamily: 'Roboto', // avoid depending on the bundled custom font
+    // Body-tier family, loaded by [_loadAppFonts] — a named-but-unloaded
+    // family would fall back to OS system fonts and break cross-platform
+    // determinism (see above).
+    fontFamily: 'Geist',
     extensions: const [AppColorTokens.light],
   );
 }
@@ -62,6 +87,11 @@ Future<void> _expectGolden(
 }
 
 void main() {
+  setUpAll(() async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    await _loadAppFonts();
+  });
+
   group('AppScaffold goldens', () {
     testWidgets('primary variant', (tester) async {
       await _expectGolden(
