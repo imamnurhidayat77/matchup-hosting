@@ -1,6 +1,9 @@
 import { Timestamp } from 'firebase-admin/firestore';
 import { firestore } from '../../database/firebase.js';
-import { createNotification } from '../notifications/notifications.service.js';
+import {
+    createNotification,
+    renderTemplate,
+} from '../notifications/notifications.service.js';
 
 export type AppealType =
     | 'suspension'
@@ -276,20 +279,34 @@ export async function decideAppeal(
     if (!view) throw new Error('Appeal not found');
     // Decision notice — best-effort, never fails triage. The appellant may
     // be suspended (no API access), so push is their only channel back.
+    // Copy comes from the admin-curated template library, falling back to
+    // the built-in wording when the template is missing or disabled.
     const decided = decision === 'approved' ? 'approved' : 'rejected';
+    const noteText = view.adminNote ?? '';
+    const fallback =
+        decided === 'approved'
+            ? {
+                  title: 'Your appeal was approved',
+                  body: 'Good news — the moderation action on your account was reversed.',
+              }
+            : {
+                  title: 'Your appeal was reviewed',
+                  body:
+                      'After review, your appeal was not approved.' +
+                      (noteText ? ` Note from our team: ${noteText}` : ''),
+              };
     try {
+        const template = await renderTemplate(
+            decided === 'approved'
+                ? 'moderation.appeal_approved'
+                : 'moderation.appeal_rejected',
+            { adminNote: noteText, supportEmail: '' },
+        );
         await createNotification({
             recipientUid: view.appellantUid,
             type: 'system',
-            title:
-                decided === 'approved'
-                    ? 'Your appeal was approved'
-                    : 'Your appeal was reviewed',
-            body:
-                decided === 'approved'
-                    ? 'Good news — the moderation action on your account was reversed.'
-                    : 'After review, your appeal was not approved.' +
-                      (view.adminNote ? ` Note from our team: ${view.adminNote}` : ''),
+            title: template?.title ?? fallback.title,
+            body: template?.body ?? fallback.body,
         });
     } catch {
         // Best-effort.

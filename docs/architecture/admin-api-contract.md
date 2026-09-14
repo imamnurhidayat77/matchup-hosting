@@ -103,7 +103,15 @@ bundled fallbacks offline.
 | `GET /api/admin/templates` | By trigger |
 | `PATCH /api/admin/templates/:id` | `{ title?, body?, enabled? }` |
 
-Data-only for now — senders still hardcode copy; editing is safe.
+Wired senders (`{{variables}}` filled, hardcoded fallback when missing or
+disabled): `activity.joined` (host on join), `activity.cancelled`
+(participants on host-cancel), `account.suspended` + `account.reactivated`
+(status changes), `account.welcome` (new signups),
+`moderation.report_resolved` (reporter on resolve),
+`moderation.appeal_approved` + `moderation.appeal_rejected` (appellant on
+decision, with `{{adminNote}}`). No scheduler exists yet, so
+`activity.reminder`, `activity.starting_soon`, and the `engagement.*`
+triggers are curated but unfired.
 
 ## Analytics (read-only, bounded)
 

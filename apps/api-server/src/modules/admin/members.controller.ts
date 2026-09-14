@@ -1,5 +1,9 @@
 import type { Request, Response } from 'express';
 import {
+    createNotification,
+    renderTemplate,
+} from '../notifications/notifications.service.js';
+import {
     ADMIN_MEMBERS_PAGE_LIMIT_DEFAULT,
     deleteMember,
     getMemberDetail,
@@ -66,6 +70,26 @@ export async function setMemberStatusHandler(
     try {
         const body = req.body as { status?: unknown };
         const row = await setMemberStatus(req.params.uid, body?.status);
+        // Status-change notice (best-effort, never fails the write). A
+        // newly-suspended user is locked out of the API, so push may be
+        // their only channel informing them — and how to appeal.
+        const trigger =
+            row.status === 'suspended'
+                ? 'account.suspended'
+                : 'account.reactivated';
+        const template = await renderTemplate(trigger, {
+            reason: '',
+            supportEmail: '',
+            appealDeadline: '',
+        });
+        if (template) {
+            await createNotification({
+                recipientUid: row.uid,
+                type: 'system',
+                title: template.title,
+                body: template.body,
+            }).catch(() => undefined);
+        }
         return res.status(200).json({ ok: true, data: row });
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';

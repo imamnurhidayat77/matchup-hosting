@@ -9,6 +9,10 @@ import {
   type SkillLevel,
   type UpdateUserProfileInput,
 } from './users.service.js';
+import {
+  createNotification,
+  renderTemplate,
+} from '../notifications/notifications.service.js';
 
 type PublicProfileParams = {
   uid: string;
@@ -132,6 +136,21 @@ export async function bootstrapUserHandler(req: Request, res: Response) {
       authUid,
       email: emailToUse,
     });
+
+    if (user.created) {
+      // Welcome nudge for genuinely new accounts (best-effort).
+      const template = await renderTemplate('account.welcome', {
+        userName: emailToUse.split('@')[0] ?? 'there',
+      });
+      if (template) {
+        await createNotification({
+          recipientUid: user.authUid,
+          type: 'system',
+          title: template.title,
+          body: template.body,
+        }).catch(() => undefined);
+      }
+    }
 
     return res.status(user.created ? 201 : 200).json({
       ok: true,

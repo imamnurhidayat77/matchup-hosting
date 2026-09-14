@@ -1,10 +1,15 @@
 import type { Request, Response } from 'express';
+import { firestore } from '../../database/firebase.js';
 import {
     dismissReport,
     listReports,
     resolveReport,
     submitReport,
 } from './reports.service.js';
+import {
+    createNotification,
+    renderTemplate,
+} from '../notifications/notifications.service.js';
 
 export async function submitReportHandler(req: Request, res: Response) {
     try {
@@ -222,6 +227,32 @@ async function triageHandler(
         };
         if (action === 'resolved') {
             await resolveReport(input);
+            // Reporter notice (best-effort, never fails triage).
+            try {
+                const snap = await firestore
+                    .collection('reports')
+                    .doc(reportId)
+                    .get();
+                const reporterId = snap.exists
+                    ? snap.data()?.reporterId
+                    : undefined;
+                if (typeof reporterId === 'string' && reporterId.length > 0) {
+                    const template = await renderTemplate(
+                        'moderation.report_resolved',
+                        {},
+                    );
+                    if (template) {
+                        await createNotification({
+                            recipientUid: reporterId,
+                            type: 'system',
+                            title: template.title,
+                            body: template.body,
+                        }).catch(() => undefined);
+                    }
+                }
+            } catch {
+                // Best-effort.
+            }
         } else {
             await dismissReport(input);
         }
