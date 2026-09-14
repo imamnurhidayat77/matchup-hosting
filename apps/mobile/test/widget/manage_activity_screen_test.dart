@@ -21,6 +21,14 @@ void main() {
     when(() => repo.joinRequests(any())).thenAnswer((_) async => []);
     when(() => repo.approveJoinRequest(any(), any())).thenAnswer((_) async {});
     when(() => repo.declineJoinRequest(any(), any())).thenAnswer((_) async {});
+    when(
+      () => repo.updateActivity(
+        activityId: any(named: 'activityId'),
+        title: any(named: 'title'),
+        locationName: any(named: 'locationName'),
+        description: any(named: 'description'),
+      ),
+    ).thenAnswer((_) async {});
   });
 
   ActivityModel activity({
@@ -257,6 +265,43 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Profile Pending Petra'), findsOneWidget);
+    });
+
+    testWidgets('quick-edit sheet should call updateActivity on save', (
+      tester,
+    ) async {
+      when(() => repo.byId('5')).thenAnswer((_) async => activity());
+      when(() => repo.participants('5')).thenAnswer((_) async => []);
+      when(() => repo.joinRequests('5')).thenAnswer((_) async => []);
+
+      await pumpScreen(tester);
+
+      // Quick-action "Edit" opens the bottom sheet (hero edit button
+      // uses the 'Edit activity' semantics label, so text 'Edit' is unique).
+      await tester.scrollUntilVisible(
+        find.text('Edit'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.text('Edit'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Edit Activity'), findsOneWidget);
+
+      await tester.tap(find.text('Save Changes'));
+      await tester.pumpAndSettle();
+
+      verify(
+        () => repo.updateActivity(
+          activityId: '5',
+          title: 'Thursday Night Volleyball',
+          locationName: 'Eastside Rec Centre',
+          description: '',
+        ),
+      ).called(1);
+      // Sheet dismissed with a success confirmation.
+      expect(find.text('Save Changes'), findsNothing);
+      expect(find.text('Activity updated.'), findsOneWidget);
     });
   });
 }

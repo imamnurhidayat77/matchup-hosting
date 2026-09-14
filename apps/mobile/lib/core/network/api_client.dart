@@ -12,7 +12,7 @@ import '../storage/secure_token_store.dart';
 const String _apiBase = '/api';
 
 /// Production-ready Dio client with three interceptors:
-///   1. [_AuthInterceptor]    — inject stored Firebase ID token; refresh on 401.
+///   1. [AuthInterceptor]       — inject stored Firebase ID token; refresh on 401.
 ///   2. [_ErrorInterceptor]   — normalise Dio errors into [ApiException].
 ///   3. [_LoggingInterceptor] — debug-only, redacts sensitive headers.
 class ApiClient {
@@ -39,7 +39,7 @@ class ApiClient {
     );
 
     dio.interceptors.addAll([
-      _AuthInterceptor(),
+      AuthInterceptor(),
       _ErrorInterceptor(),
       if (kDebugMode) _LoggingInterceptor(),
     ]);
@@ -52,7 +52,41 @@ class ApiClient {
 
 /// Result of a refresh attempt, so callers can tell "try again
 /// later" apart from "session is dead, send the user to login".
-enum _RefreshOutcome { refreshed, transientFailure, deadSession }
+enum RefreshOutcome { refreshed, transientFailure, deadSession }
+
+/// HTTP exchange with the Firebase securetoken endpoint.
+///
+/// Takes the stored refresh token, returns the fresh token pair.
+/// Throws [UnrecoverableRefreshException] when the session itself is
+/// dead (rejected/revoked refresh token, disabled user) and
+/// [TransientRefreshException] for anything worth retrying later
+/// (timeout, network, 5xx, unexpected shape).
+typedef SecureTokenExchange = Future<SecureTokenPair> Function(
+  String refreshToken,
+);
+
+/// Fresh tokens from a securetoken exchange.
+class SecureTokenPair {
+  const SecureTokenPair({required this.idToken, this.refreshToken});
+  final String idToken;
+  final String? refreshToken;
+}
+
+/// The refresh token itself was rejected — re-login is the only way out.
+class UnrecoverableRefreshException implements Exception {
+  const UnrecoverableRefreshException(this.message);
+  final String message;
+  @override
+  String toString() => 'UnrecoverableRefreshException($message)';
+}
+
+/// Network/timeout/server-side blip — safe to retry on a later 401.
+class TransientRefreshException implements Exception {
+  const TransientRefreshException(this.message);
+  final String message;
+  @override
+  String toString() => 'TransientRefreshException($message)';
+}
 
 /// Injects the stored Firebase ID token and keeps it alive.
 ///
@@ -70,7 +104,47 @@ enum _RefreshOutcome { refreshed, transientFailure, deadSession }
 /// When the refresh token itself is rejected, the session is
 /// unrecoverable: storage is cleared and [SessionEvents] fires so the
 /// app routes to login instead of sitting in a zombie session.
-class _AuthInterceptor extends Interceptor {
+///
+/// Public (rather than private) so tests can drive the full
+/// 401 → refresh → retry flow with an in-memory token store and a fake
+/// securetoken exchange. Production always uses the default constructor
+/// (secure storage + real Google endpoint).
+class AuthInterceptor extends Interceptor {
+  AuthInterceptor({
+    Future<String?> Function()? readAccessToken,
+    Future<void> Function(String)? saveAccessToken,
+    Future<String?> Function()? readRefreshToken,
+    Future<void> Function(String)? saveRefreshToken,
+    Future<void> Function()? clearTokens,
+    String Function()? apiKeyProvider,
+    SecureTokenExchange? exchange,
+    // Separated for tests: production retries through the shared
+    // singleton (same interceptors, same base URL); tests route the
+    // retry through their own Dio pointed at a local fake backend.
+    Future<Response<dynamic>> Function(RequestOptions)? retryFetch,
+  })  : _readAccessToken =
+            readAccessToken ?? SecureTokenStore.instance.readAccessToken,
+        _saveAccessToken =
+            saveAccessToken ?? SecureTokenStore.instance.saveAccessToken,
+        _readRefreshToken =
+            readRefreshToken ?? SecureTokenStore.instance.readRefreshToken,
+        _saveRefreshToken =
+            saveRefreshToken ?? SecureTokenStore.instance.saveRefreshToken,
+        _clearTokens = clearTokens ?? SecureTokenStore.instance.clearAll,
+        _apiKeyProvider = apiKeyProvider ?? (() => Env.firebaseWebApiKey),
+        _exchange = exchange ?? secureTokenExchange,
+        _retryFetch =
+            retryFetch ?? ((opts) => ApiClient.instance.dio.fetch(opts));
+
+  final Future<String?> Function() _readAccessToken;
+  final Future<void> Function(String) _saveAccessToken;
+  final Future<String?> Function() _readRefreshToken;
+  final Future<void> Function(String) _saveRefreshToken;
+  final Future<void> Function() _clearTokens;
+  final String Function() _apiKeyProvider;
+  final SecureTokenExchange _exchange;
+  final Future<Response<dynamic>> Function(RequestOptions) _retryFetch;
+
   /// Header marking a request that already went through one
   /// refresh-and-retry cycle — prevents infinite 401 loops when the
   /// server keeps rejecting even a fresh token.
@@ -80,7 +154,7 @@ class _AuthInterceptor extends Interceptor {
   static const _refreshSkew = Duration(minutes: 5);
 
   /// Coalesces concurrent refreshes into one network call.
-  static Future<_RefreshOutcome>? _refreshInFlight;
+  Future<RefreshOutcome>? _refreshInFlight;
 
   /// Cooldown after a failed refresh: when Google is unreachable (dead
   /// emulator DNS, airplane mode), every request would otherwise burn
@@ -88,22 +162,22 @@ class _AuthInterceptor extends Interceptor {
   /// the network call while a recent failure is still fresh so errors
   /// surface fast; the next attempt happens automatically afterwards.
   static const _failureCooldown = Duration(seconds: 60);
-  static DateTime? _lastRefreshFailureAt;
+  DateTime? _lastRefreshFailureAt;
 
   @override
   Future<void> onRequest(
     RequestOptions options,
     RequestInterceptorHandler handler,
   ) async {
-    var token = await SecureTokenStore.instance.readAccessToken();
+    var token = await _readAccessToken();
     if (token != null && token.isNotEmpty) {
       // Proactive refresh: never send a token that dies mid-flight.
       // Best-effort — a failed proactive refresh still sends the old
       // token and lets the reactive path handle a 401.
       if (isIdTokenExpiringSoon(token, skew: _refreshSkew)) {
         final outcome = await _sharedRefresh();
-        if (outcome == _RefreshOutcome.refreshed) {
-          token = await SecureTokenStore.instance.readAccessToken();
+        if (outcome == RefreshOutcome.refreshed) {
+          token = await _readAccessToken();
         }
       }
     }
@@ -131,19 +205,33 @@ class _AuthInterceptor extends Interceptor {
     if (err.response?.statusCode == 401 &&
         err.requestOptions.headers[_retriedHeader] == null) {
       final outcome = await _sharedRefresh();
-      if (outcome == _RefreshOutcome.refreshed) {
-        final token = await SecureTokenStore.instance.readAccessToken();
+      if (outcome == RefreshOutcome.refreshed) {
+        final token = await _readAccessToken();
         final opts = err.requestOptions;
         opts.headers['Authorization'] = 'Bearer $token';
         opts.headers[_retriedHeader] = '1';
         try {
-          final response = await ApiClient.instance.dio.fetch(opts);
+          final response = await _retryFetch(opts);
+          debugPrint(
+            '[ApiClient] retry after refresh -> ${response.statusCode} '
+            '${opts.path}',
+          );
           return handler.resolve(response);
+        } on DioException catch (e) {
+          // Retry failed too — fall through to the original error.
+          // Logged (with status, never the token) because a 401 here
+          // after a successful refresh means the backend rejects even
+          // fresh tokens — check the backend `[auth] verifyIdToken
+          // rejected:` line for expired vs revoked vs invalid.
+          debugPrint(
+            '[ApiClient] retry after refresh failed: '
+            'HTTP ${e.response?.statusCode} ${opts.path}',
+          );
         } catch (_) {
           // Retry failed too — fall through to the original error.
         }
-      } else if (outcome == _RefreshOutcome.deadSession) {
-        await SecureTokenStore.instance.clearAll();
+      } else if (outcome == RefreshOutcome.deadSession) {
+        await _clearTokens();
         SessionEvents.instance.notifySessionExpired();
       }
     }
@@ -153,91 +241,140 @@ class _AuthInterceptor extends Interceptor {
   /// Returns the in-flight refresh, or starts one. Guarantees at most
   /// one securetoken call at a time no matter how many requests 401
   /// together.
-  static Future<_RefreshOutcome> _sharedRefresh() {
+  Future<RefreshOutcome> _sharedRefresh() {
     return _refreshInFlight ??= _tryRefreshFirebaseToken().whenComplete(
       () => _refreshInFlight = null,
     );
   }
 
-  /// Exchanges the stored Firebase refresh token for a fresh ID token
-  /// using the Firebase securetoken REST endpoint. Transient failures
-  /// (timeout, network, 5xx) are retried once; rejections that mean
-  /// the session itself is dead surface as [deadSession].
-  static Future<_RefreshOutcome> _tryRefreshFirebaseToken() async {
+  /// Exchanges the stored Firebase refresh token for a fresh ID token.
+  /// Transient failures are retried once inside [_exchange]; rejections
+  /// that mean the session itself is dead surface as [deadSession].
+  Future<RefreshOutcome> _tryRefreshFirebaseToken() async {
     final lastFailure = _lastRefreshFailureAt;
     if (lastFailure != null &&
         DateTime.now().difference(lastFailure) < _failureCooldown) {
-      return _RefreshOutcome.transientFailure;
+      debugPrint('[ApiClient] refresh skipped (cooldown after recent failure)');
+      return RefreshOutcome.transientFailure;
     }
 
-    final outcome = await _doRefreshAttempt();
-    if (outcome == _RefreshOutcome.transientFailure) {
-      _lastRefreshFailureAt = DateTime.now();
-    }
-    return outcome;
-  }
-
-  static Future<_RefreshOutcome> _doRefreshAttempt() async {
-    final refreshToken = await SecureTokenStore.instance.readRefreshToken();
+    final refreshToken = await _readRefreshToken();
     if (refreshToken == null || refreshToken.isEmpty) {
-      return _RefreshOutcome.deadSession;
+      debugPrint('[ApiClient] no stored refresh token — session dead');
+      return RefreshOutcome.deadSession;
     }
 
-    final apiKey = Env.firebaseWebApiKey;
+    final apiKey = _apiKeyProvider();
     if (apiKey.isEmpty) {
       debugPrint('[ApiClient] token refresh skipped: no web API key');
-      return _RefreshOutcome.transientFailure;
+      _lastRefreshFailureAt = DateTime.now();
+      return RefreshOutcome.transientFailure;
     }
 
-    for (var attempt = 0; attempt < 2; attempt++) {
-      try {
-        final plain = Dio();
-        final res = await plain
-            .post(
-              'https://securetoken.googleapis.com/v1/token?key=$apiKey',
-              data: {
-                'grant_type': 'refresh_token',
-                'refresh_token': refreshToken,
-              },
-              options: Options(
-                headers: {
-                  'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                sendTimeout: const Duration(seconds: 10),
-                receiveTimeout: const Duration(seconds: 10),
-              ),
-            )
-            .timeout(const Duration(seconds: 15));
-
-        final newIdToken = res.data['id_token'] as String?;
-        final newRefreshToken = res.data['refresh_token'] as String?;
-
-        if (newIdToken == null || newIdToken.isEmpty) {
-          return _RefreshOutcome.transientFailure;
-        }
-
-        await SecureTokenStore.instance.saveAccessToken(newIdToken);
-        if (newRefreshToken != null && newRefreshToken.isNotEmpty) {
-          await SecureTokenStore.instance.saveRefreshToken(newRefreshToken);
-        }
-        return _RefreshOutcome.refreshed;
-      } on TimeoutException {
-        debugPrint('[ApiClient] token refresh timed out (attempt $attempt)');
-        continue;
-      } on DioException catch (e) {
-        if (isUnrecoverableRefreshError(e)) {
-          debugPrint('[ApiClient] refresh token rejected — session dead');
-          return _RefreshOutcome.deadSession;
-        }
-        debugPrint('[ApiClient] token refresh failed: $e');
-        continue;
-      } catch (e) {
-        debugPrint('[ApiClient] token refresh failed: $e');
-        continue;
+    try {
+      // exp timestamps (not token contents) help diagnose skew: if the
+      // backend keeps 401ing a token whose exp is in the future, the
+      // device clock or revocation — not expiry — is the problem. See
+      // the backend `[auth] verifyIdToken rejected:` line for the cause.
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final oldExp = await _readAccessToken().then(idTokenExpiryMs);
+      final pair = await _exchange(refreshToken);
+      await _saveAccessToken(pair.idToken);
+      if (pair.refreshToken != null && pair.refreshToken!.isNotEmpty) {
+        await _saveRefreshToken(pair.refreshToken!);
       }
+      debugPrint(
+        '[ApiClient] token refreshed (old exp=$oldExp now=$now '
+        'new exp=${idTokenExpiryMs(pair.idToken)})',
+      );
+      return RefreshOutcome.refreshed;
+    } on UnrecoverableRefreshException catch (e) {
+      debugPrint('[ApiClient] refresh token rejected — session dead ($e)');
+      return RefreshOutcome.deadSession;
+    } on TransientRefreshException catch (e) {
+      debugPrint('[ApiClient] token refresh failed: $e');
+      _lastRefreshFailureAt = DateTime.now();
+      return RefreshOutcome.transientFailure;
+    } catch (e) {
+      debugPrint('[ApiClient] token refresh failed: $e');
+      _lastRefreshFailureAt = DateTime.now();
+      return RefreshOutcome.transientFailure;
     }
-    return _RefreshOutcome.transientFailure;
   }
+}
+
+/// Default [SecureTokenExchange]: the real Firebase securetoken REST
+/// endpoint. Transient failures (timeout, network, 5xx) are retried
+/// once; rejections that mean the session itself is dead throw
+/// [UnrecoverableRefreshException].
+///
+/// Budget: each attempt fails fast (~10s worst case) so a blackholed
+/// route to Google stalls the app for seconds, not half a minute —
+/// the failure cooldown then lets 401s surface immediately until the
+/// network recovers.
+Future<SecureTokenPair> secureTokenExchange(String refreshToken) async {
+  final apiKey = Env.firebaseWebApiKey;
+  for (var attempt = 0; attempt < 2; attempt++) {
+    try {
+      final plain = Dio();
+      final res = await plain
+          .post(
+            'https://securetoken.googleapis.com/v1/token?key=$apiKey',
+            data: {
+              'grant_type': 'refresh_token',
+              'refresh_token': refreshToken,
+            },
+            options: Options(
+              headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+              },
+              sendTimeout: const Duration(seconds: 8),
+              receiveTimeout: const Duration(seconds: 8),
+            ),
+          )
+          .timeout(const Duration(seconds: 10));
+
+      final data = res.data;
+      final newIdToken =
+          data is Map ? data['id_token'] as String? : null;
+      final newRefreshToken =
+          data is Map ? data['refresh_token'] as String? : null;
+
+      if (newIdToken == null || newIdToken.isEmpty) {
+        throw const TransientRefreshException('empty id_token in response');
+      }
+      return SecureTokenPair(
+        idToken: newIdToken,
+        refreshToken: newRefreshToken,
+      );
+    } on TimeoutException {
+      debugPrint('[ApiClient] token refresh timed out (attempt $attempt)');
+      continue;
+    } on DioException catch (e) {
+      if (isUnrecoverableRefreshError(e)) {
+        throw UnrecoverableRefreshException(
+          _refreshErrorMessage(e) ?? e.toString(),
+        );
+      }
+      final status = e.response?.statusCode;
+      debugPrint('[ApiClient] token refresh HTTP $status: ${_refreshErrorMessage(e)}');
+      continue;
+    } catch (e) {
+      debugPrint('[ApiClient] token refresh failed: $e');
+      continue;
+    }
+  }
+  throw const TransientRefreshException('exhausted retries');
+}
+
+/// Best-effort Google error message for refresh-failure logs.
+String? _refreshErrorMessage(DioException e) {
+  final body = e.response?.data;
+  if (body is Map && body['error'] is Map) {
+    final message = (body['error'] as Map)['message'];
+    if (message != null) return message.toString();
+  }
+  return e.message;
 }
 
 /// True when the securetoken error means the session itself is dead
@@ -277,9 +414,10 @@ bool isIdTokenExpiringSoon(String idToken, {required Duration skew}) {
 
 /// Epoch-millis `exp` of a JWT without verifying its signature.
 /// Expiry is a freshness hint, not a trust decision — verification
-/// stays server-side. Returns null when unparseable.
+/// stays server-side. Returns null when missing or unparseable.
 @visibleForTesting
-int? idTokenExpiryMs(String idToken) {
+int? idTokenExpiryMs(String? idToken) {
+  if (idToken == null) return null;
   try {
     final parts = idToken.split('.');
     if (parts.length != 3) return null;

@@ -28,6 +28,7 @@ void main() {
     when(
       () => activityRepo.participants('9'),
     ).thenAnswer((_) async => <ActivityParticipant>[]);
+    when(() => activityRepo.leave('9')).thenAnswer((_) async {});
   });
 
   Future<void> pumpScreen(WidgetTester tester) async {
@@ -169,7 +170,50 @@ void main() {
       await tester.tap(find.text('Leave'));
       await tester.pumpAndSettle();
 
+      verify(() => activityRepo.leave('9')).called(1);
       expect(find.text('Activities'), findsOneWidget);
+    });
+
+    testWidgets('should stay and show an error when leave fails', (
+      tester,
+    ) async {
+      when(() => activityRepo.byId('9')).thenAnswer(
+        (_) async => ActivityModel(
+          id: '9',
+          title: 'Tuesday Night Volleyball',
+          sportType: 'Volleyball',
+          description: '',
+          location: 'Eastside Rec Centre',
+          distanceKm: 3.1,
+          dateTime: DateTime(2026, 8, 25, 19),
+          skillLevel: 'Beginner',
+          capacity: 12,
+          participantCount: 7,
+          hostName: 'Wren Oduya',
+        ),
+      );
+      when(() => chatRepo.messages('9')).thenAnswer((_) async => []);
+      when(() => activityRepo.leave('9')).thenThrow(Exception('offline'));
+
+      await pumpScreen(tester);
+      await tester.scrollUntilVisible(
+        find.text('Leave Activity'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.text('Leave Activity'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Leave'));
+      await tester.pumpAndSettle();
+
+      verify(() => activityRepo.leave('9')).called(1);
+      expect(
+        find.text('Could not leave the activity. Please try again.'),
+        findsOneWidget,
+      );
+      // Stays on the detail screen — no navigation to Activities.
+      expect(find.text('Tuesday Night Volleyball'), findsOneWidget);
     });
 
     testWidgets('should render recent chat messages from the repository', (

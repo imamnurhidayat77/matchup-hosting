@@ -730,7 +730,7 @@ class _QuickActions extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _EditSheet(activity: activity),
+      builder: (_) => _EditSheet(activityId: activityId, activity: activity),
     );
   }
 
@@ -800,18 +800,20 @@ class _ActionBtn extends StatelessWidget {
 
 // ─── Edit sheet ───────────────────────────────────────────────────────────────
 
-class _EditSheet extends StatefulWidget {
-  const _EditSheet({required this.activity});
+class _EditSheet extends ConsumerStatefulWidget {
+  const _EditSheet({required this.activityId, required this.activity});
+  final String activityId;
   final ActivityModel activity;
 
   @override
-  State<_EditSheet> createState() => _EditSheetState();
+  ConsumerState<_EditSheet> createState() => _EditSheetState();
 }
 
-class _EditSheetState extends State<_EditSheet> {
+class _EditSheetState extends ConsumerState<_EditSheet> {
   late final TextEditingController _titleCtrl;
   late final TextEditingController _locationCtrl;
   late final TextEditingController _descCtrl;
+  bool _saving = false;
 
   @override
   void initState() {
@@ -827,6 +829,46 @@ class _EditSheetState extends State<_EditSheet> {
     _locationCtrl.dispose();
     _descCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_saving) return;
+    final title = _titleCtrl.text.trim();
+    final location = _locationCtrl.text.trim();
+    final description = _descCtrl.text.trim();
+    if (title.isEmpty) {
+      AppSnackbar.show(
+        context,
+        message: 'Please enter a title.',
+        variant: AppSnackbarVariant.error,
+      );
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      await ref.read(activityRepositoryProvider).updateActivity(
+            activityId: widget.activityId,
+            title: title,
+            locationName: location,
+            description: description,
+          );
+      ref.invalidate(_manageProvider(widget.activityId));
+      if (!mounted) return;
+      AppSnackbar.show(
+        context,
+        message: 'Activity updated.',
+        variant: AppSnackbarVariant.success,
+      );
+      Navigator.of(context).pop();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      AppSnackbar.show(
+        context,
+        message: 'Could not save changes. Please try again.',
+        variant: AppSnackbarVariant.error,
+      );
+    }
   }
 
   @override
@@ -878,14 +920,8 @@ class _EditSheetState extends State<_EditSheet> {
             const SizedBox(height: AppSpacing.x5),
             _SheetPrimaryBtn(
               label: 'Save Changes',
-              onTap: () {
-                AppSnackbar.show(
-                  context,
-                  message: 'Activity updated.',
-                  variant: AppSnackbarVariant.success,
-                );
-                Navigator.of(context).pop();
-              },
+              loading: _saving,
+              onTap: _save,
             ),
           ],
         ),

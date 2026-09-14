@@ -169,6 +169,26 @@ class LocalActivityRepository implements ActivityRepository {
   }
 
   @override
+  Future<void> checkIn({
+    required String activityId,
+    double? latitude,
+    double? longitude,
+  }) async {
+    throw StateError(
+      'ActivityRepository.checkIn() requires a live backend — no offline '
+      'fallback is provided.',
+    );
+  }
+
+  @override
+  Future<bool> isCheckedIn(String activityId) async {
+    throw StateError(
+      'ActivityRepository.isCheckedIn() requires a live backend — no offline '
+      'fallback is provided.',
+    );
+  }
+
+  @override
   Future<List<ActivityParticipant>> participants(String activityId) async {
     await _delay();
     return const <ActivityParticipant>[];

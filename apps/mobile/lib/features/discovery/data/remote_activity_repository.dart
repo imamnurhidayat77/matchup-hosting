@@ -620,6 +620,39 @@ class RemoteActivityRepository implements ActivityRepository {
   }
 
   @override
+  Future<void> checkIn({
+    required String activityId,
+    double? latitude,
+    double? longitude,
+  }) async {
+    // No local fallback: the backend owns attendance state, and its
+    // 4xx answers carry the reason the screen shows. Swallowing them
+    // here would turn precise rejections into mystery failures.
+    // Follows the requestJoin/updateActivity pattern (throw on failure).
+    final Map<String, dynamic> data = {};
+    if (latitude != null) data['latitude'] = latitude;
+    if (longitude != null) data['longitude'] = longitude;
+    await _client.dio.post('$_base/$activityId/check-in', data: data);
+  }
+
+  @override
+  Future<bool> isCheckedIn(String activityId) async {
+    try {
+      final res = await _client.dio.get('$_base/$activityId/check-in/me');
+      final map = apiDataMap(res.data);
+      if (map == null) return false;
+      final checkedIn = map['checkedIn'];
+      if (checkedIn is bool) return checkedIn;
+      // Be lenient: a raw timestamp payload also means checked in.
+      if (map['checkedInAt'] is num) return true;
+      return false;
+    } catch (e, st) {
+      debugPrint('[RemoteActivityRepository.isCheckedIn] $e\n$st');
+      return false;
+    }
+  }
+
+  @override
   Future<List<ActivityParticipant>> participants(String activityId) async {
     final hit = _participantsCache.get(activityId);
     if (hit != null) return hit;

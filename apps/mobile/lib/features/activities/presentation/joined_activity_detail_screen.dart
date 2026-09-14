@@ -54,7 +54,7 @@ class JoinedActivityDetailScreen extends ConsumerWidget {
   const JoinedActivityDetailScreen({super.key, required this.activityId});
   final String activityId;
 
-  Future<void> _confirmLeave(BuildContext context) async {
+  Future<void> _confirmLeave(BuildContext context, WidgetRef ref) async {
     final confirmed = await AppDialog.confirm(
       context,
       title: 'Leave Activity?',
@@ -63,12 +63,25 @@ class JoinedActivityDetailScreen extends ConsumerWidget {
       destructive: true,
     );
     if (confirmed != true || !context.mounted) return;
-    AppSnackbar.show(
-      context,
-      message: 'You have left the activity.',
-      variant: AppSnackbarVariant.info,
-    );
-    if (context.mounted) context.go('/activities');
+    try {
+      await ref.read(activityRepositoryProvider).leave(activityId);
+      ref.invalidate(_detailProvider(activityId));
+      ref.invalidate(activityFeedProvider);
+      if (!context.mounted) return;
+      AppSnackbar.show(
+        context,
+        message: 'You have left the activity.',
+        variant: AppSnackbarVariant.info,
+      );
+      if (context.mounted) context.go('/activities');
+    } catch (_) {
+      if (!context.mounted) return;
+      AppSnackbar.show(
+        context,
+        message: 'Could not leave the activity. Please try again.',
+        variant: AppSnackbarVariant.error,
+      );
+    }
   }
 
   @override
@@ -88,7 +101,7 @@ class JoinedActivityDetailScreen extends ConsumerWidget {
         data: (data) => _DetailBody(
           activity: data.activity,
           recentMessages: data.recentMessages,
-          onLeave: () => _confirmLeave(context),
+          onLeave: () => _confirmLeave(context, ref),
         ),
       ),
     );

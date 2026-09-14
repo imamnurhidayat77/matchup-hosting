@@ -144,7 +144,25 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _resolveLocation());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _restoreCheckIn();
+      _resolveLocation();
+    });
+  }
+
+  /// Restores already-persisted check-in state so a returning user sees
+  /// "Checked in" immediately instead of being asked to check in again.
+  /// Best-effort: failures leave the normal location-gate flow untouched.
+  Future<void> _restoreCheckIn() async {
+    try {
+      final checkedIn = await ref
+          .read(activityRepositoryProvider)
+          .isCheckedIn(widget.activityId);
+      if (!mounted || !checkedIn) return;
+      setState(() => _status = _CheckInStatus.checkedIn);
+    } catch (_) {
+      // Offline / backend unreachable — stay in the gate flow.
+    }
   }
 
   /// Resolves the device position once (initial load + manual refresh).
@@ -173,21 +191,47 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
     if (!mounted) return;
     final effective = pos ?? _position;
     final gate = _gateFor(activity, effective);
-    setState(() {
-      _position = effective;
-      _status = gate.canCheckIn
-          ? _CheckInStatus.checkedIn
-          : effective == null
-              ? _CheckInStatus.locationDenied
-              : _CheckInStatus.notCheckedIn;
-    });
-    if (!gate.canCheckIn && mounted) {
+    if (!gate.canCheckIn) {
+      setState(() {
+        _position = effective;
+        _status = effective == null
+            ? _CheckInStatus.locationDenied
+            : _CheckInStatus.notCheckedIn;
+      });
+      if (mounted) {
+        AppSnackbar.show(
+          context,
+          message: gate.body,
+          variant: AppSnackbarVariant.warning,
+        );
+      }
+      return;
+    }
+    // Gate passed — persist server-side before flipping to checkedIn.
+    try {
+      await ref.read(activityRepositoryProvider).checkIn(
+            activityId: widget.activityId,
+            latitude: effective?.latitude,
+            longitude: effective?.longitude,
+          );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _position = effective;
+        _status = _CheckInStatus.notCheckedIn;
+      });
       AppSnackbar.show(
         context,
-        message: gate.body,
-        variant: AppSnackbarVariant.warning,
+        message: 'Could not check in. Please try again.',
+        variant: AppSnackbarVariant.error,
       );
+      return;
     }
+    if (!mounted) return;
+    setState(() {
+      _position = effective;
+      _status = _CheckInStatus.checkedIn;
+    });
   }
 
   Future<void> _onRefresh() async {

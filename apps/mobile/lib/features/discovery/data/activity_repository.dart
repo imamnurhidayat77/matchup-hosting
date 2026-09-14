@@ -107,4 +107,17 @@ abstract class ActivityRepository {
   /// mapped to lightweight [ActivityModel]s with `joinRequestStatus:
   /// 'pending' for the My Games "Pending" tab.
   Future<List<ActivityModel>> pendingRequests();
+
+  /// Persists a check-in (`POST /api/activities/:id/check-in`).
+  /// Throws on failure so the check-in screen can show an error and
+  /// revert to the not-checked-in state.
+  Future<void> checkIn({
+    required String activityId,
+    double? latitude,
+    double? longitude,
+  });
+
+  /// Whether the viewer already checked in
+  /// (`GET /api/activities/:id/check-in/me`).
+  Future<bool> isCheckedIn(String activityId);
 }

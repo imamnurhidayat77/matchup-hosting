@@ -61,6 +61,14 @@ void main() {
   setUp(() {
     repo = _MockActivityRepository();
     when(() => repo.byId(any())).thenAnswer((_) async => null);
+    when(() => repo.isCheckedIn(any())).thenAnswer((_) async => false);
+    when(
+      () => repo.checkIn(
+        activityId: any(named: 'activityId'),
+        latitude: any(named: 'latitude'),
+        longitude: any(named: 'longitude'),
+      ),
+    ).thenAnswer((_) async {});
   });
 
   tearDown(() {
@@ -83,6 +91,55 @@ void main() {
     await tester.tap(find.text('Check In'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Checked in!'), findsOneWidget);
+    verify(
+      () => repo.checkIn(
+        activityId: 'c-1',
+        latitude: any(named: 'latitude'),
+        longitude: any(named: 'longitude'),
+      ),
+    ).called(1);
+  });
+
+  testWidgets('failed persist shows error and reverts to not checked in',
+      (tester) async {
+    final start = DateTime.now().add(const Duration(minutes: 10));
+    when(() => repo.byId('c-1'))
+        .thenAnswer((_) async => _activity(start: start));
+    when(
+      () => repo.checkIn(
+        activityId: any(named: 'activityId'),
+        latitude: any(named: 'latitude'),
+        longitude: any(named: 'longitude'),
+      ),
+    ).thenThrow(Exception('offline'));
+    LocationService.debugGetCurrentLocation =
+        () async => _pos(-36.8558, 174.7764);
+
+    await _pump(tester, repo, _activity(start: start));
+
+    await tester.scrollUntilVisible(find.text('Check In'), 200);
+    await tester.tap(find.text('Check In'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Checked in!'), findsNothing);
+    expect(
+      find.text('Could not check in. Please try again.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('already checked in restores checked-in state on init',
+      (tester) async {
+    final start = DateTime.now().add(const Duration(minutes: 10));
+    when(() => repo.byId('c-1'))
+        .thenAnswer((_) async => _activity(start: start));
+    when(() => repo.isCheckedIn('c-1')).thenAnswer((_) async => true);
+    LocationService.debugGetCurrentLocation =
+        () async => _pos(-36.8558, 174.7764);
+
+    await _pump(tester, repo, _activity(start: start));
+
     expect(find.text('Checked in!'), findsOneWidget);
   });
 
