@@ -93,6 +93,11 @@ class RemoteNotificationRepository implements NotificationRepository {
     // Backend shape: `{notificationId, title, body, type, isRead,
     // createdAt: {_seconds,…}, activityId?, senderUid?}`.
     final json = raw as Map<String, dynamic>;
+    String? clean(Object? v) {
+      final s = v?.toString().trim() ?? '';
+      return s.isEmpty ? null : s;
+    }
+
     return AppNotification(
       id: json['notificationId']?.toString() ??
           json['id']?.toString() ??
@@ -102,6 +107,9 @@ class RemoteNotificationRepository implements NotificationRepository {
       createdAt: _parseTimestamp(json['createdAt']) ?? DateTime.now(),
       type: _typeFromString(json['type'] as String? ?? 'system'),
       unread: !(json['isRead'] as bool? ?? true),
+      activityId: clean(json['activityId']),
+      senderUid: clean(json['senderUid']),
+      backendType: (json['type'] as String? ?? 'system').trim(),
     );
   }
 
