@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { fetchActivities } from '../../services/activitiesService';
 import type { AdminActivity } from '../../services/activitiesService';
-import type { ActivityStatus } from '../../data/activitiesDummy';
+import type { ActivityStatus } from '../../types/activities';
+import { Avatar } from '../../components/ui/Avatar';
 
 function StatusBadge({ status }: { status: ActivityStatus }) {
   const map: Record<ActivityStatus, string> = {
@@ -159,7 +160,7 @@ export function ActivityDetailPage() {
           <div className="rounded-2xl border border-ink-200 bg-white shadow-card px-5 py-4">
             <p className="text-[11px] font-bold uppercase tracking-wide text-ink-400 mb-3">Host</p>
             <div className="flex items-center gap-3">
-              <img src={`https://api.dicebear.com/8.x/thumbs/svg?seed=${activity.hostAvatarSeed}`} alt={activity.host} className="h-11 w-11 rounded-xl bg-ink-200" />
+              <Avatar name={activity.host} photoUrl={activity.photoUrl} seed={activity.hostAvatarSeed} className="h-11 w-11 rounded-xl" />
               <div className="flex-1 min-w-0">
                 <p className="font-bold text-ink-900 text-sm leading-tight">{activity.host}</p>
                 <p className="text-xs text-ink-400 mt-0.5">Host</p>

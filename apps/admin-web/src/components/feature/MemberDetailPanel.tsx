@@ -1,12 +1,11 @@
 import { SlidePanel } from '../ui/SlidePanel';
-import type { Member, MemberStatus } from '../../data/membersDummy';
+import { Avatar } from '../ui/Avatar';
+import type { Member, MemberStatus } from '../../types/members';
 
 function StatusBadge({ status }: { status: MemberStatus }) {
   const map: Record<MemberStatus, { cls: string; dot: string }> = {
     Active:    { cls: 'bg-brand-50 text-brand-700 border-brand-200',   dot: 'bg-brand-500' },
-    Inactive:  { cls: 'bg-ink-100 text-ink-600 border-ink-200',        dot: 'bg-ink-400' },
     Suspended: { cls: 'bg-danger-50 text-danger-700 border-danger-200', dot: 'bg-danger-500' },
-    Pending:   { cls: 'bg-warning-100 text-warning-700 border-warning-200', dot: 'bg-warning-500' },
   };
   const { cls, dot } = map[status];
   return (
@@ -64,10 +63,11 @@ export function MemberDetailPanel({
           {/* Avatar — larger, prominent */}
           <div className="relative shrink-0">
             <div className="h-[72px] w-[72px] overflow-hidden rounded-2xl ring-2 ring-brand-400 ring-offset-2">
-              <img
-                src={`https://api.dicebear.com/8.x/thumbs/svg?seed=${member.avatarSeed}`}
-                alt={member.name}
-                className="h-full w-full object-cover"
+              <Avatar
+                name={member.name}
+                photoUrl={member.photoUrl}
+                seed={member.avatarSeed}
+                className="h-full w-full text-lg rounded-2xl"
               />
             </div>
           </div>

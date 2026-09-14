@@ -3,7 +3,7 @@ import { useBroadcasts } from '../../hooks/useBroadcasts';
 import { BroadcastsPageSkeleton, PageError, EmptyState, EmptyIcons } from '../../components/ui/PageStates';
 import { useToast } from '../../context/ToastContext';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
-import type { BroadcastStatus, BroadcastAudience } from '../../data/broadcastsDummy';
+import type { BroadcastStatus, BroadcastAudience } from '../../types/broadcasts';
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
 

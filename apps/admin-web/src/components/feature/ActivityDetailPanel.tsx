@@ -1,5 +1,6 @@
 import { SlidePanel } from '../ui/SlidePanel';
-import type { AdminActivity, ActivityStatus } from '../../data/activitiesDummy';
+import { Avatar } from '../ui/Avatar';
+import type { AdminActivity, ActivityStatus } from '../../types/activities';
 
 function StatusBadge({ status }: { status: ActivityStatus }) {
   const map: Record<ActivityStatus, string> = {
@@ -75,10 +76,11 @@ export function ActivityDetailPanel({
 
         {/* Host card — mirrors _HostCard */}
         <div className="flex items-center gap-3 rounded-xl border border-ink-200 bg-white px-3.5 py-3">
-          <img
-            src={`https://api.dicebear.com/8.x/thumbs/svg?seed=${activity.hostAvatarSeed}`}
-            alt={activity.host}
-            className="h-9 w-9 rounded-full bg-ink-200"
+          <Avatar
+            name={activity.host}
+            photoUrl={activity.photoUrl}
+            seed={activity.hostAvatarSeed}
+            className="h-9 w-9 rounded-full"
           />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-bold text-ink-900 leading-tight">{activity.host}</p>

@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useAppeals } from '../../hooks/useAppeals';
 import { useToast } from '../../context/ToastContext';
 import { PageSkeleton, PageError, EmptyState, EmptyIcons } from '../../components/ui/PageStates';
-import type { Appeal, AppealStatus, AppealType } from '../../data/appealsDummy';
+import { Avatar } from '../../components/ui/Avatar';
+import type { Appeal, AppealStatus, AppealType } from '../../types/appeals';
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
 
@@ -58,10 +59,11 @@ function ReviewModal({
         {/* User + appeal summary */}
         <div className="mb-5 rounded-xl bg-ink-50 px-4 py-3 space-y-1.5">
           <div className="flex items-center gap-2.5">
-            <img
-              src={`https://api.dicebear.com/8.x/thumbs/svg?seed=${appeal.userAvatarSeed}`}
-              alt={appeal.userName}
-              className="h-8 w-8 rounded-full bg-ink-200"
+            <Avatar
+              name={appeal.userName}
+              photoUrl={appeal.userPhotoUrl}
+              seed={appeal.userAvatarSeed}
+              className="h-8 w-8 rounded-full"
             />
             <div>
               <p className="text-sm font-semibold text-ink-900">{appeal.userName}</p>
@@ -155,10 +157,11 @@ function AppealCard({
       {/* Header row */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2.5 min-w-0">
-          <img
-            src={`https://api.dicebear.com/8.x/thumbs/svg?seed=${appeal.userAvatarSeed}`}
-            alt={appeal.userName}
-            className="h-8 w-8 shrink-0 rounded-full bg-ink-200"
+          <Avatar
+            name={appeal.userName}
+            photoUrl={appeal.userPhotoUrl}
+            seed={appeal.userAvatarSeed}
+            className="h-8 w-8 shrink-0 rounded-full"
           />
           <div className="min-w-0">
             <p className="text-sm font-semibold text-ink-900 truncate">{appeal.userName}</p>

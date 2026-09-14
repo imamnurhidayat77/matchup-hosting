@@ -5,15 +5,16 @@ import { MembersPageSkeleton, PageError, EmptyState, EmptyIcons } from '../../co
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { downloadCsv } from '../../utils/csvExport';
 import { useToast } from '../../context/ToastContext';
-import type { MemberStatus } from '../../data/membersDummy';
+import { Avatar } from '../../components/ui/Avatar';
+import type { MemberStatus } from '../../types/members';
 
-const STATUS_TABS = ['All', 'Active', 'Inactive', 'Suspended', 'Pending'];
+const STATUS_TABS = ['All', 'Active', 'Suspended'];
 const PAGE_SIZE = 10;
 
 
 function StatusBadge({ status }: { status: MemberStatus }) {
-  const cls: Record<MemberStatus, string> = { Active: 'badge-blue', Inactive: 'badge-neutral', Suspended: 'badge-red', Pending: 'badge-yellow' };
-  const dot: Record<MemberStatus, string> = { Active: 'bg-brand-700', Inactive: 'bg-ink-500', Suspended: 'bg-danger-700', Pending: 'bg-warning-700' };
+  const cls: Record<MemberStatus, string> = { Active: 'badge-blue', Suspended: 'badge-red' };
+  const dot: Record<MemberStatus, string> = { Active: 'bg-brand-700', Suspended: 'bg-danger-700' };
   return <span className={cls[status]}><span className={`inline-block h-1.5 w-1.5 rounded-full ${dot[status]}`} />{status}</span>;
 }
 
@@ -104,7 +105,6 @@ export function MembersPage() {
     { label: 'Total Members', value: members.length, color: 'text-ink-900' },
     { label: 'Active',    value: members.filter((m) => m.status === 'Active').length,    color: 'text-brand-500' },
     { label: 'Suspended', value: members.filter((m) => m.status === 'Suspended').length, color: 'text-danger-500' },
-    { label: 'Pending',   value: members.filter((m) => m.status === 'Pending').length,   color: 'text-warning-600' },
   ];
 
   return (
@@ -131,7 +131,7 @@ export function MembersPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {stats.map((s) => (
           <div key={s.label} className="card py-4 text-center">
             <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
@@ -186,7 +186,7 @@ export function MembersPage() {
                   <td className="tbl-td"><input type="checkbox" checked={selectedIds.has(m.id)} onChange={() => toggleSelect(m.id)} className="rounded" /></td>
                   <td className="tbl-td">
                     <div className="flex items-center gap-3">
-                      <img src={`https://api.dicebear.com/8.x/thumbs/svg?seed=${m.avatarSeed}`} alt={m.name} className="h-8 w-8 rounded-full bg-ink-200" />
+                      <Avatar name={m.name} photoUrl={m.photoUrl} seed={m.avatarSeed} className="h-8 w-8 rounded-full" />
                       <div>
                         <Link to={`/members/${m.id}`} className="font-semibold text-brand-500 hover:underline">
                           {m.name}
@@ -236,7 +236,7 @@ export function MembersPage() {
             <div key={m.id} className="px-4 py-3 space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <img src={`https://api.dicebear.com/8.x/thumbs/svg?seed=${m.avatarSeed}`} alt={m.name} className="h-8 w-8 rounded-full bg-ink-200" />
+                  <Avatar name={m.name} photoUrl={m.photoUrl} seed={m.avatarSeed} className="h-8 w-8 rounded-full" />
                   <div>
                     <p className="text-sm font-semibold text-ink-900">{m.name}</p>
                     <p className="text-xs text-ink-400">{m.email}</p>

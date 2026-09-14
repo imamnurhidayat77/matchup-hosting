@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { DEMO_CREDENTIALS } from '../../services/authService';
 import { AuthError } from '../../services/authService';
 
 export function LoginPage() {
-  const { signIn, isAuthenticated, loading: authLoading } = useAuth();
+  const { signIn, isAuthenticated, loading: authLoading, sessionExpired } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -40,12 +39,6 @@ export function LoginPage() {
     }
   }
 
-  function fillDemoCredentials(index: 0) {
-    setEmail(DEMO_CREDENTIALS[index].email);
-    setPassword(DEMO_CREDENTIALS[index].password);
-    setError('');
-  }
-
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[#f8fafc]">
       {/* Radial gradient background */}
@@ -69,6 +62,16 @@ export function LoginPage() {
           <h1 className="text-[26px] font-extrabold tracking-tight text-ink-900">Welcome Back</h1>
           <p className="mt-1 text-sm text-ink-600">Sign in to your admin account</p>
         </div>
+
+        {/* Session-expired notice (auto logout) */}
+        {sessionExpired && !error && (
+          <div className="mb-4 flex items-start gap-2 rounded-xl border border-warning-200 bg-warning-50 px-4 py-3">
+            <svg className="mt-0.5 h-4 w-4 shrink-0 text-warning-500" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <circle cx="8" cy="8" r="7" /><path d="M8 5v4M8 11v.5" strokeLinecap="round" />
+            </svg>
+            <p className="text-sm text-warning-700">Your session has expired. Please sign in again.</p>
+          </div>
+        )}
 
         {/* Error banner */}
         {error && (
@@ -163,32 +166,6 @@ export function LoginPage() {
           </button>
 
         </form>
-
-        {/* Demo credentials */}
-        <div className="mt-6 rounded-2xl border border-dashed border-brand-200 bg-brand-50 p-4">
-          <p className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-brand-600">
-            <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <circle cx="8" cy="8" r="7" /><path d="M8 7v5M8 5v.5" strokeLinecap="round" />
-            </svg>
-            Demo Credentials
-          </p>
-          <button
-            type="button"
-            onClick={() => fillDemoCredentials(0)}
-            className="w-full rounded-xl border border-brand-100 bg-white px-4 py-2.5 text-left transition-colors hover:border-brand-300 hover:bg-brand-50"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold text-ink-800">{DEMO_CREDENTIALS[0].user.name} <span className="font-normal text-ink-400">— {DEMO_CREDENTIALS[0].user.role}</span></p>
-                <p className="mt-0.5 font-mono text-[11px] text-ink-500">{DEMO_CREDENTIALS[0].email}</p>
-              </div>
-              <div className="text-right">
-                <p className="font-mono text-[11px] text-ink-500">{DEMO_CREDENTIALS[0].password}</p>
-                <p className="mt-0.5 text-[10px] font-semibold text-brand-500">click to fill</p>
-              </div>
-            </div>
-          </button>
-        </div>
       </div>
 
       <p className="relative z-10 mt-8 text-[13px] text-ink-400">
