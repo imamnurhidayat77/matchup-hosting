@@ -22,10 +22,13 @@ import '../features/activities/presentation/create_activity_screen.dart';
 import '../features/activities/presentation/my_activities_screen.dart';
 import '../features/activities/presentation/joined_activity_detail_screen.dart';
 import '../features/activities/presentation/past_activity_review_screen.dart';
+import '../features/activities/presentation/pending_request_detail_screen.dart';
 import '../features/activities/presentation/activity_participants_screen.dart';
 import '../features/activities/presentation/activity_full_screen.dart';
 import '../features/activities/presentation/check_in_screen.dart';
+import '../features/activities/presentation/edit_activity_screen.dart';
 import '../features/activities/presentation/manage_activity_screen.dart';
+import '../features/activities/presentation/join_request_sent_screen.dart';
 import '../features/activities/presentation/match_screen.dart';
 import '../features/preferences/presentation/get_to_know_1_screen.dart';
 import '../features/preferences/presentation/get_to_know_2_screen.dart';
@@ -255,6 +258,13 @@ GoRouter buildRouter(Ref ref) {
               return MatchScreen(activityId: id);
             },
           ),
+          GoRoute(
+            path: '/request-sent/:id',
+            builder: (_, state) {
+              final id = state.pathParameters['id'] ?? '1';
+              return JoinRequestSentScreen(activityId: id);
+            },
+          ),
 
           // Everything below is reached exclusively via context.push() —
           // each gets the shared appPage slide+fade so every push feels
@@ -302,6 +312,17 @@ GoRouter buildRouter(Ref ref) {
               );
             },
           ),
+          GoRoute(
+            path: '/edit-activity/:id',
+            pageBuilder: (_, state) {
+              final id = state.pathParameters['id'] ?? '1';
+              return appPage(
+                state,
+                EditActivityScreen(activityId: id),
+                key: ValueKey('edit-activity-$id'),
+              );
+            },
+          ),
           // '/joined-activities' removed (PRD Section 3 / Appendix E.2):
           // JoinedActivitiesScreen duplicated My Activities and nothing in
           // the app ever navigated to it — confirmed via a full-repo grep
@@ -325,6 +346,17 @@ GoRouter buildRouter(Ref ref) {
                 state,
                 PastActivityReviewScreen(activityId: id),
                 key: ValueKey('past-activity-review-$id'),
+              );
+            },
+          ),
+          GoRoute(
+            path: '/pending-request/:id',
+            pageBuilder: (_, state) {
+              final id = state.pathParameters['id'] ?? '1';
+              return appPage(
+                state,
+                PendingRequestDetailScreen(activityId: id),
+                key: ValueKey('pending-request-$id'),
               );
             },
           ),

@@ -403,13 +403,12 @@ class RemoteActivityRepository implements ActivityRepository {
 
   @override
   Future<void> requestJoin(String activityId) async {
-    try {
-      _invalidateDetails();
-      await _client.dio.post('$_base/$activityId/join-requests');
-    } catch (e, st) {
-      debugPrint('[RemoteActivityRepository.requestJoin] $e\n$st');
-      await _fallback.requestJoin(activityId);
-    }
+    // No local fallback: the backend owns join-request state (pending
+    // duplicates, full, closed), and its 409/4xx answers carry the
+    // reason the screen shows. Swallowing them here turned precise
+    // rejections (e.g. "already pending") into mystery failures.
+    _invalidateDetails();
+    await _client.dio.post('$_base/$activityId/join-requests');
   }
 
   @override
@@ -515,6 +514,52 @@ class RemoteActivityRepository implements ActivityRepository {
   }
 
   @override
+  Future<void> updateActivity({
+    required String activityId,
+    String? title,
+    String? sportType,
+    String? description,
+    String? locationName,
+    double? latitude,
+    double? longitude,
+    String? geohash,
+    DateTime? startTime,
+    DateTime? endTime,
+    String? skillLevel,
+    int? capacity,
+    String? joinPolicy,
+  }) async {
+    _invalidateDetails();
+    invalidateFeed();
+    final Map<String, dynamic> data = {};
+    void setIfPresent(String key, Object? value) {
+      if (value != null) data[key] = value;
+    }
+
+    setIfPresent('title', title);
+    setIfPresent('sportType', sportType);
+    setIfPresent('description', description);
+    setIfPresent('locationName', locationName);
+    setIfPresent('latitude', latitude);
+    setIfPresent('longitude', longitude);
+    setIfPresent('geohash', geohash);
+    setIfPresent('startTime', startTime?.toIso8601String());
+    setIfPresent('endTime', endTime?.toIso8601String());
+    setIfPresent(
+      'skillLevel',
+      skillLevel == null ? null : _normaliseSkill(skillLevel),
+    );
+    setIfPresent('capacity', capacity);
+    setIfPresent('joinPolicy', joinPolicy);
+    try {
+      await _client.dio.patch('$_base/$activityId', data: data);
+    } catch (e, st) {
+      debugPrint('[RemoteActivityRepository.updateActivity] $e\n$st');
+      rethrow;
+    }
+  }
+
+  @override
   Future<List<ActivityModel>> pastByUser(String userId) async {
     try {
       // No dedicated backend route — "past" means lifecycle `completed`,
@@ -530,6 +575,48 @@ class RemoteActivityRepository implements ActivityRepository {
       debugPrint('[RemoteActivityRepository.pastByUser] $e\n$st');
       return _fallback.pastByUser(userId);
     }
+  }
+
+  @override
+  Future<List<ActivityModel>> pendingRequests() async {
+    try {
+      final res = await _client.dio.get('$_base/join-requests/me');
+      return [
+        for (final e in apiDataList(res.data))
+          if (e is Map<String, dynamic>) _parsePending(e),
+      ];
+    } catch (e, st) {
+      debugPrint('[RemoteActivityRepository.pendingRequests] $e\n$st');
+      return _fallback.pendingRequests();
+    }
+  }
+
+  /// Maps a backend pending-request view
+  /// (`{activityId, title, sportType, locationName, startTime}`) to a
+  /// lightweight activity for the Pending tab. Missing fields degrade
+  /// to blanks — the row still renders and taps through to the detail
+  /// screen, which loads the full record.
+  ActivityModel _parsePending(Map<String, dynamic> json) {
+    DateTime start;
+    try {
+      start = DateTime.parse(json['startTime'] as String);
+    } catch (_) {
+      start = DateTime.now();
+    }
+    return ActivityModel(
+      id: json['activityId']?.toString() ?? '',
+      title: json['title'] as String? ?? '',
+      sportType: json['sportType'] as String? ?? '',
+      description: '',
+      location: json['locationName'] as String? ?? '',
+      distanceKm: 0,
+      dateTime: start,
+      skillLevel: '',
+      capacity: 0,
+      participantCount: 0,
+      hostName: '',
+      joinRequestStatus: 'pending',
+    );
   }
 
   @override

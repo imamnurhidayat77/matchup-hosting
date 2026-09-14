@@ -1,9 +1,11 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mocktail/mocktail.dart';
 
+import 'package:matchup_mobile/core/network/api_client.dart';
 import 'package:matchup_mobile/core/providers/repository_providers.dart';
 import 'package:matchup_mobile/core/widgets/skeleton.dart';
 import 'package:matchup_mobile/features/activities/domain/activity_model.dart';
@@ -108,6 +110,12 @@ void main() {
         GoRoute(
           path: '/notifications',
           builder: (_, _) => const Scaffold(body: Text('Notifications')),
+        ),
+        GoRoute(
+          path: '/request-sent/:id',
+          builder: (_, state) => Scaffold(
+            body: Text('Pending ${state.pathParameters['id']}'),
+          ),
         ),
         GoRoute(
           path: '/match/:id',
@@ -616,6 +624,126 @@ void main() {
         ).called(1);
       },
     );
+
+    testWidgets('should distinguish instant-join from approval games', (
+      tester,
+    ) async {
+      // First card open (default policy), second needs approval.
+      when(
+        () => activityRepo.feed(
+          limit: any(named: 'limit'),
+          offset: any(named: 'offset'),
+          filter: any(named: 'filter'),
+          forceRefresh: any(named: 'forceRefresh'),
+        ),
+      ).thenAnswer(
+        (_) async => [
+          _fixtures().first,
+          _fixtures().last.copyWith(joinPolicy: 'approval'),
+        ],
+      );
+
+      await pumpDiscovery(tester);
+
+      // Pills for both stacked cards exist; the action row follows
+      // the top card (open): Join, not Request.
+      expect(find.text('INSTANT JOIN'), findsWidgets);
+      expect(find.text('NEEDS APPROVAL'), findsWidgets);
+      expect(find.bySemanticsLabel('Join game'), findsOneWidget);
+      expect(find.bySemanticsLabel('Request'), findsNothing);
+
+      // Pass the open card (left swipe stays on deck, unlike join
+      // which navigates to Match): the row flips to Request.
+      await tester.tap(find.bySemanticsLabel('Not now'));
+      await tester.pumpAndSettle(const Duration(milliseconds: 600));
+
+      expect(find.bySemanticsLabel('Request'), findsOneWidget);
+      expect(find.bySemanticsLabel('Join game'), findsNothing);
+    });
+
+    testWidgets('should request join and open pending on approval swipe', (
+      tester,
+    ) async {
+      when(
+        () => activityRepo.requestJoin(any()),
+      ).thenAnswer((_) async {});
+      when(
+        () => activityRepo.feed(
+          limit: any(named: 'limit'),
+          offset: any(named: 'offset'),
+          filter: any(named: 'filter'),
+          forceRefresh: any(named: 'forceRefresh'),
+        ),
+      ).thenAnswer(
+        (_) async => [_fixtures().first.copyWith(joinPolicy: 'approval')],
+      );
+
+      await pumpDiscovery(tester);
+
+      // Request button (not Join) for the approval card.
+      await tester.tap(find.bySemanticsLabel('Request'));
+      await tester.pumpAndSettle();
+
+      verify(() => activityRepo.requestJoin('1')).called(1);
+      expect(find.text('Pending 1'), findsOneWidget);
+      expect(find.text('Match'), findsNothing);
+    });
+
+    testWidgets('should open pending when the request already exists', (
+      tester,
+    ) async {
+      // Backend rejects duplicates with 409 + the exact pending message
+      // (mirrors _ErrorInterceptor output: ApiException in error).
+      when(() => activityRepo.requestJoin(any())).thenThrow(
+        DioException(
+          requestOptions: RequestOptions(path: '/activities/1/join-requests'),
+          response: Response(
+            requestOptions: RequestOptions(path: '/activities/1/join-requests'),
+            statusCode: 409,
+            data: const {
+              'ok': false,
+              'error': {
+                'code': 'CONFLICT',
+                'message': 'Join request already pending',
+              },
+            },
+          ),
+          type: DioExceptionType.badResponse,
+          error: const ApiException(
+            statusCode: 409,
+            userMessage: 'Join request already pending',
+            code: 'CONFLICT',
+          ),
+        ),
+      );
+      when(
+        () => activityRepo.feed(
+          limit: any(named: 'limit'),
+          offset: any(named: 'offset'),
+          filter: any(named: 'filter'),
+          forceRefresh: any(named: 'forceRefresh'),
+        ),
+      ).thenAnswer(
+        (_) async => [_fixtures().first.copyWith(joinPolicy: 'approval')],
+      );
+
+      await pumpDiscovery(tester);
+
+      await tester.tap(find.bySemanticsLabel('Request'));
+      await tester.pumpAndSettle();
+
+      // No error claimed — she is already queued, so the pending
+      // screen is shown and the swipe is recorded.
+      verify(() => activityRepo.requestJoin('1')).called(1);
+      expect(find.text('Pending 1'), findsOneWidget);
+      expect(
+        find.text('Could not send the request. Please try again.'),
+        findsNothing,
+      );
+      verify(
+        () => swipesRepo.save(activityId: '1', decision: SwipeDecision.join),
+      ).called(1);
+    });
 
     testWidgets('should force-refresh the deck when Refresh is tapped', (
       tester,

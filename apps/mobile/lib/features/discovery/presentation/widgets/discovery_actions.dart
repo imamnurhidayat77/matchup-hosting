@@ -129,6 +129,18 @@ class DiscoveryAction extends StatelessWidget {
         filled: true,
       );
 
+  /// Approval-gated variant: same weight, "Request" wording + send
+  /// icon so the deck distinguishes instant-join from request-to-join
+  /// before the user swipes.
+  factory DiscoveryAction.request({required VoidCallback onTap}) =>
+      DiscoveryAction._(
+        icon: Icons.send_rounded,
+        label: 'Request',
+        onTap: onTap,
+        size: 68,
+        filled: true,
+      );
+
   final IconData icon;
   final String label;
   final VoidCallback onTap;

@@ -10,6 +10,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/utils/geo.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/asset_image.dart';
 import '../../../core/widgets/error_retry.dart';
@@ -379,6 +380,7 @@ class _CoverImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final distanceText = distanceLabel(activity.distanceKm)?.toUpperCase();
     return ClipRRect(
       borderRadius: BorderRadius.vertical(
         top: Radius.circular(AppRadius.xl),
@@ -421,25 +423,27 @@ class _CoverImage extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(width: AppSpacing.x2),
-                  // Distance — blue pill
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(AppRadius.pill),
-                    ),
-                    child: Text(
-                      '${activity.distanceKm.toStringAsFixed(1)} KM AWAY',
-                      style: AppTypography.chipLabel(context).copyWith(
-                        color: AppColors.textOnPrimary,
-                        fontSize: 11,
+                  // Distance — blue pill (hidden when unknown).
+                  if (distanceText != null) ...[
+                    const SizedBox(width: AppSpacing.x2),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(AppRadius.pill),
+                      ),
+                      child: Text(
+                        distanceText,
+                        style: AppTypography.chipLabel(context).copyWith(
+                          color: AppColors.textOnPrimary,
+                          fontSize: 11,
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),

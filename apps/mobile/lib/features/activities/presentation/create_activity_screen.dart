@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/providers/repository_providers.dart';
+import '../../../core/storage/local_storage.dart';
 import '../../../core/utils/geohash.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -85,19 +87,129 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
     'Swimming',
   ];
 
+  /// Modern, consistent metadata for every "tipe" picker so Sport, Skill,
+  /// Entry, and Join Policy all speak the same visual language
+  /// (icon + title + subtitle).
+  static const _sportIcons = <String, IconData>{
+    'Basketball': Icons.sports_basketball_outlined,
+    'Tennis': Icons.sports_tennis_outlined,
+    'Running': Icons.directions_run_outlined,
+    'Volleyball': Icons.sports_volleyball_outlined,
+    'Football': Icons.sports_football_outlined,
+    'Soccer': Icons.sports_soccer_outlined,
+    'Cycling': Icons.directions_bike_outlined,
+    'Hiking': Icons.hiking_outlined,
+    'Golf': Icons.sports_golf_outlined,
+    'Swimming': Icons.pool_outlined,
+  };
+
+  static final _skillMeta = <String, ({IconData icon, String subtitle})>{
+    'All Level': (icon: Icons.groups_outlined, subtitle: 'Everyone welcome'),
+    'Beginner': (icon: Icons.eco_outlined, subtitle: 'Just starting out'),
+    'Intermediate': (
+      icon: Icons.trending_up_outlined,
+      subtitle: 'Knows the basics'
+    ),
+    'Advanced': (icon: Icons.bolt_outlined, subtitle: 'Competitive play'),
+  };
+
+  static final _joinPolicyMeta = <String, ({IconData icon, String title, String subtitle})>{
+    'open': (
+      icon: Icons.lock_open_outlined,
+      title: 'Open',
+      subtitle: 'Anyone can join instantly'
+    ),
+    'approval': (
+      icon: Icons.verified_outlined,
+      title: 'Approval',
+      subtitle: 'You approve each request'
+    ),
+  };
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(imageUploadProvider.notifier).reset();
-      ref.read(formDataProvider.notifier)
-        ..reset()
-        ..setSelectedDate(DateTime.now().add(const Duration(hours: 2)));
-      _titleController.clear();
-      _locationController.clear();
-      _descriptionController.clear();
-      _priceController.text = '0.00';
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _restoreOrReset());
+  }
+
+  /// Draft persistence (spec Phase 5, MVP scope): the form is JSON-
+  /// serialisable via [ActivityFormData.toJson], so a draft survives app
+  /// restarts and is restored on reopen. Cleared on successful submit.
+  /// Cover image bytes are NOT persisted (too large for prefs); the venue
+  /// picker's lat/lng falls back to the default when restored from text.
+  /// Crop tool intentionally skipped: `image_picker` maxWidth/maxHeight/
+  /// imageQuality already constrains uploads (see audit A-plan §3).
+  static const _draftKey = 'create_activity_draft_v1';
+
+  Future<void> _restoreOrReset() async {
+    try {
+      final store = await LocalStorage.create();
+      final raw = store.getString(_draftKey);
+      if (raw != null && raw.isNotEmpty && mounted) {
+        final data = ActivityFormData.fromJson(
+          Map<String, dynamic>.from(jsonDecode(raw) as Map),
+        );
+        if (data.title.trim().isNotEmpty ||
+            data.location.trim().isNotEmpty ||
+            data.description.trim().isNotEmpty) {
+          ref.read(imageUploadProvider.notifier).reset();
+          final form = ref.read(formDataProvider.notifier)
+            ..reset()
+            ..setTitle(data.title)
+            ..setSportType(data.sportType)
+            ..setLocation(data.location)
+            ..setDescription(data.description)
+            ..setMaxParticipants(data.maxParticipants)
+            ..setSkillLevel(data.skillLevel)
+            ..setFeeType(data.feeType)
+            ..setPrice(data.price)
+            ..setDurationMinutes(data.durationMinutes)
+            ..setJoinPolicy(data.joinPolicy);
+          if (data.selectedDate != null &&
+              data.selectedDate!.isAfter(DateTime.now())) {
+            form.setSelectedDate(data.selectedDate);
+          } else {
+            form.setSelectedDate(DateTime.now().add(const Duration(hours: 2)));
+          }
+          _titleController.text = data.title;
+          _locationController.text = data.location;
+          _descriptionController.text = data.description;
+          _priceController.text = data.price ?? '0.00';
+          return;
+        }
+      }
+    } catch (_) {
+      // No usable draft (fresh install, test harness without prefs plugin,
+      // or corrupt JSON) — fall through to a clean form.
+    }
+    if (!mounted) return;
+    ref.read(imageUploadProvider.notifier).reset();
+    ref.read(formDataProvider.notifier)
+      ..reset()
+      ..setSelectedDate(DateTime.now().add(const Duration(hours: 2)));
+    _titleController.clear();
+    _locationController.clear();
+    _descriptionController.clear();
+    _priceController.text = '0.00';
+  }
+
+  Future<void> _saveDraft() async {
+    try {
+      final store = await LocalStorage.create();
+      final data = ref.read(formDataProvider);
+      await store.setString(_draftKey, jsonEncode(data.toJson()));
+    } catch (_) {
+      // Draft is best-effort; a failed save must never block the wizard.
+    }
+  }
+
+  Future<void> _clearDraft() async {
+    try {
+      final store = await LocalStorage.create();
+      await store.remove(_draftKey);
+    } catch (_) {
+      // Best-effort only.
+    }
   }
 
   @override
@@ -203,10 +315,14 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
 
   void _showOptionPicker({
     required String title,
+    String? subtitle,
     required List<String> options,
     required String current,
     required ValueChanged<String> onSelect,
+    IconData Function(String option)? iconFor,
+    String Function(String option)? subtitleFor,
   }) {
+    HapticFeedback.selectionClick();
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
@@ -214,7 +330,7 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
       builder: (_) => SafeArea(
         child: ConstrainedBox(
           constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(context).size.height * 0.55,
+            maxHeight: MediaQuery.of(context).size.height * 0.7,
           ),
           child: Container(
             decoration: BoxDecoration(
@@ -222,23 +338,27 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
               borderRadius: BorderRadius.vertical(
                 top: Radius.circular(AppRadius.xl),
               ),
+              boxShadow: AppShadows.sheet,
             ),
             padding: const EdgeInsets.fromLTRB(
-              AppSpacing.x6,
+              AppSpacing.x5,
               AppSpacing.x3,
-              AppSpacing.x6,
+              AppSpacing.x5,
               AppSpacing.x6,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 36,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: AppSpacing.x4),
-                  decoration: BoxDecoration(
-                    color: context.colors.border,
-                    borderRadius: AppRadius.pillR,
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: AppSpacing.x4),
+                    decoration: BoxDecoration(
+                      color: context.colors.border,
+                      borderRadius: AppRadius.pillR,
+                    ),
                   ),
                 ),
                 Text(
@@ -247,44 +367,129 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
                     context,
                   ).copyWith(fontWeight: FontWeight.w800),
                 ),
-                const SizedBox(height: AppSpacing.x3),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: AppTypography.bodyMedium(context).copyWith(
+                      color: context.colors.textSecondary,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: AppSpacing.x4),
                 Flexible(
-                  child: ListView.builder(
+                  child: ListView.separated(
                     shrinkWrap: true,
                     itemCount: options.length,
+                    separatorBuilder: (_, __) =>
+                        const SizedBox(height: AppSpacing.x2),
                     itemBuilder: (context, index) {
                       final opt = options[index];
                       final selected = opt == current;
+                      final icon = iconFor?.call(opt);
+                      final sub = subtitleFor?.call(opt);
+                      final c = context.colors;
                       return PressableScale(
                         onTap: () {
+                          HapticFeedback.selectionClick();
                           onSelect(opt);
                           Navigator.of(context).pop();
                         },
-                        child: Padding(
+                        child: AnimatedContainer(
+                          duration: AppDurations.fast,
                           padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.x4,
                             vertical: AppSpacing.x3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: selected ? c.primarySoft : c.surface,
+                            borderRadius: BorderRadius.circular(
+                              AppRadius.card,
+                            ),
+                            border: Border.all(
+                              color: selected ? c.primaryOnSurface : c.border,
+                              width: selected ? 1.5 : 1,
+                            ),
                           ),
                           child: Row(
                             children: [
+                              if (icon != null) ...[
+                                Container(
+                                  width: 38,
+                                  height: 38,
+                                  decoration: BoxDecoration(
+                                    color: selected
+                                        ? c.surface
+                                        : c.surfaceSubtle,
+                                    borderRadius: BorderRadius.circular(
+                                      AppRadius.input,
+                                    ),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Icon(
+                                    icon,
+                                    size: 19,
+                                    color: selected
+                                        ? c.primaryOnSurface
+                                        : c.textSecondary,
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.x3),
+                              ],
                               Expanded(
-                                child: Text(
-                                  opt,
-                                  style: AppTypography.bodyMedium(context)
-                                      .copyWith(
-                                        fontSize: 15,
-                                        color: context.colors.textPrimary,
-                                        fontWeight: selected
-                                            ? FontWeight.w700
-                                            : FontWeight.w500,
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _joinPolicyMeta[opt]?.title ?? opt,
+                                      style: AppTypography.bodyMedium(context)
+                                          .copyWith(
+                                            fontSize: 15,
+                                            color: selected
+                                                ? c.primaryOnSurface
+                                                : c.textPrimary,
+                                            fontWeight: selected
+                                                ? FontWeight.w700
+                                                : FontWeight.w600,
+                                          ),
+                                    ),
+                                    if (sub != null) ...[
+                                      const SizedBox(height: 1),
+                                      Text(
+                                        sub,
+                                        style: AppTypography.metaSub(context),
                                       ),
+                                    ],
+                                  ],
                                 ),
                               ),
-                              if (selected)
-                                Icon(
-                                  Icons.check_rounded,
-                                  color: context.colors.primaryOnSurface,
-                                  size: 18,
+                              const SizedBox(width: AppSpacing.x2),
+                              AnimatedContainer(
+                                duration: AppDurations.fast,
+                                width: 24,
+                                height: 24,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: selected
+                                      ? c.primaryOnSurface
+                                      : Colors.transparent,
+                                  border: Border.all(
+                                    color: selected
+                                        ? c.primaryOnSurface
+                                        : c.borderInput,
+                                    width: 1.5,
+                                  ),
                                 ),
+                                alignment: Alignment.center,
+                                child: selected
+                                    ? const Icon(
+                                        Icons.check_rounded,
+                                        size: 15,
+                                        color: Colors.white,
+                                      )
+                                    : null,
+                              ),
                             ],
                           ),
                         ),
@@ -323,6 +528,7 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
     }
     FocusScope.of(context).unfocus();
     setState(() => _step = _stepRules);
+    unawaited(_saveDraft());
   }
 
   void _goToPreview() {
@@ -339,6 +545,7 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
     }
     FocusScope.of(context).unfocus();
     setState(() => _step = _stepPreview);
+    unawaited(_saveDraft());
   }
 
   /// First blocking issue on the setup step, or null when it's good to go.
@@ -387,6 +594,7 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
           );
       _form.reset();
       ref.read(imageUploadProvider.notifier).reset();
+      await _clearDraft();
       if (!mounted) return;
       HapticFeedback.heavyImpact();
       AppSnackbar.show(
@@ -397,10 +605,15 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
       context.go('/activities');
     } catch (_) {
       if (!mounted) return;
+      // Retry path (spec Phase 4): the form is NOT reset on failure, so
+      // tapping Retry reuses every field exactly as the user left it.
       AppSnackbar.show(
         context,
         message: 'Could not create activity. Please try again.',
         variant: AppSnackbarVariant.error,
+        duration: const Duration(seconds: 5),
+        actionLabel: 'Retry',
+        onAction: _submit,
       );
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -520,9 +733,12 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
           label: 'Sport',
           onTap: () => _showOptionPicker(
             title: 'Select Sport',
+            subtitle: 'What will you be playing?',
             options: _sportOptions,
             current: data.sportType,
             onSelect: _form.setSportType,
+            iconFor: (o) =>
+                _sportIcons[o] ?? Icons.sports_basketball_outlined,
           ),
           value: Text(data.sportType, style: _valueStyle(context)),
           trailing: _chevron(context),
@@ -640,19 +856,47 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
         ),
         const SizedBox(height: AppSpacing.x4),
 
-        // Skill level — a select field (opens the same picker as Sport).
-        _SelectField(
-          value: data.skillLevel,
-          onTap: () => _showOptionPicker(
-            title: 'Select Skill Level',
-            options: _skillOptions,
-            current: data.skillLevel,
-            onSelect: _form.setSkillLevel,
-          ),
+        // Skill level — consistent 2-col choice grid, same language as
+        // Entry / Join Policy below (no more bare dropdown).
+        _FieldLabel('Skill Level'),
+        const SizedBox(height: 2),
+        Text(
+          'Who is this game for?',
+          style: AppTypography.metaSub(context),
         ),
-        const SizedBox(height: AppSpacing.x4),
+        const SizedBox(height: _kLabelGap + 2),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            mainAxisSpacing: AppSpacing.x3,
+            crossAxisSpacing: AppSpacing.x3,
+            mainAxisExtent: 76,
+          ),
+          itemCount: _skillOptions.length,
+          itemBuilder: (context, i) {
+            final opt = _skillOptions[i];
+            final meta = _skillMeta[opt];
+            return _ChoiceCard(
+              icon: meta?.icon ?? Icons.signal_cellular_alt_outlined,
+              title: opt,
+              subtitle: meta?.subtitle ?? '',
+              selected: data.skillLevel == opt,
+              onTap: () => _form.setSkillLevel(opt),
+            );
+          },
+        ),
+        const SizedBox(height: AppSpacing.x5),
 
         // Entry — two selectable choice cards.
+        _FieldLabel('Entry Fee'),
+        const SizedBox(height: 2),
+        Text(
+          'Is there a cost to join?',
+          style: AppTypography.metaSub(context),
+        ),
+        const SizedBox(height: _kLabelGap + 2),
         Row(
           children: [
             Expanded(
@@ -715,6 +959,39 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
           ),
         ],
         const SizedBox(height: AppSpacing.x4),
+
+        // Join Policy — same choice-card language as Entry above.
+        _FieldLabel('Who Can Join'),
+        const SizedBox(height: 2),
+        Text(
+          'Control how people join your game',
+          style: AppTypography.metaSub(context),
+        ),
+        const SizedBox(height: _kLabelGap + 2),
+        Row(
+          children: [
+            Expanded(
+              child: _ChoiceCard(
+                icon: _joinPolicyMeta['open']!.icon,
+                title: _joinPolicyMeta['open']!.title,
+                subtitle: _joinPolicyMeta['open']!.subtitle,
+                selected: data.joinPolicy == 'open',
+                onTap: () => _form.setJoinPolicy('open'),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.x3),
+            Expanded(
+              child: _ChoiceCard(
+                icon: _joinPolicyMeta['approval']!.icon,
+                title: _joinPolicyMeta['approval']!.title,
+                subtitle: _joinPolicyMeta['approval']!.subtitle,
+                selected: data.joinPolicy == 'approval',
+                onTap: () => _form.setJoinPolicy('approval'),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.x5),
 
         // Description.
         Row(
@@ -1063,55 +1340,6 @@ class _IconBox extends StatelessWidget {
       ),
       alignment: Alignment.center,
       child: Icon(icon, size: 19, color: context.colors.primaryOnSurface),
-    );
-  }
-}
-
-/// Tappable select field (value + chevron) — opens an option picker sheet.
-/// Used for Skill Level, matching the Sport select on step 1.
-class _SelectField extends StatelessWidget {
-  const _SelectField({required this.value, required this.onTap});
-
-  final String value;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    return Semantics(
-      button: true,
-      label: value,
-      child: PressableScale(
-        onTap: onTap,
-        child: Container(
-          height: 48,
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x4),
-          decoration: BoxDecoration(
-            color: c.surface,
-            borderRadius: BorderRadius.circular(AppRadius.input),
-            border: Border.all(color: c.border),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  value,
-                  style: AppTypography.bodyMedium(context).copyWith(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                    color: c.textPrimary,
-                  ),
-                ),
-              ),
-              Icon(
-                Icons.keyboard_arrow_down_rounded,
-                size: 20,
-                color: c.textSecondary,
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

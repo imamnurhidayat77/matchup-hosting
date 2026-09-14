@@ -23,6 +23,7 @@ import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../../activities/domain/activity_model.dart';
 import '../../activities/domain/activity_participant.dart';
+import '../../report/presentation/report_activity_sheet.dart';
 import '../data/typing_repository.dart';
 import '../domain/chat_message.dart';
 import 'chat_attachment_sheet.dart';
@@ -483,7 +484,11 @@ class _Header extends ConsumerWidget {
             button: true,
             label: 'Chat settings',
             child: PressableScale(
-              onTap: () {},
+              onTap: () => _ChatSettingsSheet.show(
+                context,
+                activityId: activityId,
+                activityTitle: title,
+              ),
               child: Container(
                 width: 38,
                 height: 38,
@@ -1209,3 +1214,111 @@ class _InputBar extends StatelessWidget {
 }
 
 
+
+// ─── Chat settings sheet ─────────────────────────────────────────────────────
+
+/// Bottom sheet behind the header settings button: view the activity
+/// or report it. Mute/notification toggles are out of scope (no
+/// backend support) and deliberately omitted.
+class _ChatSettingsSheet extends StatelessWidget {
+  const _ChatSettingsSheet({
+    required this.activityId,
+    required this.activityTitle,
+  });
+  final String activityId;
+  final String activityTitle;
+
+  static Future<void> show(
+    BuildContext context, {
+    required String activityId,
+    required String activityTitle,
+  }) {
+    return showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ChatSettingsSheet(
+        activityId: activityId,
+        activityTitle: activityTitle,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.x5,
+        AppSpacing.x3,
+        AppSpacing.x5,
+        AppSpacing.x5 + MediaQuery.of(context).viewPadding.bottom,
+      ),
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: context.colors.border,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.x4),
+          _SettingsRow(
+            icon: Icons.info_outline_rounded,
+            label: 'View activity details',
+            onTap: () {
+              Navigator.of(context).pop();
+              context.push('/activity/$activityId');
+            },
+          ),
+          _SettingsRow(
+            icon: Icons.flag_outlined,
+            label: 'Report activity',
+            onTap: () {
+              Navigator.of(context).pop();
+              ReportActivitySheet.show(
+                context,
+                activityId: activityId,
+                activityTitle: activityTitle,
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsRow extends StatelessWidget {
+  const _SettingsRow({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return PressableScale(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.x3),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: context.colors.textPrimary),
+            const SizedBox(width: AppSpacing.x4),
+            Text(label, style: AppTypography.titleMedium(context)),
+          ],
+        ),
+      ),
+    );
+  }
+}

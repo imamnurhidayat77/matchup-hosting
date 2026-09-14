@@ -21,7 +21,7 @@ export function createApp(){
 
     app.use(cors());
     app.use(helmet());
-    app.use(morgan('dev'));
+    app.use(morgan(':date[iso] :method :url :status :response-time ms'));
     app.use(express.json());
 
     app.get('/api/health', async (_req, res) =>{

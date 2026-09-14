@@ -69,6 +69,12 @@ void main() {
           builder: (_, _) => const Scaffold(body: Text('Review')),
         ),
         GoRoute(
+          path: '/pending-request/:id',
+          builder: (_, state) => Scaffold(
+            body: Text('Pending Detail ${state.pathParameters['id']}'),
+          ),
+        ),
+        GoRoute(
           path: '/create',
           builder: (_, _) => const Scaffold(body: Text('Create')),
         ),
@@ -162,6 +168,45 @@ void main() {
       await pumpScreen(tester);
 
       expect(find.text('No upcoming activities'), findsOneWidget);
+    });
+
+    group('Pending tab', () {
+      testWidgets('should list requests with the waiting badge', (
+        tester,
+      ) async {
+        when(() => activityRepo.joinedByUser(any())).thenAnswer((_) async => []);
+        when(() => activityRepo.hostedByUser(any())).thenAnswer((_) async => []);
+        when(() => activityRepo.pastByUser(any())).thenAnswer((_) async => []);
+        when(() => activityRepo.pendingRequests()).thenAnswer(
+          (_) async => [_fixture(id: '9', title: 'Evening Tennis')],
+        );
+
+        await pumpScreen(tester);
+        await tester.tap(find.text('Pending'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Evening Tennis'), findsOneWidget);
+        expect(find.text('WAITING APPROVAL'), findsOneWidget);
+      });
+
+      testWidgets('should open the read-only pending detail', (
+        tester,
+      ) async {
+        when(() => activityRepo.joinedByUser(any())).thenAnswer((_) async => []);
+        when(() => activityRepo.hostedByUser(any())).thenAnswer((_) async => []);
+        when(() => activityRepo.pastByUser(any())).thenAnswer((_) async => []);
+        when(() => activityRepo.pendingRequests()).thenAnswer(
+          (_) async => [_fixture(id: '9', title: 'Evening Tennis')],
+        );
+
+        await pumpScreen(tester);
+        await tester.tap(find.text('Pending'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Evening Tennis'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Pending Detail 9'), findsOneWidget);
+      });
     });
   });
 }

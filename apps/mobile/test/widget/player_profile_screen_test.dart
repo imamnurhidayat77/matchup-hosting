@@ -32,6 +32,11 @@ void main() {
           builder: (_, _) => const Scaffold(body: Text('Chat')),
         ),
         GoRoute(
+          path: '/dm/:uid',
+          builder: (_, state) =>
+              Scaffold(body: Text('DM ${state.pathParameters['uid']}')),
+        ),
+        GoRoute(
           path: '/report/:type/:name',
           builder: (_, _) => const Scaffold(body: Text('Report')),
         ),
@@ -79,7 +84,7 @@ void main() {
     });
 
     testWidgets(
-      'should keep Send Message disabled until DMs are supported',
+      'should open the DM thread when Send Message is tapped',
       (tester) async {
         when(() => userRepo.byId('James')).thenAnswer(
           (_) async =>
@@ -87,16 +92,61 @@ void main() {
         );
         await pumpScreen(tester);
 
-        // The button is rendered but disabled — tapping it should not
-        // navigate anywhere. DMs need a dedicated backend endpoint.
-        final sendButton = find.text('Send Message');
-        expect(sendButton, findsOneWidget);
-        // `Widget.enabled` is false for an AppButton built with
-        // `onPressed: null`, so the tap is a no-op.
-        await tester.tap(sendButton);
+        await tester.tap(find.text('Send Message'));
         await tester.pumpAndSettle();
-        expect(find.text('Chat'), findsNothing);
+
+        expect(find.text('DM james'), findsOneWidget);
       },
     );
+
+    testWidgets('should show sport with fallback skill level', (
+      tester,
+    ) async {
+      when(() => userRepo.byId('James')).thenAnswer(
+        (_) async => const UserModel(
+          id: 'james',
+          displayName: 'James Wilson',
+          sports: [(sport: 'Basketball', level: '')],
+          skillLevel: 'Intermediate',
+        ),
+      );
+      await pumpScreen(tester);
+
+      expect(find.text('Basketball'), findsOneWidget);
+      // Empty per-sport level falls back to the general skill level.
+      expect(find.text('INTERMEDIATE'), findsOneWidget);
+    });
+
+    testWidgets('should hide the level badge when unknown', (
+      tester,
+    ) async {
+      when(() => userRepo.byId('James')).thenAnswer(
+        (_) async => const UserModel(
+          id: 'james',
+          displayName: 'James Wilson',
+          sports: [(sport: 'Basketball', level: '')],
+        ),
+      );
+      await pumpScreen(tester);
+
+      expect(find.text('Basketball'), findsOneWidget);
+      expect(find.text('INTERMEDIATE'), findsNothing);
+    });
+
+    testWidgets('should open the options sheet from More options', (
+      tester,
+    ) async {
+      when(() => userRepo.byId('James')).thenAnswer(
+        (_) async =>
+            const UserModel(id: 'james', displayName: 'James Wilson'),
+      );
+      await pumpScreen(tester);
+
+      await tester.tap(find.bySemanticsLabel('More options'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Share profile'), findsOneWidget);
+      expect(find.text('Report profile'), findsOneWidget);
+    });
   });
 }

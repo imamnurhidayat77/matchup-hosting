@@ -51,6 +51,8 @@ void main() {
   setUp(() => userRepo = _FakeUserRepository());
 
   Future<void> pumpRouter(WidgetTester tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     final router = GoRouter(
       initialLocation: '/get-to-know-1',
       routes: [
@@ -105,7 +107,11 @@ void main() {
       tester,
     ) async {
       await pumpRouter(tester);
+      final optCenter = tester.getCenter(find.text('Meet new sports partners'));
+      final nextTopLeft = tester.getTopLeft(find.text('Next'));
+      final nextBottomRight = tester.getBottomRight(find.text('Next'));
       await tester.tap(find.text('Meet new sports partners'));
+      await tester.pump();
       await tester.pumpAndSettle();
       await tester.tap(find.text('Next'));
       await tester.pumpAndSettle();

@@ -7,11 +7,13 @@ import {
     leaveActivityHandler,
     getParticipantsHandler,
     listJoinRequestsHandler,
+    listMyJoinRequestsHandler,
     requestJoinActivityHandler,
 } from './activity-participants.controller.js';
 
 export const activityParticipantsRouter = Router();
 
+activityParticipantsRouter.get('/join-requests/me', requireAuth, listMyJoinRequestsHandler);
 activityParticipantsRouter.post('/:activityId/participants', requireAuth, joinActivityHandler);
 activityParticipantsRouter.get('/:activityId/participants', requireAuth, getParticipantsHandler);
 activityParticipantsRouter.delete('/:activityId/participants/:uid', requireAuth, leaveActivityHandler);

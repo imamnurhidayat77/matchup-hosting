@@ -27,6 +27,7 @@ vi.mock('./activity-participants.service.js', () => {
         leaveActivity: vi.fn().mockResolvedValue(undefined),
         requestToJoin: vi.fn().mockResolvedValue(undefined),
         listJoinRequests: vi.fn(),
+        listMyJoinRequests: vi.fn().mockResolvedValue([]),
         approveJoinRequest: vi.fn().mockResolvedValue(undefined),
         declineJoinRequest: vi.fn().mockResolvedValue(undefined),
     };
@@ -2104,5 +2105,19 @@ describe('DELETE /api/activities/:activityId/participants/:uid', () => {
                 message: 'Unknown error',
             },
         });
+    });
+});
+
+describe('GET /api/activities/join-requests/me', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it('returns the viewer outgoing requests', async () => {
+        const app = createApp();
+        const response = await request(app).get('/api/activities/join-requests/me');
+
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual({ ok: true, data: [] });
     });
 });

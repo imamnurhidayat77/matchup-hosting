@@ -25,6 +25,12 @@ class UserModel {
   /// Sports + skill level pairs (e.g. `[('Basketball', 'Intermediate')]`).
   final List<({String sport, String level})> sports;
 
+  /// General playing level (`beginner`/`intermediate`/`advanced`/`any`)
+  /// from the user record. Used as the fallback badge on sport chips
+  /// whose own level is empty (backend `preferredSports` carries names
+  /// only).
+  final String? skillLevel;
+
   /// Per-sport community rating aggregate. Keyed by sport type
   /// (e.g. `Basketball`). Pulled from the API response
   /// `users/{id}.ratingBySport` and exposed so discovery/host cards can
@@ -61,6 +67,7 @@ class UserModel {
     this.activitiesCount = 0,
     this.hostedCount = 0,
     this.sports = const [],
+    this.skillLevel,
     this.ratingBySport = const {},
     this.totalRatingCount = 0,
     this.email,
@@ -82,6 +89,7 @@ class UserModel {
     int? weightKg,
     String? goal,
     List<({String sport, String level})>? sports,
+    String? skillLevel,
     Map<String, SportRatingSummary>? ratingBySport,
     int? totalRatingCount,
   }) {
@@ -96,6 +104,7 @@ class UserModel {
       activitiesCount: activitiesCount,
       hostedCount: hostedCount,
       sports: sports ?? this.sports,
+      skillLevel: skillLevel ?? this.skillLevel,
       ratingBySport: ratingBySport ?? this.ratingBySport,
       totalRatingCount: totalRatingCount ?? this.totalRatingCount,
       email: email ?? this.email,

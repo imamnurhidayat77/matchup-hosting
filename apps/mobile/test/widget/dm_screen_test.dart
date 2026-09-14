@@ -6,7 +6,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:matchup_mobile/core/providers/repository_providers.dart';
 import 'package:matchup_mobile/features/chat/data/dm_repository.dart';
 import 'package:matchup_mobile/features/chat/domain/chat_message.dart';
+import 'package:matchup_mobile/features/profile/data/user_repository.dart';
+import 'package:matchup_mobile/features/profile/domain/user_model.dart';
+import 'package:mocktail/mocktail.dart';
+
 import 'package:matchup_mobile/features/chat/presentation/dm_screen.dart';
+
+class _MockUserRepository extends Mock implements UserRepository {}
 
 class _FakeDmRepo implements DmRepository {
   _FakeDmRepo({List<ChatMessage>? seed}) : _messages = List.of(seed ?? []) {
@@ -70,7 +76,10 @@ Future<void> _pump(
 }) async {
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [dmRepositoryProvider.overrideWithValue(repo)],
+      overrides: [
+        dmRepositoryProvider.overrideWithValue(repo),
+        userRepositoryProvider.overrideWithValue(_userRepo()),
+      ],
       child: MaterialApp(
         home: DmScreen(otherUid: 'u-9', peerName: peerName),
       ),
@@ -96,6 +105,22 @@ void main() {
 
     expect(find.text('hey there'), findsOneWidget);
     expect(find.text('hi!'), findsOneWidget);
+    // Peer avatar falls back to initials when the photo can't load —
+    // twice: once in the header, once beside the peer bubble.
+    expect(find.text('SR'), findsNWidgets(2));
+  });
+
+  testWidgets('shows a timestamp under each bubble', (tester) async {
+    await _pump(
+      tester,
+      _FakeDmRepo(seed: [_msg('m-1', 'u-9', 'hey there')]),
+    );
+
+    // e.g. "11:29 AM" — one per bubble.
+    expect(
+      find.textContaining(RegExp(r'^\d{1,2}:\d{2} [AP]M$')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('sending appends the bubble and calls the repo', (tester) async {
@@ -113,14 +138,52 @@ void main() {
   });
 
   testWidgets('falls back to a generic title without a peer name', (tester) async {
+    final unknownUserRepo = _MockUserRepository();
+    when(() => unknownUserRepo.byId(any())).thenAnswer((_) async => null);
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [dmRepositoryProvider.overrideWithValue(_FakeDmRepo())],
+        overrides: [
+          dmRepositoryProvider.overrideWithValue(_FakeDmRepo()),
+          userRepositoryProvider.overrideWithValue(unknownUserRepo),
+        ],
         child: const MaterialApp(home: DmScreen(otherUid: 'u-9')),
       ),
     );
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.text('Direct message'), findsOneWidget);
   });
+
+  testWidgets('shows the live profile name and avatar in the header',
+      (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          dmRepositoryProvider.overrideWithValue(_FakeDmRepo()),
+          userRepositoryProvider.overrideWithValue(_userRepo()),
+        ],
+        child: const MaterialApp(home: DmScreen(otherUid: 'u-9')),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    // Profile displayName wins over the missing route extra; avatar
+    // falls back to initials when the photo can't load in tests.
+    expect(find.text('Sam Rivera'), findsOneWidget);
+    expect(find.text('SR'), findsOneWidget);
+  });
+}
+
+UserRepository _userRepo() {
+  final repo = _MockUserRepository();
+  when(() => repo.byId(any())).thenAnswer(
+    (_) async => const UserModel(
+      id: 'u-9',
+      displayName: 'Sam Rivera',
+      avatarUrl: 'https://example.com/sam.png',
+    ),
+  );
+  return repo;
 }

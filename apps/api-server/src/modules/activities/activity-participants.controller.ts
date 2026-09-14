@@ -6,6 +6,7 @@ import {
     joinActivity,
     leaveActivity,
     listJoinRequests,
+    listMyJoinRequests,
     requestToJoin,
 } from './activity-participants.service.js';
 import { getActivityById } from './activities.service.js';
@@ -523,4 +524,31 @@ export async function declineJoinRequestHandler(
     res: Response,
 ) {
     return decideJoinRequestHandler(req, res, 'declined');
+}
+
+/**
+ * `GET /api/activities/join-requests/me` — the viewer's own outgoing
+ * pending requests for the My Games "Pending" tab.
+ */
+export async function listMyJoinRequestsHandler(req: Request, res: Response) {
+    try {
+        const uid = req.auth?.uid;
+        if (!uid) {
+            return res.status(401).json({
+                ok: false,
+                error: {
+                    code: 'UNAUTHORIZED',
+                    message: 'Authenticated user is required',
+                },
+            });
+        }
+        const rows = await listMyJoinRequests(uid);
+        return res.status(200).json({ ok: true, data: rows });
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        return res.status(500).json({
+            ok: false,
+            error: { code: 'INTERNAL_ERROR', message },
+        });
+    }
 }

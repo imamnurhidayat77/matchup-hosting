@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/utils/geo.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/app_button.dart';
@@ -292,6 +293,7 @@ class _CoverImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final distanceText = distanceLabel(activity.distanceKm);
     return SizedBox(
       height: 140,
       width: double.infinity,
@@ -331,34 +333,36 @@ class _CoverImage extends StatelessWidget {
                     ).copyWith(fontSize: 11, color: AppColors.textOnPrimary),
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.x2 + 2,
-                    vertical: AppSpacing.x1 + 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: context.colors.scrimControl,
-                    borderRadius: BorderRadius.circular(AppRadius.lg),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AppIcon(
-                        AppIcons.mapPin,
-                        size: AppIconSize.sm,
-                        color: context.colors.textOnPrimary,
-                      ),
-                      const SizedBox(width: AppSpacing.x1),
-                      Text(
-                        '${activity.distanceKm.toStringAsFixed(1)} km away',
-                        style: AppTypography.chipLabel(context).copyWith(
-                          fontSize: 11,
+                // Distance pill (hidden when unknown).
+                if (distanceText != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.x2 + 2,
+                      vertical: AppSpacing.x1 + 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: context.colors.scrimControl,
+                      borderRadius: BorderRadius.circular(AppRadius.lg),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AppIcon(
+                          AppIcons.mapPin,
+                          size: AppIconSize.sm,
                           color: context.colors.textOnPrimary,
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: AppSpacing.x1),
+                        Text(
+                          distanceText,
+                          style: AppTypography.chipLabel(context).copyWith(
+                            fontSize: 11,
+                            color: context.colors.textOnPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
               ],
             ),
           ),

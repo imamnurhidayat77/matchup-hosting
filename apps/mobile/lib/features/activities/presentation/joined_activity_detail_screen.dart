@@ -7,6 +7,8 @@ import '../../../core/providers/repository_providers.dart';
 import '../../../core/services/calendar_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/utils/geo.dart';
+import '../../../core/utils/share_helper.dart';
 import '../../../core/widgets/app_dialog.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/theme/app_typography.dart';
@@ -269,7 +271,7 @@ class _Hero extends StatelessWidget {
                   ),
                   _HeroBtn(
                     icon: Icons.ios_share_rounded,
-                    onTap: () {},
+                    onTap: () => ShareHelper.shareActivity(activity),
                     label: 'Share',
                   ),
                 ],
@@ -541,8 +543,7 @@ class _MetaCard extends StatelessWidget {
     final start = DateFormat('h:mm a').format(activity.dateTime);
     final end = DateFormat('h:mm a').format(activity.endTime);
     final address =
-        activity.addressLine ??
-        '${activity.distanceKm.toStringAsFixed(1)} km away';
+        activity.addressLine ?? distanceLabel(activity.distanceKm) ?? '';
 
     return Container(
       decoration: BoxDecoration(

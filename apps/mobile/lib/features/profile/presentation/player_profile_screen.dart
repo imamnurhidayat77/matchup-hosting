@@ -8,6 +8,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/dark_colors.dart';
+import '../../../core/utils/share_helper.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_icon.dart';
 import '../../../core/widgets/app_scaffold.dart';
@@ -89,7 +90,10 @@ class _ProfileContent extends StatelessWidget {
                       ),
                       _CircleBtn(
                         icon: Icons.more_horiz_rounded,
-                        onTap: () {},
+                        onTap: () => _ProfileOptionsSheet.show(
+                          context,
+                          user: user,
+                        ),
                         label: 'More options',
                       ),
                     ],
@@ -322,7 +326,12 @@ class _ProfileContent extends StatelessWidget {
                             for (var i = 0; i < user.sports.length; i++)
                               _SportChip(
                                 sport: user.sports[i].sport,
-                                level: user.sports[i].level,
+                                // Per-sport levels aren't persisted yet —
+                                // fall back to the general skill level so
+                                // the badge is never an empty pill.
+                                level: user.sports[i].level.isNotEmpty
+                                    ? user.sports[i].level
+                                    : (user.skillLevel ?? ''),
                                 isPrimary: i == 0,
                               ),
                           ],
@@ -504,36 +513,41 @@ class _SportChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadius.pill),
         border: Border.all(color: context.colors.border),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            sport,
-            style: AppTypography.labelField(
-              context,
-            ).copyWith(color: context.colors.textPrimary),
-          ),
-          const SizedBox(width: AppSpacing.x2),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: isPrimary
-                  ? context.colors.primarySoft
-                  : context.colors.surfaceMuted,
-              borderRadius: BorderRadius.circular(AppRadius.pill),
-            ),
-            child: Text(
-              level.toUpperCase(),
-              style: AppTypography.chipLabel(context).copyWith(
-                color: isPrimary
-                    ? context.colors.primaryOnSurface
-                    : context.colors.textSecondary,
-                fontSize: 10,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                sport,
+                style: AppTypography.labelField(
+                  context,
+                ).copyWith(color: context.colors.textPrimary),
               ),
-            ),
+              // No badge when neither per-sport nor general level is
+              // known — an empty pill reads as broken UI.
+              if (level.isNotEmpty) ...[
+                const SizedBox(width: AppSpacing.x2),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: isPrimary
+                        ? context.colors.primarySoft
+                        : context.colors.surfaceMuted,
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                  ),
+                  child: Text(
+                    level.toUpperCase(),
+                    style: AppTypography.chipLabel(context).copyWith(
+                      color: isPrimary
+                          ? context.colors.primaryOnSurface
+                          : context.colors.textSecondary,
+                      fontSize: 10,
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
-        ],
-      ),
     );
   }
 }
@@ -578,6 +592,102 @@ class _RatingRow extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── More-options sheet ───────────────────────────────────────────────────────
+
+/// Bottom sheet behind the header ⋯ button: share the profile or
+/// report it (same [ReportUserSheet] as the dedicated button below).
+class _ProfileOptionsSheet extends StatelessWidget {
+  const _ProfileOptionsSheet({required this.user});
+  final UserModel user;
+
+  static Future<void> show(BuildContext context, {required UserModel user}) {
+    return showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ProfileOptionsSheet(user: user),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.x5,
+        AppSpacing.x3,
+        AppSpacing.x5,
+        AppSpacing.x5 + MediaQuery.of(context).viewPadding.bottom,
+      ),
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: context.colors.border,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.x4),
+          _OptionsRow(
+            icon: Icons.ios_share_rounded,
+            label: 'Share profile',
+            onTap: () {
+              Navigator.of(context).pop();
+              ShareHelper.shareProfile(user);
+            },
+          ),
+          _OptionsRow(
+            icon: Icons.flag_outlined,
+            label: 'Report profile',
+            onTap: () {
+              Navigator.of(context).pop();
+              ReportUserSheet.show(
+                context,
+                userId: user.id,
+                userName: user.displayName,
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OptionsRow extends StatelessWidget {
+  const _OptionsRow({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return PressableScale(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.x3),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: context.colors.textPrimary),
+            const SizedBox(width: AppSpacing.x4),
+            Text(label, style: AppTypography.titleMedium(context)),
+          ],
+        ),
       ),
     );
   }

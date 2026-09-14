@@ -76,6 +76,25 @@ abstract class ActivityRepository {
   /// Manage Activity screen's host-only "Cancel Activity" action.
   Future<void> cancel(String activityId);
 
+  /// Host-only field update (`PATCH /api/activities/:id`). Only
+  /// non-null fields are sent; the backend validates + ignores the
+  /// rest. Used by the edit screen.
+  Future<void> updateActivity({
+    required String activityId,
+    String? title,
+    String? sportType,
+    String? description,
+    String? locationName,
+    double? latitude,
+    double? longitude,
+    String? geohash,
+    DateTime? startTime,
+    DateTime? endTime,
+    String? skillLevel,
+    int? capacity,
+    String? joinPolicy,
+  });
+
   /// Generic host-only status update. [status] is the wire value the
   /// backend accepts: `'open' | 'cancelled' | 'completed' | 'removed'`.
   /// Use this for "mark as completed" once the activity time has passed;
@@ -83,4 +102,9 @@ abstract class ActivityRepository {
   Future<void> updateStatus(String activityId, String status);
 
   Future<List<ActivityModel>> pastByUser(String userId);
+
+  /// Outgoing pending join requests (`GET /api/activities/join-requests/me`),
+  /// mapped to lightweight [ActivityModel]s with `joinRequestStatus:
+  /// 'pending' for the My Games "Pending" tab.
+  Future<List<ActivityModel>> pendingRequests();
 }

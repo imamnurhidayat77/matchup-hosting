@@ -184,18 +184,8 @@ class RemoteDmRepository implements DmRepository {
     );
   }
 
-  List<ChatMessage> _parseList(Object? value, {required String myUid}) {
-    if (value is! Map) return const [];
-    final out = <ChatMessage>[];
-    for (final entry in value.entries) {
-      final v = entry.value;
-      if (v is Map<String, dynamic>) {
-        out.add(_parseOne({'messageId': entry.key, ...v}, myUid: myUid));
-      }
-    }
-    out.sort((a, b) => a.sentAt.compareTo(b.sentAt));
-    return out;
-  }
+  List<ChatMessage> _parseList(Object? value, {required String myUid}) =>
+      parseRtdbDmMessages(value, myUid: myUid);
 
   ChatMessage _parseOne(Map<String, dynamic> json, {required String myUid}) {
     final senderId = json['senderId']?.toString() ?? '';
@@ -211,4 +201,44 @@ class RemoteDmRepository implements DmRepository {
       isMine: senderId == myUid && senderId.isNotEmpty,
     );
   }
+}
+
+/// Parses an RTDB `dmChats/{pair}/messages` snapshot value into
+/// time-sorted messages.
+///
+/// Top-level (not a method) so unit tests can feed it realistic
+/// snapshot shapes. CRITICAL: RTDB decodes to `Map<dynamic, dynamic>`,
+/// so this must never narrow with `is Map<String, dynamic>` — generic
+/// invariance would silently drop every message (thread renders empty
+/// forever while the HTTP-fed inbox looks fine).
+List<ChatMessage> parseRtdbDmMessages(Object? value, {required String myUid}) {
+  if (value is! Map) return const [];
+  final out = <ChatMessage>[];
+  for (final entry in value.entries.whereType<MapEntry<dynamic, dynamic>>()) {
+    final v = entry.value;
+    if (v is Map) {
+      final json = <String, dynamic>{
+        'messageId': entry.key.toString(),
+        ...Map<String, dynamic>.from(v),
+      };
+      out.add(_parseDmMessage(json, myUid: myUid));
+    }
+  }
+  out.sort((a, b) => a.sentAt.compareTo(b.sentAt));
+  return out;
+}
+
+ChatMessage _parseDmMessage(Map<String, dynamic> json, {required String myUid}) {
+  final senderId = json['senderId']?.toString() ?? '';
+  final ms = json['timestamp'];
+  return ChatMessage(
+    id: json['messageId']?.toString() ?? json['id']?.toString() ?? '',
+    senderId: senderId,
+    senderName: senderId == myUid ? 'You' : '',
+    text: json['text']?.toString() ?? '',
+    sentAt: ms is num
+        ? DateTime.fromMillisecondsSinceEpoch(ms.toInt())
+        : DateTime.now(),
+    isMine: senderId == myUid && senderId.isNotEmpty,
+  );
 }

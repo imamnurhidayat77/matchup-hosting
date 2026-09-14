@@ -133,6 +133,7 @@ void main() {
         weightKg: any(named: 'weightKg'),
         goal: any(named: 'goal'),
         sports: any(named: 'sports'),
+        joinReason: any(named: 'joinReason'),
       ),
     ).thenAnswer(
       (_) async => UserModel(id: 'me', displayName: 'Test User'),

@@ -602,3 +602,74 @@ export async function declineJoinRequest(
 ): Promise<void> {
   await decideJoinRequest(activityId, targetUid, actorUid, 'declined');
 }
+
+export type MyJoinRequestView = {
+    activityId: string;
+    title: string;
+    sportType: string;
+    locationName: string;
+    startTime: string | null;
+    status: 'pending';
+    requestedAt: FirebaseFirestore.Timestamp | null;
+};
+
+/**
+ * Outgoing join requests for the viewer — powers the "Pending" tab in
+ * My Games. Single-field collection-group equality (`uid`) uses the
+ * automatic index (no composite needed); the `pending` filter runs in
+ * memory since a user has few requests. Each row carries the activity
+ * snapshot the mobile card renders, so no second round trip is needed.
+ */
+export async function listMyJoinRequests(
+    viewerUid: string,
+): Promise<MyJoinRequestView[]> {
+    const normalizedUid = viewerUid.trim();
+    if (!normalizedUid) {
+        throw new Error('uid is required');
+    }
+
+    const snap = await firestore
+        .collectionGroup('joinRequests')
+        .where('uid', '==', normalizedUid)
+        .get();
+
+    const views: MyJoinRequestView[] = [];
+    for (const doc of snap.docs) {
+        const data = doc.data();
+        if (data.status !== 'pending') continue;
+        const activityId =
+            typeof data.activityId === 'string' && data.activityId
+                ? data.activityId
+                : doc.ref.parent.parent?.id;
+        if (!activityId) continue;
+
+        let title = '';
+        let sportType = '';
+        let locationName = '';
+        let startTime: string | null = null;
+        try {
+            const activitySnap = await firestore
+                .doc(activityDocPath(activityId))
+                .get();
+            const a = activitySnap.exists ? activitySnap.data() : undefined;
+            if (typeof a?.title === 'string') title = a.title;
+            if (typeof a?.sportType === 'string') sportType = a.sportType;
+            if (typeof a?.locationName === 'string') locationName = a.locationName;
+            if (typeof a?.startTime === 'string') startTime = a.startTime;
+        } catch {
+            // Best-effort enrichment — the row still renders from ids.
+        }
+
+        views.push({
+            activityId,
+            title,
+            sportType,
+            locationName,
+            startTime,
+            status: 'pending',
+            requestedAt: (data.createdAt as FirebaseFirestore.Timestamp | undefined) ?? null,
+        });
+    }
+
+    return views;
+}

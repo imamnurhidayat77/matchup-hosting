@@ -138,7 +138,32 @@ class LocalActivityRepository implements ActivityRepository {
   }
 
   @override
+  Future<void> updateActivity({
+    required String activityId,
+    String? title,
+    String? sportType,
+    String? description,
+    String? locationName,
+    double? latitude,
+    double? longitude,
+    String? geohash,
+    DateTime? startTime,
+    DateTime? endTime,
+    String? skillLevel,
+    int? capacity,
+    String? joinPolicy,
+  }) async {
+    await _delay();
+  }
+
+  @override
   Future<List<ActivityModel>> pastByUser(String userId) async {
+    await _delay();
+    return const <ActivityModel>[];
+  }
+
+  @override
+  Future<List<ActivityModel>> pendingRequests() async {
     await _delay();
     return const <ActivityModel>[];
   }

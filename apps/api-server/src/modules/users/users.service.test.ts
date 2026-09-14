@@ -102,3 +102,79 @@ describe('user activity counts', () => {
         expect(profile?.hostedCount).toBe(0);
     });
 });
+
+describe('getPublicUserProfile displayName fallback', () => {
+    function mockUidMissThenNameHit() {
+        const userGet = vi.fn().mockResolvedValue({ exists: false });
+        const rowGet = vi.fn().mockResolvedValue({
+            docs: [
+                {
+                    id: 'uid-james',
+                    exists: true,
+                    data: () => ({
+                        email: 'james@example.com',
+                        displayName: 'James Wilson',
+                        createdAt: Timestamp.now(),
+                    }),
+                },
+            ],
+            empty: false,
+        });
+        const limit = vi.fn().mockReturnValue({ get: rowGet });
+        const where = vi.fn().mockReturnValue({ limit });
+        vi.mocked(firestore.collection).mockImplementation(
+            ((name: string) => {
+                if (name === 'users') {
+                    return { doc: () => ({ get: userGet }), where };
+                }
+                throw new Error(`unexpected collection: ${name}`);
+            }) as never,
+        );
+        // Counts for the fallback path (joined via collection group,
+        // hosted via activities collection — mirrors mockCounts).
+        const joinedGet = vi.fn().mockResolvedValue({ data: () => ({ count: 2 }) });
+        const hostedGet = vi.fn().mockResolvedValue({ data: () => ({ count: 1 }) });
+        vi.mocked(firestore.collectionGroup).mockReturnValue({
+            where: () => ({ count: () => ({ get: joinedGet }) }),
+        } as never);
+        const prevImpl = vi.mocked(firestore.collection).getMockImplementation()
+        vi.mocked(firestore.collection).mockImplementation(
+            ((name: string) => {
+                if (name === 'activities') {
+                    return { where: () => ({ count: () => ({ get: hostedGet }) }) };
+                }
+                return prevImpl!(name);
+            }) as never,
+        );
+    }
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it('resolves a display name when the uid misses', async () => {
+        mockUidMissThenNameHit();
+
+        const profile = await getPublicUserProfile('James Wilson');
+
+        expect(profile?.displayName).toBe('James Wilson');
+        expect(profile?.activitiesCount).toBe(2);
+    });
+
+    it('returns null when neither uid nor name matches', async () => {
+        const userGet = vi.fn().mockResolvedValue({ exists: false });
+        const rowGet = vi.fn().mockResolvedValue({ docs: [], empty: true });
+        const limit = vi.fn().mockReturnValue({ get: rowGet });
+        const where = vi.fn().mockReturnValue({ limit });
+        vi.mocked(firestore.collection).mockImplementation(
+            ((name: string) => {
+                if (name === 'users') {
+                    return { doc: () => ({ get: userGet }), where };
+                }
+                throw new Error(`unexpected collection: ${name}`);
+            }) as never,
+        );
+
+        await expect(getPublicUserProfile('Ghost Person')).resolves.toBeNull();
+    });
+});

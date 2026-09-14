@@ -7,6 +7,7 @@ import '../../../core/providers/repository_providers.dart';
 import '../../../core/services/location_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/utils/share_helper.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/geo.dart';
@@ -449,7 +450,7 @@ class _Hero extends StatelessWidget {
                   _HeroBtn(
                     icon: Icons.ios_share_rounded,
                     label: 'Share',
-                    onTap: () {},
+                    onTap: () => ShareHelper.shareActivity(activity),
                   ),
                 ],
               ),
@@ -481,36 +482,39 @@ class _Hero extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: AppSpacing.x2),
-              // Distance — green pill
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.success,
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.location_on_rounded,
-                      size: 12,
-                      color: AppColors.textOnPrimary,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${activity.distanceKm.toStringAsFixed(1)} KM AWAY',
-                      style: AppTypography.chipLabel(context).copyWith(
+              // Distance — green pill (hidden when unknown).
+              if (distanceLabel(activity.distanceKm)
+                  case final distanceText?) ...[
+                const SizedBox(width: AppSpacing.x2),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.success,
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.location_on_rounded,
+                        size: 12,
                         color: AppColors.textOnPrimary,
-                        fontSize: 11,
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 4),
+                      Text(
+                        distanceText.toUpperCase(),
+                        style: AppTypography.chipLabel(context).copyWith(
+                          color: AppColors.textOnPrimary,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
@@ -586,8 +590,7 @@ class _DetailsCard extends StatelessWidget {
     final startStr = DateFormat('h:mm a').format(activity.dateTime);
     final endStr = DateFormat('h:mm a').format(activity.endTime);
     final address =
-        activity.addressLine ??
-        '${activity.distanceKm.toStringAsFixed(1)} km away';
+        activity.addressLine ?? distanceLabel(activity.distanceKm) ?? '';
 
     return Container(
       decoration: BoxDecoration(

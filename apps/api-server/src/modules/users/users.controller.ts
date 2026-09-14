@@ -251,6 +251,15 @@ export async function updateMyUserProfileHandler(req: Request, res: Response) {
       });
     }
 
+    // Key-only request logging (no values — privacy safe) to
+    // diagnose client/server contract mismatches like wrong field
+    // names or shapes sent by older app builds.
+    try {
+      console.log(`[users] PATCH /me keys=${Object.keys(body ?? {}).join(',')}`);
+    } catch {
+      // Logging must never break the request.
+    }
+
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
       return res.status(400).json({
         ok: false,
@@ -259,6 +268,10 @@ export async function updateMyUserProfileHandler(req: Request, res: Response) {
           message: 'request body must be an object',
         },
       });
+    }
+
+    for (const key of Object.keys(body)) {
+      if (body[key] === null) delete body[key];
     }
 
     if (hasUnknownProfileFields(body)) {

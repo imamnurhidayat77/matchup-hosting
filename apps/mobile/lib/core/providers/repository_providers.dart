@@ -140,7 +140,11 @@ final placesRepositoryProvider = Provider<PlacesRepository>((ref) {
 
 final calendarRepositoryProvider = Provider<CalendarRepository>((ref) {
   final remote = ref.watch(useRemoteApiProvider);
-  if (remote) return RemoteCalendarRepository();
+  if (remote) {
+    return RemoteCalendarRepository(
+      activities: ref.watch(activityRepositoryProvider),
+    );
+  }
   return LocalCalendarRepository();
 });
 

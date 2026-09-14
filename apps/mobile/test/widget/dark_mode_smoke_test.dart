@@ -19,6 +19,7 @@ import 'package:matchup_mobile/core/theme/app_colors.dart';
 import 'package:matchup_mobile/core/theme/app_typography.dart';
 import 'package:matchup_mobile/core/theme/dark_colors.dart';
 import 'package:matchup_mobile/features/activities/domain/activity_model.dart';
+import 'package:matchup_mobile/features/activities/presentation/join_request_sent_screen.dart';
 import 'package:matchup_mobile/features/activities/presentation/my_activities_screen.dart';
 import 'package:matchup_mobile/features/discovery/data/activity_repository.dart';
 import 'package:matchup_mobile/features/discovery/presentation/discovery_screen.dart';
@@ -299,6 +300,46 @@ void main() {
         await tester.tap(find.text('Next'));
         await tester.pumpAndSettle();
         expect(find.text('Swipe to find games'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'JoinRequestSentScreen renders without exceptions under dark theme',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(390, 844));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        final activityRepo = _MockActivityRepository();
+        when(
+          () => activityRepo.byId(any()),
+        ).thenAnswer((_) async => _activityFixture());
+
+        final router = GoRouter(
+          initialLocation: '/request-sent/9',
+          routes: [
+            GoRoute(
+              path: '/request-sent/:id',
+              builder: (_, state) => JoinRequestSentScreen(
+                activityId: state.pathParameters['id']!,
+              ),
+            ),
+          ],
+        );
+
+        await expectNoRenderExceptions(
+          tester,
+          ProviderScope(
+            overrides: [
+              activityRepositoryProvider.overrideWithValue(activityRepo),
+            ],
+            child: MaterialApp.router(
+              theme: _darkThemeForTest(),
+              routerConfig: router,
+            ),
+          ),
+        );
+
+        expect(find.text('Request sent!'), findsOneWidget);
       },
     );
   });

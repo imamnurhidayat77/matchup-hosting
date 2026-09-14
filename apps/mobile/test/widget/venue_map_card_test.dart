@@ -50,6 +50,54 @@ void main() {
     expect(find.text('Venue Location'), findsNothing);
   });
 
+  test('venueDirectionsUri builds a Google Maps directions URL', () {
+    expect(
+      venueDirectionsUri(-36.8558, 174.7764).toString(),
+      'https://www.google.com/maps/dir/?api=1&destination=-36.8558,174.7764',
+    );
+  });
+
+  testWidgets('preview shows a Get Directions button', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: VenueMapCard(
+            activity: _activity(lat: -36.8558, lng: 174.7764),
+          ),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('Get Directions'), findsOneWidget);
+    // No directions affordance without coordinates.
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: VenueMapCard(activity: _activity())),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('Get Directions'), findsNothing);
+  });
+
+  testWidgets('full-screen map offers Open in Google Maps', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: VenueMapCard(
+            activity: _activity(lat: -36.8558, lng: 174.7764),
+          ),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+
+    await tester.tap(find.text('Auckland Domain'));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('Open in Google Maps'), findsOneWidget);
+  });
+
   testWidgets('tapping preview opens the full-screen map', (tester) async {
     await tester.pumpWidget(
       MaterialApp(

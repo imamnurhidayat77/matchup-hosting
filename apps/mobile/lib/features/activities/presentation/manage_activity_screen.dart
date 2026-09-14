@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -6,6 +7,8 @@ import 'package:intl/intl.dart';
 import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/utils/geo.dart';
+import '../../../core/utils/share_helper.dart';
 import '../../../core/widgets/app_dialog.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/theme/app_typography.dart';
@@ -48,6 +51,21 @@ final _manageProvider = FutureProvider.autoDispose
 class ManageActivityScreen extends ConsumerWidget {
   const ManageActivityScreen({super.key, required this.activityId});
   final String activityId;
+
+  /// Opens the edit screen; refreshes the detail provider and confirms
+  /// when the host saved changes (the edit screen pops `true`, silent,
+  /// because its own snackbar would die with its route).
+  Future<void> _openEdit(BuildContext context, WidgetRef ref) async {
+    final updated =
+        await context.push<bool>('/edit-activity/$activityId');
+    if (updated != true || !context.mounted) return;
+    ref.invalidate(_manageProvider(activityId));
+    AppSnackbar.show(
+      context,
+      message: 'Activity updated.',
+      variant: AppSnackbarVariant.success,
+    );
+  }
 
   Future<void> _confirmCancel(BuildContext context, WidgetRef ref) async {
     final confirmed = await AppDialog.confirm(
@@ -162,6 +180,7 @@ class ManageActivityScreen extends ConsumerWidget {
           activity: data.activity,
           roster: data.roster,
           requests: data.requests,
+          onEdit: () => _openEdit(context, ref),
           onCancel: () => _confirmCancel(context, ref),
           onComplete: () => _confirmComplete(context, ref),
           onApprove: (uid, name) =>
@@ -182,6 +201,7 @@ class _ManageBody extends StatelessWidget {
     required this.activity,
     required this.roster,
     required this.requests,
+    required this.onEdit,
     required this.onCancel,
     required this.onComplete,
     required this.onApprove,
@@ -194,6 +214,7 @@ class _ManageBody extends StatelessWidget {
 
   /// Pending join requests (approval-gated activities only, host view).
   final List<ActivityParticipant> requests;
+  final VoidCallback onEdit;
   final VoidCallback onCancel;
   final VoidCallback onComplete;
 
@@ -212,7 +233,10 @@ class _ManageBody extends StatelessWidget {
         SizedBox(
           height: _heroHeight,
           width: double.infinity,
-          child: _Hero(activity: activity),
+          child: _Hero(
+            activity: activity,
+            onEdit: onEdit,
+          ),
         ),
 
         // ── White card ──────────────────────────────────────────────────
@@ -324,8 +348,9 @@ class _ManageBody extends StatelessWidget {
 // ─── Hero ─────────────────────────────────────────────────────────────────────
 
 class _Hero extends StatelessWidget {
-  const _Hero({required this.activity});
+  const _Hero({required this.activity, required this.onEdit});
   final ActivityModel activity;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -372,7 +397,7 @@ class _Hero extends StatelessWidget {
                   ),
                   _HeroBtn(
                     icon: Icons.edit_outlined,
-                    onTap: () {},
+                    onTap: onEdit,
                     label: 'Edit activity',
                   ),
                 ],
@@ -566,8 +591,8 @@ class _MetaCard extends StatelessWidget {
     final date = DateFormat('EEEE, MMMM d').format(activity.dateTime);
     final start = DateFormat('h:mm a').format(activity.dateTime);
     final end = DateFormat('h:mm a').format(activity.endTime);
-    final address = activity.addressLine ??
-        '${activity.distanceKm.toStringAsFixed(1)} km away';
+    final address =
+        activity.addressLine ?? distanceLabel(activity.distanceKm) ?? '';
 
     return Container(
       decoration: BoxDecoration(
@@ -940,6 +965,7 @@ class _ShareSheet extends StatelessWidget {
                   feedback: AppTapFeedback.scale,
                   minSize: 36,
                   onTap: () {
+                    Clipboard.setData(ClipboardData(text: link));
                     AppSnackbar.show(
                       context,
                       message: 'Link copied.',
@@ -978,7 +1004,10 @@ class _ShareSheet extends StatelessWidget {
                 label: 'Message',
                 color: context.colors.successText,
                 bgColor: context.colors.statusSuccessBg,
-                onTap: () => Navigator.of(context).pop(),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  context.push('/chat/${activity.id}');
+                },
               ),
               const SizedBox(width: AppSpacing.x3),
               _ShareOption(
@@ -986,7 +1015,15 @@ class _ShareSheet extends StatelessWidget {
                 label: 'Copy link',
                 color: context.colors.primaryOnSurface,
                 bgColor: context.colors.primarySoft,
-                onTap: () => Navigator.of(context).pop(),
+                onTap: () {
+                  Clipboard.setData(ClipboardData(text: link));
+                  AppSnackbar.show(
+                    context,
+                    message: 'Link copied.',
+                    variant: AppSnackbarVariant.success,
+                  );
+                  Navigator.of(context).pop();
+                },
               ),
               const SizedBox(width: AppSpacing.x3),
               _ShareOption(
@@ -994,7 +1031,10 @@ class _ShareSheet extends StatelessWidget {
                 label: 'More',
                 color: context.colors.textPrimary,
                 bgColor: context.colors.surfaceSubtle,
-                onTap: () => Navigator.of(context).pop(),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  ShareHelper.shareActivity(activity);
+                },
               ),
             ],
           ),
@@ -1492,22 +1532,34 @@ class _JoinRequestRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          AppAvatar(
-            imageUrl: item.avatarUrl,
-            name: item.name,
-            size: AppAvatarSize.sm,
-          ),
-          const SizedBox(width: AppSpacing.x3),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(item.name, style: AppTypography.labelField(context)),
-                Text(
-                  item.skillLevel,
-                  style: AppTypography.metaSub(context),
-                ),
-              ],
+            child: AppTappable(
+              semanticLabel: 'View ${item.name} profile',
+              feedback: AppTapFeedback.scale,
+              onTap: () => context.push('/player-profile/${item.name}'),
+              child: Row(
+                children: [
+                  AppAvatar(
+                    imageUrl: item.avatarUrl,
+                    name: item.name,
+                    size: AppAvatarSize.sm,
+                  ),
+                  const SizedBox(width: AppSpacing.x3),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(item.name,
+                            style: AppTypography.labelField(context)),
+                        Text(
+                          item.skillLevel,
+                          style: AppTypography.metaSub(context),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           AppTappable(

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../auth/session_events.dart';
 import '../services/rtdb_auth_service.dart';
 import '../storage/secure_token_store.dart';
 
@@ -30,9 +31,25 @@ class AuthState {
 // ─── Notifier ────────────────────────────────────────────────────────────────
 
 class AuthStateNotifier extends StateNotifier<AuthState> {
-  AuthStateNotifier() : super(AuthState.unknown);
+  AuthStateNotifier() : super(AuthState.unknown) {
+    // Fired by the API layer when the refresh token itself is dead.
+    // Re-login is the only recovery — flip to unauthenticated so the
+    // router sends the user to login instead of stranding them in a
+    // zombie session that 401s forever.
+    _expirySub = SessionEvents.instance.onSessionExpired.listen((_) async {
+      await _store.clearAll();
+      state = AuthState.unauthenticated;
+    });
+  }
 
   final _store = SecureTokenStore.instance;
+  late final StreamSubscription<void> _expirySub;
+
+  @override
+  void dispose() {
+    _expirySub.cancel();
+    super.dispose();
+  }
 
   /// Called at app start (splash screen). Reads secure storage to determine
   /// if a valid session exists (stored Firebase ID token + userId).

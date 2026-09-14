@@ -13,7 +13,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
-API_DIR="$ROOT_DIR/apps/api"
+API_DIR="$ROOT_DIR/apps/api-server"
 WEB_DIR="$ROOT_DIR/apps/admin-web"
 MOBILE_DIR="$ROOT_DIR/apps/mobile"
 LOG_DIR="$ROOT_DIR/.logs"

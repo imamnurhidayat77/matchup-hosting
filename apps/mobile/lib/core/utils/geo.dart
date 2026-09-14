@@ -23,3 +23,13 @@ double haversineKm(
 }
 
 double _radians(double degrees) => degrees * math.pi / 180.0;
+
+/// Display label for a distance ("1.2 km away"), or null when the
+/// distance is unknown. A stored `0.0` means "no GPS fix yet", not
+/// "at the venue" — callers must hide the chip/row instead of
+/// rendering a misleading zero. Single source of truth so every
+/// screen agrees on the rule.
+String? distanceLabel(double distanceKm) {
+  if (distanceKm <= 0) return null;
+  return '${distanceKm.toStringAsFixed(1)} km away';
+}

@@ -394,7 +394,10 @@ class _DmConversationList extends ConsumerWidget {
             padding: const EdgeInsets.only(bottom: AppSpacing.x3),
             child: _ConversationCard(
               conversation: filtered[i],
-              onTap: () => context.push('/dm/${filtered[i].id}'),
+              onTap: () => context.push(
+                '/dm/${filtered[i].id}',
+                extra: filtered[i].name,
+              ),
             ),
           ),
         );

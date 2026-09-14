@@ -243,6 +243,21 @@ void main() {
       },
     );
 
+    testWidgets('should open settings with details + report rows', (
+      tester,
+    ) async {
+      await pumpScreen(tester);
+
+      final settings = find.bySemanticsLabel('Chat settings');
+      await tester.ensureVisible(settings);
+      await tester.pumpAndSettle();
+      await tester.tap(settings);
+      await tester.pumpAndSettle();
+
+      expect(find.text('View activity details'), findsOneWidget);
+      expect(find.text('Report activity'), findsOneWidget);
+    });
+
     testWidgets(
       'should hide the Check In button outside the check-in window',
       (tester) async {

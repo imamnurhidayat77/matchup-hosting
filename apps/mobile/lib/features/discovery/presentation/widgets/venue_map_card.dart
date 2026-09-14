@@ -2,15 +2,45 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/dark_colors.dart';
 import '../../../activities/domain/activity_model.dart';
 
+/// Google Maps directions URL targeting the venue coordinates.
+///
+/// Uses the universal https scheme so it opens the Google Maps app when
+/// installed and falls back to the browser otherwise — no native
+/// manifest/plist configuration required.
+Uri venueDirectionsUri(double latitude, double longitude) => Uri.parse(
+      'https://www.google.com/maps/dir/?api=1&destination=$latitude,$longitude',
+    );
+
+/// Opens Google Maps with route directions to ([latitude], [longitude]).
+///
+/// Shows a SnackBar instead of failing silently when no app can handle it.
+Future<void> openVenueDirections(
+  BuildContext context,
+  double latitude,
+  double longitude,
+) async {
+  final opened = await launchUrl(
+    venueDirectionsUri(latitude, longitude),
+    mode: LaunchMode.externalApplication,
+  );
+  if (!opened && context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Couldn't open Google Maps")),
+    );
+  }
+}
+
 /// Venue location map for activity detail screens.
 ///
 /// Shows a static OSM preview (180px) with a venue pin. Tapping it
-/// opens a full-screen interactive map participants can pan/zoom.
+/// opens a full-screen interactive map participants can pan/zoom, and the
+/// "Get Directions" button opens Google Maps with route directions.
 /// Renders nothing when the activity carries no coordinates.
 class VenueMapCard extends StatelessWidget {
   const VenueMapCard({super.key, required this.activity});
@@ -121,6 +151,15 @@ class VenueMapCard extends StatelessWidget {
                 ],
               ),
             ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.x3),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () => openVenueDirections(context, lat, lng),
+            icon: const Icon(Icons.directions_rounded, size: 18),
+            label: const Text('Get Directions'),
           ),
         ),
       ],
@@ -275,10 +314,27 @@ class _FullVenueMapState extends State<_FullVenueMap> {
               ),
             ),
           ),
-          // Zoom cluster, bottom-right.
+          // Open in Google Maps — route directions to the venue.
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 0,
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: FilledButton.icon(
+                  onPressed: () =>
+                      openVenueDirections(context, lat, lng),
+                  icon: const Icon(Icons.navigation_rounded, size: 18),
+                  label: const Text('Open in Google Maps'),
+                ),
+              ),
+            ),
+          ),
+          // Zoom cluster, bottom-right (above the directions button).
           Positioned(
             right: 12,
-            bottom: 32,
+            bottom: 96,
             child: Material(
               color: theme.colorScheme.surface,
               elevation: 3,
