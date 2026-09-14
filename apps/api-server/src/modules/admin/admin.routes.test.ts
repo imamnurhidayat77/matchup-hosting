@@ -18,6 +18,25 @@ vi.mock('./activities.service.js', () => ({
     deleteAdminActivity: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('./broadcasts.service.js', () => ({
+    listBroadcasts: vi.fn(),
+    createBroadcast: vi.fn(),
+    updateBroadcast: vi.fn(),
+    deleteBroadcast: vi.fn().mockResolvedValue(undefined),
+    sendBroadcast: vi.fn(),
+}));
+
+vi.mock('./sports.service.js', () => ({
+    listSports: vi.fn(),
+    replaceSports: vi.fn(),
+    updateSport: vi.fn(),
+}));
+
+vi.mock('./templates.service.js', () => ({
+    listTemplates: vi.fn(),
+    updateTemplate: vi.fn(),
+}));
+
 vi.mock('../../middleware/auth.middleware.js', () => ({
     requireAuth: vi.fn((req, _res, next) => {
         req.auth = { uid: 'admin-1', token: {} as never };
@@ -31,6 +50,9 @@ vi.mock('../../middleware/auth.middleware.js', () => ({
 import { createApp } from '../../app/app.js';
 import * as membersService from './members.service.js';
 import * as activitiesService from './activities.service.js';
+import * as broadcastsService from './broadcasts.service.js';
+import * as sportsService from './sports.service.js';
+import * as templatesService from './templates.service.js';
 
 beforeEach(() => {
     vi.clearAllMocks();
@@ -106,5 +128,54 @@ describe('admin routes', () => {
         const response = await request(createApp()).get('/api/admin/members');
         expect(response.status).toBe(500);
         expect(response.body.error.code).toBe('INTERNAL_ERROR');
+    });
+
+    it('POST /api/admin/broadcasts returns 201', async () => {
+        vi.mocked(broadcastsService.createBroadcast).mockResolvedValue({
+            id: 'b-1',
+        } as never);
+        const response = await request(createApp())
+            .post('/api/admin/broadcasts')
+            .send({ title: 'Hi', message: 'Hello', audience: 'All Users' });
+        expect(response.status).toBe(201);
+    });
+
+    it('POST /api/admin/broadcasts/:id/send maps double-send to 409', async () => {
+        vi.mocked(broadcastsService.sendBroadcast).mockRejectedValue(
+            new Error('Broadcast already sent'),
+        );
+        const response = await request(createApp()).post(
+            '/api/admin/broadcasts/b-1/send',
+        );
+        expect(response.status).toBe(409);
+    });
+
+    it('PUT /api/admin/sports publishes the whole config', async () => {
+        vi.mocked(sportsService.replaceSports).mockResolvedValue([] as never);
+        const response = await request(createApp())
+            .put('/api/admin/sports')
+            .send({ sports: [] });
+        expect(response.status).toBe(200);
+        expect(sportsService.replaceSports).toHaveBeenCalledWith([]);
+    });
+
+    it('PATCH /api/admin/sports/:id maps boolean violation to 400', async () => {
+        vi.mocked(sportsService.updateSport).mockRejectedValue(
+            new Error('enabled must be a boolean'),
+        );
+        const response = await request(createApp())
+            .patch('/api/admin/sports/golf')
+            .send({ enabled: 'yes' });
+        expect(response.status).toBe(400);
+    });
+
+    it('PATCH /api/admin/templates/:id maps missing to 404', async () => {
+        vi.mocked(templatesService.updateTemplate).mockRejectedValue(
+            new Error('Template not found'),
+        );
+        const response = await request(createApp())
+            .patch('/api/admin/templates/activity.joined')
+            .send({ title: 'Hi' });
+        expect(response.status).toBe(404);
     });
 });

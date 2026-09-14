@@ -2,6 +2,9 @@ import { Router } from 'express';
 import { requireAuth, requireAdmin } from '../../middleware/auth.middleware.js';
 import { adminMembersRouter } from './members.routes.js';
 import { adminActivitiesRouter } from './activities.routes.js';
+import { adminBroadcastsRouter } from './broadcasts.routes.js';
+import { adminSportsRouter } from './sports.routes.js';
+import { adminTemplatesRouter } from './templates.routes.js';
 
 /**
  * Admin API namespace (`/api/admin/*`). Every sub-router enforces
@@ -26,3 +29,6 @@ adminRouter.get('/me', requireAuth, requireAdmin, (req, res) => {
 
 adminRouter.use('/members', adminMembersRouter);
 adminRouter.use('/activities', adminActivitiesRouter);
+adminRouter.use('/broadcasts', adminBroadcastsRouter);
+adminRouter.use('/sports', adminSportsRouter);
+adminRouter.use('/templates', adminTemplatesRouter);
