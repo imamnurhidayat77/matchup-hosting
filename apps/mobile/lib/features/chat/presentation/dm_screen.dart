@@ -1,8 +1,14 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/providers/repository_providers.dart';
+import '../../../core/services/location_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
@@ -12,7 +18,9 @@ import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../profile/domain/user_model.dart';
+import '../../report/presentation/report_user_sheet.dart';
 import '../domain/chat_message.dart';
+import 'chat_attachment_sheet.dart';
 
 /// Peer profile for the avatar (best-effort — null while loading or
 /// when the lookup fails; bubbles fall back to initials/no avatar).
@@ -96,6 +104,7 @@ class _DmScreenState extends ConsumerState<DmScreen> {
       debugPrint('[DmScreen] sent id=${msg.id}');
       if (!mounted) return;
       setState(() => _errorText = null);
+      _scrollToLatest();
     } catch (e) {
       debugPrint('[DmScreen] send failed: $e');
       if (!mounted) return;
@@ -109,6 +118,106 @@ class _DmScreenState extends ConsumerState<DmScreen> {
       );
     } finally {
       if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  void _scrollToLatest() {
+    // ListView is reversed: offset 0 is the newest message.
+    if (_scroll.hasClients) {
+      _scroll.animateTo(
+        0,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
+    }
+  }
+
+  Future<void> _openAttachmentSheet() async {
+    final choice = await ChatAttachmentSheet.show(context);
+    if (choice == null || !mounted) return;
+    switch (choice) {
+      case ChatAttachmentChoice.photo:
+        await _pickAndSendImage(ImageSource.gallery);
+      case ChatAttachmentChoice.camera:
+        await _pickAndSendImage(ImageSource.camera);
+      case ChatAttachmentChoice.location:
+        await _shareLocation();
+    }
+  }
+
+  Future<void> _pickAndSendImage(ImageSource source) async {
+    final XFile? picked;
+    try {
+      picked = await ImagePicker().pickImage(
+        source: source,
+        maxWidth: 1600,
+        imageQuality: 85,
+      );
+    } on PlatformException {
+      if (!mounted) return;
+      AppSnackbar.show(
+        context,
+        message: source == ImageSource.camera
+            ? 'Could not access the camera. Check camera permissions and try again.'
+            : 'Could not access your photos. Check photo permissions and try again.',
+        variant: AppSnackbarVariant.error,
+      );
+      return;
+    } catch (_) {
+      if (!mounted) return;
+      AppSnackbar.show(
+        context,
+        message: 'Could not attach a photo. Please try again.',
+        variant: AppSnackbarVariant.error,
+      );
+      return;
+    }
+    if (picked == null || !mounted) return;
+    HapticFeedback.lightImpact();
+    try {
+      await ref
+          .read(dmRepositoryProvider)
+          .sendImage(otherUid: widget.otherUid, imagePath: picked.path);
+      if (!mounted) return;
+      _scrollToLatest();
+    } catch (_) {
+      if (!mounted) return;
+      AppSnackbar.show(
+        context,
+        message: 'Could not send photo.',
+        variant: AppSnackbarVariant.error,
+      );
+    }
+  }
+
+  Future<void> _shareLocation() async {
+    final position = await LocationService.instance.getCurrentLocation();
+    if (!mounted) return;
+    if (position == null) {
+      AppSnackbar.show(
+        context,
+        message: 'Could not access your location. Check location '
+            'permissions and try again.',
+        variant: AppSnackbarVariant.error,
+      );
+      return;
+    }
+    HapticFeedback.lightImpact();
+    try {
+      await ref.read(dmRepositoryProvider).sendLocation(
+        otherUid: widget.otherUid,
+        latitude: position.latitude,
+        longitude: position.longitude,
+      );
+      if (!mounted) return;
+      _scrollToLatest();
+    } catch (_) {
+      if (!mounted) return;
+      AppSnackbar.show(
+        context,
+        message: 'Could not share your location.',
+        variant: AppSnackbarVariant.error,
+      );
     }
   }
 
@@ -144,6 +253,7 @@ class _DmScreenState extends ConsumerState<DmScreen> {
               child: SafeArea(
                 bottom: false,
                 child: _DmHeader(
+                  peerUid: widget.otherUid,
                   peerName: peerName,
                   peerPhotoUrl: peerPhotoUrl,
                 ),
@@ -203,6 +313,7 @@ class _DmScreenState extends ConsumerState<DmScreen> {
             hasText: _hasText,
             sending: _sending,
             onSend: _send,
+            onAttach: _openAttachmentSheet,
           ),
         ],
       ),
@@ -216,7 +327,12 @@ class _DmScreenState extends ConsumerState<DmScreen> {
 const _dmHeaderNavyTop = Color(0xFF1B2BA3);
 
 class _DmHeader extends StatelessWidget {
-  const _DmHeader({required this.peerName, required this.peerPhotoUrl});
+  const _DmHeader({
+    required this.peerUid,
+    required this.peerName,
+    required this.peerPhotoUrl,
+  });
+  final String peerUid;
   final String peerName;
   final String? peerPhotoUrl;
 
@@ -322,10 +438,156 @@ class _DmHeader extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                const SizedBox(width: AppSpacing.x3),
+                // Settings — frosted glass on navy, same as group chat.
+                Semantics(
+                  button: true,
+                  label: 'Conversation settings',
+                  child: PressableScale(
+                    onTap: () => _DmSettingsSheet.show(
+                      context,
+                      peerUid: peerUid,
+                      peerName: peerName,
+                    ),
+                    child: Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(AppRadius.sm),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.28),
+                        ),
+                      ),
+                      alignment: Alignment.center,
+                      child: const Icon(
+                        Icons.settings_outlined,
+                        size: 18,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Bottom sheet behind the DM header settings button: view the peer's
+/// profile or report them. Mirrors the group chat's [_ChatSettingsSheet]
+/// shape (drag handle, frosted rows) without importing it.
+class _DmSettingsSheet extends StatelessWidget {
+  const _DmSettingsSheet({required this.peerUid, required this.peerName});
+  final String peerUid;
+  final String peerName;
+
+  static Future<void> show(
+    BuildContext context, {
+    required String peerUid,
+    required String peerName,
+  }) {
+    return showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _DmSettingsSheet(peerUid: peerUid, peerName: peerName),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.x5,
+        AppSpacing.x3,
+        AppSpacing.x5,
+        AppSpacing.x5 + MediaQuery.of(context).viewPadding.bottom,
+      ),
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: context.colors.border,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.x4),
+          _DmSettingsRow(
+            icon: Icons.person_outline_rounded,
+            label: 'View profile',
+            onTap: () {
+              Navigator.of(context).pop();
+              context.push('/player-profile/$peerName');
+            },
+          ),
+          _DmSettingsRow(
+            icon: Icons.flag_outlined,
+            label: 'Report $peerName',
+            onTap: () {
+              Navigator.of(context).pop();
+              ReportUserSheet.show(
+                context,
+                userId: peerUid,
+                userName: peerName,
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DmSettingsRow extends StatelessWidget {
+  const _DmSettingsRow({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: label,
+      child: PressableScale(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.x3),
+          child: Row(
+            children: [
+              Icon(icon, size: 22, color: context.colors.textSecondary),
+              const SizedBox(width: AppSpacing.x4),
+              Expanded(
+                child: Text(
+                  label,
+                  style: AppTypography.bodyMedium(context),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 16,
+                color: context.colors.textTertiary,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -355,7 +617,9 @@ class _DmBubble extends StatelessWidget {
           flex: 0,
           child: Container(
             margin: const EdgeInsets.symmetric(vertical: 3),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: message.isImage || message.isLocation
+                ? const EdgeInsets.all(4)
+                : const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             constraints: BoxConstraints(
               maxWidth: MediaQuery.of(context).size.width * 0.72,
             ),
@@ -366,14 +630,7 @@ class _DmBubble extends StatelessWidget {
                   ? null
                   : Border.all(color: context.colors.border),
             ),
-            child: Text(
-              message.text,
-              style: AppTypography.bodyMedium(context).copyWith(
-                color: mine
-                    ? AppColors.textOnPrimary
-                    : context.colors.textPrimary,
-              ),
-            ),
+            child: _DmBubbleContent(message: message, isMine: mine),
           ),
         ),
           Padding(
@@ -413,9 +670,197 @@ class _DmBubble extends StatelessWidget {
   }
 }
 
+/// Renders a DM bubble's payload — plain text by default, or a photo /
+/// location attachment when the message carries one (same wire format
+/// as group chat: download URL / maps link inside [ChatMessage.text]).
+class _DmBubbleContent extends StatelessWidget {
+  const _DmBubbleContent({required this.message, required this.isMine});
+  final ChatMessage message;
+  final bool isMine;
+
+  Future<void> _openLocation() async {
+    final uri = Uri.parse(
+      'https://www.google.com/maps/search/?api=1&query=${message.latitude},${message.longitude}',
+    );
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (message.isImage) {
+      return PressableScale(
+        onTap: () => _DmImageViewer.show(context, message),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          child: _DmImage(message: message, width: 200, height: 200),
+        ),
+      );
+    }
+
+    if (message.isLocation) {
+      final fg =
+          isMine ? AppColors.textOnPrimary : context.colors.textPrimary;
+      return PressableScale(
+        onTap: _openLocation,
+        child: SizedBox(
+          width: 180,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.location_on_rounded, color: fg, size: 28),
+              const SizedBox(height: AppSpacing.x2),
+              Text(
+                'My Location',
+                style: AppTypography.labelField(context).copyWith(color: fg),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Tap to open in Maps',
+                style: AppTypography.metaSub(context).copyWith(
+                  color: fg.withValues(alpha: 0.75),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Text(
+      message.text,
+      style: AppTypography.bodyMedium(context).copyWith(
+        color: isMine ? AppColors.textOnPrimary : context.colors.textPrimary,
+      ),
+    );
+  }
+}
+
+/// Single DM photo — local file when just captured, network image
+/// otherwise. Tapping opens the full-screen viewer.
+class _DmImage extends StatelessWidget {
+  const _DmImage({
+    required this.message,
+    required this.width,
+    required this.height,
+  });
+  final ChatMessage message;
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final localPath = message.imagePath;
+    if (localPath != null) {
+      return Image.file(
+        File(localPath),
+        width: width,
+        height: height,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => _brokenDmImage(context),
+      );
+    }
+    return Image.network(
+      message.imageUrl!,
+      width: width,
+      height: height,
+      fit: BoxFit.cover,
+      loadingBuilder: (context, child, progress) {
+        if (progress == null) return child;
+        return Container(
+          width: width,
+          height: height,
+          color: context.colors.surfaceMuted,
+          alignment: Alignment.center,
+          child: const SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        );
+      },
+      errorBuilder: (_, _, _) => _brokenDmImage(context),
+    );
+  }
+
+  Widget _brokenDmImage(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      color: context.colors.surfaceMuted,
+      alignment: Alignment.center,
+      child: Icon(
+        Icons.broken_image_outlined,
+        color: context.colors.textTertiary,
+      ),
+    );
+  }
+}
+
+/// Full-screen DM photo viewer: pinch-to-zoom, dark scrim, close button.
+class _DmImageViewer extends StatelessWidget {
+  const _DmImageViewer({required this.message});
+  final ChatMessage message;
+
+  static Future<void> show(BuildContext context, ChatMessage message) {
+    return showDialog<void>(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (_) => _DmImageViewer(message: message),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screen = MediaQuery.of(context).size;
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: EdgeInsets.zero,
+      child: Stack(
+        children: [
+          Center(
+            child: InteractiveViewer(
+              child: _DmImage(
+                message: message,
+                width: screen.width,
+                height: screen.height * 0.7,
+              ),
+            ),
+          ),
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 8,
+            right: 16,
+            child: Semantics(
+              button: true,
+              label: 'Close viewer',
+              child: PressableScale(
+                onTap: () => Navigator.of(context).pop(),
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.14),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.28),
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.close_rounded,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// 'h:mm a' without pulling intl in for one label.
-String _dmTime(DateTime dt) {
-  final h24 = dt.hour;
+String _dmTime(DateTime dt) {  final h24 = dt.hour;
   final h = h24 % 12 == 0 ? 12 : h24 % 12;
   final m = dt.minute.toString().padLeft(2, '0');
   return '$h:$m ${h24 < 12 ? 'AM' : 'PM'}';
@@ -430,12 +875,14 @@ class _Composer extends StatelessWidget {
     required this.hasText,
     required this.sending,
     required this.onSend,
+    required this.onAttach,
   });
   final TextEditingController controller;
   final FocusNode focusNode;
   final bool hasText;
   final bool sending;
   final VoidCallback onSend;
+  final VoidCallback onAttach;
 
   @override
   Widget build(BuildContext context) {
@@ -454,6 +901,33 @@ class _Composer extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
+          // + attachment button — same circle-outline treatment as group chat.
+          Semantics(
+            button: true,
+            label: 'Attach photo or location',
+            child: PressableScale(
+              onTap: onAttach,
+              child: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: Colors.transparent,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: context.colors.border,
+                    width: 1.5,
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  Icons.add_rounded,
+                  size: 22,
+                  color: context.colors.textSecondary,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.x2),
           Expanded(
             child: Container(
               constraints: const BoxConstraints(minHeight: 44),

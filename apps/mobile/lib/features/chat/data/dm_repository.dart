@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/services/rtdb_auth_service.dart';
+import '../../../core/services/storage_service.dart';
 import '../../../core/storage/secure_token_store.dart';
 import '../domain/chat_message.dart';
 
@@ -18,9 +19,9 @@ String dmThreadId(String uidA, String uidB) {
 
 /// Read contract for 1-on-1 direct messages.
 ///
-/// Minimal scope: text messages only (no images/locations), realtime
-/// via RTDB with HTTP polling fallback — same shape as the group chat
-/// repository so a future merge is mechanical.
+/// Text, photo, and location shares (same text-carrying wire format as
+/// the group chat repository so a future merge is mechanical), realtime
+/// via RTDB with HTTP polling fallback.
 ///
 /// Inbox rows reuse [ChatConversation] (`id` = peer uid, `isGroup` =
 /// false) so the messages screen renders them with the same cards.
@@ -28,6 +29,21 @@ abstract class DmRepository {
   Stream<List<ChatMessage>> watchMessages(String otherUid);
   Future<List<ChatMessage>> messages(String otherUid, {int limit = 50});
   Future<ChatMessage> send({required String otherUid, required String text});
+
+  /// Shares a photo: uploads to Storage, posts the download URL as the
+  /// message text. Returns the message with `imagePath`/`imageUrl` set
+  /// so the bubble renders inline immediately.
+  Future<ChatMessage> sendImage({
+    required String otherUid,
+    required String imagePath,
+  });
+
+  /// Shares the current location as a maps link message.
+  Future<ChatMessage> sendLocation({
+    required String otherUid,
+    required double latitude,
+    required double longitude,
+  });
 
   /// Inbox threads, newest first, with peer names + unread badges.
   Future<List<ChatConversation>> conversations();
@@ -143,10 +159,15 @@ class RemoteDmRepository implements DmRepository {
     final sentAt = ms is num
         ? DateTime.fromMillisecondsSinceEpoch(ms.toInt())
         : null;
+    // Never leak a raw download URL / maps link into the inbox row.
+    final rawPreview = json['lastText']?.toString() ?? '';
+    final preview = parseSharedLocation(rawPreview) != null
+        ? '📍 Location'
+        : ChatMessage.previewText(rawPreview);
     return ChatConversation(
       id: peerUid,
       name: displayName.isNotEmpty ? displayName : peerUid,
-      lastMessage: json['lastText']?.toString() ?? '',
+      lastMessage: preview,
       time: sentAt == null ? '' : _relativeTime(sentAt),
       unreadCount: (json['unreadCount'] as num?)?.toInt() ?? 0,
     );
@@ -184,23 +205,99 @@ class RemoteDmRepository implements DmRepository {
     );
   }
 
+  @override
+  Future<ChatMessage> sendImage({
+    required String otherUid,
+    required String imagePath,
+  }) async {
+    // Same text-only wire format as group chat: upload to Storage
+    // first, post the download URL as the text. Scoped per thread so
+    // one peer's attachments never mix with another's.
+    final myUid = await _myUid();
+    final uploadedUrl = await StorageService.instance.uploadImage(
+      localPath: imagePath,
+      folder: 'chat-attachments/dm_${dmThreadId(myUid, otherUid)}',
+    );
+    if (uploadedUrl == null) throw Exception('upload failed');
+    final sent = await send(otherUid: otherUid, text: uploadedUrl);
+    return ChatMessage(
+      id: sent.id,
+      senderId: sent.senderId,
+      senderName: sent.senderName,
+      text: sent.text,
+      sentAt: sent.sentAt,
+      isMine: true,
+      imagePath: imagePath,
+      imageUrl: uploadedUrl,
+    );
+  }
+
+  @override
+  Future<ChatMessage> sendLocation({
+    required String otherUid,
+    required double latitude,
+    required double longitude,
+  }) async {
+    final sent = await send(
+      otherUid: otherUid,
+      text:
+          '📍 Shared location: https://maps.google.com/?q=$latitude,$longitude',
+    );
+    return ChatMessage(
+      id: sent.id,
+      senderId: sent.senderId,
+      senderName: sent.senderName,
+      text: sent.text,
+      sentAt: sent.sentAt,
+      isMine: true,
+      latitude: latitude,
+      longitude: longitude,
+    );
+  }
+
   List<ChatMessage> _parseList(Object? value, {required String myUid}) =>
       parseRtdbDmMessages(value, myUid: myUid);
 
   ChatMessage _parseOne(Map<String, dynamic> json, {required String myUid}) {
     final senderId = json['senderId']?.toString() ?? '';
     final ms = json['timestamp'];
+    final text = json['text']?.toString() ?? '';
+    final coords = parseSharedLocation(text);
     return ChatMessage(
       id: json['messageId']?.toString() ?? json['id']?.toString() ?? '',
       senderId: senderId,
       senderName: senderId == myUid ? 'You' : '',
-      text: json['text']?.toString() ?? '',
+      text: text,
       sentAt: ms is num
           ? DateTime.fromMillisecondsSinceEpoch(ms.toInt())
           : DateTime.now(),
       isMine: senderId == myUid && senderId.isNotEmpty,
+      imageUrl: ChatMessage.imageUrlFromText(text),
+      latitude: coords?.latitude,
+      longitude: coords?.longitude,
     );
   }
+}
+
+/// Coordinates carried by a `'📍 Shared location: <maps link>'` message
+/// (see `RemoteChatRepository.sendLocation` for the wire format).
+/// Returns null for any other text — in particular plain URLs, which
+/// belong to [ChatMessage.imageUrlFromText].
+({double latitude, double longitude})? parseSharedLocation(String text) {
+  const prefix = '📍 Shared location: ';
+  if (!text.startsWith(prefix)) return null;
+  final link = text.substring(prefix.length).trim();
+  final uri = Uri.tryParse(link);
+  if (uri == null) return null;
+  // Group chat writes `https://maps.google.com/?q=<lat>,<lng>`.
+  final q = uri.queryParameters['q'];
+  if (q == null) return null;
+  final parts = q.split(',');
+  if (parts.length != 2) return null;
+  final lat = double.tryParse(parts[0].trim());
+  final lng = double.tryParse(parts[1].trim());
+  if (lat == null || lng == null) return null;
+  return (latitude: lat, longitude: lng);
 }
 
 /// Parses an RTDB `dmChats/{pair}/messages` snapshot value into
@@ -231,14 +328,19 @@ List<ChatMessage> parseRtdbDmMessages(Object? value, {required String myUid}) {
 ChatMessage _parseDmMessage(Map<String, dynamic> json, {required String myUid}) {
   final senderId = json['senderId']?.toString() ?? '';
   final ms = json['timestamp'];
+  final text = json['text']?.toString() ?? '';
+  final coords = parseSharedLocation(text);
   return ChatMessage(
     id: json['messageId']?.toString() ?? json['id']?.toString() ?? '',
     senderId: senderId,
     senderName: senderId == myUid ? 'You' : '',
-    text: json['text']?.toString() ?? '',
+    text: text,
     sentAt: ms is num
         ? DateTime.fromMillisecondsSinceEpoch(ms.toInt())
         : DateTime.now(),
     isMine: senderId == myUid && senderId.isNotEmpty,
+    imageUrl: ChatMessage.imageUrlFromText(text),
+    latitude: coords?.latitude,
+    longitude: coords?.longitude,
   );
 }
