@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/config/env.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/storage/secure_token_store.dart';
 import 'auth_repository.dart';
 
 /// Firebase Auth REST API base URL.
@@ -54,7 +55,12 @@ class RemoteAuthRepository implements AuthRepository {
           'returnSecureToken': true,
         },
       );
-      return _parseFirebaseResult(res.data as Map<String, dynamic>);
+      final result = _parseFirebaseResult(res.data as Map<String, dynamic>);
+      // Self-heal accounts whose Firestore profile is missing (e.g.
+      // registered before the bootstrap call existed, or data wiped):
+      // `POST /users/me` is idempotent — a no-op when the doc exists.
+      await _ensureBackendProfile(result);
+      return result;
     } on DioException catch (e) {
       throw _toAuthException(e);
     } catch (e) {
@@ -96,18 +102,20 @@ class RemoteAuthRepository implements AuthRepository {
         debugPrint('[RemoteAuthRepository.register] displayName update failed: $e');
       }
 
-      // 3. Create user profile in backend Firestore
-      try {
-        await _api.dio.post(
-          '/users',
-          data: {
-            'authUid': result.userId,
-            'email': email.trim().toLowerCase(),
-          },
-        );
-      } catch (e) {
-        debugPrint('[RemoteAuthRepository.register] backend profile create failed: $e');
-      }
+      // 3. Bootstrap the user document in the backend's Firestore. The
+      // canonical route is `POST /api/users/me` with `{ email }` — the
+      // auth middleware resolves the auth uid from the Bearer token, so
+      // the fresh tokens must be persisted BEFORE this call (the
+      // ApiClient interceptor reads SecureTokenStore at request time;
+      // AuthStateNotifier only saves them after register() returns).
+      await _ensureBackendProfile(
+        result,
+        email: email.trim().toLowerCase(),
+        // The bootstrap only stores authUid + email — without this the
+        // sign-up name would live solely in Firebase Auth until the
+        // user edits their profile.
+        displayName: name.trim(),
+      );
 
       return result;
     } on DioException catch (e) {
@@ -164,6 +172,38 @@ class RemoteAuthRepository implements AuthRepository {
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
+
+  /// Persists [result]'s tokens, then ensures the Firestore user profile
+  /// exists via idempotent `POST /api/users/me`. Failures are swallowed
+  /// (logged) so a backend blip never blocks sign-in/register — the next
+  /// sign-in retries the bootstrap.
+  Future<void> _ensureBackendProfile(
+    AuthResult result, {
+    String? email,
+    String? displayName,
+  }) async {
+    try {
+      await Future.wait([
+        SecureTokenStore.instance.saveAccessToken(result.accessToken),
+        SecureTokenStore.instance.saveRefreshToken(result.refreshToken),
+        SecureTokenStore.instance.saveUserId(result.userId),
+      ]);
+      await _api.dio.post(
+        '/users/me',
+        data: {
+          'email': ?email,
+        },
+      );
+      if (displayName != null && displayName.isNotEmpty) {
+        await _api.dio.patch(
+          '/users/me',
+          data: {'displayName': displayName},
+        );
+      }
+    } catch (e) {
+      debugPrint('[RemoteAuthRepository] backend profile ensure failed: $e');
+    }
+  }
 
   AuthResult _parseFirebaseResult(Map<String, dynamic> json) {
     final idToken = json['idToken'] as String?;

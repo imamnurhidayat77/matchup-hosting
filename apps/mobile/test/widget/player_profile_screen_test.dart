@@ -32,6 +32,11 @@ void main() {
           builder: (_, _) => const Scaffold(body: Text('Chat')),
         ),
         GoRoute(
+          path: '/dm/:uid',
+          builder: (_, state) =>
+              Scaffold(body: Text('DM ${state.pathParameters['uid']}')),
+        ),
+        GoRoute(
           path: '/report/:type/:name',
           builder: (_, _) => const Scaffold(body: Text('Report')),
         ),
@@ -78,15 +83,70 @@ void main() {
       expect(find.text('Player not found.'), findsOneWidget);
     });
 
-    testWidgets('should push chat when Message is tapped', (tester) async {
+    testWidgets(
+      'should open the DM thread when Send Message is tapped',
+      (tester) async {
+        when(() => userRepo.byId('James')).thenAnswer(
+          (_) async =>
+              const UserModel(id: 'james', displayName: 'James Wilson'),
+        );
+        await pumpScreen(tester);
+
+        await tester.tap(find.text('Send Message'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('DM james'), findsOneWidget);
+      },
+    );
+
+    testWidgets('should show sport with fallback skill level', (
+      tester,
+    ) async {
       when(() => userRepo.byId('James')).thenAnswer(
-        (_) async => const UserModel(id: 'james', displayName: 'James Wilson'),
+        (_) async => const UserModel(
+          id: 'james',
+          displayName: 'James Wilson',
+          sports: [(sport: 'Basketball', level: '')],
+          skillLevel: 'Intermediate',
+        ),
       );
       await pumpScreen(tester);
 
-      await tester.tap(find.text('Send Message'));
+      expect(find.text('Basketball'), findsOneWidget);
+      // Empty per-sport level falls back to the general skill level.
+      expect(find.text('INTERMEDIATE'), findsOneWidget);
+    });
+
+    testWidgets('should hide the level badge when unknown', (
+      tester,
+    ) async {
+      when(() => userRepo.byId('James')).thenAnswer(
+        (_) async => const UserModel(
+          id: 'james',
+          displayName: 'James Wilson',
+          sports: [(sport: 'Basketball', level: '')],
+        ),
+      );
+      await pumpScreen(tester);
+
+      expect(find.text('Basketball'), findsOneWidget);
+      expect(find.text('INTERMEDIATE'), findsNothing);
+    });
+
+    testWidgets('should open the options sheet from More options', (
+      tester,
+    ) async {
+      when(() => userRepo.byId('James')).thenAnswer(
+        (_) async =>
+            const UserModel(id: 'james', displayName: 'James Wilson'),
+      );
+      await pumpScreen(tester);
+
+      await tester.tap(find.bySemanticsLabel('More options'));
       await tester.pumpAndSettle();
-      expect(find.text('Chat'), findsOneWidget);
+
+      expect(find.text('Share profile'), findsOneWidget);
+      expect(find.text('Report profile'), findsOneWidget);
     });
   });
 }

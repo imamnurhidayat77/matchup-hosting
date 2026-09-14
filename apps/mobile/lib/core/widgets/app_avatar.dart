@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import '../theme/dark_colors.dart';
 import 'pressable_scale.dart';
+import 'skeleton.dart';
 
 /// Sizes for [AppAvatar].
 enum AppAvatarSize { xs, sm, md, lg, xl }
@@ -122,7 +124,9 @@ class AppAvatar extends StatelessWidget {
       );
     }
 
-    // Network image
+    // Network image — branded shimmer sweep while bytes arrive, then
+    // a soft cross-fade. Matches the cover loader in
+    // AssetImageWithFallback so avatars and photos feel like one system.
     if (imageUrl != null && imageUrl!.isNotEmpty) {
       return ClipOval(
         child: Image.network(
@@ -131,8 +135,17 @@ class AppAvatar extends StatelessWidget {
           height: d,
           fit: BoxFit.cover,
           errorBuilder: (_, _, _) => _fallback(context, d),
-          loadingBuilder: (_, child, progress) =>
-              progress == null ? child : _shimmer(context, d),
+          loadingBuilder: (_, child, progress) => progress == null
+              ? child
+              : SkeletonBox(width: d, height: d, radius: d / 2),
+          frameBuilder: (_, child, frame, sync) {
+            if (sync) return child;
+            return AnimatedOpacity(
+              opacity: frame == null ? 0 : 1,
+              duration: AppDurations.base,
+              child: child,
+            );
+          },
         ),
       );
     }
@@ -146,9 +159,6 @@ class AppAvatar extends StatelessWidget {
       context,
     ).copyWith(fontSize: size.fontSize, color: context.colors.primaryOnSurface),
   );
-
-  Widget _shimmer(BuildContext context, double d) =>
-      Container(width: d, height: d, color: context.colors.surfaceSubtle);
 }
 
 /// Overlapping avatar stack — shows the first [maxVisible] avatars

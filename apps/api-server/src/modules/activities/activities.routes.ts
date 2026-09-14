@@ -8,6 +8,7 @@ import {
     updateActivityStatusHandler,
 } from './activities.controller.js';
 import { activityParticipantsRouter } from './activity-participants.routes.js';
+import { ratingsRouter } from '../ratings/ratings.routes.js';
 import { requireAuth } from '../../middleware/auth.middleware.js';
 
 export const activitiesRouter = Router();
@@ -19,3 +20,4 @@ activitiesRouter.patch('/:activityId/cover', requireAuth, updateActivityCoverHan
 activitiesRouter.patch('/:activityId', requireAuth, updateActivityHandler);
 activitiesRouter.get('/:activityId', requireAuth, getActivityHandler);
 activitiesRouter.use('/', activityParticipantsRouter);
+activitiesRouter.use('/', ratingsRouter);

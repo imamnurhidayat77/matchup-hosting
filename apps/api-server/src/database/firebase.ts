@@ -2,6 +2,7 @@ import { cert, getApp, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getDatabase } from 'firebase-admin/database';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getMessaging } from 'firebase-admin/messaging';
 import { getStorage, type Storage } from 'firebase-admin/storage';
 import { env } from '../config/env.js';
 
@@ -34,6 +35,7 @@ const firebaseApp = createFirebaseApp();
 export const auth = getAuth(firebaseApp);
 export const firestore = getFirestore(firebaseApp);
 export const rtdb = getDatabase(firebaseApp);
+export const messaging = getMessaging(firebaseApp);
 export const storageBucket: ReturnType<Storage['bucket']> = getStorage(firebaseApp).bucket();
 
 export async function checkFirestoreConnection() {

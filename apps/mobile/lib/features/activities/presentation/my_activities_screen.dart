@@ -9,6 +9,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/asset_image.dart';
 import '../../../core/widgets/app_tab_bar.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/error_retry.dart';
@@ -31,6 +32,10 @@ final _hostedProvider = FutureProvider.autoDispose<List<ActivityModel>>(
 
 final _pastProvider = FutureProvider.autoDispose<List<ActivityModel>>(
   (ref) => ref.watch(activityRepositoryProvider).pastByUser(_mockUserId),
+);
+
+final _pendingProvider = FutureProvider.autoDispose<List<ActivityModel>>(
+  (ref) => ref.watch(activityRepositoryProvider).pendingRequests(),
 );
 
 final _unreadNotifCountProvider = FutureProvider.autoDispose<int>((ref) async {
@@ -75,7 +80,7 @@ class MyActivitiesScreen extends ConsumerStatefulWidget {
 
 class _MyActivitiesScreenState extends ConsumerState<MyActivitiesScreen> {
   int _tab = 0;
-  static const _tabLabels = ['Upcoming', 'Hosting', 'Past'];
+  static const _tabLabels = ['Upcoming', 'Hosting', 'Pending', 'Past'];
 
   @override
   Widget build(BuildContext context) {
@@ -144,6 +149,16 @@ class _MyActivitiesScreenState extends ConsumerState<MyActivitiesScreen> {
         emptyIcon: Icons.emoji_events_outlined,
         emptyActionLabel: 'Create activity',
         onEmptyAction: () => context.push('/create'),
+      ),
+    2 => _SimpleList(
+        key: const ValueKey('pending'),
+        provider: _pendingProvider,
+        onTap: (a) => context.push('/pending-request/${a.id}'),
+        pending: true,
+        emptyTitle: 'No pending requests',
+        emptySubtitle:
+            'Request to join an approval-gated game and it will wait here.',
+        emptyIcon: Icons.hourglass_top_rounded,
       ),
     _ => _SimpleList(
         key: const ValueKey('past'),
@@ -365,9 +380,13 @@ class _FeaturedCard extends StatelessWidget {
 // ─── Compact card — thumbnail + info ─────────────────────────────────────────
 
 class _CompactCard extends StatelessWidget {
-  const _CompactCard({required this.activity, required this.onTap});
+  const _CompactCard(
+      {required this.activity, required this.onTap, this.pending = false});
   final ActivityModel activity;
   final VoidCallback onTap;
+
+  /// Pending requests show an amber status pill instead of the count.
+  final bool pending;
 
   @override
   Widget build(BuildContext context) {
@@ -390,12 +409,11 @@ class _CompactCard extends StatelessWidget {
               ClipRRect(
                 borderRadius: BorderRadius.circular(AppRadius.input),
                 child: activity.coverImageUrl != null
-                    ? Image.asset(
-                        activity.coverImageUrl!,
+                    ? AssetImageWithFallback(
+                        imagePath: activity.coverImageUrl!,
                         width: 72,
                         height: 72,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => _ThumbFallback(),
                       )
                     : _ThumbFallback(),
               ),
@@ -405,18 +423,40 @@ class _CompactCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Sport badge + joined count
+                    // Sport badge + joined count (or the pending pill).
                     Row(
                       children: [
                         _SportBadge(label: activity.sportType, small: true),
                         const Spacer(),
-                        Text(
-                          '${activity.participantCount}/${activity.capacity} Joined',
-                          style: AppTypography.metaSub(context).copyWith(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
+                        if (pending)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: context.colors.warningBg,
+                              borderRadius:
+                                  BorderRadius.circular(AppRadius.pill),
+                            ),
+                            child: Text(
+                              'WAITING APPROVAL',
+                              style: AppTypography.chipLabel(context).copyWith(
+                                color: context.colors.warningText,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.4,
+                              ),
+                            ),
+                          )
+                        else
+                          Text(
+                            '${activity.participantCount}/${activity.capacity} Joined',
+                            style: AppTypography.metaSub(context).copyWith(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                            ),
                           ),
-                        ),
                       ],
                     ),
                     const SizedBox(height: AppSpacing.x2),
@@ -460,6 +500,7 @@ class _SimpleList extends ConsumerWidget {
     required this.emptySubtitle,
     required this.emptyIcon,
     this.past = false,
+    this.pending = false,
     this.emptyActionLabel,
     this.onEmptyAction,
   });
@@ -470,6 +511,10 @@ class _SimpleList extends ConsumerWidget {
   final String emptySubtitle;
   final IconData emptyIcon;
   final bool past;
+
+  /// Pending-request rows render an amber "waiting approval" badge
+  /// instead of the joined count.
+  final bool pending;
   final String? emptyActionLabel;
   final VoidCallback? onEmptyAction;
 
@@ -507,6 +552,7 @@ class _SimpleList extends ConsumerWidget {
                 const SizedBox(height: AppSpacing.x3),
             itemBuilder: (_, i) => _CompactCard(
               activity: activities[i],
+              pending: pending,
               onTap: () => onTap(activities[i]),
             ),
           ),

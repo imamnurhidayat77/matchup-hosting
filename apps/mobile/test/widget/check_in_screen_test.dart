@@ -1,85 +1,134 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mocktail/mocktail.dart';
-
+import 'package:geolocator/geolocator.dart';
 import 'package:matchup_mobile/core/providers/repository_providers.dart';
+import 'package:matchup_mobile/core/services/location_service.dart';
 import 'package:matchup_mobile/features/activities/presentation/check_in_screen.dart';
 import 'package:matchup_mobile/features/discovery/data/activity_repository.dart';
 import 'package:matchup_mobile/features/discovery/domain/activity_model.dart';
+import 'package:mocktail/mocktail.dart';
 
 class _MockActivityRepository extends Mock implements ActivityRepository {}
+
+Position _pos(double lat, double lng) => Position(
+      latitude: lat,
+      longitude: lng,
+      timestamp: DateTime.now(),
+      accuracy: 5,
+      altitude: 0,
+      altitudeAccuracy: 1,
+      heading: 0,
+      headingAccuracy: 1,
+      speed: 0,
+      speedAccuracy: 1,
+    );
+
+ActivityModel _activity({required DateTime start}) => ActivityModel(
+      id: 'c-1',
+      title: 'Morning Run',
+      sportType: 'Running',
+      description: 'Easy laps.',
+      location: 'Auckland Domain',
+      distanceKm: 1.0,
+      dateTime: start,
+      skillLevel: 'Beginner',
+      capacity: 10,
+      participantCount: 4,
+      hostName: 'Sam',
+      latitude: -36.8558,
+      longitude: 174.7764,
+    );
+
+Future<void> _pump(
+  WidgetTester tester,
+  _MockActivityRepository repo,
+  ActivityModel activity,
+) async {
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [activityRepositoryProvider.overrideWithValue(repo)],
+      child: const MaterialApp(home: CheckInScreen(activityId: 'c-1')),
+    ),
+  );
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 100));
+}
 
 void main() {
   late _MockActivityRepository repo;
 
   setUp(() {
     repo = _MockActivityRepository();
+    when(() => repo.byId(any())).thenAnswer((_) async => null);
   });
 
-  ActivityModel activity() => ActivityModel(
-    id: '3',
-    title: 'Sunrise Yoga in the Park',
-    sportType: 'Yoga',
-    description: '',
-    location: 'Meridian Gardens, Lawn B',
-    distanceKm: 0.8,
-    dateTime: DateTime(2026, 8, 22, 7),
-    skillLevel: 'All levels',
-    capacity: 15,
-    participantCount: 9,
-    hostName: 'Ines Coelho',
-    durationMinutes: 60,
-  );
+  tearDown(() {
+    LocationService.debugGetCurrentLocation = null;
+  });
 
-  Future<void> pumpScreen(WidgetTester tester) async {
-    await tester.binding.setSurfaceSize(const Size(600, 1400));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [activityRepositoryProvider.overrideWithValue(repo)],
-        child: const MaterialApp(home: CheckInScreen(activityId: '3')),
-      ),
-    );
-    await tester.pumpAndSettle();
-  }
-
-  group('CheckInScreen', () {
-    testWidgets(
-      'should render real activity data from the repository, not the old hardcoded seed',
+  testWidgets('eligible user (near + in window) can check in',
       (tester) async {
-        when(() => repo.byId('3')).thenAnswer((_) async => activity());
+    final start = DateTime.now().add(const Duration(minutes: 10));
+    when(() => repo.byId('c-1'))
+        .thenAnswer((_) async => _activity(start: start));
+    // GPS exactly at the venue.
+    LocationService.debugGetCurrentLocation =
+        () async => _pos(-36.8558, 174.7764);
 
-        await pumpScreen(tester);
+    await _pump(tester, repo, _activity(start: start));
 
-        expect(find.text('Sunrise Yoga in the Park'), findsOneWidget);
-        expect(find.text('Meridian Gardens, Lawn B'), findsOneWidget);
-        expect(find.text('Not checked in yet'), findsOneWidget);
-        // Old hardcoded seed content must be gone.
-        expect(find.text('Saturday Afternoon 5v5 Basketball'), findsNothing);
-        expect(find.text('Central Park Court B'), findsNothing);
-      },
-    );
+    expect(find.text('You are at the venue'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Check In'), 200);
+    await tester.tap(find.text('Check In'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Checked in!'), findsOneWidget);
+  });
 
-    testWidgets('should show "Checked in" after tapping Check In', (
-      tester,
-    ) async {
-      when(() => repo.byId('3')).thenAnswer((_) async => activity());
+  testWidgets('too early shows when the window opens', (tester) async {
+    final start = DateTime.now().add(const Duration(hours: 2));
+    when(() => repo.byId('c-1'))
+        .thenAnswer((_) async => _activity(start: start));
+    LocationService.debugGetCurrentLocation =
+        () async => _pos(-36.8558, 174.7764);
 
-      await pumpScreen(tester);
-      final checkIn = find.text('Check In');
-      await tester.ensureVisible(checkIn);
-      await tester.pumpAndSettle();
-      await tester.tap(checkIn);
-      await tester.pump();
-      expect(find.text('Detecting your location…'), findsOneWidget);
+    await _pump(tester, repo, _activity(start: start));
 
-      await tester.pump(const Duration(milliseconds: 900));
-      await tester.pumpAndSettle();
+    expect(find.text('Not open yet'), findsOneWidget);
+    // Button is dimmed (Opacity 0.45 wraps it) — tap does nothing.
+    await tester.scrollUntilVisible(find.text('Check In'), 200);
+    await tester.tap(find.text('Check In'), warnIfMissed: false);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Checked in!'), findsNothing);
+  });
 
-      expect(find.text('Checked in!'), findsOneWidget);
-      expect(find.text('Checked In'), findsOneWidget);
-    });
+  testWidgets('far away shows distance reason', (tester) async {
+    final start = DateTime.now().add(const Duration(minutes: 10));
+    when(() => repo.byId('c-1'))
+        .thenAnswer((_) async => _activity(start: start));
+    // GPS ~11 km away (central Auckland motel strip).
+    LocationService.debugGetCurrentLocation =
+        () async => _pos(-36.8485, 174.7633);
+
+    await _pump(tester, repo, _activity(start: start));
+
+    expect(find.text('You are not at the venue yet'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Check In'), 200);
+    await tester.tap(find.text('Check In'), warnIfMissed: false);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Checked in!'), findsNothing);
+  });
+
+  testWidgets('ended activity shows closed', (tester) async {
+    final start = DateTime.now().subtract(const Duration(hours: 3));
+    when(() => repo.byId('c-1'))
+        .thenAnswer((_) async => _activity(start: start));
+    LocationService.debugGetCurrentLocation =
+        () async => _pos(-36.8558, 174.7764);
+
+    await _pump(tester, repo, _activity(start: start));
+
+    expect(find.text('Check-in closed'), findsOneWidget);
   });
 }

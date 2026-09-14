@@ -39,6 +39,9 @@ dependencies:
   # Opens a shared location in the device's maps app
   url_launcher: ^6.3.2
 
+  # System share sheet (activity invites, profiles)
+  share_plus: ^13.3.0
+
   # Image processing (decode/encode/crop for wizard uploads)
   image: ^4.2.0
 
@@ -52,10 +55,30 @@ dependencies:
   local_auth: ^2.3.0
 
   # Secure storage for tokens/PII (Keychain iOS, Keystore Android)
-  flutter_secure_storage: ^9.2.2
+  flutter_secure_storage: ^11.1.0
 
   # Calendar integration (optional / class-two feature)
   device_calendar: ^4.3.3
+
+  # Firebase Cloud Messaging + Realtime Database + Storage.
+  # All three are wrapped behind a "Firebase enabled?" guard so the app
+  # still boots without `firebase_options.dart` / `google-services.json` /
+  # `GoogleService-Info.plist` — in that mode, push notifications, real-
+  # time chat, and image uploads gracefully fall back to HTTP / polling
+  # / local-only paths.
+  firebase_core: ^3.6.0
+  firebase_auth: ^5.3.1
+  firebase_messaging: ^15.1.3
+  firebase_database: ^11.1.2
+  firebase_storage: ^12.4.0
+
+  # Interactive maps for the venue picker — OpenStreetMap tile source
+  # (no API key, no billing). The venue picker opens a bottom sheet
+  # with a tappable map and a search list; tapping a pin or row sets
+  # the activity's location field.
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+  package_info_plus: ^10.2.1
 
 dev_dependencies:
   flutter_test:

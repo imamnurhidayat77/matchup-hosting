@@ -7,11 +7,29 @@ import '../../features/calendar/data/calendar_repository.dart';
 import '../../features/calendar/data/calendar_repository_impl.dart';
 import '../../features/chat/data/chat_repository.dart';
 import '../../features/chat/data/chat_repository_impl.dart';
+import '../../features/chat/data/dm_repository.dart';
+import '../../features/chat/data/local_typing_repository.dart';
+import '../../features/chat/data/remote_typing_repository.dart';
+import '../../features/chat/data/typing_repository.dart';
 import '../../features/discovery/data/activity_repository.dart';
 import '../../features/discovery/data/activity_repository_impl.dart';
+import '../../features/discovery/data/local_swipes_repository.dart';
+import '../../features/discovery/data/public_activity_repository.dart';
 import '../../features/discovery/data/remote_activity_repository.dart';
+import '../../features/discovery/data/remote_public_activity_repository.dart';
+import '../../features/discovery/data/remote_swipes_repository.dart';
+import '../../features/discovery/data/swipes_repository.dart';
+import '../../features/activities/data/local_places_repository.dart';
+import '../../features/activities/data/places_repository.dart';
+import '../../features/activities/data/remote_places_repository.dart';
+import '../../features/notifications/data/device_repository.dart';
+import '../../features/notifications/data/local_device_repository.dart';
+import '../../features/notifications/data/local_presence_repository.dart';
 import '../../features/notifications/data/notification_repository_impl.dart';
 import '../../features/notifications/data/notification_repository.dart';
+import '../../features/notifications/data/presence_repository.dart';
+import '../../features/notifications/data/remote_device_repository.dart';
+import '../../features/notifications/data/remote_presence_repository.dart';
 import '../../features/profile/data/user_repository_impl.dart';
 import '../../features/profile/data/user_repository.dart';
 import '../../features/ratings/data/ratings_repository.dart';
@@ -42,6 +60,26 @@ final activityRepositoryProvider = Provider<ActivityRepository>((ref) {
   return LocalActivityRepository();
 });
 
+/// Discovery deck swipes (left = pass, right = join). The remote flavour
+/// posts to `POST /api/swipes`; the local flavour records in memory for
+/// the rest of the session.
+final swipesRepositoryProvider = Provider<SwipesRepository>((ref) {
+  final remote = ref.watch(useRemoteApiProvider);
+  if (remote) return RemoteSwipesRepository();
+  return LocalSwipesRepository();
+});
+
+/// Unauthenticated public teasers for landing / onboarding screens.
+/// The remote flavour calls `GET /api/public/activities` (no auth
+/// required); the local flavour reuses the seeded discovery feed.
+final publicActivityRepositoryProvider = Provider<PublicActivityRepository>((
+  ref,
+) {
+  final remote = ref.watch(useRemoteApiProvider);
+  if (remote) return RemotePublicActivityRepository();
+  return LocalPublicActivityRepository();
+});
+
 final userRepositoryProvider = Provider<UserRepository>((ref) {
   final remote = ref.watch(useRemoteApiProvider);
   if (remote) return RemoteUserRepository();
@@ -54,15 +92,59 @@ final chatRepositoryProvider = Provider<ChatRepository>((ref) {
   return LocalChatRepository();
 });
 
+/// 1-on-1 direct messages (`/api/dm/:uid/...`). Remote-only by design
+/// (like chat, there is no offline fallback) — always the live repo.
+final dmRepositoryProvider = Provider<DmRepository>((ref) {
+  return RemoteDmRepository();
+});
+
+/// "X is typing…" indicator for activity chats. The remote flavour
+/// posts to `/api/typing`; the local flavour is in-memory.
+final typingRepositoryProvider = Provider<TypingRepository>((ref) {
+  final remote = ref.watch(useRemoteApiProvider);
+  if (remote) return RemoteTypingRepository();
+  return LocalTypingRepository();
+});
+
 final notificationRepositoryProvider = Provider<NotificationRepository>((ref) {
   final remote = ref.watch(useRemoteApiProvider);
   if (remote) return RemoteNotificationRepository();
   return LocalNotificationRepository();
 });
 
+/// Push-notification device roster. The remote flavour posts to the
+/// backend's `/api/devices` endpoints; the local flavour is an in-memory
+/// list used as a fallback when the network call fails.
+final deviceRepositoryProvider = Provider<DeviceRepository>((ref) {
+  final remote = ref.watch(useRemoteApiProvider);
+  if (remote) return RemoteDeviceRepository();
+  return LocalDeviceRepository();
+});
+
+/// Online / offline presence. The remote flavour posts to the backend's
+/// `/api/presence` endpoint; the local flavour is in-memory.
+final presenceRepositoryProvider = Provider<PresenceRepository>((ref) {
+  final remote = ref.watch(useRemoteApiProvider);
+  if (remote) return RemotePresenceRepository();
+  return LocalPresenceRepository();
+});
+
+/// Venue autocomplete for the create wizard. Backed by the api-server
+/// `/api/places` proxy; the local fallback returns no suggestions so
+/// the field degrades to plain free text.
+final placesRepositoryProvider = Provider<PlacesRepository>((ref) {
+  final remote = ref.watch(useRemoteApiProvider);
+  if (remote) return RemotePlacesRepository();
+  return LocalPlacesRepository();
+});
+
 final calendarRepositoryProvider = Provider<CalendarRepository>((ref) {
   final remote = ref.watch(useRemoteApiProvider);
-  if (remote) return RemoteCalendarRepository();
+  if (remote) {
+    return RemoteCalendarRepository(
+      activities: ref.watch(activityRepositoryProvider),
+    );
+  }
   return LocalCalendarRepository();
 });
 

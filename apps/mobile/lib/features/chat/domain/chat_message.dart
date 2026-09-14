@@ -10,6 +10,10 @@ class ChatMessage {
   final String senderId;
   final String senderName;
   final String? senderAvatarAsset;
+
+  /// Remote photo URL of the sender (`photoUrl` on their profile), if
+  /// known. Takes precedence over [senderAvatarAsset] at render time.
+  final String? senderAvatarUrl;
   final String text;
   final DateTime sentAt;
   final bool isMine;
@@ -30,6 +34,7 @@ class ChatMessage {
     required this.text,
     required this.sentAt,
     this.senderAvatarAsset,
+    this.senderAvatarUrl,
     this.isMine = false,
     this.imagePath,
     this.latitude,

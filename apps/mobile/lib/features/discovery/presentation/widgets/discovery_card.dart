@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/utils/geo.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/theme/dark_colors.dart';
 import '../../../../core/widgets/app_icon.dart';
+import '../../../../core/widgets/asset_image.dart';
 import '../../domain/activity_model.dart';
 
 /// Discovery swipe-deck card — a Tinder-style card that does NOT fill the
@@ -73,7 +75,10 @@ class _HeroImage extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           if (activity.coverImageUrl != null)
-            Image.asset(activity.coverImageUrl!, fit: BoxFit.cover)
+            AssetImageWithFallback(
+              imagePath: activity.coverImageUrl!,
+              fit: BoxFit.cover,
+            )
           else
             const _CoverPlaceholder(),
 
@@ -91,59 +96,73 @@ class _HeroImage extends StatelessWidget {
             ),
           ),
 
-          // Sport badge — blue pill, top-left.
+          // Sport badge — blue pill, top-left, with the join-policy
+          // pill beneath it (instant vs approval at a glance).
           Positioned(
             top: AppSpacing.x3,
             left: AppSpacing.x3,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                color: AppColors.primary,
-                borderRadius: AppRadius.pillR,
-                boxShadow: AppShadows.glowPrimary,
-              ),
-              child: Text(
-                activity.sportType.toUpperCase(),
-                style: AppTypography.badgeSport(
-                  context,
-                ).copyWith(
-                  color: AppColors.textOnPrimary,
-                  letterSpacing: 0.8,
-                  fontWeight: FontWeight.w800,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: AppRadius.pillR,
+                    boxShadow: AppShadows.glowPrimary,
+                  ),
+                  child: Text(
+                    activity.sportType.toUpperCase(),
+                    style: AppTypography.badgeSport(
+                      context,
+                    ).copyWith(
+                      color: AppColors.textOnPrimary,
+                      letterSpacing: 0.8,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(height: 6),
+                _JoinPolicyPill(
+                  needsApproval: activity.joinPolicy == 'approval',
+                ),
+              ],
             ),
           ),
 
-          // Distance pill — dark translucent, top-right.
-          Positioned(
-            top: AppSpacing.x3,
-            right: AppSpacing.x3,
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(12, 8, 14, 8),
-              decoration: BoxDecoration(
-                color: const Color(0xCC0F172A),
-                borderRadius: AppRadius.pillR,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  AppIcon(
-                    AppIcons.mapPin,
-                    size: AppIconSize.sm,
-                    color: AppColors.textOnPrimary,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    '${activity.distanceKm.toStringAsFixed(1)} km away',
-                    style: AppTypography.chipLabel(
-                      context,
-                    ).copyWith(color: AppColors.textOnPrimary),
-                  ),
-                ],
+          // Distance pill — dark translucent, top-right. Hidden when
+          // the distance is unknown (see [distanceLabel]).
+          if (distanceLabel(activity.distanceKm) case final label?)
+            Positioned(
+              top: AppSpacing.x3,
+              right: AppSpacing.x3,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(12, 8, 14, 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xCC0F172A),
+                  borderRadius: AppRadius.pillR,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AppIcon(
+                      AppIcons.mapPin,
+                      size: AppIconSize.sm,
+                      color: AppColors.textOnPrimary,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      label,
+                      style: AppTypography.chipLabel(
+                        context,
+                      ).copyWith(color: AppColors.textOnPrimary),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -455,4 +474,47 @@ String _formatDateTime(DateTime dt) {
     'Dec',
   ];
   return '${months[dt.month - 1]} ${dt.day}, $time';
+}
+
+/// Small join-policy pill under the sport badge: green "INSTANT JOIN"
+/// for open activities, amber "NEEDS APPROVAL" otherwise. Text-only
+/// (no icon) to stay legible at small size over photos.
+class _JoinPolicyPill extends StatelessWidget {
+  const _JoinPolicyPill({required this.needsApproval});
+  final bool needsApproval;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: const Color(0xCC0F172A),
+        borderRadius: AppRadius.pillR,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            needsApproval
+                ? Icons.how_to_reg_rounded
+                : Icons.flash_on_rounded,
+            size: 11,
+            color: needsApproval
+                ? context.colors.warningText
+                : context.colors.successText,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            needsApproval ? 'NEEDS APPROVAL' : 'INSTANT JOIN',
+            style: AppTypography.badgeSport(context).copyWith(
+              color: AppColors.textOnPrimary,
+              fontSize: 9,
+              letterSpacing: 0.6,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

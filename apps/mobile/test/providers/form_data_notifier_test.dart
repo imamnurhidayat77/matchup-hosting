@@ -64,8 +64,8 @@ void main() {
     });
 
     test('should update coverImage via setCoverImage', () {
-      notifier().setCoverImage('base64string==');
-      expect(state().coverImageBase64, 'base64string==');
+      notifier().setCoverImage('/tmp/photo.jpg');
+      expect(state().coverImagePath, '/tmp/photo.jpg');
     });
 
     test('should default durationMinutes to 120', () {

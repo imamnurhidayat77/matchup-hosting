@@ -39,6 +39,19 @@ service firebase.storage {
       allow delete: if isActivityHost(activityId);
     }
 
+    // Chat photo attachments, uploaded by activity participants via
+    // StorageService (`uploads/chat-attachments/{activityId}/…`).
+    // Membership is enforced at the API layer (POST /api/chat/messages);
+    // rules here only require a signed-in uploader and image content.
+    match /uploads/chat-attachments/{allPaths=**} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn()
+        && request.resource != null
+        && request.resource.size <= 8 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)');
+      allow delete: if isSignedIn();
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }

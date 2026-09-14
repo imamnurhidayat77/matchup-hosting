@@ -3,8 +3,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Persists the last visited route so the app can resume from where the user
 /// left off after being minimized or killed by the OS.
 ///
-/// Only routes inside the authenticated shell are saved — auth/onboarding
-/// routes are never persisted (there is nothing to "resume" there).
+/// Auth routes are never persisted (there is no session to resume with —
+/// the router gates those to /welcome anyway, and splash clears the
+/// store on logout). The get-to-know onboarding steps ARE persisted so a
+/// restart mid-onboarding resumes the flow instead of dropping the user
+/// into Discovery with an unfinished profile — each step saves its
+/// answer to the backend before advancing, so nothing is lost.
 class RouteStore {
   RouteStore._();
   static final RouteStore instance = RouteStore._();
@@ -21,9 +25,6 @@ class RouteStore {
     '/forgot-password',
     '/otp-verification',
     '/new-password',
-    '/get-to-know-1',
-    '/get-to-know-2',
-    '/get-to-know-3',
   };
 
   Future<void> save(String location) async {

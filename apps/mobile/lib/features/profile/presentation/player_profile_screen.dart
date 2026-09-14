@@ -8,9 +8,11 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/dark_colors.dart';
+import '../../../core/utils/share_helper.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_icon.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/asset_image.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
@@ -88,7 +90,10 @@ class _ProfileContent extends StatelessWidget {
                       ),
                       _CircleBtn(
                         icon: Icons.more_horiz_rounded,
-                        onTap: () {},
+                        onTap: () => _ProfileOptionsSheet.show(
+                          context,
+                          user: user,
+                        ),
                         label: 'More options',
                       ),
                     ],
@@ -118,12 +123,11 @@ class _ProfileContent extends StatelessWidget {
                         color: context.colors.primaryLight,
                       ),
                       clipBehavior: Clip.antiAlias,
-                      child: user.avatarAsset != null
-                          ? Image.asset(
-                              user.avatarAsset!,
+                      child: (user.avatarUrl ?? user.avatarAsset) != null
+                          ? AssetImageWithFallback(
+                              imagePath:
+                                  user.avatarUrl ?? user.avatarAsset!,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, _, _) =>
-                                  _AvatarFallback(name: user.displayName),
                             )
                           : _AvatarFallback(name: user.displayName),
                     ),
@@ -226,6 +230,49 @@ class _ProfileContent extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.x5),
 
+                // ── Ratings by sport ─────────────────────────────────────
+                if (user.ratingBySport.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.x6,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Ratings',
+                          style: AppTypography.titleMedium(context),
+                        ),
+                        const SizedBox(height: AppSpacing.x3),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.x4,
+                            vertical: AppSpacing.x2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: context.colors.card,
+                            borderRadius: AppRadius.cardR,
+                            border: Border.all(color: context.colors.border),
+                          ),
+                          child: Column(
+                            children: [
+                              for (final entry
+                                  in user.ratingBySport.entries)
+                                _RatingRow(
+                                  sport: entry.key,
+                                  average: entry.value.average,
+                                  count: entry.value.count,
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.x5),
+                ],
+
                 // ── Bio ──────────────────────────────────────────────────
                 if (user.bio != null && user.bio!.isNotEmpty) ...[
                   Padding(
@@ -279,7 +326,12 @@ class _ProfileContent extends StatelessWidget {
                             for (var i = 0; i < user.sports.length; i++)
                               _SportChip(
                                 sport: user.sports[i].sport,
-                                level: user.sports[i].level,
+                                // Per-sport levels aren't persisted yet —
+                                // fall back to the general skill level so
+                                // the badge is never an empty pill.
+                                level: user.sports[i].level.isNotEmpty
+                                    ? user.sports[i].level
+                                    : (user.skillLevel ?? ''),
                                 isPrimary: i == 0,
                               ),
                           ],
@@ -304,8 +356,10 @@ class _ProfileContent extends StatelessWidget {
                           size: 18,
                           color: AppColors.textOnPrimary,
                         ),
-                        onPressed: () =>
-                            context.push('/chat/${user.displayName}'),
+                        onPressed: () => context.push(
+                          '/dm/${user.id}',
+                          extra: user.displayName,
+                        ),
                       ),
                       const SizedBox(height: AppSpacing.x3),
                       AppButton.secondary(
@@ -317,6 +371,7 @@ class _ProfileContent extends StatelessWidget {
                         ),
                         onPressed: () => ReportUserSheet.show(
                           context,
+                          userId: user.id,
                           userName: user.displayName,
                         ),
                       ),
@@ -458,35 +513,181 @@ class _SportChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadius.pill),
         border: Border.all(color: context.colors.border),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            sport,
-            style: AppTypography.labelField(
-              context,
-            ).copyWith(color: context.colors.textPrimary),
-          ),
-          const SizedBox(width: AppSpacing.x2),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: isPrimary
-                  ? context.colors.primarySoft
-                  : context.colors.surfaceMuted,
-              borderRadius: BorderRadius.circular(AppRadius.pill),
-            ),
-            child: Text(
-              level.toUpperCase(),
-              style: AppTypography.chipLabel(context).copyWith(
-                color: isPrimary
-                    ? context.colors.primaryOnSurface
-                    : context.colors.textSecondary,
-                fontSize: 10,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                sport,
+                style: AppTypography.labelField(
+                  context,
+                ).copyWith(color: context.colors.textPrimary),
               ),
+              // No badge when neither per-sport nor general level is
+              // known — an empty pill reads as broken UI.
+              if (level.isNotEmpty) ...[
+                const SizedBox(width: AppSpacing.x2),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: isPrimary
+                        ? context.colors.primarySoft
+                        : context.colors.surfaceMuted,
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                  ),
+                  child: Text(
+                    level.toUpperCase(),
+                    style: AppTypography.chipLabel(context).copyWith(
+                      color: isPrimary
+                          ? context.colors.primaryOnSurface
+                          : context.colors.textSecondary,
+                      fontSize: 10,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+    );
+  }
+}
+
+/// One row of the per-sport rating breakdown: sport name on the
+/// left, "★ 4.8 (12)" on the right. Rendered only for sports the
+/// user has actually been rated in.
+class _RatingRow extends StatelessWidget {
+  const _RatingRow({
+    required this.sport,
+    required this.average,
+    required this.count,
+  });
+  final String sport;
+  final double average;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.x2),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              sport,
+              style: AppTypography.labelField(context),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          AppIcon(
+            AppIcons.star,
+            size: AppIconSize.sm,
+            color: context.colors.warningText,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            '${average.toStringAsFixed(1)} ($count)',
+            style: AppTypography.labelField(context).copyWith(
+              color: context.colors.textSecondary,
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── More-options sheet ───────────────────────────────────────────────────────
+
+/// Bottom sheet behind the header ⋯ button: share the profile or
+/// report it (same [ReportUserSheet] as the dedicated button below).
+class _ProfileOptionsSheet extends StatelessWidget {
+  const _ProfileOptionsSheet({required this.user});
+  final UserModel user;
+
+  static Future<void> show(BuildContext context, {required UserModel user}) {
+    return showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ProfileOptionsSheet(user: user),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.x5,
+        AppSpacing.x3,
+        AppSpacing.x5,
+        AppSpacing.x5 + MediaQuery.of(context).viewPadding.bottom,
+      ),
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: context.colors.border,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.x4),
+          _OptionsRow(
+            icon: Icons.ios_share_rounded,
+            label: 'Share profile',
+            onTap: () {
+              Navigator.of(context).pop();
+              ShareHelper.shareProfile(user);
+            },
+          ),
+          _OptionsRow(
+            icon: Icons.flag_outlined,
+            label: 'Report profile',
+            onTap: () {
+              Navigator.of(context).pop();
+              ReportUserSheet.show(
+                context,
+                userId: user.id,
+                userName: user.displayName,
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OptionsRow extends StatelessWidget {
+  const _OptionsRow({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return PressableScale(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.x3),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: context.colors.textPrimary),
+            const SizedBox(width: AppSpacing.x4),
+            Text(label, style: AppTypography.titleMedium(context)),
+          ],
+        ),
       ),
     );
   }

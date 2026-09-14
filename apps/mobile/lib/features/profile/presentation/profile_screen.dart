@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -12,7 +14,10 @@ import '../../../core/theme/dark_colors.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_tappable.dart';
+import '../../../core/widgets/asset_image.dart';
+import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/skeleton.dart';
+import '../../notifications/services/push_notification_service.dart';
 import '../../tour/presentation/tour_controller.dart';
 import '../../tour/presentation/tour_steps.dart';
 import '../domain/user_model.dart';
@@ -114,8 +119,11 @@ class ProfileScreen extends ConsumerWidget {
           Expanded(
             child: profileAsync.when(
               loading: () => const SkeletonList(count: 6),
-              error: (_, _) => const Center(
-                child: Text('Could not load profile.'),
+              error: (_, _) => Center(
+                child: ErrorRetry(
+                  message: 'Could not load profile.',
+                  onRetry: () => ref.invalidate(myProfileProvider),
+                ),
               ),
               data: (user) => ListView(
                 padding: const EdgeInsets.fromLTRB(
@@ -202,9 +210,12 @@ class _AvatarCard extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.all(2),
                     child: ClipOval(
-                      child: user.avatarAsset != null
-                          ? Image.asset(
-                              user.avatarAsset!,
+                      // Prefer the backend `photoUrl` (remote Storage URL)
+                      // when present; fall back to the bundled asset.
+                      child: (user.avatarUrl ?? user.avatarAsset) != null
+                          ? AssetImageWithFallback(
+                              imagePath:
+                                  user.avatarUrl ?? user.avatarAsset!,
                               fit: BoxFit.cover,
                             )
                           : Container(
@@ -822,6 +833,14 @@ class _LogoutRow extends ConsumerWidget {
       builder: (ctx) => const _LogoutSheet(),
     );
     if (confirmed == true && context.mounted) {
+      // Unregister the FCM device from the backend's push-notification
+      // roster before clearing the auth state — fire-and-forget so a
+      // slow network doesn't delay the sign-out UX.
+      unawaited(
+        PushNotificationService.instance.unregister(
+          deviceRepository: ref.read(deviceRepositoryProvider),
+        ),
+      );
       await ref.read(authStateProvider.notifier).signOut();
       if (context.mounted) context.go('/welcome');
     }

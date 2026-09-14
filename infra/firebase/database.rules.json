@@ -1,0 +1,36 @@
+{
+  "rules": {
+    "activityChats": {
+      "$activityId": {
+        "messages": {
+          ".read": "auth != null",
+          ".write": false,
+          "$messageId": {
+            ".validate": "newData.hasChildren(['senderId', 'text', 'type', 'timestamp']) && newData.child('senderId').isString() && newData.child('text').isString() && (newData.child('type').val() == 'text' || newData.child('type').val() == 'system') && newData.child('timestamp').isNumber()"
+          }
+        }
+      }
+    },
+    "typing": {
+      "$activityId": {
+        ".read": "auth != null",
+        ".write": false
+      }
+    },
+    "presence": {
+      ".read": "auth != null",
+      ".write": false
+    },
+    "dmChats": {
+      "$threadId": {
+        "messages": {
+          ".read": "auth != null",
+          ".write": false,
+          "$messageId": {
+            ".validate": "newData.hasChildren(['senderId', 'text', 'timestamp']) && newData.child('senderId').isString() && newData.child('text').isString() && newData.child('timestamp').isNumber()"
+          }
+        }
+      }
+    }
+  }
+}

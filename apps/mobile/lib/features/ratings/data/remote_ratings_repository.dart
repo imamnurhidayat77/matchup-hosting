@@ -6,14 +6,10 @@ import 'ratings_repository.dart';
 import 'ratings_repository_impl.dart';
 
 /// HTTP-backed [RatingsRepository]. Posts the submission to the
-/// `POST /api/activities/{activityId}/ratings` endpoint once it ships.
-///
-/// While the backend is still in development this implementation
-/// delegates straight to [LocalRatingsRepository] so the screen continues
-/// to behave like a completed integration. The fallback is intentional —
-/// keeping the public surface stable means mobile can ship the UI
-/// independently of the API work and the provider switch becomes a
-/// one-line change later.
+/// `POST /api/activities/{activityId}/ratings` endpoint using the
+/// backend's camelCase wire shape (`sportType`, `comment`,
+/// `participantRatings: [{rateeUid, stars}]`). Submissions are upserts
+/// server-side, so re-rating within the edit window just overwrites.
 class RemoteRatingsRepository implements RatingsRepository {
   RemoteRatingsRepository({
     ApiClient? client,
@@ -33,11 +29,11 @@ class RemoteRatingsRepository implements RatingsRepository {
       final res = await _client.dio.post(
         '/activities/${submission.activityId}/ratings',
         data: {
-          'sport_type': submission.activitySportType,
+          'sportType': submission.activitySportType,
           'comment': ?submission.comment,
-          'participant_ratings': submission.participants
+          'participantRatings': submission.participants
               .map(
-                (p) => {'ratee_uid': p.rateeUserId, 'stars': p.stars},
+                (p) => {'rateeUid': p.rateeUserId, 'stars': p.stars},
               )
               .toList(),
         },
@@ -59,7 +55,9 @@ class RemoteRatingsRepository implements RatingsRepository {
   Future<bool> hasRated(String activityId) async {
     try {
       final res = await _client.dio.get('/activities/$activityId/my-rating');
-      return res.data is Map && res.data['has_rated'] == true;
+      // Enveloped as `{ok, data: {hasRated}}`.
+      final data = apiDataMap(res.data);
+      return data?['hasRated'] == true;
     } catch (_) {
       return _fallback.hasRated(activityId);
     }

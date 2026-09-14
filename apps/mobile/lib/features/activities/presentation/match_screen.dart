@@ -10,7 +10,9 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/utils/geo.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/asset_image.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
@@ -312,7 +314,7 @@ class _ActivityCard extends StatelessWidget {
                 Row(
                   children: [
                     // Avatar stack
-                    _AvatarStack(),
+                    _AvatarStack(count: activity.participantCount),
                     const SizedBox(width: AppSpacing.x2),
 
                     // Spots count
@@ -378,6 +380,7 @@ class _CoverImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final distanceText = distanceLabel(activity.distanceKm)?.toUpperCase();
     return ClipRRect(
       borderRadius: BorderRadius.vertical(
         top: Radius.circular(AppRadius.xl),
@@ -388,18 +391,11 @@ class _CoverImage extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // Image
-            Image.asset(
-              activity.coverImageUrl ??
+            // Image (bundled asset or remote Storage URL)
+            AssetImageWithFallback(
+              imagePath: activity.coverImageUrl ??
                   'assets/images/discovery/covers/basketball_full.png',
               fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => Container(
-                color: AppColors.primaryDark,
-                child: const Center(
-                  child: Icon(Icons.sports, size: 48,
-                      color: AppColors.textOnPrimary),
-                ),
-              ),
             ),
 
             // Badges top row
@@ -427,25 +423,27 @@ class _CoverImage extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(width: AppSpacing.x2),
-                  // Distance — blue pill
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(AppRadius.pill),
-                    ),
-                    child: Text(
-                      '${activity.distanceKm.toStringAsFixed(1)} KM AWAY',
-                      style: AppTypography.chipLabel(context).copyWith(
-                        color: AppColors.textOnPrimary,
-                        fontSize: 11,
+                  // Distance — blue pill (hidden when unknown).
+                  if (distanceText != null) ...[
+                    const SizedBox(width: AppSpacing.x2),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(AppRadius.pill),
+                      ),
+                      child: Text(
+                        distanceText,
+                        style: AppTypography.chipLabel(context).copyWith(
+                          color: AppColors.textOnPrimary,
+                          fontSize: 11,
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
@@ -505,68 +503,45 @@ class _MetaChip extends StatelessWidget {
 
 // ─── Avatar stack ─────────────────────────────────────────────────────────────
 
+/// Neutral participant placeholders — generic person icons sized by
+/// the live [count]. No fake faces or invented initials: the card has
+/// no roster data, and one roster fetch per card would be N+1 traffic.
 class _AvatarStack extends StatelessWidget {
-  const _AvatarStack();
+  const _AvatarStack({required this.count});
+  final int count;
+
+  static const int _maxShown = 3;
 
   @override
   Widget build(BuildContext context) {
+    final shown = count.clamp(0, _maxShown);
+    if (shown == 0) return const SizedBox(width: 66, height: 28);
     return SizedBox(
       width: 66,
       height: 28,
       child: Stack(
         children: [
-          Positioned(
-            left: 0,
-            child: _avatarImg('avatar_alex.png', context),
-          ),
-          Positioned(
-            left: 20,
-            child: _avatarInitial('M', AppColors.primary, context),
-          ),
-          Positioned(
-            left: 40,
-            child: _avatarInitial('J', AppColors.avatarSecondary, context),
-          ),
+          for (var i = 0; i < shown; i++)
+            Positioned(
+              left: i * 20.0,
+              child: Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: context.colors.surfaceMuted,
+                  border:
+                      Border.all(color: context.colors.surface, width: 2),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  Icons.person_outline,
+                  size: 15,
+                  color: context.colors.textSecondary,
+                ),
+              ),
+            ),
         ],
-      ),
-    );
-  }
-
-  Widget _avatarImg(String asset, BuildContext context) {
-    return Container(
-      width: 28,
-      height: 28,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: context.colors.surface, width: 2),
-      ),
-      child: ClipOval(
-        child: Image.asset(
-          'assets/images/discovery/avatars/$asset',
-          fit: BoxFit.cover,
-          errorBuilder: (_, _, _) =>
-              Container(color: AppColors.primarySoft),
-        ),
-      ),
-    );
-  }
-
-  Widget _avatarInitial(String letter, Color color, BuildContext context) {
-    return Container(
-      width: 28,
-      height: 28,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: color,
-        border: Border.all(color: context.colors.surface, width: 2),
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        letter,
-        style: AppTypography.chipLabel(context).copyWith(
-          fontSize: 11,
-          color: AppColors.textOnPrimary,
-        ),
       ),
     );
   }

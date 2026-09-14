@@ -1,5 +1,5 @@
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
-import { firestore } from '../../database/firebase.js';
+import { auth, firestore } from '../../database/firebase.js';
 
 export type BootstrapUserInput = {
   authUid: string;
@@ -12,10 +12,21 @@ export type BootstrapUserResult = {
   created: boolean;
 };
 
+export type SportRatingAggregate = {
+  average: number;
+  count: number;
+};
+
 export type UserRecord = {
   authUid: string;
   email: string;
   createdAt: FirebaseFirestore.Timestamp;
+  /**
+   * Computed on read (never stored): participations and hosted
+   * activities. Absent when the counts could not be computed.
+   */
+  activitiesCount?: number;
+  hostedCount?: number;
   updatedAt?: FirebaseFirestore.Timestamp;
   displayName?: string;
   photoPath?: string;
@@ -25,8 +36,14 @@ export type UserRecord = {
   dateOfBirth?: string;
   skillLevel?: SkillLevel;
   preferredSports?: string[];
+  /** Per-sport skill levels, e.g. `{ Tennis: 'intermediate' }`. */
+  sportSkillLevels?: Record<string, SkillLevel>;
   preferredLocations?: string[];
   profileCompleted?: boolean;
+  /** Onboarding answer: why the user joined MatchUp. Private. */
+  joinReason?: string;
+  ratingBySport?: Record<string, SportRatingAggregate>;
+  totalRatingCount?: number;
 };
 
 export type SkillLevel = 'beginner' | 'intermediate' | 'advanced' | 'any';
@@ -38,18 +55,25 @@ export type UpdateUserProfileInput = {
   dateOfBirth?: string;
   skillLevel?: SkillLevel;
   preferredSports?: string[];
+  sportSkillLevels?: Record<string, SkillLevel>;
   preferredLocations?: string[];
+  joinReason?: string;
 };
 
 export type PublicUserProfile = {
   authUid: string;
+  activitiesCount?: number;
+  hostedCount?: number;
   displayName?: string;
   photoUrl?: string;
   bio?: string;
   skillLevel?: SkillLevel;
   preferredSports?: string[];
+  sportSkillLevels?: Record<string, SkillLevel>;
   preferredLocations?: string[];
   profileCompleted?: boolean;
+  ratingBySport?: Record<string, SportRatingAggregate>;
+  totalRatingCount?: number;
 };
 
 export type UpdateUserPhotoInput = {
@@ -76,6 +100,54 @@ function assertStringArray(value: unknown, fieldName: string): string[] {
   }
 
   return value;
+}
+
+function assertSportSkillLevels(value: unknown): Record<string, SkillLevel> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error('Invalid user record: sportSkillLevels must be an object');
+  }
+
+  const result: Record<string, SkillLevel> = {};
+
+  for (const [sport, level] of Object.entries(value as Record<string, unknown>)) {
+    if (!sport.trim()) {
+      throw new Error('Invalid user record: sportSkillLevels keys must be non-empty strings');
+    }
+    if (!isSkillLevel(level)) {
+      throw new Error(
+        `Invalid user record: sportSkillLevels.${sport} must be beginner, intermediate, advanced, or any`,
+      );
+    }
+    result[sport] = level;
+  }
+
+  return result;
+}
+
+function assertRatingBySport(value: unknown): Record<string, SportRatingAggregate> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error('Invalid user record: ratingBySport must be an object');
+  }
+
+  const result: Record<string, SportRatingAggregate> = {};
+
+  for (const [sport, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+      throw new Error(`Invalid user record: ratingBySport.${sport} must be an object`);
+    }
+
+    const { average, count } = entry as Record<string, unknown>;
+
+    if (typeof average !== 'number' || typeof count !== 'number') {
+      throw new Error(
+        `Invalid user record: ratingBySport.${sport} must have numeric average and count`,
+      );
+    }
+
+    result[sport] = { average, count };
+  }
+
+  return result;
 }
 
 function mapUserDoc(userDoc: FirebaseFirestore.DocumentSnapshot): UserRecord | null {
@@ -129,11 +201,23 @@ function mapUserDoc(userDoc: FirebaseFirestore.DocumentSnapshot): UserRecord | n
     ...(data.preferredSports !== undefined
       ? { preferredSports: assertStringArray(data.preferredSports, 'preferredSports') }
       : {}),
+    ...(data.sportSkillLevels !== undefined
+      ? { sportSkillLevels: assertSportSkillLevels(data.sportSkillLevels) }
+      : {}),
     ...(data.preferredLocations !== undefined
       ? { preferredLocations: assertStringArray(data.preferredLocations, 'preferredLocations') }
       : {}),
+    ...(typeof data.joinReason === 'string'
+      ? { joinReason: data.joinReason }
+      : {}),
     ...(typeof data.profileCompleted === 'boolean'
       ? { profileCompleted: data.profileCompleted }
+      : {}),
+    ...(data.ratingBySport !== undefined
+      ? { ratingBySport: assertRatingBySport(data.ratingBySport) }
+      : {}),
+    ...(typeof data.totalRatingCount === 'number'
+      ? { totalRatingCount: data.totalRatingCount }
       : {}),
   };
 }
@@ -141,13 +225,18 @@ function mapUserDoc(userDoc: FirebaseFirestore.DocumentSnapshot): UserRecord | n
 function toPublicUserProfile(user: UserRecord): PublicUserProfile {
   return {
     authUid: user.authUid,
+    ...(user.activitiesCount !== undefined ? { activitiesCount: user.activitiesCount } : {}),
+    ...(user.hostedCount !== undefined ? { hostedCount: user.hostedCount } : {}),
     ...(user.displayName !== undefined ? { displayName: user.displayName } : {}),
     ...(user.photoUrl !== undefined ? { photoUrl: user.photoUrl } : {}),
     ...(user.bio !== undefined ? { bio: user.bio } : {}),
     ...(user.skillLevel !== undefined ? { skillLevel: user.skillLevel } : {}),
     ...(user.preferredSports !== undefined ? { preferredSports: user.preferredSports } : {}),
+    ...(user.sportSkillLevels !== undefined ? { sportSkillLevels: user.sportSkillLevels } : {}),
     ...(user.preferredLocations !== undefined ? { preferredLocations: user.preferredLocations } : {}),
     ...(user.profileCompleted !== undefined ? { profileCompleted: user.profileCompleted } : {}),
+    ...(user.ratingBySport !== undefined ? { ratingBySport: user.ratingBySport } : {}),
+    ...(user.totalRatingCount !== undefined ? { totalRatingCount: user.totalRatingCount } : {}),
   };
 }
 
@@ -217,6 +306,16 @@ export async function bootstrapUser(input: BootstrapUserInput): Promise<Bootstra
   });
 }
 
+export async function mintCustomToken(authUid: string): Promise<string> {
+  const normalizedAuthUid = authUid.trim();
+
+  if (!normalizedAuthUid) {
+    throw new Error('authUid is required');
+  }
+
+  return auth.createCustomToken(normalizedAuthUid);
+}
+
 export async function getUserByAuthUid(authUid: string): Promise<UserRecord | null> {
   const normalizedAuthUid = authUid.trim();
 
@@ -225,8 +324,49 @@ export async function getUserByAuthUid(authUid: string): Promise<UserRecord | nu
   }
 
   const userDoc = await firestore.collection('users').doc(normalizedAuthUid).get();
+  const user = mapUserDoc(userDoc);
 
-  return mapUserDoc(userDoc);
+  if (!user) {
+    return null;
+  }
+
+  const counts = await countUserActivities(normalizedAuthUid);
+
+  return {
+    ...user,
+    ...counts,
+  };
+}
+
+/**
+ * Counts participations (`participants` collection group, by `uid`)
+ * and hosted activities (`activities` by `hostId`). The host is never
+ * a participant row, so the two counts are disjoint.
+ *
+ * Falls back to zeros when the aggregation cannot run — notably when
+ * the `participants/uid` collection-group index has not been created
+ * yet (see `infra/firebase/firestore.indexes.json`). The profile then
+ * shows zeros instead of failing outright, and heals once the index
+ * exists.
+ */
+export async function countUserActivities(
+  authUid: string,
+): Promise<{ activitiesCount: number; hostedCount: number }> {
+  const zero = { activitiesCount: 0, hostedCount: 0 };
+
+  try {
+    const [joinedSnap, hostedSnap] = await Promise.all([
+      firestore.collectionGroup('participants').where('uid', '==', authUid).count().get(),
+      firestore.collection('activities').where('hostId', '==', authUid).count().get(),
+    ]);
+
+    return {
+      activitiesCount: joinedSnap.data().count,
+      hostedCount: hostedSnap.data().count,
+    };
+  } catch {
+    return zero;
+  }
 }
 
 export async function updateUserProfile(
@@ -278,11 +418,59 @@ export async function updateUserProfile(
 export async function getPublicUserProfile(authUid: string): Promise<PublicUserProfile | null> {
   const user = await getUserByAuthUid(authUid);
 
+  if (user) {
+    return toPublicUserProfile(user);
+  }
+
+  // Fallback: mobile profile routes navigate by display name
+  // (`/player-profile/:name`), so a name that matches no uid is
+  // retried as an exact displayName lookup. Single-field equality —
+  // automatic index, no composite needed. First match wins; display
+  // names are not guaranteed unique.
+  const byName = await getUserByDisplayName(authUid);
+  if (!byName) {
+    return null;
+  }
+
+  return toPublicUserProfile(byName);
+}
+
+/**
+ * Exact-match lookup by display name. Used only as a fallback when a
+ * uid lookup misses (see above) — never as a primary key.
+ */
+export async function getUserByDisplayName(
+  displayName: string,
+): Promise<UserRecord | null> {
+  const normalized = displayName.trim();
+  if (!normalized) {
+    throw new Error('displayName is required');
+  }
+
+  const snap = await firestore
+    .collection('users')
+    .where('displayName', '==', normalized)
+    .limit(1)
+    .get();
+
+  if (snap.empty) {
+    return null;
+  }
+
+  // QueryDocumentSnapshot satisfies the DocumentSnapshot shape
+  // mapUserDoc expects (users are keyed by authUid, so `.id` is it).
+  const firstDoc = snap.docs[0];
+  if (!firstDoc) {
+    return null;
+  }
+  const user = mapUserDoc(firstDoc);
+
   if (!user) {
     return null;
   }
 
-  return toPublicUserProfile(user);
+  const counts = await countUserActivities(user.authUid);
+  return { ...user, ...counts };
 }
 
 export async function updateUserPhoto(

@@ -17,6 +17,10 @@ vi.mock('../../middleware/auth.middleware.js', () => {
       };
       next();
     }),
+
+  requireAdmin: vi.fn((_req, _res, next) => {
+      next();
+  }),
   };
 });
 

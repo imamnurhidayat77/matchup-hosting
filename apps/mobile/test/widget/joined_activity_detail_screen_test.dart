@@ -6,6 +6,7 @@ import 'package:mocktail/mocktail.dart';
 
 import 'package:matchup_mobile/core/providers/repository_providers.dart';
 import 'package:matchup_mobile/features/activities/presentation/joined_activity_detail_screen.dart';
+import 'package:matchup_mobile/features/activities/domain/activity_participant.dart';
 import 'package:matchup_mobile/features/chat/data/chat_repository.dart';
 import 'package:matchup_mobile/features/chat/domain/chat_message.dart';
 import 'package:matchup_mobile/features/discovery/data/activity_repository.dart';
@@ -22,6 +23,11 @@ void main() {
   setUp(() {
     activityRepo = _MockActivityRepository();
     chatRepo = _MockChatRepository();
+    // The participant stack reads the live roster — default to empty so
+    // tests never touch the network.
+    when(
+      () => activityRepo.participants('9'),
+    ).thenAnswer((_) async => <ActivityParticipant>[]);
   });
 
   Future<void> pumpScreen(WidgetTester tester) async {
@@ -200,5 +206,50 @@ void main() {
 
       expect(find.text('Bring your own knee pads this week.'), findsOneWidget);
     });
+
+    testWidgets(
+      'participant stack renders live roster initials, not stock faces',
+      (tester) async {
+        when(() => activityRepo.byId('9')).thenAnswer(
+          (_) async => ActivityModel(
+            id: '9',
+            title: 'Tuesday Night Volleyball',
+            sportType: 'Volleyball',
+            description: '',
+            location: 'Eastside Rec Centre',
+            distanceKm: 3.1,
+            dateTime: DateTime(2026, 8, 25, 19),
+            skillLevel: 'Beginner',
+            capacity: 12,
+            participantCount: 7,
+            hostName: 'Wren Oduya',
+          ),
+        );
+        when(() => chatRepo.messages('9')).thenAnswer((_) async => []);
+        when(() => activityRepo.participants('9')).thenAnswer(
+          (_) async => [
+            ActivityParticipant(
+              userId: 'wren',
+              name: 'Wren Oduya',
+              skillLevel: 'Beginner',
+              joinedAt: DateTime(2026, 8, 20),
+              isOrganizer: true,
+            ),
+          ],
+        );
+
+        await pumpScreen(tester);
+
+        // Initials of the real roster member — no bundled face involved.
+        // Scoped to the stack: the host card also shows "WO" when the
+        // host is the organizer, which is correct UI, not a dupe bug.
+        final stack = find.byKey(const ValueKey('participant-stack'));
+        expect(stack, findsOneWidget);
+        expect(
+          find.descendant(of: stack, matching: find.text('WO')),
+          findsOneWidget,
+        );
+      },
+    );
   });
 }

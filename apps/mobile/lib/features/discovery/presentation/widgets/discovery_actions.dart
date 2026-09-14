@@ -2,26 +2,74 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/theme/app_typography.dart';
 import '../../../../core/theme/dark_colors.dart';
 import '../../../../core/widgets/app_tappable.dart';
 import '../../../../core/widgets/empty_state.dart';
 
 /// Empty state shown once the swipe deck runs out of activities.
+///
+/// When [filterSummary] is non-empty the deck is empty *because of* the
+/// active filter (e.g. "Basketball · Within 5 km" from 7,000 km away) —
+/// so the copy says so and a "Clear filters" escape hatch appears next
+/// to "Start over" instead of leaving the user guessing.
 class DiscoveryEmptyDeck extends StatelessWidget {
-  const DiscoveryEmptyDeck({super.key, required this.onRestart});
+  const DiscoveryEmptyDeck({
+    super.key,
+    required this.onRestart,
+    this.filterSummary,
+    this.onClearFilters,
+  });
 
   final VoidCallback onRestart;
 
+  /// Human-readable active filter, e.g. "Basketball · Within 5 km".
+  /// Null/empty means no filter is active.
+  final String? filterSummary;
+  final VoidCallback? onClearFilters;
+
   @override
   Widget build(BuildContext context) {
-    return EmptyState(
-      icon: Icons.travel_explore_rounded,
-      title: "You're all caught up",
-      subtitle:
-          "You've seen all activities near you. Check back later or "
-          'adjust your preferences to see more.',
-      actionLabel: 'Start over',
-      onAction: onRestart,
+    final filtered = (filterSummary ?? '').isNotEmpty;
+    // Max + centered: the parent Padding fills the Expanded deck area,
+    // so this puts the content back in the vertical middle (where the
+    // old bare-EmptyState layout had it via its own Center).
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        EmptyState(
+          icon: Icons.travel_explore_rounded,
+          title: filtered ? 'No matches for these filters' : "You're all caught up",
+          subtitle: filtered
+              ? 'Nothing within $filterSummary. Loosen the filters or check back later.'
+              : "You've seen all activities near you. Check back later or "
+                  'adjust your preferences to see more.',
+          actionLabel: 'Start over',
+          onAction: onRestart,
+        ),
+        if (filtered && onClearFilters != null) ...[
+          const SizedBox(height: AppSpacing.x3),
+          AppTappable(
+            semanticLabel: 'Clear filters',
+            onTap: onClearFilters!,
+            feedback: AppTapFeedback.scale,
+            minSize: 0,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.x4,
+                vertical: AppSpacing.x2,
+              ),
+              child: Text(
+                'Clear filters',
+                style: AppTypography.labelField(context).copyWith(
+                  color: context.colors.primaryOnSurface,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -76,6 +124,18 @@ class DiscoveryAction extends StatelessWidget {
       DiscoveryAction._(
         icon: Icons.sports_basketball_rounded,
         label: 'Join game',
+        onTap: onTap,
+        size: 68,
+        filled: true,
+      );
+
+  /// Approval-gated variant: same weight, "Request" wording + send
+  /// icon so the deck distinguishes instant-join from request-to-join
+  /// before the user swipes.
+  factory DiscoveryAction.request({required VoidCallback onTap}) =>
+      DiscoveryAction._(
+        icon: Icons.send_rounded,
+        label: 'Request',
         onTap: onTap,
         size: 68,
         filled: true,

@@ -7,11 +7,14 @@ import '../../../core/providers/repository_providers.dart';
 import '../../../core/services/calendar_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/utils/geo.dart';
+import '../../../core/utils/share_helper.dart';
 import '../../../core/widgets/app_dialog.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/app_avatar.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/asset_image.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_tappable.dart';
 import '../../../core/widgets/error_retry.dart';
@@ -19,6 +22,8 @@ import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../../chat/domain/chat_message.dart';
 import '../../discovery/domain/activity_model.dart';
+import '../../discovery/presentation/widgets/venue_map_card.dart';
+import '../domain/activity_participant.dart';
 
 // ─── Data type ───────────────────────────────────────────────────────────────
 
@@ -35,6 +40,12 @@ final _detailProvider = FutureProvider.autoDispose
   final recent =
       messages.length > 2 ? messages.sublist(messages.length - 2) : messages;
   return (activity: activity, recentMessages: recent);
+});
+
+/// Live roster for the participant avatar stack — real faces only.
+final _rosterProvider = FutureProvider.autoDispose
+    .family<List<ActivityParticipant>, String>((ref, activityId) {
+  return ref.watch(activityRepositoryProvider).participants(activityId);
 });
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
@@ -158,6 +169,13 @@ class _DetailBody extends StatelessWidget {
                   _MetaCard(activity: activity),
                   const SizedBox(height: AppSpacing.x5),
 
+                  // Venue map (only when coordinates exist).
+                  if (activity.latitude != null &&
+                      activity.longitude != null) ...[
+                    VenueMapCard(activity: activity),
+                    const SizedBox(height: AppSpacing.x5),
+                  ],
+
                   // Participants
                   _ParticipantsSection(activity: activity),
                   const SizedBox(height: AppSpacing.x5),
@@ -165,7 +183,7 @@ class _DetailBody extends StatelessWidget {
                   // Group chat preview
                   _ChatSection(
                     messages: recentMessages,
-                    activityTitle: activity.title,
+                    activityId: activity.id,
                   ),
                   const SizedBox(height: AppSpacing.x5),
 
@@ -211,12 +229,11 @@ class _Hero extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Cover image
+        // Cover image (bundled asset or remote Storage URL)
         activity.coverImageUrl != null
-            ? Image.asset(
-                activity.coverImageUrl!,
+            ? AssetImageWithFallback(
+                imagePath: activity.coverImageUrl!,
                 fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => _placeholder(),
               )
             : _placeholder(),
 
@@ -254,7 +271,7 @@ class _Hero extends StatelessWidget {
                   ),
                   _HeroBtn(
                     icon: Icons.ios_share_rounded,
-                    onTap: () {},
+                    onTap: () => ShareHelper.shareActivity(activity),
                     label: 'Share',
                   ),
                 ],
@@ -449,7 +466,6 @@ class _HostCard extends StatelessWidget {
         child: Row(
           children: [
             AppAvatar(
-              assetPath: 'assets/images/discovery/avatars/avatar_alex.png',
               name: hostName,
               size: AppAvatarSize.sm,
             ),
@@ -527,8 +543,7 @@ class _MetaCard extends StatelessWidget {
     final start = DateFormat('h:mm a').format(activity.dateTime);
     final end = DateFormat('h:mm a').format(activity.endTime);
     final address =
-        activity.addressLine ??
-        '${activity.distanceKm.toStringAsFixed(1)} km away';
+        activity.addressLine ?? distanceLabel(activity.distanceKm) ?? '';
 
     return Container(
       decoration: BoxDecoration(
@@ -649,26 +664,18 @@ class _FeeChip extends StatelessWidget {
 
 // ─── Participants section ─────────────────────────────────────────────────────
 
-class _ParticipantsSection extends StatelessWidget {
+class _ParticipantsSection extends ConsumerWidget {
   const _ParticipantsSection({required this.activity});
   final ActivityModel activity;
 
   static const double _size = 32;
   static const double _step = 22;
   static const int _maxVisible = 4;
-  static const _faces = [
-    'assets/images/discovery/avatars/avatar_1.png',
-    'assets/images/discovery/avatars/avatar_2.png',
-    'assets/images/discovery/avatars/avatar_3.png',
-    'assets/images/discovery/avatars/avatar_alex.png',
-  ];
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final count = activity.participantCount;
-    final visible = count.clamp(0, _maxVisible);
-    final overflow = count - visible;
-    final slots = visible + (overflow > 0 ? 1 : 0);
+    final roster = ref.watch(_rosterProvider(activity.id));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -688,48 +695,61 @@ class _ParticipantsSection extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.x3),
-        if (slots == 0)
-          Text('No one has joined yet.', style: AppTypography.metaSub(context))
-        else
-          SizedBox(
-            height: _size,
-            width: _step * (slots - 1) + _size,
-            child: Stack(
-              children: [
-                for (var i = 0; i < visible; i++)
-                  Positioned(
-                    left: i * _step,
-                    child: _Ring(
-                      child: Image.asset(
-                        _faces[i % _faces.length],
-                        width: _size,
-                        height: _size,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) =>
-                            ColoredBox(color: context.colors.avatarNeutral),
+        roster.when(
+          loading: () => const SizedBox(height: _size),
+          error: (_, _) => const SizedBox(height: _size),
+          data: (members) {
+            if (members.isEmpty) {
+              return Text(
+                'No one has joined yet.',
+                style: AppTypography.metaSub(context),
+              );
+            }
+            final visible = members.take(_maxVisible).toList();
+            final overflow = members.length - visible.length;
+            final slots = visible.length + (overflow > 0 ? 1 : 0);
+            return SizedBox(
+              // Keyed so tests can scope finders to the live roster
+              // stack (the host card elsewhere shows the same
+              // initials when host == organizer).
+              key: const ValueKey('participant-stack'),
+              height: _size,
+              width: _step * (slots - 1) + _size,
+              child: Stack(
+                children: [
+                  for (var i = 0; i < visible.length; i++)
+                    Positioned(
+                      left: i * _step,
+                      child: _Ring(
+                        child: AppAvatar(
+                          imageUrl: visible[i].avatarUrl,
+                          name: visible[i].name,
+                          size: AppAvatarSize.sm,
+                        ),
                       ),
                     ),
-                  ),
-                if (overflow > 0)
-                  Positioned(
-                    left: visible * _step,
-                    child: _Ring(
-                      child: ColoredBox(
-                        color: context.colors.border,
-                        child: Center(
-                          child: Text(
-                            '+$overflow',
-                            style: AppTypography.badgeSport(context).copyWith(
-                              color: context.colors.textSecondary,
+                  if (overflow > 0)
+                    Positioned(
+                      left: visible.length * _step,
+                      child: _Ring(
+                        child: ColoredBox(
+                          color: context.colors.border,
+                          child: Center(
+                            child: Text(
+                              '+$overflow',
+                              style: AppTypography.badgeSport(context).copyWith(
+                                color: context.colors.textSecondary,
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-              ],
-            ),
-          ),
+                ],
+              ),
+            );
+          },
+        ),
       ],
     );
   }
@@ -758,10 +778,10 @@ class _Ring extends StatelessWidget {
 class _ChatSection extends StatelessWidget {
   const _ChatSection({
     required this.messages,
-    required this.activityTitle,
+    required this.activityId,
   });
   final List<ChatMessage> messages;
-  final String activityTitle;
+  final String activityId;
 
   @override
   Widget build(BuildContext context) {
@@ -786,7 +806,7 @@ class _ChatSection extends StatelessWidget {
               ],
               // Open Chat button
               PressableScale(
-                onTap: () => context.push('/chat/$activityTitle'),
+                onTap: () => context.push('/chat/$activityId'),
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(

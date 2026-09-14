@@ -2,17 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_tappable.dart';
 import '../../../core/widgets/pill_buttons.dart';
 import '../../../core/widgets/pressable_scale.dart';
-
-// Persists the selected reason so it's available to analytics / onboarding
-// flow without cluttering a global provider. Local state is enough here.
 
 class GetToKnow1Screen extends ConsumerStatefulWidget {
   const GetToKnow1Screen({super.key});
@@ -23,6 +22,7 @@ class GetToKnow1Screen extends ConsumerStatefulWidget {
 
 class _GetToKnow1ScreenState extends ConsumerState<GetToKnow1Screen> {
   int _selected = 0;
+  bool _saving = false;
 
   static const _options = [
     ('Stay active with new sports', Icons.directions_run_rounded),
@@ -31,6 +31,30 @@ class _GetToKnow1ScreenState extends ConsumerState<GetToKnow1Screen> {
     ('Meet new sports partners', Icons.handshake_rounded),
     ('Other reasons', Icons.more_horiz_rounded),
   ];
+
+  /// Persists the selected reason to the backend profile before
+  /// advancing — every onboarding answer must land in the DB even if
+  /// the user never reaches the final step.
+  Future<void> _onNext() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    try {
+      await ref.read(userRepositoryProvider).updateProfile(
+            joinReason: _options[_selected].$1,
+          );
+      if (!mounted) return;
+      context.push('/get-to-know-2');
+    } catch (_) {
+      if (!mounted) return;
+      AppSnackbar.show(
+        context,
+        message: 'Could not save your answer. Please try again.',
+        variant: AppSnackbarVariant.error,
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -79,7 +103,7 @@ class _GetToKnow1ScreenState extends ConsumerState<GetToKnow1Screen> {
                   const SizedBox(height: AppSpacing.x4),
                   PrimaryPillButton(
                     label: 'Next',
-                    onPressed: () => context.push('/get-to-know-2'),
+                    onPressed: _saving ? null : _onNext,
                   ),
                   const SizedBox(height: AppSpacing.x5),
                 ],

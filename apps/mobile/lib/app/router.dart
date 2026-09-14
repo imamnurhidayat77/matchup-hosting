@@ -22,10 +22,13 @@ import '../features/activities/presentation/create_activity_screen.dart';
 import '../features/activities/presentation/my_activities_screen.dart';
 import '../features/activities/presentation/joined_activity_detail_screen.dart';
 import '../features/activities/presentation/past_activity_review_screen.dart';
+import '../features/activities/presentation/pending_request_detail_screen.dart';
 import '../features/activities/presentation/activity_participants_screen.dart';
 import '../features/activities/presentation/activity_full_screen.dart';
 import '../features/activities/presentation/check_in_screen.dart';
+import '../features/activities/presentation/edit_activity_screen.dart';
 import '../features/activities/presentation/manage_activity_screen.dart';
+import '../features/activities/presentation/join_request_sent_screen.dart';
 import '../features/activities/presentation/match_screen.dart';
 import '../features/preferences/presentation/get_to_know_1_screen.dart';
 import '../features/preferences/presentation/get_to_know_2_screen.dart';
@@ -37,6 +40,7 @@ import '../features/profile/presentation/profile_screen.dart';
 import '../features/profile/presentation/edit_profile_screen.dart';
 import '../features/profile/presentation/player_profile_screen.dart';
 import '../features/chat/presentation/chat_screen.dart';
+import '../features/chat/presentation/dm_screen.dart';
 import '../features/chat/presentation/messages_screen.dart';
 import 'app_shell.dart';
 
@@ -104,8 +108,14 @@ CustomTransitionPage<void> appPage(
 
 // ─── Builder ─────────────────────────────────────────────────────────────────
 
+/// Root navigator key — lets notification taps and other app-level
+/// triggers navigate without a widget context (see `_PushRouter` in
+/// `app.dart`, which resolves its context from this key).
+final rootNavigatorKey = GlobalKey<NavigatorState>();
+
 GoRouter buildRouter(Ref ref) {
   return GoRouter(
+    navigatorKey: rootNavigatorKey,
     initialLocation: '/splash',
     refreshListenable: _AuthListenable(ref),
     redirect: (context, state) {
@@ -248,6 +258,13 @@ GoRouter buildRouter(Ref ref) {
               return MatchScreen(activityId: id);
             },
           ),
+          GoRoute(
+            path: '/request-sent/:id',
+            builder: (_, state) {
+              final id = state.pathParameters['id'] ?? '1';
+              return JoinRequestSentScreen(activityId: id);
+            },
+          ),
 
           // Everything below is reached exclusively via context.push() —
           // each gets the shared appPage slide+fade so every push feels
@@ -295,6 +312,17 @@ GoRouter buildRouter(Ref ref) {
               );
             },
           ),
+          GoRoute(
+            path: '/edit-activity/:id',
+            pageBuilder: (_, state) {
+              final id = state.pathParameters['id'] ?? '1';
+              return appPage(
+                state,
+                EditActivityScreen(activityId: id),
+                key: ValueKey('edit-activity-$id'),
+              );
+            },
+          ),
           // '/joined-activities' removed (PRD Section 3 / Appendix E.2):
           // JoinedActivitiesScreen duplicated My Activities and nothing in
           // the app ever navigated to it — confirmed via a full-repo grep
@@ -322,6 +350,17 @@ GoRouter buildRouter(Ref ref) {
             },
           ),
           GoRoute(
+            path: '/pending-request/:id',
+            pageBuilder: (_, state) {
+              final id = state.pathParameters['id'] ?? '1';
+              return appPage(
+                state,
+                PendingRequestDetailScreen(activityId: id),
+                key: ValueKey('pending-request-$id'),
+              );
+            },
+          ),
+          GoRoute(
             path: '/preferences',
             pageBuilder: (_, state) =>
                 appPage(state, const PreferencesScreen()),
@@ -335,13 +374,32 @@ GoRouter buildRouter(Ref ref) {
           // '!keyReservation.contains(key)' on double-tap/race; modal sheets
           // sidestep that because they live in an Overlay, not a Page.
           GoRoute(
-            path: '/chat/:title',
+            // Uses the *activity id* (not title) so backend calls —
+            // `/api/chat/{id}/messages`, `/api/typing/{id}/:uid`, the
+            // RTDB `activityChats/{id}` ref — all hit real rows.
+            // The screen fetches the activity to display the title.
+            path: '/chat/:id',
             pageBuilder: (_, state) {
-              final title = state.pathParameters['title'] ?? 'Chat';
+              final id = state.pathParameters['id'] ?? '';
               return appPage(
                 state,
-                ChatScreen(activityTitle: title),
-                key: ValueKey('chat-$title'),
+                ChatScreen(activityId: id),
+                key: ValueKey('chat-$id'),
+              );
+            },
+          ),
+          GoRoute(
+            // 1-on-1 thread with another user. Peer display name rides
+            // along as route `extra` (falls back to a generic label on
+            // cold-start push taps where no name is available).
+            path: '/dm/:uid',
+            pageBuilder: (_, state) {
+              final uid = state.pathParameters['uid'] ?? '';
+              final name = state.extra is String ? state.extra as String : null;
+              return appPage(
+                state,
+                DmScreen(otherUid: uid, peerName: name),
+                key: ValueKey('dm-$uid'),
               );
             },
           ),

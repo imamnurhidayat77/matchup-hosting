@@ -1,0 +1,311 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+
+import '../../../core/providers/repository_providers.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/app_typography.dart';
+import '../../../core/theme/dark_colors.dart';
+import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/asset_image.dart';
+import '../../../core/widgets/error_retry.dart';
+import '../../../core/widgets/pressable_scale.dart';
+import '../../../core/widgets/skeleton.dart';
+import '../../discovery/domain/activity_model.dart';
+
+/// Shown after requesting to join an approval-gated activity.
+///
+/// Unlike the instant-join "Match" screen, nothing is confirmed yet —
+/// this screen sets that expectation explicitly: the request is with
+/// the host, and the app notifies the user on approve/decline. All
+/// colors come from theme tokens so light and dark mode both render
+/// correctly (no hardcoded light surfaces).
+class JoinRequestSentScreen extends ConsumerWidget {
+  const JoinRequestSentScreen({super.key, required this.activityId});
+  final String activityId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(_requestActivityProvider(activityId));
+    return AppScaffold(
+      showHomeIndicator: false,
+      backgroundColor: context.colors.background,
+      body: async.when(
+        loading: () => const SkeletonList(count: 3),
+        error: (_, _) => ErrorRetry(
+          message: 'Could not load this activity.',
+          onRetry: () =>
+              ref.invalidate(_requestActivityProvider(activityId)),
+        ),
+        data: (activity) {
+          if (activity == null) {
+            return const Center(child: Text('Activity not found.'));
+          }
+          return _RequestBody(activity: activity);
+        },
+      ),
+    );
+  }
+}
+
+final _requestActivityProvider = FutureProvider.autoDispose
+    .family<ActivityModel?, String>((ref, id) {
+  return ref.watch(activityRepositoryProvider).byId(id);
+});
+
+class _RequestBody extends StatelessWidget {
+  const _RequestBody({required this.activity});
+  final ActivityModel activity;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.x5,
+        AppSpacing.x8,
+        AppSpacing.x5,
+        AppSpacing.x8,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Pending hero
+          Container(
+            width: 96,
+            height: 96,
+            decoration: BoxDecoration(
+              color: context.colors.warningBg,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: context.colors.warningText.withValues(alpha: 0.3),
+              ),
+            ),
+            alignment: Alignment.center,
+            child: Icon(
+              Icons.hourglass_top_rounded,
+              size: 44,
+              color: context.colors.warningText,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.x5),
+          Text(
+            'Request sent!',
+            style: AppTypography.headingDisplay(context),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: AppSpacing.x2),
+          Text(
+            'The host will review your request soon. '
+            'We\u2019ll notify you the moment they decide.',
+            style: AppTypography.bodyMedium(context).copyWith(
+              color: context.colors.textSecondary,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: AppSpacing.x5),
+
+          // Activity summary
+          _SummaryCard(activity: activity),
+          const SizedBox(height: AppSpacing.x5),
+
+          // What happens next
+          const _NextSteps(),
+          const SizedBox(height: AppSpacing.x6),
+
+          // Back to Discover — primary
+          PressableScale(
+            onTap: () {
+              HapticFeedback.lightImpact();
+              context.go('/discovery');
+            },
+            child: Container(
+              width: double.infinity,
+              height: 58,
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+                boxShadow: AppShadows.glowPrimary,
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                'Back to Discover',
+                style: AppTypography.buttonPrimary,
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.x3),
+
+          // View details — secondary
+          PressableScale(
+            onTap: () {
+              HapticFeedback.lightImpact();
+              context.go('/activity/${activity.id}');
+            },
+            child: Container(
+              width: double.infinity,
+              height: 58,
+              decoration: BoxDecoration(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+                border: Border.all(color: context.colors.border),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                'View Activity Details',
+                style: AppTypography.buttonPrimary.copyWith(
+                  color: context.colors.textPrimary,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryCard extends StatelessWidget {
+  const _SummaryCard({required this.activity});
+  final ActivityModel activity;
+
+  @override
+  Widget build(BuildContext context) {
+    final date = DateFormat('EEEE, MMMM d').format(activity.dateTime);
+    final time = DateFormat('h:mm a').format(activity.dateTime);
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.x4),
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        border: Border.all(color: context.colors.border),
+        boxShadow: AppShadows.card,
+      ),
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppRadius.input),
+            child: SizedBox(
+              width: 64,
+              height: 64,
+              child: activity.coverImageUrl != null
+                  ? AssetImageWithFallback(
+                      imagePath: activity.coverImageUrl!,
+                      fit: BoxFit.cover,
+                    )
+                  : Container(
+                      color: context.colors.primarySoft,
+                      alignment: Alignment.center,
+                      child: Icon(
+                        Icons.sports_basketball_rounded,
+                        size: 28,
+                        color: context.colors.primaryOnSurface,
+                      ),
+                    ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.x3),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  activity.title,
+                  style: AppTypography.labelField(context).copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '$date · $time',
+                  style: AppTypography.metaSub(context),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  activity.location,
+                  style: AppTypography.metaSub(context),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NextSteps extends StatelessWidget {
+  const _NextSteps();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.x4),
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        border: Border.all(color: context.colors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'What happens next',
+            style: AppTypography.labelField(context).copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.x3),
+          _Step(
+            icon: Icons.send_rounded,
+            text: 'Your request is with the host.',
+          ),
+          const SizedBox(height: AppSpacing.x2),
+          _Step(
+            icon: Icons.notifications_none_rounded,
+            text: 'You get notified on approve or decline.',
+          ),
+          const SizedBox(height: AppSpacing.x2),
+          _Step(
+            icon: Icons.check_circle_outline_rounded,
+            text: 'Approved? The game appears in My Games.',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Step extends StatelessWidget {
+  const _Step({required this.icon, required this.text});
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18, color: context.colors.primaryOnSurface),
+        const SizedBox(width: AppSpacing.x3),
+        Expanded(
+          child: Text(
+            text,
+            style: AppTypography.bodyMedium(context).copyWith(fontSize: 14),
+          ),
+        ),
+      ],
+    );
+  }
+}

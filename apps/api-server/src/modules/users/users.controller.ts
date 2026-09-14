@@ -3,6 +3,7 @@ import {
   bootstrapUser,
   getPublicUserProfile,
   getUserByAuthUid,
+  mintCustomToken,
   updateUserPhoto,
   updateUserProfile,
   type SkillLevel,
@@ -20,7 +21,9 @@ const editableProfileFields = [
   'dateOfBirth',
   'skillLevel',
   'preferredSports',
+  'sportSkillLevels',
   'preferredLocations',
+  'joinReason',
 ] as const;
 
 function isSkillLevel(value: unknown): value is SkillLevel {
@@ -42,6 +45,15 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string');
 }
 
+function isSportSkillLevels(value: unknown): value is Record<string, SkillLevel> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+  return Object.entries(value as Record<string, unknown>).every(
+    ([sport, level]) => sport.trim().length > 0 && isSkillLevel(level),
+  );
+}
+
 function buildProfileInput(body: Record<string, unknown>): UpdateUserProfileInput {
   const input: UpdateUserProfileInput = {};
 
@@ -57,6 +69,14 @@ function buildProfileInput(body: Record<string, unknown>): UpdateUserProfileInpu
 
   if (isStringArray(body.preferredSports)) {
     input.preferredSports = body.preferredSports.map((sport) => sport.trim()).filter(Boolean);
+  }
+
+  if (isSportSkillLevels(body.sportSkillLevels)) {
+    input.sportSkillLevels = body.sportSkillLevels;
+  }
+
+  if (typeof body.joinReason === 'string' && body.joinReason.trim()) {
+    input.joinReason = body.joinReason.trim();
   }
 
   if (isStringArray(body.preferredLocations)) {
@@ -140,6 +160,39 @@ export async function bootstrapUserHandler(req: Request, res: Response) {
   }
 }
 
+export async function getCustomTokenHandler(req: Request, res: Response) {
+  try {
+    const authUid = req.auth?.uid;
+
+    if (!authUid) {
+      return res.status(401).json({
+        ok: false,
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'Authenticated user is required',
+        },
+      });
+    }
+
+    const customToken = await mintCustomToken(authUid);
+
+    return res.status(200).json({
+      ok: true,
+      data: { customToken },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+
+    return res.status(500).json({
+      ok: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message,
+      },
+    });
+  }
+}
+
 export async function getMyUserHandler(req: Request, res: Response) {
   try {
     const authUid = req.auth?.uid;
@@ -198,6 +251,15 @@ export async function updateMyUserProfileHandler(req: Request, res: Response) {
       });
     }
 
+    // Key-only request logging (no values — privacy safe) to
+    // diagnose client/server contract mismatches like wrong field
+    // names or shapes sent by older app builds.
+    try {
+      console.log(`[users] PATCH /me keys=${Object.keys(body ?? {}).join(',')}`);
+    } catch {
+      // Logging must never break the request.
+    }
+
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
       return res.status(400).json({
         ok: false,
@@ -206,6 +268,10 @@ export async function updateMyUserProfileHandler(req: Request, res: Response) {
           message: 'request body must be an object',
         },
       });
+    }
+
+    for (const key of Object.keys(body)) {
+      if (body[key] === null) delete body[key];
     }
 
     if (hasUnknownProfileFields(body)) {
@@ -256,6 +322,26 @@ export async function updateMyUserProfileHandler(req: Request, res: Response) {
         error: {
           code: 'INVALID_INPUT',
           message: 'preferredSports must be a string array',
+        },
+      });
+    }
+
+    if (body.sportSkillLevels !== undefined && !isSportSkillLevels(body.sportSkillLevels)) {
+      return res.status(400).json({
+        ok: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'sportSkillLevels must map sport names to beginner, intermediate, advanced, or any',
+        },
+      });
+    }
+
+    if (body.joinReason !== undefined && typeof body.joinReason !== 'string') {
+      return res.status(400).json({
+        ok: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'joinReason must be a string',
         },
       });
     }

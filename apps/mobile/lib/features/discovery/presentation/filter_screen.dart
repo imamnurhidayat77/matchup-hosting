@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -8,25 +9,10 @@ import '../../../core/theme/dark_colors.dart';
 import '../../../core/widgets/app_icon.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_tappable.dart';
+import '../domain/discovery_filter.dart';
+import 'discovery_screen.dart' show discoveryFilterProvider;
 
 // ─── Models ───────────────────────────────────────────────────────────────────
-
-enum _SkillLevel { any, beginner, intermediate, advanced }
-
-extension _SkillLevelLabel on _SkillLevel {
-  String get label {
-    switch (this) {
-      case _SkillLevel.any:
-        return 'Any';
-      case _SkillLevel.beginner:
-        return 'Beginner';
-      case _SkillLevel.intermediate:
-        return 'Intermediate';
-      case _SkillLevel.advanced:
-        return 'Advanced';
-    }
-  }
-}
 
 enum _DatePreset { today, tomorrow, thisWeekend, thisWeek, custom }
 
@@ -47,16 +33,33 @@ extension _DatePresetLabel on _DatePreset {
   }
 }
 
+
+
+extension _DiscoverySkillLevelLabel on DiscoverySkillLevel {
+  String get label {
+    switch (this) {
+      case DiscoverySkillLevel.any:
+        return 'Any';
+      case DiscoverySkillLevel.beginner:
+        return 'Beginner';
+      case DiscoverySkillLevel.intermediate:
+        return 'Intermediate';
+      case DiscoverySkillLevel.advanced:
+        return 'Advanced';
+    }
+  }
+}
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
-class FilterScreen extends StatefulWidget {
+class FilterScreen extends ConsumerStatefulWidget {
   const FilterScreen({super.key});
 
   @override
-  State<FilterScreen> createState() => _FilterScreenState();
+  ConsumerState<FilterScreen> createState() => _FilterScreenState();
 }
 
-class _FilterScreenState extends State<FilterScreen> {
+class _FilterScreenState extends ConsumerState<FilterScreen> {
   static const _sports = [
     'Basketball',
     'Tennis',
@@ -70,52 +73,63 @@ class _FilterScreenState extends State<FilterScreen> {
     'Golf',
   ];
 
-  static const _priceModes = ['Free', 'Paid', 'Both'];
+  /// Local working copy — written to the session provider on Apply.
+  late DiscoveryFilter _draft;
 
-  // sport index → skill level chosen for that sport (defaults to Any when first selected)
-  final Map<int, _SkillLevel> _sportSkills = {0: _SkillLevel.any};
-
-  double _distance = 5;
-  int _priceMode = 2;
-  _DatePreset? _datePreset = _DatePreset.today;
-  DateTimeRange? _customRange;
-
-  Set<int> get _selectedSports => _sportSkills.keys.toSet();
+  @override
+  void initState() {
+    super.initState();
+    _draft = ref.read(discoveryFilterProvider);
+  }
 
   void _reset() {
     setState(() {
-      _sportSkills
-        ..clear()
-        ..addAll({0: _SkillLevel.any});
-      _distance = 5;
-      _priceMode = 2;
-      _datePreset = null;
-      _customRange = null;
+      _draft = const DiscoveryFilter();
     });
   }
 
   void _toggleSport(int i) {
+    final sport = _sports[i];
     setState(() {
-      if (_sportSkills.containsKey(i)) {
-        _sportSkills.remove(i);
+      final existing = _draft.sportSkills
+          .indexWhere((s) => s.sport == sport);
+      if (existing >= 0) {
+        _draft = _draft.copyWith(
+          sportSkills: List.of(_draft.sportSkills)..removeAt(existing),
+        );
       } else {
-        _sportSkills[i] = _SkillLevel.any;
+        _draft = _draft.copyWith(
+          sportSkills: [
+            ..._draft.sportSkills,
+            DiscoverySportSkill(
+              sport: sport,
+              skill: DiscoverySkillLevel.any,
+            ),
+          ],
+        );
       }
     });
   }
 
-  void _setSkill(int sportIndex, _SkillLevel level) {
-    setState(() => _sportSkills[sportIndex] = level);
+  void _setSkill(int i, DiscoverySkillLevel level) {
+    final sport = _sports[i];
+    setState(() {
+      final updated = _draft.sportSkills
+          .map((s) => s.sport == sport ? s.copyWithSkill(level) : s)
+          .toList();
+      _draft = _draft.copyWith(sportSkills: updated);
+    });
   }
 
   Future<void> _pickCustomRange() async {
     final now = DateTime.now();
+    final start = _draft.startAfter ?? now;
+    final end = _draft.startBefore ?? now.add(const Duration(days: 3));
     final range = await showDateRangePicker(
       context: context,
       firstDate: now,
       lastDate: now.add(const Duration(days: 365)),
-      initialDateRange: _customRange ??
-          DateTimeRange(start: now, end: now.add(const Duration(days: 3))),
+      initialDateRange: DateTimeRange(start: start, end: end),
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
           colorScheme: const ColorScheme.light(
@@ -129,28 +143,69 @@ class _FilterScreenState extends State<FilterScreen> {
     );
     if (range != null) {
       setState(() {
-        _customRange = range;
-        _datePreset = _DatePreset.custom;
+        _draft = _draft.copyWith(
+          startAfter: DateTime(
+              range.start.year, range.start.month, range.start.day),
+          startBefore: DateTime(range.end.year, range.end.month,
+              range.end.day, 23, 59, 59, 999),
+        );
       });
     }
   }
 
-  String get _distanceLabel => 'Within ${_distance.round()} km';
-  String get _priceLabel => _priceModes[_priceMode];
-
   String get _dateLabel {
-    if (_datePreset == null) return 'Any time';
-    if (_datePreset == _DatePreset.custom && _customRange != null) {
+    if (_draft.startAfter != null || _draft.startBefore != null) {
       final fmt = DateFormat('d MMM');
-      return '${fmt.format(_customRange!.start)} – ${fmt.format(_customRange!.end)}';
+      final start = _draft.startAfter;
+      final end = _draft.startBefore;
+      if (start != null && end != null) {
+        return '${fmt.format(start)} – ${fmt.format(end)}';
+      }
     }
-    return _datePreset!.label;
+    return _draft.datePreset.label;
+  }
+
+  String get _distanceLabel =>
+      _draft.maxDistanceKm == null ? 'Any' : 'Within ${_draft.maxDistanceKm!.round()} km';
+
+  void _onDatePresetSelected(_DatePreset preset) {
+    if (preset == _DatePreset.custom) {
+      _pickCustomRange();
+      return;
+    }
+    // Map the local-widget enum to the wire-typed enum. The two share
+    // a 1:1 `name` mapping (today, tomorrow, thisWeekend, thisWeek);
+    // byName is non-null for any string the local enum can produce.
+    final wirePreset = DiscoveryDatePreset.values.byName(preset.name);
+    setState(() {
+      _draft = _draft.copyWith(
+        datePreset: _draft.datePreset == wirePreset
+            ? DiscoveryDatePreset.anyTime
+            : wirePreset,
+        startAfter: null,
+        startBefore: null,
+      );
+    });
+  }
+
+  void _apply() {
+    debugPrint(
+      '[FilterScreen._apply] draft.sportSkills=${_draft.sportSkills.length} '
+      'datePreset=${_draft.datePreset} '
+      'maxDistanceKm=${_draft.maxDistanceKm} '
+      'isEmpty=${_draft.isEmpty}',
+    );
+    // Always write to the provider — even when the draft is empty,
+    // because the Discovery screen's `ref.listenManual` listener
+    // treats that as "user cleared the filter" and reloads with the
+    // legacy (non-discover) feed path. Skipping the write on empty
+    // would leave a stale filter active and confuse the user.
+    ref.read(discoveryFilterProvider.notifier).state = _draft;
+    Navigator.of(context).maybePop();
   }
 
   @override
   Widget build(BuildContext context) {
-    final selected = _selectedSports;
-
     return AppScaffold.sheet(
       title: 'Filters',
       trailingAction: 'Reset',
@@ -171,7 +226,7 @@ class _FilterScreenState extends State<FilterScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Alert banner when no sport selected
-                  if (selected.isEmpty) ...[
+                  if (_draft.sportSkills.isEmpty) ...[
                     _NoBannerHint(),
                     const SizedBox(height: AppSpacing.x4),
                   ],
@@ -180,9 +235,9 @@ class _FilterScreenState extends State<FilterScreen> {
                   _SectionCard(
                     header: _SectionHeader(
                       title: 'Your sports',
-                      trailing: selected.isNotEmpty
+                      trailing: _draft.sportSkills.isNotEmpty
                           ? Text(
-                              '${selected.length} selected',
+                              '${_draft.sportSkills.length} selected',
                               style: AppTypography.caption(context).copyWith(
                                 color: context.colors.primaryOnSurface,
                               ),
@@ -191,7 +246,7 @@ class _FilterScreenState extends State<FilterScreen> {
                     ),
                     child: _SportsWithSkills(
                       sports: _sports,
-                      sportSkills: _sportSkills,
+                      selected: _draft.sportSkills,
                       onToggleSport: _toggleSport,
                       onSetSkill: _setSkill,
                     ),
@@ -202,19 +257,12 @@ class _FilterScreenState extends State<FilterScreen> {
                   _SectionCard(
                     header: const _SectionHeader(title: 'When'),
                     child: _DatePresetGrid(
-                      selected: _datePreset,
-                      customRange: _customRange,
-                      onSelect: (preset) {
-                        if (preset == _DatePreset.custom) {
-                          _pickCustomRange();
-                        } else {
-                          setState(() {
-                            _datePreset =
-                                _datePreset == preset ? null : preset;
-                            _customRange = null;
-                          });
-                        }
-                      },
+                      selected: _draft.datePreset == DiscoveryDatePreset.anyTime
+                          ? null
+                          : _DatePreset.values.byName(_draft.datePreset.name),
+                      hasCustomRange: _draft.startAfter != null ||
+                          _draft.startBefore != null,
+                      onSelect: _onDatePresetSelected,
                     ),
                   ),
                   const SizedBox(height: AppSpacing.x4),
@@ -223,25 +271,17 @@ class _FilterScreenState extends State<FilterScreen> {
                   _SectionCard(
                     header: _SectionHeader(
                       title: 'Distance',
-                      trailing: _DistancePill(km: _distance.round()),
+                      trailing: _DistancePill(
+                        km: _draft.maxDistanceKm?.round(),
+                      ),
                     ),
                     child: _DistanceSlider(
-                      distance: _distance,
-                      onChanged: (v) => setState(() => _distance = v),
+                      distanceKm: _draft.maxDistanceKm ?? 10,
+                      onChanged: (v) => setState(() {
+                        _draft = _draft.copyWith(maxDistanceKm: v);
+                      }),
                     ),
                   ),
-                  const SizedBox(height: AppSpacing.x4),
-
-                  // Price
-                  _SectionCard(
-                    header: const _SectionHeader(title: 'Price preference'),
-                    child: _PriceToggle(
-                      modes: _priceModes,
-                      selected: _priceMode,
-                      onChanged: (i) => setState(() => _priceMode = i),
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.x2),
                 ],
               ),
             ),
@@ -250,9 +290,8 @@ class _FilterScreenState extends State<FilterScreen> {
           // Pinned CTA
           _ApplyBar(
             distanceLabel: _distanceLabel,
-            priceLabel: _priceLabel,
             dateLabel: _dateLabel,
-            onApply: () => Navigator.of(context).maybePop(),
+            onApply: _apply,
           ),
         ],
       ),
@@ -265,21 +304,22 @@ class _FilterScreenState extends State<FilterScreen> {
 class _SportsWithSkills extends StatelessWidget {
   const _SportsWithSkills({
     required this.sports,
-    required this.sportSkills,
+    required this.selected,
     required this.onToggleSport,
     required this.onSetSkill,
   });
 
   final List<String> sports;
-  final Map<int, _SkillLevel> sportSkills;
+
+  /// Selected sport+skill entries from the parent state, in the
+  /// order they were added (so the per-sport skill rows render in
+  /// the order the user picked them).
+  final List<DiscoverySportSkill> selected;
   final ValueChanged<int> onToggleSport;
-  final void Function(int sportIndex, _SkillLevel level) onSetSkill;
+  final void Function(int sportIndex, DiscoverySkillLevel level) onSetSkill;
 
   @override
   Widget build(BuildContext context) {
-    // Build sorted list of selected sport indices in insertion order
-    final selectedIndices = sportSkills.keys.toList();
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -289,27 +329,35 @@ class _SportsWithSkills extends StatelessWidget {
           runSpacing: AppSpacing.x2,
           children: List.generate(
             sports.length,
-            (i) => _SportPill(
-              label: sports[i],
-              selected: sportSkills.containsKey(i),
-              onTap: () => onToggleSport(i),
-            ),
+            (i) {
+              final sport = sports[i];
+              final isSelected = selected.any((s) => s.sport == sport);
+              return _SportPill(
+                label: sport,
+                selected: isSelected,
+                onTap: () => onToggleSport(i),
+              );
+            },
           ),
         ),
 
-        // Per-sport skill rows — animate in/out as sports are selected
-        if (selectedIndices.isNotEmpty) ...[
+        // Per-sport skill rows — render one card per selected sport.
+        if (selected.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.x4),
           const _SkillDivider(),
           const SizedBox(height: AppSpacing.x3),
-          ...selectedIndices.map((i) => Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.x3),
-                child: _SportSkillRow(
-                  sportName: sports[i],
-                  current: sportSkills[i] ?? _SkillLevel.any,
-                  onChanged: (level) => onSetSkill(i, level),
-                ),
-              )),
+          ...selected.map((entry) {
+            final i = sports.indexOf(entry.sport);
+            if (i < 0) return const SizedBox.shrink();
+            return Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.x3),
+              child: _SportSkillRow(
+                sportName: entry.sport,
+                current: entry.skill,
+                onChanged: (level) => onSetSkill(i, level),
+              ),
+            );
+          }),
         ],
       ],
     );
@@ -345,8 +393,8 @@ class _SportSkillRow extends StatelessWidget {
   });
 
   final String sportName;
-  final _SkillLevel current;
-  final ValueChanged<_SkillLevel> onChanged;
+  final DiscoverySkillLevel current;
+  final ValueChanged<DiscoverySkillLevel> onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -364,10 +412,10 @@ class _SportSkillRow extends StatelessWidget {
 
 class _SkillSegment extends StatelessWidget {
   const _SkillSegment({required this.current, required this.onChanged});
-  final _SkillLevel current;
-  final ValueChanged<_SkillLevel> onChanged;
+  final DiscoverySkillLevel current;
+  final ValueChanged<DiscoverySkillLevel> onChanged;
 
-  static const _levels = _SkillLevel.values;
+  static const _levels = DiscoverySkillLevel.values;
 
   @override
   Widget build(BuildContext context) {
@@ -582,11 +630,18 @@ class _SportPill extends StatelessWidget {
 class _DatePresetGrid extends StatelessWidget {
   const _DatePresetGrid({
     required this.selected,
-    required this.customRange,
+    required this.hasCustomRange,
     required this.onSelect,
   });
+
+  /// Local-widget enum (today / tomorrow / etc.) for the pill UI. The
+  /// wire enum is [DiscoveryDatePreset] — they're bridged via the
+  /// `toLocal()` extension defined on the model.
   final _DatePreset? selected;
-  final DateTimeRange? customRange;
+
+  /// Whether the user has picked a custom date range. Drives the
+  /// "Pick dates" pill label so the user can see their selection.
+  final bool hasCustomRange;
   final ValueChanged<_DatePreset> onSelect;
 
   static const _presets = _DatePreset.values;
@@ -599,8 +654,8 @@ class _DatePresetGrid extends StatelessWidget {
       children: _presets.map((preset) {
         final isSelected = selected == preset;
         final label =
-            (preset == _DatePreset.custom && isSelected && customRange != null)
-                ? _formatRange(customRange!)
+            (preset == _DatePreset.custom && isSelected && hasCustomRange)
+                ? 'Custom range'
                 : preset.label;
 
         return AppTappable(
@@ -652,21 +707,19 @@ class _DatePresetGrid extends StatelessWidget {
       }).toList(),
     );
   }
-
-  String _formatRange(DateTimeRange range) {
-    final fmt = DateFormat('d MMM');
-    return '${fmt.format(range.start)} – ${fmt.format(range.end)}';
-  }
 }
 
 // ─── Distance pill label ──────────────────────────────────────────────────────
 
 class _DistancePill extends StatelessWidget {
   const _DistancePill({required this.km});
-  final int km;
+  final int? km;
 
   @override
   Widget build(BuildContext context) {
+    if (km == null) {
+      return const SizedBox.shrink();
+    }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x3, vertical: 4),
       decoration: BoxDecoration(
@@ -687,8 +740,8 @@ class _DistancePill extends StatelessWidget {
 // ─── Distance slider ──────────────────────────────────────────────────────────
 
 class _DistanceSlider extends StatelessWidget {
-  const _DistanceSlider({required this.distance, required this.onChanged});
-  final double distance;
+  const _DistanceSlider({required this.distanceKm, required this.onChanged});
+  final double distanceKm;
   final ValueChanged<double> onChanged;
 
   static const double _min = 1;
@@ -713,7 +766,7 @@ class _DistanceSlider extends StatelessWidget {
             overlayShape: const RoundSliderOverlayShape(overlayRadius: 18),
           ),
           child: Slider(
-            value: distance.clamp(_min, _max),
+            value: distanceKm.clamp(_min, _max),
             min: _min,
             max: _max,
             onChanged: onChanged,
@@ -733,72 +786,15 @@ class _DistanceSlider extends StatelessWidget {
   }
 }
 
-// ─── Price toggle ─────────────────────────────────────────────────────────────
-
-class _PriceToggle extends StatelessWidget {
-  const _PriceToggle({
-    required this.modes,
-    required this.selected,
-    required this.onChanged,
-  });
-  final List<String> modes;
-  final int selected;
-  final ValueChanged<int> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 44,
-      decoration: BoxDecoration(
-        color: context.colors.surfaceMuted,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-      ),
-      child: Row(
-        children: List.generate(modes.length, (i) {
-          final isSelected = i == selected;
-          return Expanded(
-            child: AppTappable(
-              semanticLabel: modes[i],
-              onTap: () => onChanged(i),
-              feedback: AppTapFeedback.scale,
-              minSize: 0,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                margin: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  color: isSelected ? AppColors.primary : Colors.transparent,
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  modes[i],
-                  style: AppTypography.labelField(context).copyWith(
-                    color: isSelected
-                        ? AppColors.textOnPrimary
-                        : context.colors.textSecondary,
-                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                  ),
-                ),
-              ),
-            ),
-          );
-        }),
-      ),
-    );
-  }
-}
-
 // ─── Apply bar ────────────────────────────────────────────────────────────────
 
 class _ApplyBar extends StatelessWidget {
   const _ApplyBar({
     required this.distanceLabel,
-    required this.priceLabel,
     required this.dateLabel,
     required this.onApply,
   });
   final String distanceLabel;
-  final String priceLabel;
   final String dateLabel;
   final VoidCallback onApply;
 
@@ -834,7 +830,7 @@ class _ApplyBar extends StatelessWidget {
               Text('Show all activities', style: AppTypography.buttonPrimary),
               const SizedBox(height: 2),
               Text(
-                '$dateLabel · $distanceLabel · $priceLabel',
+                '$dateLabel · $distanceLabel',
                 style: AppTypography.metaSub(context).copyWith(
                   color: AppColors.textOnPrimary.withValues(alpha: 0.75),
                   fontSize: 11,

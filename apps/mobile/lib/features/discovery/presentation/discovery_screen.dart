@@ -1,16 +1,25 @@
+import 'dart:async';
+
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/network/api_client.dart';
+import '../../../core/providers/preferences_provider.dart';
 import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/home_header.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../../tour/presentation/tour_anchors.dart';
 import '../domain/activity_model.dart';
+import '../data/remote_activity_repository.dart';
+import '../domain/discovery_filter.dart';
+import '../domain/swipe_decision.dart';
 import 'widgets/discovery_actions.dart';
 import 'widgets/swipe_deck.dart';
 
@@ -20,6 +29,25 @@ final _unreadNotifCountProvider = FutureProvider.autoDispose<int>((ref) async {
   final all = await ref.watch(notificationRepositoryProvider).all();
   return all.where((n) => n.unread).length;
 });
+
+/// Whether the deck includes passed (left-swiped) cards. Flipped on by
+/// "Start over". Right-swiped (joined) cards never come back regardless
+/// of this flag — a join is permanent.
+///
+/// Deliberately NOT autoDispose and NOT widget-local state: the
+/// Discover tab's State is destroyed every time the user switches tabs
+/// (plain ShellRoute), so a field would reset and force another
+/// "Start over" tap on every return. A session-lived provider keeps
+/// the user's choice until the app is killed.
+final _includeSwipedProvider = StateProvider<bool>((ref) => false);
+
+/// User-configurable discovery filter, written by the Filter screen
+/// and read by Discovery. Session-lived for the same reason as
+/// `[_includeSwipedProvider]` — the Discover State dies on tab
+/// switches, so storing it here survives the round-trip.
+final discoveryFilterProvider = StateProvider<DiscoveryFilter>(
+  (ref) => const DiscoveryFilter(),
+);
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
@@ -35,22 +63,211 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
   List<ActivityModel> _activities = const [];
   bool _isLoading = true;
 
+  /// ProviderSubscription handle — fired by the listener set up in
+  /// [initState]. Stored on the State so [dispose] can release it;
+  /// without the release, the listener would keep a strong reference
+  /// to a State that's already been unmounted and we'd leak.
+  late final ProviderSubscription<DiscoveryFilter> _filterSub;
+
+  /// True after the user has tapped Apply at least once. Distinguishes
+  /// the "no filter yet" case (don't render a chip) from "filter
+  /// active" (render a chip + tap to reset).
+  bool _hasActiveFilter = false;
+
   @override
   void initState() {
     super.initState();
-    _load();
+    // Reload the deck whenever the Filter screen writes a new filter.
+    // `listenManual` (vs `listen`) keeps the subscription out of the
+    // WidgetRef's auto-cleanup so we can release it in `dispose`.
+    _filterSub = ref.listenManual<DiscoveryFilter>(
+      discoveryFilterProvider,
+      (prev, next) {
+        // Value equality lives on the model, so redundant writes are
+        // ignored here; `_load` derives `_hasActiveFilter` itself.
+        if (prev == next) return;
+        debugPrint('[Discovery] filter changed: empty=${next.isEmpty}');
+        _load();
+      },
+      fireImmediately: false,
+    );
+    // Seed the session filter from saved sport prefs (onboarding picks)
+    // before the first load, then deal the deck.
+    _seedDefaultFilter().then((_) {
+      if (mounted) _load();
+    });
   }
 
-  Future<void> _load() async {
+  /// Seeds the session filter from the user's saved sport preferences so
+  /// onboarding picks apply to Discover by default. Only fills an EMPTY
+  /// user filter — an explicit Apply/Reset in the Filter screen is never
+  /// overwritten mid-session.
+  Future<void> _seedDefaultFilter() async {
+    if (!ref.read(discoveryFilterProvider).isEmpty) return;
+    var prefs = ref.read(sportPreferencesProvider);
+    if (prefs.isEmpty) {
+      // Cross-device: local prefs are per-install. Hydrate once from the
+      // backend profile, then keep them locally.
+      try {
+        final me = await ref.read(userRepositoryProvider).me();
+        if (!mounted) return;
+        if (me.sports.isNotEmpty) {
+          final hydrated = {
+            for (final s in me.sports)
+              s.sport: s.level.isNotEmpty ? s.level : 'Intermediate',
+          };
+          ref.read(sportPreferencesProvider.notifier).setAll(hydrated);
+          prefs = hydrated;
+        }
+      } catch (_) {
+        // Offline — fall through with whatever local prefs exist.
+      }
+    }
+    if (prefs.isEmpty) return;
+    ref.read(discoveryFilterProvider.notifier).state = DiscoveryFilter(
+      sportSkills: [
+        for (final e in prefs.entries)
+          DiscoverySportSkill(sport: e.key, skill: _discoverySkill(e.value)),
+      ],
+      maxDistanceKm: ref.read(distanceFilterProvider),
+    );
+  }
+
+  /// Maps a saved skill label ('Beginner', …) to the filter enum.
+  /// Unknown/empty levels become `any` — the sport still filters,
+  /// just without a skill restriction.
+  DiscoverySkillLevel _discoverySkill(String label) {
+    return switch (label.trim().toLowerCase()) {
+      'beginner' => DiscoverySkillLevel.beginner,
+      'intermediate' => DiscoverySkillLevel.intermediate,
+      'advanced' => DiscoverySkillLevel.advanced,
+      _ => DiscoverySkillLevel.any,
+    };
+  }
+
+  @override
+  void dispose() {
+    _filterSub.close();
+    super.dispose();
+  }
+
+  /// Manual refresh (header button) bypasses the cache and always
+  /// shows the skeleton; every other caller serves cache-first.
+  Future<void> _load({bool forceRefresh = false}) async {
+    // Merge the session "show swiped" choice into the user filter so a
+    // single object travels to the repo. `copyWith` keeps the stored
+    // provider value pristine — "Start over" must not permanently flip
+    // the user's saved filter. `_hasActiveFilter` derives here (not in
+    // the listener) so fresh mounts with an active filter flag
+    // correctly on first paint.
+    final filter = ref.read(discoveryFilterProvider).copyWith(
+          includeSwiped: ref.read(_includeSwipedProvider),
+        );
+    // Show the skeleton on EVERY load (first paint, filter apply,
+    // Start over) — not just the first. Without this, applying a filter
+    // leaves the stale deck frozen on screen with zero feedback until
+    // the new feed arrives, which reads as "the tap did nothing".
+    if (mounted && !_isLoading) setState(() => _isLoading = true);
     try {
-      final list = await ref.read(activityRepositoryProvider).feed();
+      final repo = ref.read(activityRepositoryProvider);
+      // Cache-hit serves instantly (tab switches dispose this State,
+      // so without the repo cache every return trip replays HTTP +
+      // GPS behind the skeleton). When we know the hit is fresh, kick
+      // a silent background refresh afterwards so the deck still
+      // converges without ever flashing the skeleton.
+      final remote = repo is RemoteActivityRepository ? repo : null;
+      final wasFresh =
+          !forceRefresh && (remote?.isFeedFresh(filter: filter) ?? false);
+      final list =
+          await repo.feed(filter: filter, forceRefresh: forceRefresh);
       if (!mounted) return;
-      setState(() {
-        _activities = list;
-        _isLoading = false;
-      });
+      // Never re-deal a card the user already swiped: the backend
+      // attaches `mySwipeDecision` per activity for the signed-in
+      // viewer. Cards swiped this session are already skipped via
+      // `_topIndex`, so this only matters across launches/restarts.
+      // "Start over" opts back into the full deck via
+      // [_includeSwipedProvider] — a session-lived provider (not widget
+      // state) so the choice survives tab switches, which dispose this
+      // State and would otherwise force another "Start over" tap on
+      // every return.
+      _applyDeck(list, filter);
+      // Silent background refresh when the render above came from a
+      // fresh cache entry: the deck converges to live data without
+      // ever flashing the skeleton. Skipped on cold loads (nothing
+      // cached — the fetch above already went to the network).
+      if (wasFresh && remote != null) {
+        unawaited(_refreshSilently(remote, filter));
+      }
     } catch (_) {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  /// Builds [_activities] from a raw feed inside setState. Shared by
+  /// [_load] (skeleton path) and [_refreshSilently] (no-skeleton path
+  /// that preserves the user's swipe position).
+  void _applyDeck(List<ActivityModel> list, DiscoveryFilter filter) {
+    // Never re-deal a card the user already swiped: the backend
+    // attaches `mySwipeDecision` per activity for the signed-in
+    // viewer. Cards swiped this session are already skipped via
+    // `_topIndex`, so this only matters across launches/restarts.
+    // "Start over" opts back into the full deck via
+    // [_includeSwipedProvider] — a session-lived provider (not widget
+    // state) so the choice survives tab switches, which dispose this
+    // State and would otherwise force another "Start over" tap on
+    // every return.
+    final includeSwiped = ref.read(_includeSwipedProvider);
+    setState(() {
+      // Committed games (joined or hosted) are taken from the raw
+      // feed BEFORE deck filtering — they anchor the time-clash
+      // check below and never enter the deck themselves.
+      final committed = list
+          .where((a) => a.isParticipant || a.isHost)
+          .toList();
+      _activities = list.where((a) {
+        // Joined/hosted games live in My Games — never re-deal
+        // them in Discover, not on reload, not even on "Start
+        // over".
+        if (a.isParticipant || a.isHost) return false;
+        // A right-swipe (join) is permanent: a joined game never
+        // re-enters the deck. It lives on in My Games instead.
+        if (a.mySwipeDecision == 'join') return false;
+        // "Start over" re-deals passes; otherwise only unseen cards.
+        return includeSwiped || a.mySwipeDecision == null;
+      }).toList();
+      // Drop anything time-clashing with a committed game — no
+      // point dealing a card they can't attend.
+      if (committed.isNotEmpty) {
+        _activities = _activities.where((a) {
+          return !committed.any((b) =>
+              b.id != a.id &&
+              a.dateTime.isBefore(b.endTime) &&
+              b.dateTime.isBefore(a.endTime));
+        }).toList();
+      }
+      _topIndex = 0;
+      _isLoading = false;
+      _hasActiveFilter = !filter.isEmpty;
+    });
+  }
+
+  /// Re-fetches bypassing the cache and swaps the deck silently — no
+  /// skeleton, and the swipe position is preserved so a mid-deck user
+  /// is never yanked back to the top. No-op when the fresh feed is
+  /// identical or the user already started swiping.
+  Future<void> _refreshSilently(
+    RemoteActivityRepository repo,
+    DiscoveryFilter filter,
+  ) async {
+    try {
+      final fresh = await repo.feed(filter: filter, forceRefresh: true);
+      if (!mounted || _topIndex > 0) return;
+      final sameIds = fresh.map((a) => a.id).join(',') ==
+          _activities.map((a) => a.id).join(',');
+      if (sameIds) return;
+      _applyDeck(fresh, filter);
+    } catch (_) {
+      // Silent path — stale deck simply stays.
     }
   }
 
@@ -58,8 +275,35 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
     if (_topIndex >= _activities.length) return;
     HapticFeedback.lightImpact();
     final activity = _activities[_topIndex];
+    final needsApproval = activity.joinPolicy == 'approval';
+
+    // Approval-gated games file a join request (awaited — the pending
+    // screen would lie if the request failed) instead of the instant
+    // match flow. Everything else keeps the existing path below.
+    if (liked && needsApproval) {
+      unawaited(_requestAndShowPending(activity));
+      return;
+    }
+
     final next = _topIndex + 1;
     setState(() => _topIndex = next);
+
+    // Persist the decision to the backend (or local fallback) so the user
+    // doesn't see the same card twice on next launch, and so the host
+    // gets a `join` notification for right-swipes. Fire-and-forget — UI
+    // already advanced, failures are caught inside the repository.
+    unawaited(
+      ref.read(swipesRepositoryProvider).save(
+        activityId: activity.id,
+        decision: liked ? SwipeDecision.join : SwipeDecision.pass,
+      ),
+    );
+
+    // Drop cached feeds so a just-swiped card can't be re-dealt from
+    // a stale entry within the TTL window (e.g. tab switch → back).
+    final repo = ref.read(activityRepositoryProvider);
+    if (repo is RemoteActivityRepository) repo.invalidateFeed();
+
     if (liked && next < _activities.length) {
       Future.delayed(const Duration(milliseconds: 420), () {
         if (mounted) context.go('/match/${activity.id}');
@@ -67,10 +311,92 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
     }
   }
 
+  /// Files the join request, records the swipe decision, advances past
+  /// the card, and opens the pending screen. On failure the card stays
+  /// put with an error snackbar — navigating anyway would promise a
+  /// request that was never sent. The one exception is a duplicate
+  /// request (409 "already pending"): she is already in the queue, so
+  /// the pending screen is the truth and is shown instead of an error.
+  Future<void> _requestAndShowPending(ActivityModel activity) async {
+    try {
+      await ref.read(activityRepositoryProvider).requestJoin(activity.id);
+    } catch (e) {
+      if (!mounted) return;
+      if (_isAlreadyPending(e)) {
+        _openPending(activity);
+        return;
+      }
+      AppSnackbar.show(
+        context,
+        message: _joinErrorMessage(e),
+        variant: AppSnackbarVariant.error,
+      );
+      return;
+    }
+    if (!mounted) return;
+    _openPending(activity);
+  }
+
+  /// Records the swipe, advances past the card, and opens the pending
+  /// screen. Shared by the fresh-request and already-pending paths.
+  void _openPending(ActivityModel activity) {
+    unawaited(
+      ref.read(swipesRepositoryProvider).save(
+        activityId: activity.id,
+        decision: SwipeDecision.join,
+      ),
+    );
+    final repo = ref.read(activityRepositoryProvider);
+    if (repo is RemoteActivityRepository) repo.invalidateFeed();
+    setState(() => _topIndex += 1);
+    HapticFeedback.heavyImpact();
+    context.go('/request-sent/${activity.id}');
+  }
+
+  /// True when the backend rejected the request as a duplicate of an
+  /// existing pending one (409 + the backend's exact message). The
+  /// message match is deliberate: other 409s (full, already joined)
+  /// must stay errors.
+  bool _isAlreadyPending(Object e) {
+    return e is DioException &&
+        e.error is ApiException &&
+        (e.error as ApiException).statusCode == 409 &&
+        (e.error as ApiException).userMessage ==
+            'Join request already pending';
+  }
+
+  /// Prefers the backend's own message (full, not open, …) over the
+  /// generic fallback so failures explain themselves.
+  String _joinErrorMessage(Object e) {
+    if (e is DioException && e.error is ApiException) {
+      return (e.error as ApiException).userMessage;
+    }
+    return 'Could not send the request. Please try again.';
+  }
+
   void _dislike() => _swipeOut(false);
   void _like() => _swipeOut(true);
 
-  void _reset() => setState(() => _topIndex = 0);
+  void _reset() {
+    // Previously this only rewound the index — a visible no-op whenever
+    // the swipe filter had emptied the list. Now it re-deals the full
+    // deck (swiped cards included) from the top. The skeleton itself is
+    // flipped on inside [_load], which covers every reload path.
+    HapticFeedback.lightImpact();
+    ref.read(_includeSwipedProvider.notifier).state = true;
+    _load();
+  }
+
+  void _clearFilters() {
+    // One-tap escape hatch from a filter-emptied deck. Writes the empty
+    // filter; the provider listener flips `_hasActiveFilter` off and
+    // reloads the unfiltered feed. (Writing `const DiscoveryFilter()`
+    // is const-canonicalized, so a redundant tap is a no-op write the
+    // listener ignores.)
+    HapticFeedback.lightImpact();
+    ref.read(discoveryFilterProvider.notifier).state =
+        const DiscoveryFilter();
+  }
 
   void _openDetails() {
     if (_topIndex >= _activities.length) return;
@@ -85,6 +411,7 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
   Widget build(BuildContext context) {
     final deckExhausted = !_isLoading && _topIndex >= _activities.length;
     final unreadCount = ref.watch(_unreadNotifCountProvider).valueOrNull ?? 0;
+    final filterSummary = ref.watch(discoveryFilterProvider).describe();
 
     return AppScaffold(
       showHomeIndicator: false, // inside ShellRoute — AppShell draws its own.
@@ -92,13 +419,22 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
         children: [
           HomeHeader(
             title: 'Discover',
-            subtitle: 'Find your next game',
+            subtitle: _hasActiveFilter ? 'Filtered' : 'Find your next game',
             actions: [
               HomeHeaderAction(
                 icon: Icons.tune_rounded,
                 semanticLabel: 'Filters',
                 onTap: () => context.push('/filter'),
                 anchorKey: TourAnchors.filterButton,
+                // Subtle dot in the corner when a non-empty filter
+                // is active — tells the user the deck is filtered
+                // without taking up header space.
+                showDot: _hasActiveFilter,
+              ),
+              HomeHeaderAction(
+                icon: Icons.refresh_rounded,
+                semanticLabel: 'Refresh',
+                onTap: () => _load(forceRefresh: true),
               ),
               HomeHeaderAction(
                 icon: Icons.notifications_none_rounded,
@@ -124,7 +460,11 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
                       child: const ActivityCardSkeleton(),
                     )
                   : deckExhausted
-                  ? DiscoveryEmptyDeck(onRestart: _reset)
+                  ? DiscoveryEmptyDeck(
+                      onRestart: _reset,
+                      filterSummary: filterSummary,
+                      onClearFilters: _hasActiveFilter ? _clearFilters : null,
+                    )
                   // KeyedSubtree carries the tour anchor so SwipeDeck keeps
                   // its own `ValueKey(_topIndex)` (needed to force a fresh
                   // State per card — see its comment below) instead of the
@@ -161,7 +501,12 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
                   const SizedBox(width: AppSpacing.x6),
                   DiscoveryAction.info(onTap: _openDetails),
                   const SizedBox(width: AppSpacing.x6),
-                  DiscoveryAction.join(onTap: _like),
+                  // Approval-gated games get the Request variant so
+                  // the cost of the swipe is visible upfront.
+                  if (_activities[_topIndex].joinPolicy == 'approval')
+                    DiscoveryAction.request(onTap: _like)
+                  else
+                    DiscoveryAction.join(onTap: _like),
                 ],
               ),
             ),

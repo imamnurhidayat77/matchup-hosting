@@ -12,6 +12,7 @@ vi.mock('./users.service.js', () => {
     updateUserPhoto: vi.fn(),
     updateUserProfile: vi.fn(),
     getPublicUserProfile: vi.fn(),
+    mintCustomToken: vi.fn().mockResolvedValue('custom-token-1'),
   };
 });
 
@@ -24,6 +25,10 @@ vi.mock('../../middleware/auth.middleware.js', () => {
       };
       next();
     }),
+
+  requireAdmin: vi.fn((_req, _res, next) => {
+      next();
+  }),
   };
 });
 
@@ -287,6 +292,10 @@ describe('users routes', () => {
       });
     });
 
+    // NOTE: profile photos use the dedicated `PATCH /api/users/me/photo`
+    // endpoint (photoPath + photoUrl) — generic PATCH /me no longer
+    // accepts photoUrl. Covered by the me/photo tests below.
+
     it('when request body is empty => expected 400 w/ EMPTY_INPUT', async () => {
       const app = createApp();
 
@@ -394,6 +403,72 @@ describe('users routes', () => {
           code: 'INVALID_INPUT',
           message: 'preferredSports must be a string array',
         },
+      });
+    });
+
+    it('when sportSkillLevels has an invalid level => expected 400 w/ INVALID_INPUT', async () => {
+      const app = createApp();
+
+      const response = await request(app)
+        .patch('/api/users/me')
+        .send({
+          sportSkillLevels: { Tennis: 'expert' },
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message:
+            'sportSkillLevels must map sport names to beginner, intermediate, advanced, or any',
+        },
+      });
+    });
+
+    it('when joinReason is not a string => expected 400 w/ INVALID_INPUT', async () => {
+      const app = createApp();
+
+      const response = await request(app)
+        .patch('/api/users/me')
+        .send({
+          joinReason: 123,
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'joinReason must be a string',
+        },
+      });
+    });
+
+    it('when onboarding fields are valid => forwards them to updateUserProfile', async () => {
+      vi.mocked(usersService.updateUserProfile).mockResolvedValueOnce({
+        authUid: 'test-uid-1',
+        email: 'user@example.com',
+        createdAt: { toDate: () => new Date('2026-08-18T00:00:00Z') } as never,
+      });
+
+      const app = createApp();
+
+      const response = await request(app)
+        .patch('/api/users/me')
+        .send({
+          joinReason: ' Stay active with new sports ',
+          preferredSports: ['Tennis'],
+          sportSkillLevels: { Tennis: 'intermediate' },
+          skillLevel: 'intermediate',
+        });
+
+      expect(response.status).toBe(200);
+      expect(usersService.updateUserProfile).toHaveBeenCalledWith('test-uid-1', {
+        joinReason: 'Stay active with new sports',
+        preferredSports: ['Tennis'],
+        sportSkillLevels: { Tennis: 'intermediate' },
+        skillLevel: 'intermediate',
       });
     });
 
@@ -668,6 +743,42 @@ describe('users routes', () => {
       const app = createApp();
 
       const response = await request(app).get('/api/users/test-uid-1/profile');
+
+      expect(response.status).toBe(500);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: 'Unknown error',
+        },
+      });
+    });
+  });
+
+  describe('POST /api/users/custom-token', () => {
+    it('when authenticated => expected 200 with custom token', async () => {
+      const app = createApp();
+
+      const response = await request(app).post('/api/users/custom-token').send({});
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        ok: true,
+        data: {
+          customToken: 'custom-token-1',
+        },
+      });
+      expect(usersService.mintCustomToken).toHaveBeenCalledWith('test-uid-1');
+    });
+
+    it('when service throws unknown error => expected 500 w/ INTERNAL_ERROR', async () => {
+      vi.mocked(usersService.mintCustomToken).mockRejectedValueOnce(
+        new Error('Unknown error'),
+      );
+
+      const app = createApp();
+
+      const response = await request(app).post('/api/users/custom-token').send({});
 
       expect(response.status).toBe(500);
       expect(response.body).toEqual({

@@ -1,67 +1,93 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_client.dart';
+import '../../../core/services/calendar_service.dart';
+import '../../../core/storage/secure_token_store.dart';
+import '../../discovery/data/activity_repository.dart';
 import '../domain/calendar_event.dart';
 import 'calendar_repository.dart';
 
+/// Offline-only calendar store. Reads return empty, writes no-op.
 class LocalCalendarRepository implements CalendarRepository {
-  final List<CalendarEvent> _events = [
-    CalendarEvent(
-      id: '1',
-      activityId: '1',
-      title: 'Saturday 5v5 Basketball',
-      start: DateTime.now().add(const Duration(days: 1, hours: 2)),
-      end: DateTime.now().add(const Duration(days: 1, hours: 4)),
-      location: 'Central Park Court B, NY',
-    ),
-    CalendarEvent(
-      id: '2',
-      activityId: '3',
-      title: 'Tennis Singles Sunday',
-      start: DateTime.now().add(const Duration(days: 4)),
-      end: DateTime.now().add(const Duration(days: 4, hours: 2)),
-      location: 'Auckland Domain Tennis Centre',
-    ),
-    CalendarEvent(
-      id: '3',
-      activityId: '2',
-      title: 'Sunset Basketball 5v5',
-      start: DateTime.now().add(const Duration(days: 3, hours: 4)),
-      end: DateTime.now().add(const Duration(days: 3, hours: 6)),
-      location: 'Brooklyn Public Courts',
-    ),
-  ];
-
   @override
   Future<List<CalendarEvent>> upcoming({int days = 30}) async {
-    await Future.delayed(const Duration(milliseconds: 50));
-    return List.unmodifiable(_events);
+    return const <CalendarEvent>[];
   }
 
   @override
-  Future<void> addToDeviceCalendar(CalendarEvent event) async {
-    await Future.delayed(const Duration(milliseconds: 50));
-  }
+  Future<void> addToDeviceCalendar(CalendarEvent event) async {}
 }
 
 class RemoteCalendarRepository implements CalendarRepository {
-  RemoteCalendarRepository({ApiClient? client, CalendarRepository? fallback})
-    : _client = client ?? ApiClient.instance,
-      _fallback = fallback ?? LocalCalendarRepository();
+  RemoteCalendarRepository({
+    ApiClient? client,
+    CalendarRepository? fallback,
+    ActivityRepository? activities,
+  })  : _client = client ?? ApiClient.instance,
+        _fallback = fallback ?? LocalCalendarRepository(),
+        _activities = activities; // ignore: prefer_initializing_formals
 
   final ApiClient _client;
   final CalendarRepository _fallback;
 
+  /// Source of committed games. Injected (instead of constructed) so
+  /// tests can substitute a fake. Null = legacy backend mode.
+  final ActivityRepository? _activities;
+
+  /// Activity ids successfully written to the OS calendar this
+  /// session, surfaced as `addedToDeviceCalendar` checkmarks.
+  final Set<String> _syncedIds = {};
+
   @override
   Future<List<CalendarEvent>> upcoming({int days = 30}) async {
+    final activities = _activities;
+    // No injected source → legacy backend contract (no such endpoint
+    // exists yet, so this degrades to empty via the catch below).
+    if (activities == null) {
+      try {
+        final res = await _client.dio.get(
+          '/calendar/upcoming',
+          queryParameters: {'days': days},
+        );
+        return apiDataList(res.data).map(_parse).toList();
+      } catch (e, st) {
+        debugPrint('[RemoteCalendarRepository] $e\n$st');
+        return _fallback.upcoming(days: days);
+      }
+    }
+
+    // Derive from committed games (joined + hosted): always consistent
+    // with My Games, works offline from cache, no backend endpoint.
     try {
-      final res = await _client.dio.get(
-        '/calendar/upcoming',
-        queryParameters: {'days': days},
-      );
-      return (res.data as List).map(_parse).toList();
+      final uid = await SecureTokenStore.instance.readUserId() ?? '';
+      final results = await Future.wait([
+        activities.joinedByUser(uid),
+        activities.hostedByUser(uid),
+      ]);
+      final now = DateTime.now();
+      final horizon = now.add(Duration(days: days));
+      final seen = <String>{};
+      final events = <CalendarEvent>[];
+      for (final activity in [...results[0], ...results[1]]) {
+        if (!seen.add(activity.id)) continue;
+        if (activity.endTime.isBefore(now)) continue;
+        if (activity.dateTime.isAfter(horizon)) continue;
+        events.add(
+          CalendarEvent(
+            id: activity.id,
+            activityId: activity.id,
+            title: activity.title,
+            start: activity.dateTime,
+            end: activity.endTime,
+            location: activity.location,
+            addedToDeviceCalendar: _syncedIds.contains(activity.id),
+          ),
+        );
+      }
+      events.sort((a, b) => a.start.compareTo(b.start));
+      return events;
     } catch (e, st) {
-      debugPrint('[RemoteCalendarRepository] $e\n$st');
+      debugPrint('[RemoteCalendarRepository.upcoming] $e\n$st');
       return _fallback.upcoming(days: days);
     }
   }
@@ -69,7 +95,14 @@ class RemoteCalendarRepository implements CalendarRepository {
   @override
   Future<void> addToDeviceCalendar(CalendarEvent event) async {
     try {
-      await _client.dio.post('/calendar/sync', data: _toJson(event));
+      final ok = await CalendarService.instance.addEvent(
+        title: event.title,
+        start: event.start,
+        end: event.end,
+        description: 'MatchUp activity',
+        location: event.location.isNotEmpty ? event.location : null,
+      );
+      if (ok) _syncedIds.add(event.activityId);
     } catch (e, st) {
       debugPrint('[RemoteCalendarRepository] $e\n$st');
       await _fallback.addToDeviceCalendar(event);
@@ -90,11 +123,4 @@ class RemoteCalendarRepository implements CalendarRepository {
     );
   }
 
-  Map<String, dynamic> _toJson(CalendarEvent e) => {
-    'activity_id': e.activityId,
-    'title': e.title,
-    'start': e.start.toIso8601String(),
-    'end': e.end.toIso8601String(),
-    'location': e.location,
-  };
 }

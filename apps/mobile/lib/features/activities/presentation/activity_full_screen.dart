@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/utils/geo.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/app_button.dart';
@@ -225,7 +226,7 @@ class _ActivityCard extends StatelessWidget {
                       const SizedBox(height: AppSpacing.x3),
                       Row(
                         children: [
-                          const _AvatarStack(),
+                          _AvatarStack(count: activity.participantCount),
                           const SizedBox(width: AppSpacing.x2),
                           Expanded(
                             child: Column(
@@ -292,6 +293,7 @@ class _CoverImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final distanceText = distanceLabel(activity.distanceKm);
     return SizedBox(
       height: 140,
       width: double.infinity,
@@ -303,7 +305,7 @@ class _CoverImage extends StatelessWidget {
               top: Radius.circular(AppRadius.xl),
             ),
             child: AssetImageWithFallback(
-              assetPath:
+              imagePath:
                   activity.coverImageUrl ??
                   'assets/images/discovery/covers/basketball_full.png',
               width: double.infinity,
@@ -331,34 +333,36 @@ class _CoverImage extends StatelessWidget {
                     ).copyWith(fontSize: 11, color: AppColors.textOnPrimary),
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.x2 + 2,
-                    vertical: AppSpacing.x1 + 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: context.colors.scrimControl,
-                    borderRadius: BorderRadius.circular(AppRadius.lg),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AppIcon(
-                        AppIcons.mapPin,
-                        size: AppIconSize.sm,
-                        color: context.colors.textOnPrimary,
-                      ),
-                      const SizedBox(width: AppSpacing.x1),
-                      Text(
-                        '${activity.distanceKm.toStringAsFixed(1)} km away',
-                        style: AppTypography.chipLabel(context).copyWith(
-                          fontSize: 11,
+                // Distance pill (hidden when unknown).
+                if (distanceText != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.x2 + 2,
+                      vertical: AppSpacing.x1 + 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: context.colors.scrimControl,
+                      borderRadius: BorderRadius.circular(AppRadius.lg),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AppIcon(
+                          AppIcons.mapPin,
+                          size: AppIconSize.sm,
                           color: context.colors.textOnPrimary,
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: AppSpacing.x1),
+                        Text(
+                          distanceText,
+                          style: AppTypography.chipLabel(context).copyWith(
+                            fontSize: 11,
+                            color: context.colors.textOnPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
               ],
             ),
           ),
@@ -406,77 +410,44 @@ class _MetaChip extends StatelessWidget {
   }
 }
 
+/// Neutral participant placeholders — generic person icons sized by
+/// the live [count]. No fake faces or invented initials.
 class _AvatarStack extends StatelessWidget {
-  const _AvatarStack();
+  const _AvatarStack({required this.count});
+  final int count;
+
+  static const int _maxShown = 3;
 
   @override
   Widget build(BuildContext context) {
+    final shown = count.clamp(0, _maxShown);
+    if (shown == 0) return const SizedBox(width: 70, height: 30);
     return SizedBox(
       width: 70,
       height: 30,
       child: Stack(
         children: [
-          const Positioned(left: 0, child: _StackAvatar('avatar_alex.png')),
-          Positioned(
-            left: 20,
-            child: _StackInitial(letter: 'M', color: AppColors.primary),
-          ),
-          Positioned(
-            left: 40,
-            child: _StackInitial(letter: 'J', color: AppColors.avatarSecondary),
-          ),
+          for (var i = 0; i < shown; i++)
+            Positioned(
+              left: i * 20.0,
+              child: Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: context.colors.surfaceMuted,
+                  border:
+                      Border.all(color: context.colors.border, width: 2),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  Icons.person_outline,
+                  size: 16,
+                  color: context.colors.textSecondary,
+                ),
+              ),
+            ),
         ],
-      ),
-    );
-  }
-}
-
-class _StackAvatar extends StatelessWidget {
-  const _StackAvatar(this.asset);
-  final String asset;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 30,
-      height: 30,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: context.colors.border, width: 2),
-      ),
-      child: ClipOval(
-        child: AssetImageWithFallback(
-          assetPath: 'assets/images/discovery/avatars/$asset',
-          fit: BoxFit.cover,
-          isAvatar: true,
-        ),
-      ),
-    );
-  }
-}
-
-class _StackInitial extends StatelessWidget {
-  const _StackInitial({required this.letter, required this.color});
-  final String letter;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 30,
-      height: 30,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: color,
-        border: Border.all(color: context.colors.border, width: 2),
-      ),
-      child: Center(
-        child: Text(
-          letter,
-          style: AppTypography.chipLabel(
-            context,
-          ).copyWith(fontSize: 11, color: AppColors.textOnPrimary),
-        ),
       ),
     );
   }
@@ -571,7 +542,7 @@ class _SimilarActivityRow extends StatelessWidget {
             ClipRRect(
               borderRadius: BorderRadius.circular(AppRadius.input),
               child: AssetImageWithFallback(
-                assetPath:
+                imagePath:
                     activity.coverImageUrl ??
                     'assets/images/discovery/covers/basketball_full.png',
                 width: 48,

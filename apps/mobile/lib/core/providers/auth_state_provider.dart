@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../auth/session_events.dart';
+import '../services/rtdb_auth_service.dart';
 import '../storage/secure_token_store.dart';
 
 // ─── Domain ──────────────────────────────────────────────────────────────────
@@ -27,9 +31,25 @@ class AuthState {
 // ─── Notifier ────────────────────────────────────────────────────────────────
 
 class AuthStateNotifier extends StateNotifier<AuthState> {
-  AuthStateNotifier() : super(AuthState.unknown);
+  AuthStateNotifier() : super(AuthState.unknown) {
+    // Fired by the API layer when the refresh token itself is dead.
+    // Re-login is the only recovery — flip to unauthenticated so the
+    // router sends the user to login instead of stranding them in a
+    // zombie session that 401s forever.
+    _expirySub = SessionEvents.instance.onSessionExpired.listen((_) async {
+      await _store.clearAll();
+      state = AuthState.unauthenticated;
+    });
+  }
 
   final _store = SecureTokenStore.instance;
+  late final StreamSubscription<void> _expirySub;
+
+  @override
+  void dispose() {
+    _expirySub.cancel();
+    super.dispose();
+  }
 
   /// Called at app start (splash screen). Reads secure storage to determine
   /// if a valid session exists (stored Firebase ID token + userId).
@@ -38,6 +58,9 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
     if (hasSession) {
       final userId = await _store.readUserId();
       state = AuthState(status: AuthStatus.authenticated, userId: userId);
+      // Restore the SDK session too so realtime listeners (chat, typing,
+      // presence) run as the real user instead of anonymous.
+      unawaited(RtdbAuthService.instance.ensureSignedIn());
     } else {
       state = AuthState.unauthenticated;
     }
@@ -56,11 +79,16 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
       _store.saveUserId(userId),
     ]);
     state = AuthState(status: AuthStatus.authenticated, userId: userId);
+    // Sign the Firebase SDK in as the same user so RTDB listeners are
+    // authenticated. Fire-and-forget: sign-in UX must not wait on it.
+    unawaited(RtdbAuthService.instance.ensureSignedIn());
   }
 
   /// Clears all stored tokens and sets state to unauthenticated.
   Future<void> signOut() async {
     await _store.clearAll();
+    // Drop the SDK session too so the next account doesn't inherit it.
+    unawaited(RtdbAuthService.instance.signOut());
     state = AuthState.unauthenticated;
   }
 }

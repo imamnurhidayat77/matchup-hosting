@@ -6,6 +6,7 @@ import 'package:mocktail/mocktail.dart';
 
 import 'package:matchup_mobile/core/providers/repository_providers.dart';
 import 'package:matchup_mobile/features/activities/domain/activity_model.dart';
+import 'package:matchup_mobile/features/activities/domain/activity_participant.dart';
 import 'package:matchup_mobile/features/discovery/data/activity_repository.dart';
 import 'package:matchup_mobile/features/discovery/presentation/activity_detail_screen.dart';
 
@@ -31,6 +32,22 @@ ActivityModel _fixture() => ActivityModel(
   hostName: 'James Wilson',
 );
 
+ActivityModel _approvalFixture({String? joinRequestStatus}) => ActivityModel(
+  id: 'a-2',
+  title: 'Sunday Tennis Approval',
+  sportType: 'Tennis',
+  description: 'Host-approved session.',
+  location: 'Domain Courts',
+  distanceKm: 1.2,
+  dateTime: DateTime(2026, 8, 23, 10),
+  skillLevel: 'Beginner',
+  capacity: 4,
+  participantCount: 1,
+  hostName: 'Sarah Chen',
+  joinPolicy: 'approval',
+  joinRequestStatus: joinRequestStatus,
+);
+
 void main() {
   late _MockActivityRepository repo;
 
@@ -38,6 +55,11 @@ void main() {
     repo = _MockActivityRepository();
     when(() => repo.byId(any())).thenAnswer((_) async => _fixture());
     when(() => repo.join(any())).thenAnswer((_) async {});
+    // The participant stack reads the live roster — default to empty so
+    // tests never touch the network.
+    when(
+      () => repo.participants(any()),
+    ).thenAnswer((_) async => <ActivityParticipant>[]);
   });
 
   /// Builds a router that starts on a "Home" screen and only reaches the
@@ -178,6 +200,54 @@ void main() {
 
       verify(() => repo.join('a-1')).called(1);
     });
+
+    testWidgets(
+      'approval activity shows Request to Join and files a request on tap',
+      (tester) async {
+        when(() => repo.byId(any())).thenAnswer((_) async => _approvalFixture());
+        when(() => repo.requestJoin(any())).thenAnswer((_) async {});
+
+        await pumpViaRealNavigation(
+          tester,
+          repo: repo,
+          via: (context) => context.push('/activity/a-2'),
+        );
+
+        final requestButton = find.text('Request to Join');
+        expect(requestButton, findsOneWidget);
+
+        await tester.ensureVisible(requestButton);
+        await tester.tap(requestButton);
+        await tester.pump(); // start the async request
+        await tester.pumpAndSettle();
+
+        verify(() => repo.requestJoin('a-2')).called(1);
+        expect(find.text('Request pending'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'pending request renders a disabled pill and never calls requestJoin',
+      (tester) async {
+        when(
+          () => repo.byId(any()),
+        ).thenAnswer((_) async => _approvalFixture(joinRequestStatus: 'pending'));
+        when(() => repo.requestJoin(any())).thenAnswer((_) async {});
+
+        await pumpViaRealNavigation(
+          tester,
+          repo: repo,
+          via: (context) => context.push('/activity/a-2'),
+        );
+
+        expect(find.text('Request pending'), findsOneWidget);
+        // Disabled pill: tapping must not file anything.
+        await tester.tap(find.text('Request pending'));
+        await tester.pumpAndSettle();
+
+        verifyNever(() => repo.requestJoin(any()));
+      },
+    );
 
     testWidgets('report button opens the report bottom sheet when tapped', (
       tester,

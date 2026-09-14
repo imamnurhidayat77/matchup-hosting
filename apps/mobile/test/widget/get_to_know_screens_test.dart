@@ -3,12 +3,56 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:matchup_mobile/core/providers/repository_providers.dart';
 import 'package:matchup_mobile/features/preferences/presentation/get_to_know_1_screen.dart';
 import 'package:matchup_mobile/features/preferences/presentation/get_to_know_2_screen.dart';
 import 'package:matchup_mobile/features/preferences/presentation/get_to_know_3_screen.dart';
+import 'package:matchup_mobile/features/profile/data/user_repository.dart';
+import 'package:matchup_mobile/features/profile/domain/user_model.dart';
+
+/// Test double that records onboarding saves instead of hitting the backend.
+class _FakeUserRepository implements UserRepository {
+  List<({String sport, String level})>? lastSports;
+  String? lastJoinReason;
+
+  @override
+  Future<UserModel> updateProfile({
+    String? displayName,
+    String? bio,
+    String? location,
+    String? email,
+    String? phone,
+    DateTime? dateOfBirth,
+    int? heightCm,
+    int? weightKg,
+    String? goal,
+    List<({String sport, String level})>? sports,
+    String? joinReason,
+  }) async {
+    lastSports = sports;
+    lastJoinReason = joinReason;
+    return UserModel(id: 'me', displayName: 'Test User');
+  }
+
+  @override
+  Future<UserModel> me() => throw UnimplementedError();
+
+  @override
+  Future<UserModel?> byId(String id) => throw UnimplementedError();
+
+  @override
+  Future<UserModel> uploadAvatar({required String localPath}) =>
+      throw UnimplementedError();
+}
 
 void main() {
+  late _FakeUserRepository userRepo;
+
+  setUp(() => userRepo = _FakeUserRepository());
+
   Future<void> pumpRouter(WidgetTester tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     final router = GoRouter(
       initialLocation: '/get-to-know-1',
       routes: [
@@ -32,7 +76,12 @@ void main() {
     );
 
     await tester.pumpWidget(
-      ProviderScope(child: MaterialApp.router(routerConfig: router)),
+      ProviderScope(
+        overrides: [
+          userRepositoryProvider.overrideWithValue(userRepo),
+        ],
+        child: MaterialApp.router(routerConfig: router),
+      ),
     );
     await tester.pumpAndSettle();
   }
@@ -52,6 +101,22 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('2/3'), findsOneWidget);
       expect(find.text('Which sports do you play?'), findsOneWidget);
+    });
+
+    testWidgets('should persist the selected reason to the backend', (
+      tester,
+    ) async {
+      await pumpRouter(tester);
+      final optCenter = tester.getCenter(find.text('Meet new sports partners'));
+      final nextTopLeft = tester.getTopLeft(find.text('Next'));
+      final nextBottomRight = tester.getBottomRight(find.text('Next'));
+      await tester.tap(find.text('Meet new sports partners'));
+      await tester.pump();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Next'));
+      await tester.pumpAndSettle();
+      expect(userRepo.lastJoinReason, 'Meet new sports partners');
+      expect(find.text('2/3'), findsOneWidget);
     });
   });
 
@@ -110,6 +175,34 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Give us some final details'), findsOneWidget);
+      // Skipping sends no sports to the backend.
+      expect(userRepo.lastSports, isNull);
+    });
+
+    testWidgets('should persist selected sports with levels to the backend', (
+      tester,
+    ) async {
+      await pumpRouter(tester);
+      await tester.tap(find.text('Next'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Basketball'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Intermediate'));
+      await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(
+        find.text('Next (1 selected)'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.text('Next (1 selected)'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Give us some final details'), findsOneWidget);
+      expect(userRepo.lastSports, hasLength(1));
+      expect(userRepo.lastSports!.single.sport, 'Basketball');
+      expect(userRepo.lastSports!.single.level, 'Intermediate');
     });
   });
 

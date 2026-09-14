@@ -3,11 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/providers/preferences_provider.dart';
+import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import 'get_to_know_1_screen.dart' show OnboardingProgressHeader;
 
@@ -40,11 +42,40 @@ class _GetToKnow2ScreenState extends ConsumerState<GetToKnow2Screen> {
   static const _levels = ['Beginner', 'Intermediate', 'Advanced'];
 
   double _distanceKm = 5;
+  bool _saving = false;
 
-  void _onNext() {
+  /// Keeps the local filter providers in sync immediately, then persists
+  /// the sports + per-sport levels to the backend profile before
+  /// advancing — so the picks land in the DB even if the user never
+  /// reaches the final step. Distance stays device-local (SharedPrefs).
+  Future<void> _onNext() async {
+    if (_saving) return;
     ref.read(sportPreferencesProvider.notifier).setAll(_sports);
     ref.read(distanceFilterProvider.notifier).set(_distanceKm);
-    context.push('/get-to-know-3');
+    if (_sports.isEmpty) {
+      context.push('/get-to-know-3');
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      await ref.read(userRepositoryProvider).updateProfile(
+            sports: [
+              for (final e in _sports.entries)
+                (sport: e.key, level: e.value),
+            ],
+          );
+      if (!mounted) return;
+      context.push('/get-to-know-3');
+    } catch (_) {
+      if (!mounted) return;
+      AppSnackbar.show(
+        context,
+        message: 'Could not save your sports. Please try again.',
+        variant: AppSnackbarVariant.error,
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   /// Tapping a chip: an unselected sport asks for a skill level before it is
@@ -218,7 +249,7 @@ class _GetToKnow2ScreenState extends ConsumerState<GetToKnow2Screen> {
               bottomPad + AppSpacing.x3,
             ),
             child: PressableScale(
-              onTap: _onNext,
+              onTap: _saving ? null : _onNext,
               child: Container(
                 width: double.infinity,
                 height: 56,

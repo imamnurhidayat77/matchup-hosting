@@ -23,8 +23,14 @@ import '../data/report_repository.dart';
 /// to 5 (most common — activity-specific), the "Other" free-form path is
 /// handled by the optional details field instead of a dedicated tile.
 class ReportActivitySheet extends ConsumerStatefulWidget {
-  const ReportActivitySheet({super.key, required this.activityTitle});
+  const ReportActivitySheet({
+    super.key,
+    required this.activityId,
+    required this.activityTitle,
+  });
 
+  /// Backend activity id — sent as the report target. Never the title.
+  final String activityId;
   final String activityTitle;
 
   /// Convenience launcher — handles the drag handle, scrollable body, and
@@ -35,11 +41,15 @@ class ReportActivitySheet extends ConsumerStatefulWidget {
   ///   context: ctx,
   ///   isScrollControlled: true,
   ///   backgroundColor: Colors.transparent,
-  ///   builder: (_) => ReportActivitySheet(activityTitle: ...),
+  ///   builder: (_) => ReportActivitySheet(
+  ///     activityId: ...,
+  ///     activityTitle: ...,
+  ///   ),
   /// );
   /// ```
   static Future<void> show(
     BuildContext context, {
+    required String activityId,
     required String activityTitle,
   }) {
     return showModalBottomSheet<void>(
@@ -47,7 +57,10 @@ class ReportActivitySheet extends ConsumerStatefulWidget {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       barrierColor: Colors.black54,
-      builder: (_) => ReportActivitySheet(activityTitle: activityTitle),
+      builder: (_) => ReportActivitySheet(
+        activityId: activityId,
+        activityTitle: activityTitle,
+      ),
     );
   }
 
@@ -88,7 +101,7 @@ class _ReportActivitySheetState extends ConsumerState<ReportActivitySheet> {
     setState(() => _submitting = true);
     try {
       await ref.read(reportRepositoryProvider).submit(
-        targetId: widget.activityTitle,
+        targetId: widget.activityId,
         targetType: ReportTargetType.activity,
         reason: _reason!,
         details: _detailsController.text.trim().isEmpty
@@ -96,11 +109,19 @@ class _ReportActivitySheetState extends ConsumerState<ReportActivitySheet> {
             : _detailsController.text.trim(),
       );
     } catch (_) {
-      // Non-fatal — sheet always closes and success is shown.
-    } finally {
-      if (mounted) setState(() => _submitting = false);
+      // Surface the failure and keep the sheet open — a failed report
+      // must never be presented as submitted.
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      AppSnackbar.show(
+        context,
+        message: 'Could not submit report. Check your connection and try again.',
+        variant: AppSnackbarVariant.error,
+      );
+      return;
     }
     if (!mounted) return;
+    setState(() => _submitting = false);
     Navigator.of(context).pop();
     AppSnackbar.show(
       context,

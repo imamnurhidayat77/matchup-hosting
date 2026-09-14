@@ -12,7 +12,9 @@ const _kUserId = 'auth_user_id';
 class SecureTokenStore {
   SecureTokenStore._()
     : _storage = const FlutterSecureStorage(
-        aOptions: AndroidOptions(encryptedSharedPreferences: true),
+        // v11 removed `encryptedSharedPreferences` — encrypted storage
+        // is now the default on Android, so plain const == old behavior.
+        aOptions: AndroidOptions(),
         iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
       );
 

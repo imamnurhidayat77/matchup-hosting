@@ -20,12 +20,15 @@ import '../data/report_repository.dart';
 /// User-specific reasons: harassment, impersonation, inappropriate profile,
 /// spam. "Other" routes through the optional details field below.
 class ReportUserSheet extends ConsumerStatefulWidget {
-  const ReportUserSheet({super.key, required this.userName});
+  const ReportUserSheet({super.key, required this.userId, required this.userName});
 
+  /// Backend auth uid — sent as the report target. Never the display name.
+  final String userId;
   final String userName;
 
   static Future<void> show(
     BuildContext context, {
+    required String userId,
     required String userName,
   }) {
     return showModalBottomSheet<void>(
@@ -33,7 +36,7 @@ class ReportUserSheet extends ConsumerStatefulWidget {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       barrierColor: Colors.black54,
-      builder: (_) => ReportUserSheet(userName: userName),
+      builder: (_) => ReportUserSheet(userId: userId, userName: userName),
     );
   }
 
@@ -73,7 +76,7 @@ class _ReportUserSheetState extends ConsumerState<ReportUserSheet> {
     setState(() => _submitting = true);
     try {
       await ref.read(reportRepositoryProvider).submit(
-        targetId: widget.userName,
+        targetId: widget.userId,
         targetType: ReportTargetType.user,
         reason: _reason!,
         details: _detailsController.text.trim().isEmpty
@@ -81,12 +84,17 @@ class _ReportUserSheetState extends ConsumerState<ReportUserSheet> {
             : _detailsController.text.trim(),
       );
     } catch (_) {
-      // Submission errors are non-fatal — the sheet still closes and the
-      // success message is shown so the user knows their intent was recorded.
-    } finally {
-      if (mounted) setState(() => _submitting = false);
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      AppSnackbar.show(
+        context,
+        message: 'Could not submit report. Check your connection and try again.',
+        variant: AppSnackbarVariant.error,
+      );
+      return;
     }
     if (!mounted) return;
+    setState(() => _submitting = false);
     Navigator.of(context).pop();
     AppSnackbar.show(
       context,

@@ -18,6 +18,7 @@ Current implemented domains:
 - swipes
 - notifications
 - devices
+- reports
 
 ## Base URL
 
@@ -111,6 +112,7 @@ Frontend auth flow:
 
 - Register and sign-in should be handled by Firebase Auth on the frontend.
 - After Firebase Auth returns an ID token, the frontend should call `POST /api/users/me` to create or load the backend user profile.
+- Native SDKs (RTDB realtime chat) sign in with a custom token from `POST /api/users/custom-token` — see "Realtime chat" below.
 
 ### `POST /api/users/me`
 
@@ -210,7 +212,9 @@ Editable fields:
 - `dateOfBirth`
 - `skillLevel`
 - `preferredSports`
+- `sportSkillLevels` (per-sport skill map, e.g. `{ "Tennis": "intermediate" }`)
 - `preferredLocations`
+- `joinReason` (onboarding answer — stored on the private profile, never exposed publicly)
 
 Non-editable through this route:
 
@@ -230,7 +234,9 @@ Request body:
   "dateOfBirth": "2000-01-01",
   "skillLevel": "intermediate",
   "preferredSports": ["futsal", "badminton"],
-  "preferredLocations": ["Auckland"]
+  "sportSkillLevels": { "futsal": "intermediate", "badminton": "beginner" },
+  "preferredLocations": ["Auckland"],
+  "joinReason": "Stay active with new sports"
 }
 ```
 
@@ -275,6 +281,8 @@ Errors:
 - `400 INVALID_INPUT` if string fields are not strings
 - `400 INVALID_INPUT` if `skillLevel` is invalid
 - `400 INVALID_INPUT` if `preferredSports` or `preferredLocations` are not string arrays
+- `400 INVALID_INPUT` if `sportSkillLevels` is not a sport-name → level map
+- `400 INVALID_INPUT` if `joinReason` is not a string
 - `404 NOT_FOUND` if user profile does not exist
 
 ### `PATCH /api/users/me/photo`
@@ -597,6 +605,143 @@ Errors:
 - `400 EMPTY_INPUT` if `activityId` is blank
 - `403 FORBIDDEN` if the authenticated user is not the activity host or a participant
 - `404 NOT_FOUND` if activity does not exist
+
+### Realtime chat
+
+Writes always go through `POST /api/chat/messages` (stored in RTDB
+at `activityChats/{activityId}/messages/{messageId}`). Live updates
+are delivered by subscribing directly to that RTDB path with the
+Firebase SDK — the mobile chat screen does this and falls back to
+polling `GET /api/chat/:activityId/messages` every 3 seconds when
+Firebase isn't configured.
+
+The SDK must be signed in as the real user or the listener gets
+`permission-denied` under the RTDB rules (see
+`infra/firebase/database.rules.json`, client writes denied —
+backend only). Mint the sign-in token here:
+
+### `POST /api/users/custom-token`
+
+Mints a short-lived Firebase custom token for the authenticated
+user. The mobile app signs the native SDK in with
+`FirebaseAuth.signInWithCustomToken` so RTDB listeners are
+authenticated.
+
+Authentication:
+
+- Requires `Authorization: Bearer <firebase-id-token>`
+
+Success `200`:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "customToken": "eyJhbGciOi..."
+  }
+}
+```
+
+Errors:
+
+- `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
+
+---
+
+## Reports
+
+### `POST /api/reports`
+
+Files a moderation report against a user or an activity. Reports land
+in the `reports` Firestore collection with status `pending` for later
+moderation.
+
+Request body:
+
+```json
+{
+  "targetId": "activity-id-or-uid",
+  "targetType": "activity",
+  "reason": "Spam / Fake activity",
+  "details": "Optional free-form context"
+}
+```
+
+Allowed `targetType` values:
+
+- `user`
+- `activity`
+
+Authentication:
+
+- Requires `Authorization: Bearer <firebase-id-token>`
+- `reporterId` is derived from the verified Firebase Auth user
+- Users cannot report themselves
+
+Success `201`:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "reportId": "generated-report-id",
+    "autoHidden": false
+  }
+}
+```
+
+`autoHidden` is true when the report pushed the target over the
+auto-hide threshold (3 distinct reporters) and the activity was
+flipped to `removed` pending human review.
+
+Errors:
+
+- `401 UNAUTHORIZED` if the Firebase ID token is missing or invalid
+- `400 INVALID_INPUT` if `targetId` or `reason` are not strings
+- `400 INVALID_INPUT` if `targetType` is not `user` or `activity`
+- `400 INVALID_INPUT` if reporting yourself, or reason/details exceed length limits
+- `400 EMPTY_INPUT` if `targetId` or `reason` are blank
+- `404 NOT_FOUND` if the reported user or activity does not exist
+
+### `GET /api/reports` (admin)
+
+Triage-board listing, newest first. Requires an admin uid —
+comma-separated `ADMIN_UIDS` in the api-server `.env`
+(e.g. `ADMIN_UIDS=uid1,uid2`; empty denies everyone) —
+`403 FORBIDDEN` otherwise.
+
+Query params: `status=pending|resolved|dismissed` (optional),
+`limit` 1–100 (default 50).
+
+Success `200` — `data` is an array of:
+
+```json
+{
+  "id": "report-id",
+  "reporter": "Display Name",
+  "reporterAvatarSeed": "uid",
+  "target": "Sunday Run",
+  "targetType": "activity",
+  "reason": "Spam / Fake activity",
+  "category": "Spam",
+  "activityTitle": "Sunday Run",
+  "sport": "Running",
+  "status": "Pending",
+  "createdAt": "2026-09-10T12:00:00.000Z",
+  "adminNote": "optional",
+  "resolvedAt": "optional-iso"
+}
+```
+
+### `POST /api/reports/:id/resolve` (admin)
+
+Marks a pending report `resolved` with an optional admin note.
+Body: `{ "note": "optional, max 500 chars" }`. Success `200`.
+`404 NOT_FOUND` for unknown ids, `409 CONFLICT` when already triaged.
+
+### `POST /api/reports/:id/dismiss` (admin)
+
+Same contract as resolve, but marks the report `dismissed`.
 
 ---
 

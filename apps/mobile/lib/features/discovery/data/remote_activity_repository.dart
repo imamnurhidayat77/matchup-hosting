@@ -1,15 +1,31 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_client.dart';
+import '../../../core/services/location_service.dart';
+import '../../../core/storage/secure_token_store.dart';
+import '../../../core/utils/geo.dart' show haversineKm;
 import '../../activities/domain/activity_participant.dart';
 import '../domain/activity_model.dart';
+import '../domain/discovery_filter.dart';
 import 'activity_repository.dart';
 import 'activity_repository_impl.dart';
 
-/// HTTP-backed [ActivityRepository] for the live MatchUp API. All endpoints
-/// are stubbed at `/api/v1/activities/...` — replace the path constants and
-/// JSON parsing once the backend ships. Until then, this implementation
-/// delegates to [LocalActivityRepository] so the app keeps working.
+/// Normalises a mobile-side skill label to the backend enum
+/// (`beginner` | `intermediate` | `advanced` | `any`). The backend
+/// rejects anything else with INVALID_INPUT.
+String _normaliseSkill(String skillLevel) {
+  final lower = skillLevel.toLowerCase();
+  if (lower == 'all' || lower == 'all level') return 'any';
+  return lower;
+}
+
+/// HTTP-backed [ActivityRepository] for the live MatchUp API.
+///
+/// Hits the real api-server routes under `/api/activities` and unwraps
+/// the `{ok, data}` envelope on every response. The backend has no
+/// dedicated joined/hosted/past/search routes, so those reads are
+/// derived from the `GET /activities` feed via the viewer context
+/// (`isParticipant` / `isHost`) the server attaches per activity.
 class RemoteActivityRepository implements ActivityRepository {
   RemoteActivityRepository({ApiClient? client, ActivityRepository? fallback})
     : _client = client ?? ApiClient.instance,
@@ -20,38 +36,216 @@ class RemoteActivityRepository implements ActivityRepository {
 
   static const _base = '/activities';
 
+  /// Short-TTL in-memory feed cache. Tab switches dispose the Discover
+  /// state, so without this every return trip replays HTTP +
+  /// GPS behind the skeleton. See [FeedCache].
+  final FeedCache<List<ActivityModel>> _feedCache = FeedCache();
+
+  /// Detail + roster caches (same TTL policy). Detail screens mount on
+  /// every card tap, and roster/chat polling re-reads them — without
+  /// this each open costs 1–2 HTTP round trips. Cleared on any write
+  /// (join/leave/cancel/status/requests/create) so mutations never
+  /// read stale.
+  final FeedCache<ActivityModel?> _byIdCache = FeedCache();
+  final FeedCache<List<ActivityParticipant>> _participantsCache =
+      FeedCache();
+
+  void _invalidateDetails() {
+    _byIdCache.invalidateAll();
+    _participantsCache.invalidateAll();
+  }
+
+  /// True when a fresh (unexpired) cache entry exists — lets screens
+  /// render instantly, then decide about a silent background refresh.
+  bool isFeedFresh({DiscoveryFilter? filter, int limit = 20, int offset = 0}) =>
+      _feedCache.isFresh(
+        FeedCache.keyFor(filter: filter, limit: limit, offset: offset),
+      );
+
+  /// Drops cached feeds (whole map, or one filter). Called after a
+  /// swipe is persisted so a just-swiped card can't be re-dealt from
+  /// a stale entry within the TTL window.
+  void invalidateFeed({DiscoveryFilter? filter, int limit = 20, int offset = 0}) {
+    if (filter == null) {
+      _feedCache.invalidateAll();
+    } else {
+      _feedCache.remove(
+        FeedCache.keyFor(filter: filter, limit: limit, offset: offset),
+      );
+    }
+  }
+
+  void _storeFeed(String key, List<ActivityModel> items) {
+    _feedCache.put(key, items);
+  }
+
   @override
-  Future<List<ActivityModel>> feed({int limit = 20, int offset = 0}) async {
+  Future<List<ActivityModel>> feed({
+    int limit = 20,
+    int offset = 0,
+    DiscoveryFilter? filter,
+    bool forceRefresh = false,
+  }) async {
+    debugPrint(
+      '[RemoteActivityRepository.feed] filter=$filter isEmpty=${filter?.isEmpty} '
+      'sportSkills=${filter?.sportSkills.length} '
+      'datePreset=${filter?.datePreset} '
+      'maxDistanceKm=${filter?.maxDistanceKm} limit=$limit',
+    );
+    final key = FeedCache.keyFor(filter: filter, limit: limit, offset: offset);
+    if (!forceRefresh) {
+      final hit = _feedCache.get(key);
+      if (hit != null) {
+        debugPrint('[RemoteActivityRepository.feed] cache HIT (${hit.length})');
+        return hit;
+      }
+    }
+    if (filter != null && !filter.isEmpty) {
+      try {
+        final res = await _discoverFeed(filter, limit);
+        debugPrint(
+          '[RemoteActivityRepository.feed] discover returned '
+          '${res.length} activities',
+        );
+        _storeFeed(key, res);
+        return res;
+      } catch (e, st) {
+        debugPrint(
+          '[RemoteActivityRepository.feed] discover threw, falling back: '
+          '$e\n$st',
+        );
+        return _fallback.feed(limit: limit, offset: offset);
+      }
+    }
     try {
       final res = await _client.dio.get(
         _base,
-        queryParameters: {'limit': limit, 'offset': offset},
+        queryParameters: {'limit': limit},
       );
-      return _parseList(res.data as List);
+      final activities = _parseList(apiDataList(res.data));
+      debugPrint(
+        '[RemoteActivityRepository.feed] legacy: ${res.statusCode} count=${activities.length} '
+        'uri=${res.requestOptions.uri}',
+      );
+      final withDistances = await _withDistances(activities);
+      _storeFeed(key, withDistances);
+      return withDistances;
     } catch (e, st) {
-      debugPrint('[RemoteActivityRepository] $e\n$st');
+      debugPrint('[RemoteActivityRepository.feed] $e\n$st');
       return _fallback.feed(limit: limit, offset: offset);
     }
   }
 
+  /// `?discover=1` ranked pipeline. The backend reads each filter
+  /// segment from the query string and applies sport/skill + date +
+  /// geo + swipe-exclude + preference ranking. When the user hasn't
+  /// granted location, the geo leg is simply skipped.
+  Future<List<ActivityModel>> _discoverFeed(
+    DiscoveryFilter filter,
+    int limit,
+  ) async {
+    final params = <String, dynamic>{
+      'discover': '1',
+      'limit': limit,
+      if (filter.includeSwiped) 'includeSwiped': 'true',
+    };
+
+    final sports = filter.sportFiltersQueryParam;
+    if (sports != null) params['sportFilters'] = sports;
+
+    final range = filter.dateRange;
+    if (range.startAfter != null) params['startAfter'] = range.startAfter;
+    if (range.startBefore != null) params['startBefore'] = range.startBefore;
+
+    if (filter.maxDistanceKm != null) {
+      debugPrint('[discover] requesting location for geo filter');
+      final position = await LocationService.instance.getCurrentLocation();
+      debugPrint('[discover] location: $position');
+      if (position != null) {
+        params['nearLat'] = position.latitude;
+        params['nearLng'] = position.longitude;
+        params['radiusKm'] = filter.maxDistanceKm;
+      } else {
+        debugPrint(
+          '[discover] no location — sending discover without geo leg',
+        );
+      }
+    }
+
+    final uri = Uri(
+      path: _base,
+      queryParameters:
+          params.map((k, v) => MapEntry(k, v.toString())),
+    );
+    debugPrint('[discover] request URI: $uri');
+    debugPrint(
+      '[discover] _discoverFeed ENTERED with filter=$filter limit=$limit',
+    );
+
+    final res = await _client.dio.get(_base, queryParameters: params);
+    debugPrint(
+      '[discover] response: ${res.statusCode} count=${apiDataList(res.data).length} '
+      'firstRow=${apiDataList(res.data).isNotEmpty ? (apiDataList(res.data).first as Map)['sportType'] : 'n/a'}',
+    );
+    return _parseList(apiDataList(res.data));
+  }
+
+  /// Fills [ActivityModel.distanceKm] from the device's current position
+  /// and each activity's venue coordinates (the backend has no geo
+  /// queries, so the phone does the math). Best-effort: when location
+  /// is unavailable or an activity carries no coordinates, its distance
+  /// stays whatever the payload said (0.0 for backend rows).
+  Future<List<ActivityModel>> _withDistances(
+    List<ActivityModel> activities,
+  ) async {
+    final position = await LocationService.instance.getCurrentLocation();
+    if (position == null) return activities;
+    return [
+      for (final a in activities)
+        if (a.latitude != null && a.longitude != null)
+          a.copyWith(
+            distanceKm: haversineKm(
+              position.latitude,
+              position.longitude,
+              a.latitude!,
+              a.longitude!,
+            ),
+          )
+        else
+          a,
+    ];
+  }
+
   @override
   Future<ActivityModel?> byId(String id) async {
+    final hit = _byIdCache.get(id);
+    if (hit != null) return hit;
+    // Nulls are not cached: a missing activity may appear later, and
+    // caching null would hide it for the whole TTL window.
     try {
       final res = await _client.dio.get('$_base/$id');
-      return _parse(res.data as Map<String, dynamic>);
+      final parsed = _parse(apiDataMap(res.data));
+      if (parsed != null) _byIdCache.put(id, parsed);
+      return parsed;
     } catch (e, st) {
-      debugPrint('[RemoteActivityRepository] $e\n$st');
+      debugPrint('[RemoteActivityRepository.byId] $e\n$st');
       return _fallback.byId(id);
     }
   }
 
   @override
   Future<List<ActivityModel>> joinedByUser(String userId) async {
+    // No dedicated backend route — the feed already carries viewer
+    // context (`isParticipant` / `isHost` per activity, resolved from
+    // the Bearer token), so "joined" is derived client-side. Hosted
+    // activities are excluded; they have their own tab.
     try {
-      final res = await _client.dio.get('/users/$userId/joined-activities');
-      return _parseList(res.data as List);
+      final all = await feed(limit: 50);
+      return all
+          .where((a) => a.isParticipant && !a.isHost)
+          .toList();
     } catch (e, st) {
-      debugPrint('[RemoteActivityRepository] $e\n$st');
+      debugPrint('[RemoteActivityRepository.joinedByUser] $e\n$st');
       return _fallback.joinedByUser(userId);
     }
   }
@@ -59,10 +253,10 @@ class RemoteActivityRepository implements ActivityRepository {
   @override
   Future<List<ActivityModel>> hostedByUser(String userId) async {
     try {
-      final res = await _client.dio.get('/users/$userId/hosted-activities');
-      return _parseList(res.data as List);
+      final all = await feed(limit: 50);
+      return all.where((a) => a.isHost).toList();
     } catch (e, st) {
-      debugPrint('[RemoteActivityRepository] $e\n$st');
+      debugPrint('[RemoteActivityRepository.hostedByUser] $e\n$st');
       return _fallback.hostedByUser(userId);
     }
   }
@@ -73,18 +267,28 @@ class RemoteActivityRepository implements ActivityRepository {
     String? skillLevel,
     double? maxDistanceKm,
   }) async {
+    // The backend list endpoint supports `sportType` + `skillLevel`
+    // filters directly — there is no `/search` sub-path. `maxDistanceKm`
+    // has no server-side equivalent (no geo queries yet): distances are
+    // computed client-side in [_withDistances], then filtered here.
+    // Without a device location every row reports 0 km and the filter
+    // is a no-op rather than hiding everything.
     try {
       final res = await _client.dio.get(
-        '$_base/search',
+        _base,
         queryParameters: {
-          'sport': ?sport,
-          'skill': ?skillLevel,
-          'max_km': ?maxDistanceKm,
+          'limit': 50,
+          if (sport != null && sport.isNotEmpty) 'sportType': sport,
+          if (skillLevel != null && skillLevel.isNotEmpty)
+            'skillLevel': _normaliseSkill(skillLevel),
         },
       );
-      return _parseList(res.data as List);
+      final results =
+          await _withDistances(_parseList(apiDataList(res.data)));
+      if (maxDistanceKm == null) return results;
+      return results.where((a) => a.distanceKm <= maxDistanceKm).toList();
     } catch (e, st) {
-      debugPrint('[RemoteActivityRepository] $e\n$st');
+      debugPrint('[RemoteActivityRepository.search] $e\n$st');
       return _fallback.search(
         sport: sport,
         skillLevel: skillLevel,
@@ -97,39 +301,88 @@ class RemoteActivityRepository implements ActivityRepository {
   Future<ActivityModel> create({
     required String title,
     required String sportType,
+    required String description,
     required String location,
     required DateTime dateTime,
     required int maxParticipants,
     required String skillLevel,
-    required double fee,
+    required double latitude,
+    required double longitude,
+    required String geohash,
     int durationMinutes = 120,
+    String? coverImageUrl,
+    String joinPolicy = 'open',
   }) async {
+    _invalidateDetails();
     try {
       final res = await _client.dio.post(
         _base,
         data: {
           'title': title,
-          'sport_type': sportType,
-          'location': location,
-          'date_time': dateTime.toIso8601String(),
-          'max_participants': maxParticipants,
-          'skill_level': skillLevel,
-          'fee': fee,
-          'duration_minutes': durationMinutes,
+          'sportType': sportType,
+          'description': description,
+          'locationName': location,
+          'latitude': latitude,
+          'longitude': longitude,
+          'geohash': geohash,
+          'startTime': dateTime.toIso8601String(),
+          'endTime': dateTime
+              .add(Duration(minutes: durationMinutes))
+              .toIso8601String(),
+          'skillLevel': _normaliseSkill(skillLevel),
+          'capacity': maxParticipants,
+          if (coverImageUrl != null && coverImageUrl.isNotEmpty)
+            'coverImageUrl': coverImageUrl,
+          'joinPolicy': joinPolicy,
         },
       );
-      return _parse(res.data as Map<String, dynamic>)!;
+      // Create returns `{activityId}` only — fetch the full record so
+      // the caller gets viewer context (isHost etc.) like every other
+      // read path.
+      final createdId =
+          apiDataMap(res.data)?['activityId']?.toString() ?? '';
+      if (createdId.isEmpty) {
+        throw const FormatException('create response missing activityId');
+      }
+      final created = await byId(createdId);
+      if (created != null) return created;
+      // The write succeeded but the follow-up read failed (transient
+      // blip) — synthesise the record from the inputs rather than
+      // throwing away a successful create.
+      return ActivityModel(
+        id: createdId,
+        title: title,
+        sportType: sportType,
+        description: description,
+        location: location,
+        distanceKm: 0,
+        dateTime: dateTime,
+        skillLevel: skillLevel,
+        capacity: maxParticipants,
+        participantCount: 0,
+        hostName: 'You',
+        coverImageUrl: coverImageUrl,
+        status: ActivityStatus.hosted,
+        durationMinutes: durationMinutes,
+        isHost: true,
+        hostId: await _readMyUid(),
+      );
     } catch (e, st) {
-      debugPrint('[RemoteActivityRepository] $e\n$st');
+      debugPrint('[RemoteActivityRepository.create] $e\n$st');
       return _fallback.create(
         title: title,
         sportType: sportType,
+        description: description,
         location: location,
         dateTime: dateTime,
         maxParticipants: maxParticipants,
         skillLevel: skillLevel,
-        fee: fee,
+        latitude: latitude,
+        longitude: longitude,
+        geohash: geohash,
         durationMinutes: durationMinutes,
+        coverImageUrl: coverImageUrl,
+        joinPolicy: joinPolicy,
       );
     }
   }
@@ -137,19 +390,88 @@ class RemoteActivityRepository implements ActivityRepository {
   @override
   Future<void> join(String activityId) async {
     try {
-      await _client.dio.post('$_base/$activityId/join');
+      _invalidateDetails();
+      // Backend route is `POST /api/activities/:activityId/participants`.
+      // The previous `$_base/$activityId/join` returned 404 because that
+      // sub-path doesn't exist on the backend.
+      await _client.dio.post('$_base/$activityId/participants');
     } catch (e, st) {
-      debugPrint('[RemoteActivityRepository] $e\n$st');
+      debugPrint('[RemoteActivityRepository.join] $e\n$st');
       await _fallback.join(activityId);
     }
   }
 
   @override
+  Future<void> requestJoin(String activityId) async {
+    // No local fallback: the backend owns join-request state (pending
+    // duplicates, full, closed), and its 409/4xx answers carry the
+    // reason the screen shows. Swallowing them here turned precise
+    // rejections (e.g. "already pending") into mystery failures.
+    _invalidateDetails();
+    await _client.dio.post('$_base/$activityId/join-requests');
+  }
+
+  @override
+  Future<List<ActivityParticipant>> joinRequests(String activityId) async {
+    try {
+      final res = await _client.dio.get('$_base/$activityId/join-requests');
+      return apiDataList(res.data)
+          .whereType<Map<String, dynamic>>()
+          .map(_parseJoinRequest)
+          .toList();
+    } catch (e, st) {
+      debugPrint('[RemoteActivityRepository.joinRequests] $e\n$st');
+      return _fallback.joinRequests(activityId);
+    }
+  }
+
+  @override
+  Future<void> approveJoinRequest(String activityId, String uid) async {
+    try {
+      _invalidateDetails();
+      await _client.dio.post('$_base/$activityId/join-requests/$uid/approve');
+    } catch (e, st) {
+      debugPrint('[RemoteActivityRepository.approveJoinRequest] $e\n$st');
+      await _fallback.approveJoinRequest(activityId, uid);
+    }
+  }
+
+  @override
+  Future<void> declineJoinRequest(String activityId, String uid) async {
+    try {
+      _invalidateDetails();
+      await _client.dio.post('$_base/$activityId/join-requests/$uid/decline');
+    } catch (e, st) {
+      debugPrint('[RemoteActivityRepository.declineJoinRequest] $e\n$st');
+      await _fallback.declineJoinRequest(activityId, uid);
+    }
+  }
+
+  /// Parses one join request row:
+  /// `{requestId, uid, activityId, status, createdAt, profile?}`.
+  /// Reuses the participant flattening so roster widgets render
+  /// requesters identically to members.
+  ActivityParticipant _parseJoinRequest(Map<String, dynamic> json) {
+    final participant = _parseParticipant({
+      'uid': json['uid'],
+      'participantId': json['requestId'],
+      'joinedAt': json['createdAt'],
+      'profile': json['profile'],
+    });
+    return participant;
+  }
+
+  @override
   Future<void> leave(String activityId) async {
     try {
-      await _client.dio.post('$_base/$activityId/leave');
+      _invalidateDetails();
+      // Backend route is `DELETE /api/activities/:activityId/participants/:uid`.
+      // The `uid` is the *current* user (you can only remove yourself, or
+      // the host can remove you — both are encoded server-side).
+      final uid = await _readMyUid();
+      await _client.dio.delete('$_base/$activityId/participants/$uid');
     } catch (e, st) {
-      debugPrint('[RemoteActivityRepository] $e\n$st');
+      debugPrint('[RemoteActivityRepository.leave] $e\n$st');
       await _fallback.leave(activityId);
     }
   }
@@ -157,49 +479,221 @@ class RemoteActivityRepository implements ActivityRepository {
   @override
   Future<void> cancel(String activityId) async {
     try {
-      await _client.dio.post('$_base/$activityId/cancel');
+      _invalidateDetails();
+      // Cancel maps to the host-only status update endpoint
+      // `PATCH /api/activities/:activityId/status` with `{ status: 'cancelled' }`.
+      // The dedicated `/cancel` sub-path doesn't exist on the backend.
+      await _client.dio.patch(
+        '$_base/$activityId/status',
+        data: {'status': 'cancelled'},
+      );
     } catch (e, st) {
-      debugPrint('[RemoteActivityRepository] $e\n$st');
+      debugPrint('[RemoteActivityRepository.cancel] $e\n$st');
       await _fallback.cancel(activityId);
+    }
+  }
+
+  @override
+  Future<void> updateStatus(String activityId, String status) async {
+    try {
+      _invalidateDetails();
+      await _client.dio.patch(
+        '$_base/$activityId/status',
+        data: {'status': status},
+      );
+    } catch (e, st) {
+      debugPrint('[RemoteActivityRepository.updateStatus] $e\n$st');
+      // Local fallback only knows 'cancelled' — for 'completed' we just
+      // let the failure bubble so the UI shows a snackbar.
+      if (status == 'cancelled') {
+        await _fallback.cancel(activityId);
+      } else {
+        rethrow;
+      }
+    }
+  }
+
+  @override
+  Future<void> updateActivity({
+    required String activityId,
+    String? title,
+    String? sportType,
+    String? description,
+    String? locationName,
+    double? latitude,
+    double? longitude,
+    String? geohash,
+    DateTime? startTime,
+    DateTime? endTime,
+    String? skillLevel,
+    int? capacity,
+    String? joinPolicy,
+  }) async {
+    _invalidateDetails();
+    invalidateFeed();
+    final Map<String, dynamic> data = {};
+    void setIfPresent(String key, Object? value) {
+      if (value != null) data[key] = value;
+    }
+
+    setIfPresent('title', title);
+    setIfPresent('sportType', sportType);
+    setIfPresent('description', description);
+    setIfPresent('locationName', locationName);
+    setIfPresent('latitude', latitude);
+    setIfPresent('longitude', longitude);
+    setIfPresent('geohash', geohash);
+    setIfPresent('startTime', startTime?.toIso8601String());
+    setIfPresent('endTime', endTime?.toIso8601String());
+    setIfPresent(
+      'skillLevel',
+      skillLevel == null ? null : _normaliseSkill(skillLevel),
+    );
+    setIfPresent('capacity', capacity);
+    setIfPresent('joinPolicy', joinPolicy);
+    try {
+      await _client.dio.patch('$_base/$activityId', data: data);
+    } catch (e, st) {
+      debugPrint('[RemoteActivityRepository.updateActivity] $e\n$st');
+      rethrow;
     }
   }
 
   @override
   Future<List<ActivityModel>> pastByUser(String userId) async {
     try {
-      final res = await _client.dio.get('/users/$userId/past-activities');
-      return _parseList(res.data as List);
+      // No dedicated backend route — "past" means lifecycle `completed`,
+      // filtered to activities the viewer hosted or joined.
+      final res = await _client.dio.get(
+        _base,
+        queryParameters: {'status': 'completed', 'limit': 50},
+      );
+      return _parseList(apiDataList(res.data))
+          .where((a) => a.isParticipant || a.isHost)
+          .toList();
     } catch (e, st) {
-      debugPrint('[RemoteActivityRepository] $e\n$st');
+      debugPrint('[RemoteActivityRepository.pastByUser] $e\n$st');
       return _fallback.pastByUser(userId);
     }
   }
 
   @override
+  Future<List<ActivityModel>> pendingRequests() async {
+    try {
+      final res = await _client.dio.get('$_base/join-requests/me');
+      return [
+        for (final e in apiDataList(res.data))
+          if (e is Map<String, dynamic>) _parsePending(e),
+      ];
+    } catch (e, st) {
+      debugPrint('[RemoteActivityRepository.pendingRequests] $e\n$st');
+      return _fallback.pendingRequests();
+    }
+  }
+
+  /// Maps a backend pending-request view
+  /// (`{activityId, title, sportType, locationName, startTime}`) to a
+  /// lightweight activity for the Pending tab. Missing fields degrade
+  /// to blanks — the row still renders and taps through to the detail
+  /// screen, which loads the full record.
+  ActivityModel _parsePending(Map<String, dynamic> json) {
+    DateTime start;
+    try {
+      start = DateTime.parse(json['startTime'] as String);
+    } catch (_) {
+      start = DateTime.now();
+    }
+    return ActivityModel(
+      id: json['activityId']?.toString() ?? '',
+      title: json['title'] as String? ?? '',
+      sportType: json['sportType'] as String? ?? '',
+      description: '',
+      location: json['locationName'] as String? ?? '',
+      distanceKm: 0,
+      dateTime: start,
+      skillLevel: '',
+      capacity: 0,
+      participantCount: 0,
+      hostName: '',
+      joinRequestStatus: 'pending',
+    );
+  }
+
+  @override
   Future<List<ActivityParticipant>> participants(String activityId) async {
+    final hit = _participantsCache.get(activityId);
+    if (hit != null) return hit;
     try {
       final res = await _client.dio.get('$_base/$activityId/participants');
-      return (res.data as List)
-          .map((e) => _parseParticipant(e as Map<String, dynamic>))
+      final parsed = apiDataList(res.data)
+          .whereType<Map<String, dynamic>>()
+          .map(_parseParticipant)
           .toList();
+      _participantsCache.put(activityId, parsed);
+      return parsed;
     } catch (e, st) {
-      debugPrint('[RemoteActivityRepository] $e\n$st');
+      debugPrint('[RemoteActivityRepository.participants] $e\n$st');
       return _fallback.participants(activityId);
     }
   }
 
   ActivityParticipant _parseParticipant(Map<String, dynamic> json) {
+    // Backend returns each participant as:
+    //   { participantId, uid, joinedAt, profile: { displayName, photoUrl, ... } | null }
+    // — see backend's `ActivityParticipantWithId`. The mobile model wants
+    // a flatter shape with `userId`, `name`, `avatarAsset`, `skillLevel`.
+    final profile = json['profile'] as Map<String, dynamic>?;
+    final joinedAtRaw = json['joinedAt'];
+    // `avatarAsset` feeds `Image.asset(...)` downstream, so a remote
+    // `photoUrl` must NOT be passed through as-is. When there is no
+    // usable avatar, leave it null — renderers show initials instead
+    // of a stock face.
+    final photoUrl = profile?['photoUrl'] as String?;
+    final avatarUrl = (photoUrl != null && photoUrl.isNotEmpty)
+        ? photoUrl
+        : null;
+    final avatarAsset = (photoUrl != null &&
+            !photoUrl.startsWith('http') &&
+            photoUrl.isNotEmpty)
+        ? photoUrl
+        : json['avatar_asset'] as String?;
     return ActivityParticipant(
-      userId: json['user_id']?.toString() ?? '',
-      name: json['name'] as String? ?? '',
-      avatarAsset: json['avatar_asset'] as String? ?? 'avatar_1.png',
-      skillLevel: json['skill_level'] as String? ?? 'All',
-      joinedAt:
-          DateTime.tryParse(json['joined_at'] as String? ?? '') ??
-          DateTime.now(),
+      userId: json['uid']?.toString() ??
+          json['userId']?.toString() ??
+          json['user_id']?.toString() ??
+          json['participantId']?.toString() ??
+          '',
+      name: profile?['displayName'] as String? ??
+          json['name'] as String? ??
+          '',
+      avatarAsset: avatarAsset,
+      avatarUrl: avatarUrl,
+      skillLevel: profile?['skillLevel'] as String? ??
+          json['skill_level'] as String? ??
+          'All',
+      joinedAt: _parseTimestamp(joinedAtRaw) ?? DateTime.now(),
+      // Backend doesn't surface organiser / check-in state yet — default
+      // to false so the UI renders identically. The local fallback keeps
+      // the rich seed data for the offline experience.
       isOrganizer: json['is_organizer'] as bool? ?? false,
       isCheckedIn: json['is_checked_in'] as bool? ?? false,
     );
+  }
+
+  /// Coerces a Firestore Timestamp — which arrives as either an ISO string
+  /// (admin SDK `Timestamp.toDate()` serialised), the `{ seconds,
+  /// nanoseconds }` shape, or a Dart `DateTime` — into a [DateTime].
+  DateTime? _parseTimestamp(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is String) return DateTime.tryParse(raw);
+    if (raw is DateTime) return raw;
+    if (raw is Map) {
+      final seconds = raw['seconds'] ?? raw['_seconds'];
+      if (seconds is num) {
+        return DateTime.fromMillisecondsSinceEpoch(seconds.toInt() * 1000);
+      }
+    }
+    return null;
   }
 
   /// Delegates to [ActivityModel.fromJson] — the single canonical parsing
@@ -214,4 +708,72 @@ class RemoteActivityRepository implements ActivityRepository {
       .map((e) => _parse(e as Map<String, dynamic>))
       .whereType<ActivityModel>()
       .toList();
+
+  /// Reads the current user's Firebase auth uid from secure storage. Used
+  /// by the leave-participant route which requires `:uid` in the URL.
+  /// Returns an empty string if no session is active — the resulting
+  /// request will 401 and fall through to the local fallback.
+  Future<String> _readMyUid() async {
+    return (await SecureTokenStore.instance.readUserId()) ?? '';
+  }
+}
+
+/// Short-TTL in-memory feed cache, extracted as its own class so the
+/// TTL/eviction logic is unit-testable without HTTP or GPS.
+///
+/// Keys cover the full filter ([keyFor]) so filter changes and
+/// "Start over" always miss. The clock is injectable for tests.
+class FeedCache<T> {
+  FeedCache({
+    DateTime Function()? clock,
+    this.ttl = const Duration(seconds: 60),
+    this.maxEntries = 20,
+  }) : _clock = clock ?? DateTime.now;
+
+  /// Cache key — full filter identity plus paging.
+  static String keyFor({
+    required DiscoveryFilter? filter,
+    required int limit,
+    required int offset,
+  }) =>
+      '${filter.hashCode}:$limit:$offset';
+
+  final Duration ttl;
+  final int maxEntries;
+  final DateTime Function() _clock;
+  final Map<String, _FeedCacheEntry<T>> _entries = {};
+
+  T? get(String key) {
+    final hit = _entries[key];
+    if (hit == null) return null;
+    if (_clock().difference(hit.cachedAt) >= ttl) {
+      _entries.remove(key);
+      return null;
+    }
+    return hit.items;
+  }
+
+  bool isFresh(String key) => get(key) != null;
+
+  void put(String key, T items) {
+    _entries[key] = _FeedCacheEntry(items, _clock());
+    while (_entries.length > maxEntries) {
+      _entries.remove(_entries.keys.first);
+    }
+  }
+
+  void remove(String key) => _entries.remove(key);
+
+  void invalidateAll() => _entries.clear();
+
+  @visibleForTesting
+  int get length => _entries.length;
+}
+
+/// One cached feed entry — the final list (distances already filled)
+/// plus the time it was stored, for TTL checks.
+class _FeedCacheEntry<T> {
+  const _FeedCacheEntry(this.items, this.cachedAt);
+  final T items;
+  final DateTime cachedAt;
 }

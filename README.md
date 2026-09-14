@@ -2,7 +2,7 @@
 
 > Activity-based matchmaking platform for connecting people through shared interests.
 
-This repository contains the **source code** for the MatchUp platform — mobile app (Flutter), admin web (React + Tailwind), and backend API (Node.js + Express + TypeScript), backed by PostgreSQL. It is the team project for **COMPSCI 734 — Mobile, Web & Enterprise Computing** (Semester 2, 2026).
+This repository contains the **source code** for the MatchUp platform — mobile app (Flutter), admin web (React + Tailwind), and backend API (Node.js + Express + TypeScript), backed by Firebase (Firestore + Realtime Database + Auth). It is the team project for **COMPSCI 734 — Mobile, Web & Enterprise Computing** (Semester 2, 2026).
 
 ## Team — Nimble Takahe
 
@@ -19,7 +19,9 @@ matchup/
 ├── apps/
 │   ├── mobile/                  # Flutter mobile app
 │   ├── admin-web/               # React + Tailwind admin dashboard
-│   └── api/                     # Node.js + Express backend
+│   └── api-server/              # Node.js + Express backend (Firebase)
+│       # NOTE: `apps/api/` is a dead leftover (build output only, no source).
+│       # The live backend is `apps/api-server/`. Safe to delete `apps/api/`.
 ├── packages/
 │   ├── shared-types/            # shared enums, DTO placeholders, constants
 │   ├── shared-config/           # eslint, prettier, tsconfig, conventions
@@ -49,7 +51,7 @@ matchup/
 | Flutter     | ≥ 3.44    | Mobile app                      |
 | Dart        | ≥ 3.12    | Bundled with Flutter            |
 | Git         | any       | Version control                 |
-| PostgreSQL  | ≥ 14      | API database                    |
+| Firebase CLI| optional  | Storage rules / emulator        |
 
 Install Flutter from the [official guide](https://docs.flutter.dev/get-started/install).
 
@@ -58,34 +60,21 @@ Install Flutter from the [official guide](https://docs.flutter.dev/get-started/i
 Use Homebrew:
 
 ```bash
-brew install node postgresql@16 git
+brew install node git
 ```
 
 #### Ubuntu / Debian
 
 ```bash
 sudo apt update
-sudo apt install -y nodejs npm postgresql postgresql-contrib git
-```
-
-Start PostgreSQL:
-
-```bash
-sudo systemctl start postgresql
-sudo systemctl enable postgresql
+sudo apt install -y nodejs npm git
 ```
 
 #### Windows
 
 1. Download and install [Node.js LTS](https://nodejs.org/)
 2. Download and install [Git for Windows](https://git-scm.com/download/win)
-3. Install PostgreSQL with [the official installer](https://www.postgresql.org/download/windows/) or via [winget](https://learn.microsoft.com/en-us/windows/package-manager/winget/):
-
-   ```powershell
-   winget install PostgreSQL.PostgreSQL.16
-   ```
-
-4. Install Flutter by following the [Windows install guide](https://docs.flutter.dev/get-started/install/windows)
+3. Install Flutter by following the [Windows install guide](https://docs.flutter.dev/get-started/install/windows)
 
 > **Note:** `run.sh` is a Bash script. On Windows use Git Bash, WSL, or run the commands from the script manually in separate PowerShell terminals.
 
@@ -104,19 +93,15 @@ cp .env.example .env
 
 Edit `.env` and set at minimum:
 
-- `AUTH_SECRET` — any long random string (≥ 16 characters)
-- `DATABASE_URL` — your PostgreSQL connection string
+- `AUTH_SECRET` — any long random string (≥ 16 characters, enforced)
+- `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`, `FIREBASE_DATABASE_URL`, `FIREBASE_WEB_API_KEY`, `FIREBASE_STORAGE_BUCKET` — from Firebase Console → Project settings → Service accounts
 
-Default for local PostgreSQL with the `postgres` user:
-
-```env
-DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/matchup
-```
+See `apps/api-server/.env.example` for the full list.
 
 Per-app overrides can also be set by copying each app's `.env.example`:
 
 ```bash
-cp apps/api/.env.example apps/api/.env
+cp apps/api-server/.env.example apps/api-server/.env
 cp apps/admin-web/.env.example apps/admin-web/.env
 cp apps/mobile/.env.example apps/mobile/.env
 ```
@@ -125,7 +110,7 @@ cp apps/mobile/.env.example apps/mobile/.env
 
 ```bash
 # API
-(cd apps/api && npm install --legacy-peer-deps)
+(cd apps/api-server && npm install)
 
 # Admin web
 (cd apps/admin-web && npm install --legacy-peer-deps)
@@ -136,50 +121,12 @@ cp apps/mobile/.env.example apps/mobile/.env
 
 > **Note:** The API currently requires `--legacy-peer-deps` due to a peer-dependency mismatch between ESLint packages.
 
-### 5. Set up the database
+### 5. Set up Firebase (backend database)
 
-Make sure PostgreSQL is running and the `matchup` database exists.
-
-#### macOS
-
-```bash
-brew services start postgresql@16
-psql postgres -c "CREATE DATABASE matchup;"
-```
-
-#### Ubuntu / Debian
-
-```bash
-sudo systemctl start postgresql
-sudo -u postgres psql -c "CREATE DATABASE matchup;"
-```
-
-#### Windows
-
-Start the PostgreSQL service from Services (`services.msc`) or PowerShell (admin):
-
-```powershell
-Start-Service postgresql-x64-16
-```
-
-Then create the database with pgAdmin or psql:
-
-```bash
-psql -U postgres -c "CREATE DATABASE matchup;"
-```
-
-#### Apply migrations
-
-```bash
-cd apps/api
-npm run migrate
-```
-
-Generate the Prisma Client:
-
-```bash
-npx prisma generate
-```
+The API reads/writes Firestore + Realtime Database via the Firebase Admin SDK.
+Create a service account (Firebase Console → Project settings → Service accounts),
+then put its fields into `apps/api-server/.env` (see `apps/api-server/.env.example`).
+Storage rules live in `storage.rules` — deploy with `firebase deploy --only storage` when needed.
 
 ### 6. Run the apps
 
@@ -205,8 +152,8 @@ Alternatively, run each app in its own terminal:
 
 ```bash
 # Terminal A — API
-cd apps/api && npm run dev
-# → http://localhost:4000/health
+cd apps/api-server && npm run dev
+# → http://localhost:4000/api/health
 
 # Terminal B — admin web
 cd apps/admin-web && npm run dev
@@ -218,7 +165,7 @@ cd apps/mobile && flutter run
 
 ### 7. Verify the setup
 
-- API: `curl http://localhost:4000/health` should return `{"ok":true,"data":{"status":"ok","service":"matchup-api","database":"connected"}}`
+- API: `curl http://localhost:4000/api/health` should return `{"ok":true,"data":{"status":"ok","service":"api-server","database":"connected"}}`
 - Admin web: open http://localhost:5173
 - Mobile: launches in your emulator/device
 
@@ -252,25 +199,24 @@ Or override ports in `apps/api/.env` and `apps/admin-web/.env`.
 
 ### API health returns `DB_UNAVAILABLE`
 
-Check that PostgreSQL is running and that `DATABASE_URL` points to a valid database with the correct credentials.
+Check that `apps/api-server/.env` has valid Firebase credentials and the
+service account has Firestore/Realtime Database access.
 
 
 ## Scripts by App
 
 | App              | Dev                | Build              | Lint / Analyze              |
 |------------------|--------------------|--------------------|-----------------------------|
-| `apps/api`       | `npm run dev`      | `npm run build`    | `npm run lint`              |
+| `apps/api-server`| `npm run dev`      | `npm run build`    | `npx tsc --noEmit` + `npm test` |
 | `apps/admin-web` | `npm run dev`      | `npm run build`    | `npm run lint`              |
 | `apps/mobile`    | `flutter run`      | `flutter build`    | `flutter analyze`           |
 
-### Useful Prisma commands
+### Useful api-server commands
 
 ```bash
-cd apps/api
-npm run migrate          # apply pending migrations
-npx prisma migrate dev   # create a new migration from schema changes
-npx prisma generate      # regenerate Prisma Client
-npx prisma studio        # open Prisma Studio
+cd apps/api-server
+npm test               # vitest suite
+npm run seed           # seed script (src/scripts/seed.ts)
 ```
 
 ## Documentation

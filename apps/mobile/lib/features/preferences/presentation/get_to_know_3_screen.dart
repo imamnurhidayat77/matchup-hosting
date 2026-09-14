@@ -80,14 +80,17 @@ class _GetToKnow3ScreenState extends ConsumerState<GetToKnow3Screen> {
       );
       ref.invalidate(myProfileProvider);
       if (!mounted) return;
-      // Fire-and-forget: arms the first-run tour if (and only if) this
-      // user has never seen it. It's a no-op for anyone who has, and
-      // TourHost picks up the resulting state change on its own once
-      // Discovery mounts — nothing here needs to await it.
-      ref
-          .read(tourControllerProvider.notifier)
-          .maybeStart(kFirstRunTourId, kFirstRunTour);
+      // Arm the first-run tour. Deferred to the post-frame callback of
+      // the *next* frame so Discovery's anchors (swipeDeck, actionRow,
+      // tab bar) are mounted and measurable before the overlay tries
+      // to spotlight them — without this the holeRect comes back null
+      // and the overlay renders off-screen / clipped.
       context.go('/discovery');
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref
+            .read(tourControllerProvider.notifier)
+            .maybeStart(kFirstRunTourId, kFirstRunTour);
+      });
     } catch (_) {
       if (!mounted) return;
       AppSnackbar.show(
