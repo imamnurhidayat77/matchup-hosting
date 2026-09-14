@@ -18,6 +18,14 @@ vi.mock('../../middleware/auth.middleware.js', () => {
             next();
         }),
 
+        requireAuthAllowSuspended: vi.fn((req, _res, next) => {
+            req.auth = req.auth ?? {
+                uid: 'test-uid-1',
+                token: {} as never,
+            };
+            next();
+        }),
+
         requireAdmin: vi.fn((_req, _res, next) => {
             next();
         }),

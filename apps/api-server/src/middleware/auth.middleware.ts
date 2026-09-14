@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
-import { auth } from '../database/firebase.js';
+import { auth, firestore } from '../database/firebase.js';
 import { adminUids } from '../config/env.js';
 
 
@@ -32,6 +32,34 @@ export async function requireAuth(
         }
 
         const decodedToken = await auth.verifyIdToken(idToken);
+
+        // Suspension enforcement (admin members panel): a user whose doc
+        // carries `status: 'suspended'` loses API access immediately, even
+        // with a still-valid ID token. Docs without the field (including
+        // pre-suspension docs and non-existent docs) default to active, so
+        // this is backwards compatible. A failed lookup fails OPEN —
+        // availability wins over enforcement on infra errors; the status
+        // is enforced whenever it is readable.
+        try {
+            const userSnap = await firestore
+                .collection('users')
+                .doc(decodedToken.uid)
+                .get();
+            const status = userSnap.exists
+                ? userSnap.data()?.status
+                : undefined;
+            if (status === 'suspended') {
+                return res.status(403).json({
+                    ok: false,
+                    error: {
+                        code: 'ACCOUNT_SUSPENDED',
+                        message: 'Account suspended',
+                    },
+                });
+            }
+        } catch {
+            // Fail open (see above).
+        }
 
         req.auth = {
             uid: decodedToken.uid,
