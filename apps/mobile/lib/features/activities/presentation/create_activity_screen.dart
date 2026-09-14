@@ -21,6 +21,7 @@ import '../../../core/widgets/app_tappable.dart';
 import '../../../core/widgets/date_picker_sheet.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../discovery/presentation/widgets/discovery_card.dart';
+import '../../sports/domain/sport_config.dart';
 import '../domain/activity_model.dart';
 import 'create/components/image_picker_modal.dart';
 import 'create/providers/form_data_provider.dart';
@@ -734,7 +735,12 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
           onTap: () => _showOptionPicker(
             title: 'Select Sport',
             subtitle: 'What will you be playing?',
-            options: _sportOptions,
+            // Admin-curated list (canHost); bundled fallback offline.
+            options: pickSportNames(
+              ref.watch(sportsConfigProvider).valueOrNull ?? const [],
+              (s) => s.canHost,
+              _sportOptions,
+            ),
             current: data.sportType,
             onSelect: _form.setSportType,
             iconFor: (o) =>

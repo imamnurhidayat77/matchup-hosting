@@ -14,6 +14,7 @@ import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../../discovery/domain/activity_model.dart';
+import '../../sports/domain/sport_config.dart';
 import '../domain/place_suggestion.dart';
 import 'widgets/venue_field.dart';
 
@@ -287,7 +288,12 @@ class _EditActivityScreenState extends ConsumerState<EditActivityScreen> {
                         value: _sport,
                         onTap: () => _pickOption(
                           title: 'Sport',
-                          options: _sportOptions,
+                          // Admin-curated list (canHost); bundled fallback offline.
+                          options: pickSportNames(
+                            ref.watch(sportsConfigProvider).valueOrNull ?? const [],
+                            (s) => s.canHost,
+                            _sportOptions,
+                          ),
                           current: _sport,
                           onSelect: (v) => setState(() => _sport = v),
                         ),
