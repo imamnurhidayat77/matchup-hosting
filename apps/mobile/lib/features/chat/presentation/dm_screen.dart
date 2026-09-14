@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/repository_providers.dart';
@@ -124,12 +125,30 @@ class _DmScreenState extends ConsumerState<DmScreen> {
         : (widget.peerName ?? 'Direct message');
     final peerPhotoUrl = peer?.avatarUrl;
 
-    return AppScaffold(
-      showHomeIndicator: false,
-      backgroundColor: context.colors.background,
-      body: Column(
-        children: [
-          _DmHeader(peerName: peerName, peerPhotoUrl: peerPhotoUrl),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      // Same treatment as the group chat header: white status-bar icons
+      // on navy, auto-restored when leaving this screen.
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
+      ),
+      child: AppScaffold(
+        safeAreaTop: false,
+        showHomeIndicator: false,
+        backgroundColor: context.colors.background,
+        body: Column(
+          children: [
+            Container(
+              color: _dmHeaderNavyTop,
+              child: SafeArea(
+                bottom: false,
+                child: _DmHeader(
+                  peerName: peerName,
+                  peerPhotoUrl: peerPhotoUrl,
+                ),
+              ),
+            ),
           Expanded(
             child: StreamBuilder<List<ChatMessage>>(
               stream: stream,
@@ -187,9 +206,14 @@ class _DmScreenState extends ConsumerState<DmScreen> {
           ),
         ],
       ),
+      ),
     );
   }
 }
+
+/// Navy lift at the top edge of the DM header gradient — same value as
+/// the group chat header so both bleed into the status bar identically.
+const _dmHeaderNavyTop = Color(0xFF1B2BA3);
 
 class _DmHeader extends StatelessWidget {
   const _DmHeader({required this.peerName, required this.peerPhotoUrl});
@@ -198,45 +222,110 @@ class _DmHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Visual parity with the group chat header: navy brand gradient,
+    // glow circles, rounded bottom sheet edge, frosted back button.
     return Container(
-      color: context.colors.surface,
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.x2,
-        AppSpacing.x2,
-        AppSpacing.x4,
-        AppSpacing.x3,
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Row(
-          children: [
-            Semantics(
-              button: true,
-              label: 'Back',
-              child: GestureDetector(
-                onTap: () => Navigator.of(context).maybePop(),
-                child: const Padding(
-                  padding: EdgeInsets.all(10),
-                  child: Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-                ),
-              ),
-            ),
-            AppAvatar(
-              imageUrl: peerPhotoUrl,
-              name: peerName,
-              size: AppAvatarSize.sm,
-            ),
-            const SizedBox(width: AppSpacing.x3),
-            Expanded(
-              child: Text(
-                peerName,
-                style: AppTypography.titleMedium(context),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [_dmHeaderNavyTop, AppColors.primary],
         ),
+        borderRadius: BorderRadius.vertical(
+          bottom: Radius.circular(AppRadius.card),
+        ),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -32,
+            top: -44,
+            child: Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.08),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 140,
+            bottom: -56,
+            child: Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.06),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.x2,
+              AppSpacing.x2,
+              AppSpacing.x4,
+              AppSpacing.x4,
+            ),
+            child: Row(
+              children: [
+                Semantics(
+                  button: true,
+                  label: 'Back',
+                  child: PressableScale(
+                    onTap: () => Navigator.of(context).maybePop(),
+                    child: Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(AppRadius.sm),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.28),
+                        ),
+                      ),
+                      alignment: Alignment.center,
+                      child: const Icon(
+                        Icons.arrow_back_ios_new_rounded,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.x2),
+                // White ring so the avatar reads crisply on navy.
+                Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.5),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: AppAvatar(
+                    imageUrl: peerPhotoUrl,
+                    name: peerName,
+                    size: AppAvatarSize.sm,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.x3),
+                Expanded(
+                  child: Text(
+                    peerName,
+                    style: AppTypography.titleMedium(
+                      context,
+                    ).copyWith(color: Colors.white),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

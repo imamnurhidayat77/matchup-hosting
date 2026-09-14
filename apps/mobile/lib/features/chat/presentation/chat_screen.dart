@@ -337,33 +337,59 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final activityAsync = ref.watch(_activityProvider(widget.activityId));
     final title = activityAsync.valueOrNull?.title ?? 'Chat';
 
-    return AppScaffold(
-      showHomeIndicator: false,
-      backgroundColor: context.colors.background,
-      body: Column(
-        children: [
-          _Header(title: title, activityId: widget.activityId),
-          _MatchBanner(activity: activityAsync.valueOrNull),
-          Expanded(
-            child: _MessageList(
-              id: _id,
-              scrollController: _scrollController,
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      // White status-bar icons on the navy header. AnnotatedRegion
+      // (not a manual setSystemUIOverlayStyle call) so the previous
+      // style is restored automatically when leaving this screen.
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
+      ),
+      child: AppScaffold(
+        safeAreaTop: false,
+        showHomeIndicator: false,
+        backgroundColor: context.colors.background,
+        body: Column(
+          children: [
+            Container(
+              // Flat navy matching the header gradient's top edge — the
+              // status-bar strip blends seamlessly into the header.
+              color: _chatHeaderNavyTop,
+              child: SafeArea(
+                bottom: false,
+                child: _Header(
+                  title: title,
+                  activityId: widget.activityId,
+                ),
+              ),
             ),
-          ),
-          _InputBar(
-            controller: _msgController,
-            focusNode: _focusNode,
-            hasText: _hasText,
-            onSend: _send,
-            onAttach: _openAttachmentSheet,
-          ),
-        ],
+            _MatchBanner(activity: activityAsync.valueOrNull),
+            Expanded(
+              child: _MessageList(
+                id: _id,
+                scrollController: _scrollController,
+              ),
+            ),
+            _InputBar(
+              controller: _msgController,
+              focusNode: _focusNode,
+              hasText: _hasText,
+              onSend: _send,
+              onAttach: _openAttachmentSheet,
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
 // ─── Header ──────────────────────────────────────────────────────────────────
+
+/// Navy lift at the top edge of the chat header gradient. Also paints the
+/// status-bar strip behind it so the header bleeds edge-to-edge.
+const _chatHeaderNavyTop = Color(0xFF1B2BA3);
 
 class _Header extends ConsumerWidget {
   const _Header({required this.title, required this.activityId});
@@ -412,99 +438,116 @@ class _Header extends ConsumerWidget {
 
     final subtitle = _buildSubtitle(typing, nameByUid, participants.length);
 
+    // Navy header: brand gradient (same family as the splash) with two
+    // translucent glow circles so it reads as one designed block — not
+    // a white slab stacked on the white match banner below. Pinned
+    // colors (not context.colors) on purpose: navy + white passes in
+    // both light and dark mode.
     return Container(
-      color: context.colors.surface,
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.x4,
-        AppSpacing.x3,
-        AppSpacing.x4,
-        AppSpacing.x3,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [_chatHeaderNavyTop, AppColors.primary],
+        ),
+        borderRadius: BorderRadius.vertical(
+          bottom: Radius.circular(AppRadius.card),
+        ),
       ),
-      child: Row(
+      child: Stack(
         children: [
-          // Back button — rounded square
-          Semantics(
-            button: true,
-            label: 'Back',
-            child: PressableScale(
-              onTap: () => context.pop(),
-              child: Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: context.colors.surface,
-                  borderRadius: BorderRadius.circular(AppRadius.sm),
-                  border: Border.all(color: context.colors.border),
-                  boxShadow: AppShadows.card,
-                ),
-                alignment: Alignment.center,
-                child: Icon(
-                  Icons.arrow_back_ios_new_rounded,
-                  size: 16,
-                  color: context.colors.textPrimary,
-                ),
+          // Decorative glows — splash motif, no asset dependency.
+          Positioned(
+            right: -32,
+            top: -44,
+            child: Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.08),
               ),
             ),
           ),
-          const SizedBox(width: AppSpacing.x3),
-
-          // Title + members / typing
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          Positioned(
+            left: 140,
+            bottom: -56,
+            child: Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.06),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.x4,
+              AppSpacing.x3,
+              AppSpacing.x4,
+              AppSpacing.x4,
+            ),
+            child: Row(
               children: [
-                Text(
-                  title,
-                  style: AppTypography.titleSheet(context),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                // Back button — frosted glass on navy
+                _HeaderButton(
+                  label: 'Back',
+                  icon: Icons.arrow_back_ios_new_rounded,
+                  iconSize: 16,
+                  onTap: () => context.pop(),
                 ),
-                const SizedBox(height: 2),
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 200),
-                  child: Text(
-                    subtitle,
-                    key: ValueKey(subtitle),
-                    style: typing.isNotEmpty
-                        ? AppTypography.metaSub(context).copyWith(
-                            color: context.colors.primaryOnSurface,
-                            fontStyle: FontStyle.italic,
-                          )
-                        : AppTypography.metaSub(context),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                const SizedBox(width: AppSpacing.x3),
+
+                // Title + members / typing
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: AppTypography.titleSheet(
+                          context,
+                        ).copyWith(color: Colors.white),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 200),
+                        child: Text(
+                          subtitle,
+                          key: ValueKey(subtitle),
+                          style: typing.isNotEmpty
+                              ? AppTypography.metaSub(context).copyWith(
+                                  color: AppColors.accentLight,
+                                  fontStyle: FontStyle.italic,
+                                  fontWeight: FontWeight.w600,
+                                )
+                              : AppTypography.metaSub(context).copyWith(
+                                  color: Colors.white.withValues(alpha: 0.75),
+                                ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.x3),
+
+                // Settings button — frosted glass on navy
+                _HeaderButton(
+                  label: 'Chat settings',
+                  icon: Icons.settings_outlined,
+                  iconSize: 18,
+                  onTap: () => _ChatSettingsSheet.show(
+                    context,
+                    activityId: activityId,
+                    activityTitle: title,
                   ),
                 ),
               ],
-            ),
-          ),
-
-          // Settings button — rounded square
-          Semantics(
-            button: true,
-            label: 'Chat settings',
-            child: PressableScale(
-              onTap: () => _ChatSettingsSheet.show(
-                context,
-                activityId: activityId,
-                activityTitle: title,
-              ),
-              child: Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: context.colors.surface,
-                  borderRadius: BorderRadius.circular(AppRadius.sm),
-                  border: Border.all(color: context.colors.border),
-                  boxShadow: AppShadows.card,
-                ),
-                alignment: Alignment.center,
-                child: Icon(
-                  Icons.settings_outlined,
-                  size: 18,
-                  color: context.colors.textPrimary,
-                ),
-              ),
             ),
           ),
         ],
@@ -543,6 +586,44 @@ class _Header extends ConsumerWidget {
     return more > 0
         ? '$shown, +$more others'
         : 'You, $shown';
+  }
+}
+
+/// Frosted-glass square button for the navy chat header.
+class _HeaderButton extends StatelessWidget {
+  const _HeaderButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+    this.iconSize = 18,
+  });
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+  final double iconSize;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: label,
+      child: PressableScale(
+        onTap: onTap,
+        child: Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.28),
+            ),
+          ),
+          alignment: Alignment.center,
+          child: Icon(icon, size: iconSize, color: Colors.white),
+        ),
+      ),
+    );
   }
 }
 
