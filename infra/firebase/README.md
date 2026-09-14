@@ -41,6 +41,26 @@ Per-activity authorisation is enforced on every write and on the
 `GET messages` history endpoint. Chat content between activity
 members is low-sensitivity, so this is acceptable for this project.
 
+## 1b. Publish the Firestore rules (default deny)
+
+Firestore rules live at the repo root ([`firestore.rules`](../../firestore.rules),
+wired via [`firebase.json`](../../firebase.json)):
+
+```bash
+firebase deploy --only firestore:rules
+```
+
+The rule set is a deliberate **default deny for all clients**: no
+client SDK in the project touches Firestore directly (mobile uses
+RTDB + Storage only, admin web uses HTTPS, seeds use the Admin SDK),
+so every Firestore access flows through `apps/api-server`, where
+`requireAuth`/`requireAdmin` are enforced in code. This is what makes
+suspension unbypassable — `users/{uid}.status` cannot be cleared with
+any client token, only via `PATCH /api/admin/members/:uid/status`.
+
+`firestore.get()` lookups inside `storage.rules` are unaffected (rule
+evaluation reads ignore these rules).
+
 ## 2. Configure the mobile client (`flutterfire configure`)
 
 Realtime chat needs the native Firebase config files, which are

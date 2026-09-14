@@ -11,6 +11,7 @@ import '../../../core/theme/dark_colors.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/pressable_scale.dart';
+import '../../sports/domain/sport_config.dart';
 import 'get_to_know_1_screen.dart' show OnboardingProgressHeader;
 
 class GetToKnow2Screen extends ConsumerStatefulWidget {
@@ -107,6 +108,12 @@ class _GetToKnow2ScreenState extends ConsumerState<GetToKnow2Screen> {
   @override
   Widget build(BuildContext context) {
     final bottomPad = MediaQuery.of(context).padding.bottom;
+    // Admin-curated onboarding list; bundled fallback while loading/offline.
+    final sportOptions = pickSportNames(
+      ref.watch(sportsConfigProvider).valueOrNull ?? const [],
+      (s) => s.showInOnboarding,
+      _sportOptions,
+    );
 
     return AppScaffold(
       // Outside ShellRoute (post-signup flow, no tab bar) — draws its own.
@@ -156,9 +163,9 @@ class _GetToKnow2ScreenState extends ConsumerState<GetToKnow2Screen> {
                       mainAxisSpacing: AppSpacing.x3,
                       childAspectRatio: 1.45,
                     ),
-                    itemCount: _sportOptions.length,
+                    itemCount: sportOptions.length,
                     itemBuilder: (_, i) {
-                      final name = _sportOptions[i];
+                      final name = sportOptions[i];
                       final level = _sports[name];
                       return _SportChip(
                         name: name,

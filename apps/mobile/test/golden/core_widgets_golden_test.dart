@@ -13,7 +13,10 @@
 //
 // Regenerate goldens after an intentional visual change:
 //   flutter test --update-goldens test/golden/core_widgets_golden_test.dart
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:matchup_mobile/core/theme/dark_colors.dart';
@@ -24,6 +27,26 @@ import 'package:matchup_mobile/core/widgets/app_text_field.dart';
 import 'package:matchup_mobile/core/widgets/empty_state.dart';
 import 'package:matchup_mobile/core/widgets/skeleton.dart';
 
+/// Loads every font family declared in pubspec.yaml into the test engine
+/// (mirrors what golden_toolkit's `loadAppFonts` does, using only
+/// flutter-bundled APIs). Without this, text falls back to OS system fonts
+/// (Helvetica on macOS, DejaVu Sans on Linux), which made these goldens
+/// pass locally but fail on CI. Loading the real TTF bytes removes that
+/// gross difference; the subpixel remainder is absorbed by
+/// [_TolerantGoldenComparator] below.
+Future<void> _loadAppFonts() async {
+  final manifest =
+      jsonDecode(await rootBundle.loadString('FontManifest.json'))
+          as List<dynamic>;
+  for (final family in manifest) {
+    final loader = FontLoader((family as Map)['family'] as String);
+    for (final font in (family['fonts'] as List<dynamic>)) {
+      loader.addFont(rootBundle.load((font as Map)['asset'] as String));
+    }
+    await loader.load();
+  }
+}
+
 /// Fixed light [ThemeData] registering [AppColorTokens.light] — goldens
 /// must render against a stable, explicit theme rather than whatever a
 /// bare `MaterialApp()` defaults to, so a theme change elsewhere can't
@@ -32,7 +55,10 @@ ThemeData _goldenTheme() {
   return ThemeData(
     useMaterial3: true,
     brightness: Brightness.light,
-    fontFamily: 'Roboto', // avoid depending on the bundled custom font
+    // Body-tier family, loaded by [_loadAppFonts] — a named-but-unloaded
+    // family would fall back to OS system fonts and break cross-platform
+    // determinism (see above).
+    fontFamily: 'Geist',
     extensions: const [AppColorTokens.light],
   );
 }
@@ -61,7 +87,59 @@ Future<void> _expectGolden(
   );
 }
 
+/// [LocalFileComparator] with a small allowable pixel-difference budget.
+///
+/// Even with identical font bytes and Flutter version, glyph rasterization
+/// differs slightly between macOS and Linux (fontconfig hinting/AA — see
+/// the "Including Fonts" section of [matchesGoldenFile]'s docs), so an
+/// exact pixel match can never hold across both. A 2% budget absorbs that
+/// noise while still catching genuine regressions: a layout/colour change
+/// in one of these small widgets moves far more than 2% of pixels.
+class _TolerantGoldenComparator extends LocalFileComparator {
+  _TolerantGoldenComparator(super.testFile, {this.precisionTolerance = 0.02})
+    : assert(
+        0 <= precisionTolerance && precisionTolerance <= 1,
+        'precisionTolerance must be between 0 and 1',
+      );
+
+  final double precisionTolerance;
+
+  @override
+  Future<bool> compare(Uint8List imageBytes, Uri golden) async {
+    final ComparisonResult result = await GoldenFileComparator.compareLists(
+      imageBytes,
+      await getGoldenBytes(golden),
+    );
+    final bool passed =
+        result.passed || result.diffPercent <= precisionTolerance;
+    if (passed) {
+      result.dispose();
+      return true;
+    }
+    final String error = await generateFailureOutput(result, golden, basedir);
+    result.dispose();
+    throw FlutterError(error);
+  }
+}
+
 void main() {
+  setUpAll(() async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    await _loadAppFonts();
+    // Reuse the basedir of the bootstrap-installed comparator (it points
+    // at this test file's directory). NOTE: do not build the replacement
+    // from `Platform.script` — under `flutter test` that is the generated
+    // bootstrap file, not this test file, so goldens would resolve nowhere.
+    // Appending a dummy filename recovers an equivalent testFile URI
+    // because the basedir is derived via `dirname(testFile)`.
+    final GoldenFileComparator current = goldenFileComparator;
+    if (current is LocalFileComparator) {
+      goldenFileComparator = _TolerantGoldenComparator(
+        current.basedir.resolve('core_widgets_golden_test.dart'),
+      );
+    }
+  });
+
   group('AppScaffold goldens', () {
     testWidgets('primary variant', (tester) async {
       await _expectGolden(

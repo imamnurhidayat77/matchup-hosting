@@ -1,5 +1,6 @@
-import { useState, useRef } from 'react';
-import { loadSports, saveSports, DEFAULT_SPORTS } from '../../data/sportsDummy';
+import { useEffect, useState, useRef } from 'react';
+import { DEFAULT_SPORTS } from '../../data/sportsDummy';
+import { fetchSports, replaceSports } from '../../services/sportsService';
 import { downloadCsv } from '../../utils/csvExport';
 import { useToast } from '../../context/ToastContext';
 import type { SportConfig } from '../../data/sportsDummy';
@@ -312,11 +313,33 @@ function MobilePreview({ sports }: { sports: SportConfig[] }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function SportsPage() {
-  const [sports, setSports] = useState<SportConfig[]>(loadSports);
+  const [sports, setSports] = useState<SportConfig[]>(DEFAULT_SPORTS);
   const [showAdd, setShowAdd] = useState(false);
   const [search, setSearch] = useState('');
+  const [saving, setSaving] = useState(false);
   const dragId = useRef<string | null>(null);
   const { push: toast } = useToast();
+
+  // Live source of truth is the backend; local defaults only seed first paint.
+  useEffect(() => {
+    let cancelled = false;
+    fetchSports()
+      .then((rows) => {
+        if (!cancelled && rows.length > 0) setSports(rows);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          toast(
+            err instanceof Error ? err.message : 'Failed to load sports.',
+            'error',
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function update(id: string, patch: Partial<SportConfig>) {
     setSports((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
@@ -336,12 +359,19 @@ export function SportsPage() {
     toast(`"${sport.name}" added.`, 'success');
   }
 
-  function handleSave() {
+  async function handleSave() {
     // Normalise sort orders to 1-based sequential
     const sorted = [...sports].sort((a, b) => a.sortOrder - b.sortOrder).map((s, i) => ({ ...s, sortOrder: i + 1 }));
-    saveSports(sorted);
-    setSports(sorted);
-    toast('Changes published.', 'success');
+    setSaving(true);
+    try {
+      const published = await replaceSports(sorted);
+      setSports(published);
+      toast('Changes published.', 'success');
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : 'Failed to publish.', 'error');
+    } finally {
+      setSaving(false);
+    }
   }
 
   function handleReset() {
@@ -402,9 +432,10 @@ export function SportsPage() {
           <button onClick={() => setShowAdd(true)} className="btn-outline rounded-lg px-3 py-1.5 text-sm">+ Add Sport</button>
           <button
             onClick={handleSave}
-            className="btn-primary rounded-lg px-4 py-1.5 text-sm"
+            disabled={saving}
+            className="btn-primary rounded-lg px-4 py-1.5 text-sm disabled:opacity-60"
           >
-            Publish Changes
+            {saving ? 'Publishing…' : 'Publish Changes'}
           </button>
         </div>
       </div>

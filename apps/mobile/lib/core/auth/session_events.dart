@@ -21,4 +21,17 @@ class SessionEvents {
   void notifySessionExpired() {
     if (!_expiredController.isClosed) _expiredController.add(null);
   }
+
+  final StreamController<void> _suspendedController =
+      StreamController<void>.broadcast();
+
+  /// Fires when the backend reports `ACCOUNT_SUSPENDED` (403). Unlike
+  /// expiry the session stays alive — tokens are kept so the user can
+  /// still file and track an appeal. The UI gates to the suspended
+  /// interstitial instead of logging out.
+  Stream<void> get onSuspended => _suspendedController.stream;
+
+  void notifySuspended() {
+    if (!_suspendedController.isClosed) _suspendedController.add(null);
+  }
 }

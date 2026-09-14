@@ -44,9 +44,18 @@ export type UserRecord = {
   joinReason?: string;
   ratingBySport?: Record<string, SportRatingAggregate>;
   totalRatingCount?: number;
+  /** Admin-managed suspension state. Absent on old docs = 'active'. */
+  status?: UserStatus;
 };
 
 export type SkillLevel = 'beginner' | 'intermediate' | 'advanced' | 'any';
+
+/** Admin-managed account state. Absent on old docs = 'active'. */
+export type UserStatus = 'active' | 'suspended';
+
+export function isUserStatus(value: unknown): value is UserStatus {
+  return value === 'active' || value === 'suspended';
+}
 
 export type UpdateUserProfileInput = {
   displayName?: string;
@@ -219,6 +228,7 @@ function mapUserDoc(userDoc: FirebaseFirestore.DocumentSnapshot): UserRecord | n
     ...(typeof data.totalRatingCount === 'number'
       ? { totalRatingCount: data.totalRatingCount }
       : {}),
+    ...(isUserStatus(data.status) ? { status: data.status } : {}),
   };
 }
 

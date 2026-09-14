@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { DUMMY_MEMBERS } from '../../data/membersDummy';
+import { fetchMember } from '../../services/membersService';
+import type { Member } from '../../services/membersService';
 import type { MemberStatus } from '../../data/membersDummy';
 
 function StatusBadge({ status }: { status: MemberStatus }) {
@@ -30,7 +32,34 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 export function MemberDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const member = DUMMY_MEMBERS.find((m) => m.id === id);
+  const [member, setMember] = useState<Member | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetchMember(id ?? '')
+      .then((m) => {
+        if (!cancelled) setMember(m);
+      })
+      .catch(() => {
+        if (!cancelled) setMember(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div className="page-container flex flex-col items-center justify-center gap-3 py-24">
+        <p className="text-sm text-ink-500">Loading member…</p>
+      </div>
+    );
+  }
 
   if (!member) {
     return (

@@ -10,10 +10,8 @@ import { ActivityDetailPage } from '../pages/activities/ActivityDetailPage';
 import { ReportsPage } from '../pages/reports/ReportsPage';
 import { BroadcastsPage } from '../pages/broadcasts/BroadcastsPage';
 import { AnalyticsPage } from '../pages/analytics/AnalyticsPage';
-import { SettingsPage } from '../pages/settings/SettingsPage';
 import { SportsPage } from '../pages/sports/SportsPage';
 import { AppealsPage } from '../pages/appeals/AppealsPage';
-import { AuditLogPage } from '../pages/audit/AuditLogPage';
 import { NotificationTemplatesPage } from '../pages/notifications/NotificationTemplatesPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 
@@ -37,9 +35,7 @@ const router = createBrowserRouter([
   { path: '/sports',                element: <Shell><SportsPage /></Shell> },
   { path: '/analytics',             element: <Shell><AnalyticsPage /></Shell> },
   { path: '/appeals',               element: <Shell><AppealsPage /></Shell> },
-  { path: '/audit',                 element: <Shell><AuditLogPage /></Shell> },
   { path: '/notification-templates',element: <Shell><NotificationTemplatesPage /></Shell> },
-  { path: '/settings',              element: <Shell><SettingsPage /></Shell> },
   { path: '*',                      element: <Shell><NotFoundPage /></Shell> },
 ]);
 

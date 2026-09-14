@@ -7,11 +7,27 @@ vi.mock('../database/firebase.js', () => {
     auth: {
       verifyIdToken: vi.fn(),
     },
+    firestore: {
+      collection: vi.fn(),
+    },
   };
 });
 
-import { auth } from '../database/firebase.js';
-import { requireAuth } from './auth.middleware.js';
+import { auth, firestore } from '../database/firebase.js';
+import { requireAuth, requireAuthAllowSuspended } from './auth.middleware.js';
+
+/** Default user-doc lookup: doc missing → active (backwards compatible). */
+function mockUserStatus(status: unknown, exists = true) {
+  const get = vi.fn().mockResolvedValue(
+    exists ? { exists: true, data: () => ({ status }) } : { exists: false },
+  );
+  const doc = vi.fn().mockReturnValue({ get });
+  vi.mocked(firestore.collection).mockReturnValue({ doc } as never);
+}
+
+beforeEach(() => {
+  mockUserStatus(undefined);
+});
 
 function createProtectedApp() {
   const app = express();
@@ -127,5 +143,82 @@ describe('requireAuth middleware', () => {
       },
     });
     expect(auth.verifyIdToken).toHaveBeenCalledWith('valid-token');
+  });
+
+  it('when user doc is suspended => expected 403 w/ ACCOUNT_SUSPENDED', async () => {
+    vi.mocked(auth.verifyIdToken).mockResolvedValueOnce({
+      uid: 'suspended-uid',
+      email: 'bad@example.com',
+    } as never);
+    mockUserStatus('suspended');
+
+    const app = createProtectedApp();
+
+    const response = await request(app)
+      .get('/protected')
+      .set('Authorization', 'Bearer valid-token');
+
+    expect(response.status).toBe(403);
+    expect(response.body).toEqual({
+      ok: false,
+      error: {
+        code: 'ACCOUNT_SUSPENDED',
+        message: 'Account suspended',
+      },
+    });
+  });
+
+  it('when status lookup fails => fail open with 200', async () => {
+    vi.mocked(auth.verifyIdToken).mockResolvedValueOnce({
+      uid: 'test-uid-1',
+      email: 'user@example.com',
+    } as never);
+    vi.mocked(firestore.collection).mockImplementationOnce(() => {
+      throw new Error('firestore down');
+    });
+
+    const app = createProtectedApp();
+
+    const response = await request(app)
+      .get('/protected')
+      .set('Authorization', 'Bearer valid-token');
+
+    expect(response.status).toBe(200);
+  });
+});
+
+describe('requireAuthAllowSuspended', () => {
+  it('lets a suspended user through (appeals recourse)', async () => {
+    vi.mocked(auth.verifyIdToken).mockResolvedValueOnce({
+      uid: 'suspended-uid',
+      email: 'bad@example.com',
+    } as never);
+    mockUserStatus('suspended');
+
+    const app = express();
+    app.get(
+      '/appeals-gate',
+      requireAuthAllowSuspended,
+      (req, res) => {
+        res.status(200).json({ ok: true, data: { uid: req.auth?.uid } });
+      },
+    );
+
+    const response = await request(app)
+      .get('/appeals-gate')
+      .set('Authorization', 'Bearer valid-token');
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual({ uid: 'suspended-uid' });
+  });
+
+  it('still rejects missing tokens with 401', async () => {
+    const app = express();
+    app.get('/appeals-gate', requireAuthAllowSuspended, (_req, res) => {
+      res.status(200).json({ ok: true });
+    });
+
+    const response = await request(app).get('/appeals-gate');
+    expect(response.status).toBe(401);
   });
 });

@@ -44,6 +44,48 @@ export type NotificationWithId = NotificationRecord & {
     notificationId: string;
 };
 
+/**
+ * Renders an admin-curated template (`notificationTemplates/{trigger}`).
+ * Returns null when the template is missing, disabled, or malformed —
+ * callers fall back to their hardcoded copy, so template editing can
+ * never break a live notification path. `{{variables}}` without a value
+ * render as empty strings.
+ */
+export async function renderTemplate(
+    trigger: string,
+    vars: Record<string, string>,
+): Promise<{ title: string; body: string } | null> {
+    try {
+        const snap = await firestore
+            .collection('notificationTemplates')
+            .doc(trigger)
+            .get();
+        if (!snap.exists) return null;
+        const data = snap.data();
+        if (!data || data.enabled === false) return null;
+        const { title, body } = data;
+        if (typeof title !== 'string' || typeof body !== 'string') {
+            return null;
+        }
+        const fill = (s: string) =>
+            s.replace(/\{\{(\w+)\}\}/g, (_, key: string) => vars[key] ?? '');
+        return { title: fill(title), body: fill(body) };
+    } catch {
+        return null;
+    }
+}
+
+/** Best-effort display name for template variables (falls back to ''). */
+export async function displayNameOf(uid: string): Promise<string> {
+    try {
+        const snap = await firestore.collection('users').doc(uid).get();
+        const name = snap.exists ? snap.data()?.displayName : undefined;
+        return typeof name === 'string' ? name : '';
+    } catch {
+        return '';
+    }
+}
+
 function assertNotificationType(type: unknown): asserts type is NotificationType {
     if (type !== 'activity_reminder' &&
         type !== 'activity_interest' &&

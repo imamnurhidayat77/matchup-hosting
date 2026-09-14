@@ -810,6 +810,76 @@ async function main(): Promise<void> {
     }
     console.log(`Ratings seeded: ${beachRatings.length} submissions on seed-act-beach-1.`);
 
+    // 7b. Admin config: master sports list + notification templates.
+    // Deterministic doc ids make re-runs overwrite instead of duplicating.
+    const SEED_SPORTS: Array<{
+        id: string;
+        name: string;
+        emoji: string;
+        enabled: boolean;
+        showInFilter: boolean;
+        showInOnboarding: boolean;
+        canHost: boolean;
+        sortOrder: number;
+    }> = [
+        { id: 'basketball', name: 'Basketball', emoji: '🏀', enabled: true, showInFilter: true, showInOnboarding: true, canHost: true, sortOrder: 1 },
+        { id: 'football', name: 'Soccer', emoji: '⚽', enabled: true, showInFilter: true, showInOnboarding: true, canHost: true, sortOrder: 2 },
+        { id: 'tennis', name: 'Tennis', emoji: '🎾', enabled: true, showInFilter: true, showInOnboarding: true, canHost: true, sortOrder: 3 },
+        { id: 'running', name: 'Running', emoji: '🏃', enabled: true, showInFilter: true, showInOnboarding: true, canHost: true, sortOrder: 4 },
+        { id: 'badminton', name: 'Badminton', emoji: '🏸', enabled: true, showInFilter: true, showInOnboarding: true, canHost: true, sortOrder: 5 },
+        { id: 'volleyball', name: 'Volleyball', emoji: '🏐', enabled: true, showInFilter: true, showInOnboarding: true, canHost: true, sortOrder: 6 },
+        { id: 'cycling', name: 'Cycling', emoji: '🚴', enabled: true, showInFilter: true, showInOnboarding: true, canHost: true, sortOrder: 7 },
+        { id: 'swimming', name: 'Swimming', emoji: '🏊', enabled: true, showInFilter: true, showInOnboarding: true, canHost: true, sortOrder: 8 },
+        { id: 'fitness', name: 'Fitness', emoji: '💪', enabled: true, showInFilter: true, showInOnboarding: true, canHost: true, sortOrder: 9 },
+        { id: 'golf', name: 'Golf', emoji: '⛳', enabled: true, showInFilter: true, showInOnboarding: true, canHost: false, sortOrder: 10 },
+        { id: 'squash', name: 'Squash', emoji: '🎱', enabled: true, showInFilter: false, showInOnboarding: true, canHost: true, sortOrder: 11 },
+        { id: 'yoga', name: 'Yoga', emoji: '🧘', enabled: true, showInFilter: false, showInOnboarding: true, canHost: false, sortOrder: 12 },
+        { id: 'futsal', name: 'Futsal', emoji: '🥅', enabled: true, showInFilter: false, showInOnboarding: false, canHost: true, sortOrder: 13 },
+        { id: 'cricket', name: 'Cricket', emoji: '🏏', enabled: false, showInFilter: false, showInOnboarding: false, canHost: false, sortOrder: 14 },
+        { id: 'tabletennis', name: 'Table Tennis', emoji: '🏓', enabled: false, showInFilter: false, showInOnboarding: false, canHost: false, sortOrder: 15 },
+    ];
+    for (const sport of SEED_SPORTS) {
+        await firestore.doc(`sports/${sport.id}`).set({
+            ...sport,
+            updatedAt: Timestamp.now(),
+        }, { merge: true });
+    }
+
+    const SEED_TEMPLATES: Array<{
+        trigger: string;
+        category: string;
+        name: string;
+        description: string;
+        title: string;
+        body: string;
+        variables: string[];
+        enabled: boolean;
+    }> = [
+        { trigger: 'activity.joined', category: 'Activity', name: 'Activity Joined', description: 'Sent to the host when a new participant joins their activity', title: '{{participantName}} joined your activity!', body: 'Great news — {{participantName}} has joined "{{activityName}}". You now have {{participantCount}}/{{capacity}} spots filled.', variables: ['participantName', 'activityName', 'participantCount', 'capacity'], enabled: true },
+        { trigger: 'activity.cancelled', category: 'Activity', name: 'Activity Cancelled', description: 'Sent to all participants when a host cancels an activity', title: '"{{activityName}}" has been cancelled', body: 'Unfortunately, "{{activityName}}" scheduled for {{activityDate}} has been cancelled by the host.', variables: ['activityName', 'activityDate', 'hostName'], enabled: true },
+        { trigger: 'activity.reminder', category: 'Activity', name: 'Activity Reminder (24h)', description: 'Reminder sent 24 hours before activity starts', title: 'Reminder: {{activityName}} is tomorrow!', body: 'Just a reminder that "{{activityName}}" starts tomorrow at {{activityTime}} at {{location}}. See you there!', variables: ['activityName', 'activityTime', 'location', 'hostName'], enabled: true },
+        { trigger: 'activity.full', category: 'Activity', name: 'Activity Now Full', description: 'Sent to host when their activity reaches capacity', title: 'Your activity is full!', body: '"{{activityName}}" has reached its capacity of {{capacity}} participants.', variables: ['activityName', 'capacity'], enabled: true },
+        { trigger: 'activity.starting_soon', category: 'Activity', name: 'Activity Starting Soon (1h)', description: 'Sent to participants 1 hour before activity starts', title: '{{activityName}} starts in 1 hour', body: 'Head over to {{location}} — "{{activityName}}" starts in about 1 hour.', variables: ['activityName', 'location', 'activityTime'], enabled: false },
+        { trigger: 'account.suspended', category: 'Account', name: 'Account Suspended', description: 'Sent to user when their account is suspended by admin', title: 'Your MatchUp account has been suspended', body: 'Your account has been suspended due to a violation of our community guidelines: {{reason}}.', variables: ['reason', 'supportEmail', 'appealDeadline'], enabled: true },
+        { trigger: 'account.reactivated', category: 'Account', name: 'Account Reactivated', description: 'Sent when a suspended account is reinstated', title: 'Your account has been reinstated', body: 'Good news — your MatchUp account has been reactivated. Welcome back!', variables: [], enabled: true },
+        { trigger: 'account.welcome', category: 'Account', name: 'Welcome Message', description: 'First notification sent after account creation', title: 'Welcome to MatchUp, {{userName}}!', body: "You're all set! Start by browsing activities near you or create your own.", variables: ['userName'], enabled: true },
+        { trigger: 'moderation.report_resolved', category: 'Moderation', name: 'Report Resolved (to reporter)', description: 'Sent to the user who filed a report when it is resolved', title: 'Your report has been reviewed', body: 'Thank you for helping keep MatchUp safe. Your report has been reviewed and action has been taken.', variables: [], enabled: true },
+        { trigger: 'moderation.appeal_approved', category: 'Moderation', name: 'Appeal Approved', description: "Sent when an admin approves a user's appeal", title: 'Your appeal has been approved', body: 'We have reviewed your appeal and decided to reverse the previous action on your account. {{adminNote}}', variables: ['adminNote'], enabled: true },
+        { trigger: 'moderation.appeal_rejected', category: 'Moderation', name: 'Appeal Rejected', description: "Sent when an admin rejects a user's appeal", title: 'Your appeal has been reviewed', body: 'After careful review, we were unable to approve your appeal. {{adminNote}}', variables: ['adminNote', 'supportEmail'], enabled: true },
+        { trigger: 'engagement.inactive', category: 'Engagement', name: 'Re-engagement (Inactive User)', description: "Sent to users who haven't opened the app in 30+ days", title: 'We miss you on MatchUp!', body: 'There are {{nearbyCount}} activities happening near you this week — come back and play!', variables: ['nearbyCount', 'userName'], enabled: false },
+        { trigger: 'engagement.new_activity_nearby', category: 'Engagement', name: 'New Activity Nearby', description: "Sent when a new activity matches user's preferred sports", title: 'New {{sport}} activity near you', body: '"{{activityName}}" is happening {{distanceKm}}km from you on {{activityDate}}. Only {{spotsLeft}} spots left — join now!', variables: ['sport', 'activityName', 'distanceKm', 'activityDate', 'spotsLeft'], enabled: true },
+    ];
+    for (const template of SEED_TEMPLATES) {
+        await firestore.doc(`notificationTemplates/${template.trigger}`).set({
+            ...template,
+            lastEditedAt: Timestamp.now(),
+            updatedAt: Timestamp.now(),
+        }, { merge: true });
+    }
+    console.log(
+        `Admin config seeded: ${SEED_SPORTS.length} sports, ${SEED_TEMPLATES.length} notification templates.`,
+    );
+
     // 8. Verify by reading back through the same paths the API uses.
     const [usersSnap, activitiesSnap] = await Promise.all([
         firestore.collection('users').get(),

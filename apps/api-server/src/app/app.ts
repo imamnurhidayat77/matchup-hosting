@@ -9,7 +9,10 @@ import { typingRouter } from '../modules/typing/typing.routes.js';
 import { chatRouter } from '../modules/chat/chat.routes.js';
 import { dmRouter } from '../modules/dm/dm.routes.js';
 import { activitiesRouter } from '../modules/activities/activities.routes.js';
+import { adminRouter } from '../modules/admin/admin.routes.js';
+import { appealsRouter } from '../modules/appeals/appeals.routes.js';
 import { listPublicActivityTeasersHandler } from '../modules/activities/activities.controller.js';
+import { listPublicSportsHandler } from '../modules/admin/public-sports.controller.js';
 import { swipesRouter } from '../modules/swipes/swipes.routes.js';
 import { notificationsRouter } from '../modules/notifications/notifications.routes.js';
 import { devicesRouter } from '../modules/devices/devices.routes.js';
@@ -47,6 +50,7 @@ export function createApp(){
     })
 
     app.get('/api/public/activities', listPublicActivityTeasersHandler);
+    app.get('/api/public/sports', listPublicSportsHandler);
 
     app.use('/api/users', usersRouter);
     app.use('/api/presence', presenceRouter);
@@ -59,6 +63,8 @@ export function createApp(){
     app.use('/api/devices', devicesRouter);
     app.use('/api/places', placesRouter);
     app.use('/api/reports', reportsRouter);
+    app.use('/api/appeals', appealsRouter);
+    app.use('/api/admin', adminRouter);
     
     return app;
 }

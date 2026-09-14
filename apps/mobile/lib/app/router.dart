@@ -14,6 +14,7 @@ import '../features/auth/presentation/welcome_screen.dart';
 import '../features/auth/recovery/forgot_password_screen.dart';
 import '../features/auth/recovery/new_password_screen.dart';
 import '../features/auth/recovery/otp_verification_screen.dart';
+import '../features/appeals/presentation/suspended_screen.dart';
 import '../features/calendar/presentation/calendar_screen.dart';
 import '../features/discovery/presentation/discovery_screen.dart';
 import '../features/discovery/presentation/activity_detail_screen.dart';
@@ -131,6 +132,13 @@ GoRouter buildRouter(Ref ref) {
         return location == '/splash' ? null : '/splash';
       }
 
+      // Suspended accounts are locked to the interstitial: no tabs, no
+      // auth screens, no deep content. Tokens are kept (appeals need
+      // them); sign-out inside the interstitial flips to unauthenticated.
+      if (authStatus == AuthStatus.suspended) {
+        return location == '/suspended' ? null : '/suspended';
+      }
+
       final isPublic = _publicPaths.any((p) => location.startsWith(p));
 
       if (authStatus == AuthStatus.unauthenticated && !isPublic) {
@@ -148,6 +156,12 @@ GoRouter buildRouter(Ref ref) {
     },
     routes: [
       GoRoute(path: '/splash', builder: (_, _) => const SplashScreen()),
+      // Suspended interstitial — outside the shell (no tab bar), reached
+      // only via the auth redirect above, never via context.go().
+      GoRoute(
+        path: '/suspended',
+        pageBuilder: (_, state) => appPage(state, const SuspendedScreen()),
+      ),
       GoRoute(path: '/onboarding', builder: (_, _) => const OnboardingScreen()),
       GoRoute(path: '/welcome', builder: (_, _) => const WelcomeScreen()),
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),

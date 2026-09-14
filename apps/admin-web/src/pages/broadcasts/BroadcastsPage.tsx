@@ -90,7 +90,7 @@ const AUDIENCE_OPTIONS: BroadcastAudience[] = ['All Users', 'Hosts Only', 'Playe
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function BroadcastsPage() {
-  const { loading, error, broadcasts, reload, handleCreate, handleDelete } = useBroadcasts();
+  const { loading, error, broadcasts, reload, handleCreate, handleDelete, handleSend: sendDraft } = useBroadcasts();
   const { push: toast } = useToast();
   const [showCompose, setShowCompose] = useState(false);
   const [form, setForm] = useState({ title: '', message: '', audience: 'All Users' as BroadcastAudience });
@@ -120,7 +120,7 @@ export function BroadcastsPage() {
   }
 
   async function handleSendDraft(id: string) {
-    await handleDelete(id);
+    await sendDraft(id);
     toast('Draft sent successfully.', 'success');
   }
 

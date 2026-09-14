@@ -211,6 +211,17 @@ service account has Firestore/Realtime Database access.
 | `apps/admin-web` | `npm run dev`      | `npm run build`    | `npm run lint`              |
 | `apps/mobile`    | `flutter run`      | `flutter build`    | `flutter analyze`           |
 
+### Mobile release builds (OWASP M7 — binary protection)
+
+Release builds must obfuscate Dart code and split debug info (keeps stack
+traces symbolicatable via the emitted `.map` files — store them per release):
+
+```bash
+cd apps/mobile
+flutter build apk --obfuscate --split-debug-info=build/debug-info
+flutter build ipa --obfuscate --split-debug-info=build/debug-info
+```
+
 ### Useful api-server commands
 
 ```bash

@@ -2,10 +2,13 @@
  * Analytics service.
  *
  * HOW TO SWITCH TO REAL API:
- *   Set VITE_USE_MOCK_API=false in .env.
+ *   Set VITE_USE_MOCK_API=false in .env (plus an admin Firebase ID token
+ *   under `admin_id_token` in localStorage — see reportsService header).
  *
- * Expected endpoints:
- *   GET /api/v1/admin/analytics?range=7d|30d|90d  → AnalyticsData
+ * Live endpoint (api-server, admin-gated):
+ *   GET /api/admin/analytics?range=7d|30d|90d → AnalyticsData
+ * Live series are daily buckets over the window; retention/health cards
+ * have no backing events yet and arrive as empty series.
  */
 import { apiFetch } from './api';
 
@@ -101,7 +104,7 @@ export async function fetchAnalytics(
 ): Promise<AnalyticsData> {
   if (USE_MOCK) return delay(400, DUMMY);
   const res = await apiFetch<AnalyticsData>(
-    `/api/v1/admin/analytics?range=${range}`,
+    `/api/admin/analytics?range=${range}`,
   );
   if (!res.ok) throw new Error(res.error.message);
   return res.data;

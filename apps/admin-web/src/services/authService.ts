@@ -1,15 +1,17 @@
 /**
  * Auth service.
  *
- * HOW TO SWITCH TO REAL API:
- *   Set VITE_USE_MOCK_API=false in .env.
+ * Mock mode (`VITE_USE_MOCK_API=true`, default): demo credentials below.
  *
- * Expected endpoints:
- *   POST /api/v1/auth/admin/sign-in   { email, password } → { token, user }
- *   POST /api/v1/auth/admin/sign-out  → void
- *   GET  /api/v1/auth/admin/me        → AdminUser
+ * Live mode: Firebase email/password sign-in (same identity provider as
+ * the mobile app — no custom password endpoint on the backend, by design).
+ * After sign-in the Firebase ID token is sent as `Authorization: Bearer …`
+ * and the caller's admin rights are proven via `GET /api/admin/me`
+ * (403 unless the uid is in the backend `ADMIN_UIDS` allowlist).
  */
-import { apiFetch } from './api';
+import { signInWithEmailAndPassword, signOut as firebaseSignOut } from 'firebase/auth';
+import { apiFetch, clearAdminIdToken, setAdminIdToken } from './api';
+import { getFirebaseAuth } from './firebase';
 
 export interface AdminUser {
   id: string;
@@ -124,17 +126,47 @@ export async function signIn(
     return session;
   }
 
-  // ── Real API path ──────────────────────────────────────────────────────────
-  const res = await apiFetch<{ token: string; user: AdminUser }>(
-    '/api/v1/auth/admin/sign-in',
-    { method: 'POST', body: JSON.stringify({ email, password }) },
+  // ── Real Firebase path ───────────────────────────────────────────────
+  let idToken: string;
+  let uid: string;
+  let accountEmail: string;
+  try {
+    const credential = await signInWithEmailAndPassword(
+      getFirebaseAuth(),
+      email.trim(),
+      password,
+    );
+    uid = credential.user.uid;
+    accountEmail = credential.user.email ?? email.trim();
+    idToken = await credential.user.getIdToken();
+  } catch {
+    throw new AuthError('Invalid email or password.');
+  }
+  setAdminIdToken(idToken);
+
+  // Prove admin rights — 403 unless the uid is allowlisted server-side.
+  const me = await apiFetch<{ uid: string; email: string | null; admin: boolean }>(
+    '/api/admin/me',
   );
-  if (!res.ok) throw new AuthError(res.error.message);
+  if (!me.ok) {
+    clearAdminIdToken();
+    throw new AuthError(
+      me.error.code === 'FORBIDDEN'
+        ? 'This account is not an admin.'
+        : me.error.message,
+    );
+  }
 
   const ttl = remember ? SESSION_TTL_REMEMBER : SESSION_TTL_DEFAULT;
   const session: AuthSession = {
-    token: res.data.token,
-    user: res.data.user,
+    token: idToken,
+    user: {
+      id: uid,
+      name: accountEmail.split('@')[0] ?? uid,
+      email: accountEmail,
+      role: 'Admin',
+      avatarSeed: uid,
+    },
     expiresAt: Date.now() + ttl,
   };
   saveSession(session, remember);
@@ -142,10 +174,14 @@ export async function signIn(
 }
 
 export async function signOut(): Promise<void> {
-  const session = loadSession();
   clearSession();
-  if (!USE_MOCK && session) {
-    // Fire-and-forget — don't block UI on sign-out API call.
-    apiFetch('/api/v1/auth/admin/sign-out', { method: 'POST' }).catch(() => {});
+  clearAdminIdToken();
+  if (!USE_MOCK) {
+    // Best-effort Firebase sign-out — never blocks the UI.
+    try {
+      await firebaseSignOut(getFirebaseAuth());
+    } catch {
+      // Ignore.
+    }
   }
 }

@@ -1,25 +1,41 @@
-import { useState, useCallback } from 'react';
-import { DUMMY_APPEALS } from '../data/appealsDummy';
-import type { Appeal, AppealStatus } from '../data/appealsDummy';
+import { useState, useCallback, useEffect } from 'react';
+import { fetchAppeals, decideAppeal } from '../services/appealsService';
+import type { Appeal } from '../services/appealsService';
 
 export function useAppeals() {
-  const [appeals, setAppeals] = useState<Appeal[]>(DUMMY_APPEALS);
-  const [loading] = useState(false);
-  const [error] = useState<string | null>(null);
+  const [appeals, setAppeals] = useState<Appeal[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      // The page tabs filter locally — load every triage state up front.
+      const [pending, approved, rejected] = await Promise.all([
+        fetchAppeals('Pending'),
+        fetchAppeals('Approved'),
+        fetchAppeals('Rejected'),
+      ]);
+      setAppeals([...pending, ...approved, ...rejected]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load appeals');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const handleDecision = useCallback(
-    (id: string, decision: 'approve' | 'reject', response: string) => {
-      const status: AppealStatus = decision === 'approve' ? 'Approved' : 'Rejected';
-      setAppeals((prev) =>
-        prev.map((a) =>
-          a.id === id
-            ? { ...a, status, adminResponse: response, resolvedAt: new Date().toISOString() }
-            : a,
-        ),
-      );
+    async (id: string, decision: 'approve' | 'reject', response: string) => {
+      const updated = await decideAppeal(id, decision, response);
+      setAppeals((prev) => prev.map((a) => (a.id === id ? updated : a)));
     },
     [],
   );
 
-  return { loading, error, appeals, handleDecision };
+  return { loading, error, appeals, handleDecision, reload: load };
 }

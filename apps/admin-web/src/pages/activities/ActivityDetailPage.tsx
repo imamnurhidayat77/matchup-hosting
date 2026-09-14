@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { DUMMY_ACTIVITIES } from '../../data/activitiesDummy';
+import { fetchActivities } from '../../services/activitiesService';
+import type { AdminActivity } from '../../services/activitiesService';
 import type { ActivityStatus } from '../../data/activitiesDummy';
 
 function StatusBadge({ status }: { status: ActivityStatus }) {
@@ -36,7 +38,35 @@ function MetaItem({ icon, primary, secondary }: {
 export function ActivityDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const activity = DUMMY_ACTIVITIES.find((a) => a.id === id);
+  const [activity, setActivity] = useState<AdminActivity | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    // No admin detail endpoint — resolve from the admin list.
+    fetchActivities()
+      .then((rows) => {
+        if (!cancelled) setActivity(rows.find((a) => a.id === id) ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setActivity(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div className="page-container flex flex-col items-center justify-center gap-3 py-24">
+        <p className="text-sm text-ink-500">Loading activity…</p>
+      </div>
+    );
+  }
 
   if (!activity) {
     return (

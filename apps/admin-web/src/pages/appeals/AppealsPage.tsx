@@ -215,7 +215,7 @@ const STATUS_TABS: Array<AppealStatus | 'All'> = ['All', 'Pending', 'Approved', 
 const TYPE_OPTIONS: Array<AppealType | 'All'> = ['All', 'Suspension', 'Activity Removal', 'Account Ban', 'Content Removal'];
 
 export function AppealsPage() {
-  const { loading, error, appeals, handleDecision } = useAppeals();
+  const { loading, error, appeals, handleDecision, reload } = useAppeals();
   const { push: toast } = useToast();
   const [activeTab, setActiveTab] = useState<AppealStatus | 'All'>('All');
   const [typeFilter, setTypeFilter] = useState<AppealType | 'All'>('All');
@@ -236,16 +236,21 @@ export function AppealsPage() {
   }, [appeals, modal]);
 
   if (loading) return <PageSkeleton rows={3} />;
-  if (error) return <PageError message={error} onRetry={() => {}} />;
+  if (error) return <PageError message={error} onRetry={reload} />;
 
-  function handleConfirm(decision: 'approve' | 'reject', response: string) {
+  async function handleConfirm(decision: 'approve' | 'reject', response: string) {
     if (!modal) return;
-    handleDecision(modal.id, decision, response);
-    toast(
-      `Appeal ${decision === 'approve' ? 'approved' : 'rejected'} — response sent to ${modal.userName}.`,
-      decision === 'approve' ? 'success' : 'info',
-    );
-    setModal(null);
+    const userName = modal.userName;
+    try {
+      await handleDecision(modal.id, decision, response);
+      toast(
+        `Appeal ${decision === 'approve' ? 'approved' : 'rejected'} — response sent to ${userName}.`,
+        decision === 'approve' ? 'success' : 'info',
+      );
+      setModal(null);
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : 'Decision failed.', 'error');
+    }
   }
 
   const filtered = appeals.filter((a) => {

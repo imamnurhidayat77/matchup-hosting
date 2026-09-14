@@ -2,6 +2,7 @@ import { useCallback, useEffect, useReducer } from 'react';
 import {
   fetchBroadcasts,
   createBroadcast,
+  sendBroadcast,
   deleteBroadcast,
 } from '../services/broadcastsService';
 import type {
@@ -19,6 +20,7 @@ type Action =
   | { type: 'FETCH_SUCCESS'; broadcasts: Broadcast[] }
   | { type: 'FETCH_ERROR'; message: string }
   | { type: 'PREPEND'; broadcast: Broadcast }
+  | { type: 'UPDATE'; broadcast: Broadcast }
   | { type: 'REMOVE'; id: string };
 
 function reducer(state: State, action: Action): State {
@@ -29,6 +31,14 @@ function reducer(state: State, action: Action): State {
     case 'PREPEND':
       if (state.status !== 'success') return state;
       return { ...state, broadcasts: [action.broadcast, ...state.broadcasts] };
+    case 'UPDATE':
+      if (state.status !== 'success') return state;
+      return {
+        ...state,
+        broadcasts: state.broadcasts.map((b) =>
+          b.id === action.broadcast.id ? action.broadcast : b,
+        ),
+      };
     case 'REMOVE':
       if (state.status !== 'success') return state;
       return { ...state, broadcasts: state.broadcasts.filter((b) => b.id !== action.id) };
@@ -62,6 +72,12 @@ export function useBroadcasts() {
     try { await deleteBroadcast(id); } catch { load(); }
   }, [load]);
 
+  const handleSend = useCallback(async (id: string) => {
+    const sent = await sendBroadcast(id); // throws on error — let caller handle
+    dispatch({ type: 'UPDATE', broadcast: sent });
+    return sent;
+  }, []);
+
   return {
     loading: state.status === 'idle' || state.status === 'loading',
     error: state.status === 'error' ? state.message : null,
@@ -69,5 +85,6 @@ export function useBroadcasts() {
     reload: load,
     handleCreate,
     handleDelete,
+    handleSend,
   };
 }

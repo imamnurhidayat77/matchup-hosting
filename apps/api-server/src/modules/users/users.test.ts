@@ -16,6 +16,14 @@ vi.mock('./users.service.js', () => {
   };
 });
 
+vi.mock('../notifications/notifications.service.js', () => {
+  return {
+    createNotification: vi.fn().mockResolvedValue({ notificationId: 'n-1' }),
+    renderTemplate: vi.fn().mockResolvedValue(null),
+    displayNameOf: vi.fn().mockResolvedValue(''),
+  };
+});
+
 vi.mock('../../middleware/auth.middleware.js', () => {
   return {
     requireAuth: vi.fn((req, _res, next) => {
@@ -25,6 +33,14 @@ vi.mock('../../middleware/auth.middleware.js', () => {
       };
       next();
     }),
+
+  requireAuthAllowSuspended: vi.fn((req, _res, next) => {
+      req.auth = req.auth ?? {
+          uid: 'test-uid-1',
+          token: {} as never,
+      };
+      next();
+  }),
 
   requireAdmin: vi.fn((_req, _res, next) => {
       next();

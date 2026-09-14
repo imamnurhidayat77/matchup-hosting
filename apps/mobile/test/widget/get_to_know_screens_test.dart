@@ -107,9 +107,6 @@ void main() {
       tester,
     ) async {
       await pumpRouter(tester);
-      final optCenter = tester.getCenter(find.text('Meet new sports partners'));
-      final nextTopLeft = tester.getTopLeft(find.text('Next'));
-      final nextBottomRight = tester.getBottomRight(find.text('Next'));
       await tester.tap(find.text('Meet new sports partners'));
       await tester.pump();
       await tester.pumpAndSettle();

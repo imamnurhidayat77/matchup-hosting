@@ -274,28 +274,36 @@ function TemplateRow({
 const ALL_CATEGORIES: Array<TemplateCategory | 'All'> = ['All', 'Activity', 'Account', 'Moderation', 'Engagement'];
 
 export function NotificationTemplatesPage() {
-  const { loading, error, templates, handleUpdate, handleToggle } = useNotifTemplates();
+  const { loading, error, templates, handleUpdate, handleToggle, reload } = useNotifTemplates();
   const { push: toast } = useToast();
   const [activeCategory, setActiveCategory] = useState<TemplateCategory | 'All'>('All');
   const [editingTemplate, setEditingTemplate] = useState<NotifTemplate | null>(null);
   const [search, setSearch] = useState('');
 
   if (loading) return <PageSkeleton rows={4} />;
-  if (error) return <PageError message={error} onRetry={() => {}} />;
+  if (error) return <PageError message={error} onRetry={reload} />;
 
-  function handleSave(patch: Partial<NotifTemplate>) {
+  async function handleSave(patch: Partial<NotifTemplate>) {
     if (!editingTemplate) return;
-    handleUpdate(editingTemplate.id, patch);
-    toast(`"${editingTemplate.name}" template updated.`, 'success');
-    setEditingTemplate(null);
+    try {
+      await handleUpdate(editingTemplate.id, patch);
+      toast(`"${editingTemplate.name}" template updated.`, 'success');
+      setEditingTemplate(null);
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : 'Update failed.', 'error');
+    }
   }
 
-  function onToggle(template: NotifTemplate) {
-    handleToggle(template.id);
-    toast(
-      `"${template.name}" ${template.enabled ? 'disabled' : 'enabled'}.`,
-      template.enabled ? 'info' : 'success',
-    );
+  async function onToggle(template: NotifTemplate) {
+    try {
+      await handleToggle(template.id);
+      toast(
+        `"${template.name}" ${template.enabled ? 'disabled' : 'enabled'}.`,
+        template.enabled ? 'info' : 'success',
+      );
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : 'Update failed.', 'error');
+    }
   }
 
   const filtered = templates.filter((t) => {
