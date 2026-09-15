@@ -22,7 +22,7 @@ dependencies:
   flutter_dotenv: ^5.2.1
 
   # State management (lightweight placeholder; can be replaced in MVP)
-  flutter_riverpod: ^2.5.1
+  flutter_riverpod: ^3.4.3
 
   # Routing
   go_router: ^14.6.1
