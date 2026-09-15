@@ -25,6 +25,7 @@ import 'package:matchup_mobile/features/chat/data/chat_repository.dart';
 import 'package:matchup_mobile/features/chat/data/dm_repository.dart';
 import 'package:matchup_mobile/features/chat/data/typing_repository.dart';
 import 'package:matchup_mobile/features/chat/domain/chat_message.dart';
+import 'package:matchup_mobile/features/chat/domain/chat_poll.dart';
 import 'package:matchup_mobile/features/chat/presentation/chat_screen.dart';
 import 'package:matchup_mobile/features/chat/presentation/dm_screen.dart';
 import 'package:matchup_mobile/features/discovery/data/activity_repository.dart';
@@ -192,6 +193,12 @@ void main() {
       when(
         () => repo.watchMessages(any()),
       ).thenAnswer((_) => Stream.value(const <ChatMessage>[]));
+      when(
+        () => repo.watchReactions(any()),
+      ).thenAnswer((_) => Stream.value(const <String, Map<String, List<String>>>{}));
+      when(
+        () => repo.watchPolls(any()),
+      ).thenAnswer((_) => Stream.value(const <ChatPoll>[]));
       when(
         () => activityRepo.byId(any()),
       ).thenAnswer((_) async => _testActivity());

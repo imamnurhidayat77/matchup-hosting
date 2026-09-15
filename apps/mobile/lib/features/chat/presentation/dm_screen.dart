@@ -133,7 +133,9 @@ class _DmScreenState extends ConsumerState<DmScreen> {
   }
 
   Future<void> _openAttachmentSheet() async {
-    final choice = await ChatAttachmentSheet.show(context);
+    // Polls live under activity group chats — hidden in 1-on-1 threads.
+    final choice =
+        await ChatAttachmentSheet.show(context, includePoll: false);
     if (choice == null || !mounted) return;
     switch (choice) {
       case ChatAttachmentChoice.photo:
@@ -142,6 +144,8 @@ class _DmScreenState extends ConsumerState<DmScreen> {
         await _pickAndSendImage(ImageSource.camera);
       case ChatAttachmentChoice.location:
         await _shareLocation();
+      case ChatAttachmentChoice.poll:
+        break;
     }
   }
 

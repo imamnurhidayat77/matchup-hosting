@@ -10,6 +10,8 @@ import '../../../core/services/storage_service.dart';
 import '../../../core/storage/secure_token_store.dart';
 import '../../discovery/data/remote_activity_repository.dart';
 import '../domain/chat_message.dart';
+import '../domain/chat_poll.dart';
+import '../domain/chat_reaction.dart';
 import 'chat_repository.dart';
 
 class LocalChatRepository implements ChatRepository {
@@ -62,6 +64,43 @@ class LocalChatRepository implements ChatRepository {
   @override
   Future<List<ChatConversation>> conversations() async {
     return const <ChatConversation>[];
+  }
+
+  @override
+  Stream<MessageReactions> watchReactions(String activityId) async* {
+    yield const <String, EmojiReactions>{};
+  }
+
+  @override
+  Future<bool?> toggleReaction({
+    required String activityId,
+    required String messageId,
+    required String emoji,
+  }) async {
+    return null;
+  }
+
+  @override
+  Stream<List<ChatPoll>> watchPolls(String activityId) async* {
+    yield const <ChatPoll>[];
+  }
+
+  @override
+  Future<String?> createPoll({
+    required String activityId,
+    required String question,
+    required List<String> options,
+  }) async {
+    return null;
+  }
+
+  @override
+  Future<bool?> votePoll({
+    required String activityId,
+    required String pollId,
+    required int optionIndex,
+  }) async {
+    return null;
   }
 }
 
@@ -218,6 +257,186 @@ class RemoteChatRepository implements ChatRepository {
     };
 
     yield* controller.stream;
+  }
+
+  /// Real-time stream of emoji reactions for [activityId], keyed by
+  /// message id. Same transport strategy as [watchMessages]: RTDB
+  /// (`activityChats/{activityId}/reactions`) when Firebase is ready,
+  /// HTTP polling (`GET /chat/:id/reactions`) otherwise.
+  @override
+  Stream<MessageReactions> watchReactions(String activityId) async* {
+    if (_isFirebaseReady()) {
+      try {
+        await RtdbAuthService.instance.ensureSignedIn();
+        await for (final reactions
+            in _watchReactionsViaRtdb(activityId)) {
+          yield reactions;
+        }
+        return;
+      } catch (e, st) {
+        debugPrint(
+          '[RemoteChatRepository.watchReactions] RTDB failed, '
+          'falling back to polling: $e\n$st',
+        );
+      }
+    }
+    yield* _watchReactionsViaPolling(activityId);
+  }
+
+  Stream<MessageReactions> _watchReactionsViaRtdb(String activityId) {
+    final ref = FirebaseDatabase.instance.ref(
+      'activityChats/$activityId/reactions',
+    );
+    return ref.onValue.map((event) => parseReactionMap(event.snapshot.value));
+  }
+
+  Stream<MessageReactions> _watchReactionsViaPolling(
+    String activityId,
+  ) async* {
+    final controller = StreamController<MessageReactions>();
+    Timer? timer;
+
+    Future<void> tick() async {
+      try {
+        final res = await _client.dio.get('/chat/$activityId/reactions');
+        final latest = parseReactionMap(apiDataMap(res.data));
+        if (!controller.isClosed) controller.add(latest);
+      } catch (e) {
+        if (!controller.isClosed) controller.addError(e);
+      }
+    }
+
+    unawaited(tick());
+    timer = Timer.periodic(_pollingInterval, (_) => tick());
+
+    controller.onCancel = () {
+      timer?.cancel();
+      timer = null;
+    };
+
+    yield* controller.stream;
+  }
+
+  /// Toggles the current user's [emoji] reaction on one message via
+  /// `POST /chat/:activityId/messages/:messageId/reactions`.
+  /// Returns the server's `reacted` flag, or `null` on failure.
+  @override
+  Future<bool?> toggleReaction({
+    required String activityId,
+    required String messageId,
+    required String emoji,
+  }) async {
+    try {
+      final res = await _client.dio.post(
+        '/chat/$activityId/messages/$messageId/reactions',
+        data: {'emoji': emoji},
+      );
+      final reacted = apiDataMap(res.data)?['reacted'];
+      if (reacted is bool) return reacted;
+      return null;
+    } catch (e, st) {
+      debugPrint('[RemoteChatRepository.toggleReaction] $e\n$st');
+      return null;
+    }
+  }
+
+  /// Real-time stream of polls for [activityId]. Same transport
+  /// strategy as [watchMessages]: RTDB (`activityChats/{activityId}/polls`)
+  /// when Firebase is ready, HTTP polling (`GET /chat/:id/polls`)
+  /// otherwise.
+  @override
+  Stream<List<ChatPoll>> watchPolls(String activityId) async* {
+    if (_isFirebaseReady()) {
+      try {
+        await RtdbAuthService.instance.ensureSignedIn();
+        await for (final polls in _watchPollsViaRtdb(activityId)) {
+          yield polls;
+        }
+        return;
+      } catch (e, st) {
+        debugPrint(
+          '[RemoteChatRepository.watchPolls] RTDB failed, '
+          'falling back to polling: $e\n$st',
+        );
+      }
+    }
+    yield* _watchPollsViaPolling(activityId);
+  }
+
+  Stream<List<ChatPoll>> _watchPollsViaRtdb(String activityId) {
+    final ref = FirebaseDatabase.instance.ref(
+      'activityChats/$activityId/polls',
+    );
+    return ref.onValue.map((event) => parsePollList(event.snapshot.value));
+  }
+
+  Stream<List<ChatPoll>> _watchPollsViaPolling(String activityId) async* {
+    final controller = StreamController<List<ChatPoll>>();
+    Timer? timer;
+
+    Future<void> tick() async {
+      try {
+        final res = await _client.dio.get('/chat/$activityId/polls');
+        final latest = parsePollList(apiDataList(res.data));
+        if (!controller.isClosed) controller.add(latest);
+      } catch (e) {
+        if (!controller.isClosed) controller.addError(e);
+      }
+    }
+
+    unawaited(tick());
+    timer = Timer.periodic(_pollingInterval, (_) => tick());
+
+    controller.onCancel = () {
+      timer?.cancel();
+      timer = null;
+    };
+
+    yield* controller.stream;
+  }
+
+  /// Creates a poll via `POST /chat/:activityId/polls`.
+  /// Returns the new poll id, or `null` on failure.
+  @override
+  Future<String?> createPoll({
+    required String activityId,
+    required String question,
+    required List<String> options,
+  }) async {
+    try {
+      final res = await _client.dio.post(
+        '/chat/$activityId/polls',
+        data: {'question': question, 'options': options},
+      );
+      final pollId = apiDataMap(res.data)?['pollId']?.toString();
+      if (pollId == null || pollId.isEmpty) return null;
+      return pollId;
+    } catch (e, st) {
+      debugPrint('[RemoteChatRepository.createPoll] $e\n$st');
+      return null;
+    }
+  }
+
+  /// Votes via `POST /chat/:activityId/polls/:pollId/votes`.
+  /// Returns the server's `voted` flag, or `null` on failure.
+  @override
+  Future<bool?> votePoll({
+    required String activityId,
+    required String pollId,
+    required int optionIndex,
+  }) async {
+    try {
+      final res = await _client.dio.post(
+        '/chat/$activityId/polls/$pollId/votes',
+        data: {'optionIndex': optionIndex},
+      );
+      final voted = apiDataMap(res.data)?['voted'];
+      if (voted is bool) return voted;
+      return null;
+    } catch (e, st) {
+      debugPrint('[RemoteChatRepository.votePoll] $e\n$st');
+      return null;
+    }
   }
 
   /// Parses a single RTDB message entry. The backend writes messages
@@ -402,14 +621,23 @@ class RemoteChatRepository implements ChatRepository {
             if (msgs.isNotEmpty) {
               final last = msgs.last;
               final who = last.isMine ? 'You' : last.senderName;
-              var lastMessage = ChatMessage.previewText(last.text);
+              // NOTE: assign the outer `lastMessage` — `var` here would
+              // shadow it, silently discarding the preview while `time`
+              // still gets set (empty preview + real timestamp).
+              lastMessage = ChatMessage.previewText(last.text);
               lastMessage =
                   lastMessage.length > 60 ? '${lastMessage.substring(0, 60)}…' : lastMessage;
               lastMessage = '$who: $lastMessage';
               time = _relativeTime(last.sentAt);
             }
-          } catch (_) {
-            // One broken thread must not sink the whole inbox.
+          } catch (e, st) {
+            // One broken thread must not sink the whole inbox — but log
+            // which activity failed so "No messages yet" can be debugged
+            // instead of silently blanking a thread that has messages.
+            debugPrint(
+              '[RemoteChatRepository.conversations] preview failed for '
+              '${activity.id}: $e\n$st',
+            );
           }
           return ChatConversation(
             id: activity.id,

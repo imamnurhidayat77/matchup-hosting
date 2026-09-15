@@ -26,7 +26,10 @@ import '../../activities/domain/activity_participant.dart';
 import '../../report/presentation/report_activity_sheet.dart';
 import '../data/typing_repository.dart';
 import '../domain/chat_message.dart';
+import '../domain/chat_poll.dart';
+import '../domain/chat_reaction.dart';
 import 'chat_attachment_sheet.dart';
+import 'poll_create_sheet.dart';
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
@@ -41,6 +44,69 @@ final _messagesStreamProvider = StreamProvider.autoDispose
     .family<List<ChatMessage>, String>((ref, id) {
       return ref.watch(chatRepositoryProvider).watchMessages(id);
     });
+
+/// Real-time emoji reactions for [id] (the activity id), keyed by
+/// message id. Watched alongside [_messagesStreamProvider] so reaction
+/// chips stay in sync with the conversation.
+final _reactionsStreamProvider = StreamProvider.autoDispose
+    .family<MessageReactions, String>((ref, id) {
+      return ref.watch(chatRepositoryProvider).watchReactions(id);
+    });
+
+/// Real-time single-choice polls for [id] (the activity id), oldest
+/// first. Merged into the message timeline so polls read inline with
+/// the conversation that discusses them.
+final _pollsStreamProvider = StreamProvider.autoDispose
+    .family<List<ChatPoll>, String>((ref, id) {
+      return ref.watch(chatRepositoryProvider).watchPolls(id);
+    });
+
+/// Toggles one emoji reaction, toast on transport failure. The chips
+/// update via [_reactionsStreamProvider] — no optimistic state needed
+/// because the RTDB stream pushes the change straight back.
+Future<void> _toggleReaction(
+  WidgetRef ref,
+  BuildContext context, {
+  required String activityId,
+  required String messageId,
+  required String emoji,
+}) async {
+  final reacted = await ref.read(chatRepositoryProvider).toggleReaction(
+        activityId: activityId,
+        messageId: messageId,
+        emoji: emoji,
+      );
+  if (reacted == null && context.mounted) {
+    AppSnackbar.show(
+      context,
+      message: 'Could not save your reaction. Please try again.',
+      variant: AppSnackbarVariant.error,
+    );
+  }
+}
+
+/// Votes for one poll option, toast on transport failure. Results
+/// update via [_pollsStreamProvider] — no optimistic state needed.
+Future<void> _votePoll(
+  WidgetRef ref,
+  BuildContext context, {
+  required String activityId,
+  required String pollId,
+  required int optionIndex,
+}) async {
+  final voted = await ref.read(chatRepositoryProvider).votePoll(
+        activityId: activityId,
+        pollId: pollId,
+        optionIndex: optionIndex,
+      );
+  if (voted == null && context.mounted) {
+    AppSnackbar.show(
+      context,
+      message: 'Could not save your vote. Please try again.',
+      variant: AppSnackbarVariant.error,
+    );
+  }
+}
 
 /// Fetches the activity for the chat header. Returns the full
 /// [ActivityModel] (which carries the title and the participant
@@ -272,6 +338,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         await _pickAndSendImage(ImageSource.camera);
       case ChatAttachmentChoice.location:
         await _shareLocation();
+      case ChatAttachmentChoice.poll:
+        await _openPollCreateSheet();
+    }
+  }
+
+  Future<void> _openPollCreateSheet() async {
+    final created = await PollCreateSheet.show(context, activityId: _id);
+    if (created == true && mounted) {
+      AppSnackbar.show(
+        context,
+        message: 'Poll created. Time to vote!',
+        variant: AppSnackbarVariant.success,
+      );
+      _scrollToBottom();
     }
   }
 
@@ -862,40 +942,90 @@ class _MessageItem extends _ListItem {
   final bool isLastOfRun;
 }
 
-List<_ListItem> _buildListItems(List<ChatMessage> messages) {
+class _PollItem extends _ListItem {
+  _PollItem(
+    this.poll, {
+    required this.showSenderName,
+    required this.isLastOfRun,
+  });
+  final ChatPoll poll;
+  final bool showSenderName;
+  final bool isLastOfRun;
+}
+
+/// One row of the unified timeline — either a message or a poll —
+/// carrying the timestamp + sender used for day separators and run
+/// grouping. Polls interleave chronologically so a "Play at 4 or
+/// 5?" reads inline with the conversation discussing it.
+class _TimelineEntry {
+  _TimelineEntry({
+    required this.time,
+    required this.senderId,
+    this.message,
+    this.poll,
+  });
+  final DateTime time;
+  final String senderId;
+  final ChatMessage? message;
+  final ChatPoll? poll;
+}
+
+List<_ListItem> _buildListItems(
+  List<ChatMessage> messages,
+  List<ChatPoll> polls, {
+  required String myUid,
+}) {
+  final timeline = <_TimelineEntry>[
+    for (final msg in messages)
+      _TimelineEntry(time: msg.sentAt, senderId: msg.senderId, message: msg),
+    for (final poll in polls)
+      _TimelineEntry(
+          time: poll.createdAt, senderId: poll.createdBy, poll: poll),
+  ]..sort((a, b) => a.time.compareTo(b.time));
+
   final items = <_ListItem>[];
   DateTime? lastDay;
 
-  for (var i = 0; i < messages.length; i++) {
-    final msg = messages[i];
-    final day = DateTime(msg.sentAt.year, msg.sentAt.month, msg.sentAt.day);
+  for (var i = 0; i < timeline.length; i++) {
+    final entry = timeline[i];
+    final day = DateTime(entry.time.year, entry.time.month, entry.time.day);
     if (lastDay == null || day != lastDay) {
       items.add(_DaySeparatorItem(_dayLabel(day)));
       lastDay = day;
     }
 
-    final prev = i > 0 ? messages[i - 1] : null;
-    final next = i + 1 < messages.length ? messages[i + 1] : null;
-    final nextSameDay =
-        next != null &&
-        DateTime(next.sentAt.year, next.sentAt.month, next.sentAt.day) == day;
-    final prevSameDay =
-        prev != null &&
-        DateTime(prev.sentAt.year, prev.sentAt.month, prev.sentAt.day) == day;
+    final prev = i > 0 ? timeline[i - 1] : null;
+    final next = i + 1 < timeline.length ? timeline[i + 1] : null;
+    final nextSameDay = next != null &&
+        DateTime(next.time.year, next.time.month, next.time.day) == day;
+    final prevSameDay = prev != null &&
+        DateTime(prev.time.year, prev.time.month, prev.time.day) == day;
 
     final isFirstOfRun =
-        prev == null || prev.senderId != msg.senderId || !prevSameDay;
+        prev == null || prev.senderId != entry.senderId || !prevSameDay;
     final isLastOfRun =
-        next == null || next.senderId != msg.senderId || !nextSameDay;
+        next == null || next.senderId != entry.senderId || !nextSameDay;
+    final isMine = entry.senderId == myUid && myUid.isNotEmpty;
 
-    items.add(
-      _MessageItem(
-        msg,
-        showAvatar: isLastOfRun && !msg.isMine,
-        showSenderName: isFirstOfRun && !msg.isMine,
-        isLastOfRun: isLastOfRun,
-      ),
-    );
+    final message = entry.message;
+    if (message != null) {
+      items.add(
+        _MessageItem(
+          message,
+          showAvatar: isLastOfRun && !message.isMine,
+          showSenderName: isFirstOfRun && !message.isMine,
+          isLastOfRun: isLastOfRun,
+        ),
+      );
+    } else {
+      items.add(
+        _PollItem(
+          entry.poll!,
+          showSenderName: isFirstOfRun && !isMine,
+          isLastOfRun: isLastOfRun,
+        ),
+      );
+    }
   }
   return items;
 }
@@ -921,6 +1051,15 @@ class _MessageList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(_messagesStreamProvider(id));
+    final reactions = ref.watch(_reactionsStreamProvider(id)).valueOrNull;
+    final polls = ref.watch(_pollsStreamProvider(id)).valueOrNull ??
+        const <ChatPoll>[];
+    final myUid = ref.watch(_myUidProvider).valueOrNull ?? '';
+    final roster =
+        ref.watch(_participantsProvider(id)).valueOrNull ?? const [];
+    final names = <String, String>{
+      for (final p in roster) p.userId: p.name,
+    };
     return async.when(
       loading: () => const SkeletonList(count: 5),
       error: (_, _) => ErrorRetry(
@@ -928,7 +1067,7 @@ class _MessageList extends ConsumerWidget {
         onRetry: () => ref.invalidate(_messagesStreamProvider(id)),
       ),
       data: (messages) {
-        if (messages.isEmpty) {
+        if (messages.isEmpty && polls.isEmpty) {
           return Center(
             child: Text(
               'No messages yet. Say hello!',
@@ -937,7 +1076,7 @@ class _MessageList extends ConsumerWidget {
             ),
           );
         }
-        final items = _buildListItems(messages);
+        final items = _buildListItems(messages, polls, myUid: myUid);
         return ListView.builder(
           controller: scrollController,
           padding: const EdgeInsets.fromLTRB(
@@ -951,7 +1090,35 @@ class _MessageList extends ConsumerWidget {
             final item = items[i];
             return switch (item) {
               _DaySeparatorItem() => _DaySeparator(label: item.label),
-              _MessageItem() => _Bubble(item: item),
+              _MessageItem() => _Bubble(
+                  item: item,
+                  reactions:
+                      reactions?[item.message.id] ?? const <String, List<String>>{},
+                  myUid: myUid,
+                  onReact: (emoji) => _toggleReaction(
+                    ref,
+                    context,
+                    activityId: id,
+                    messageId: item.message.id,
+                    emoji: emoji,
+                  ),
+                ),
+              _PollItem() => _PollCard(
+                  item: item,
+                  creatorName: item.poll.createdBy == myUid && myUid.isNotEmpty
+                      ? 'You'
+                      : (names[item.poll.createdBy] ??
+                          item.poll.createdBy),
+                  isMine: item.poll.createdBy == myUid && myUid.isNotEmpty,
+                  myUid: myUid,
+                  onVote: (optionIndex) => _votePoll(
+                    ref,
+                    context,
+                    activityId: id,
+                    pollId: item.poll.pollId,
+                    optionIndex: optionIndex,
+                  ),
+                ),
             };
           },
         );
@@ -988,8 +1155,16 @@ class _DaySeparator extends StatelessWidget {
 // ─── Bubble ───────────────────────────────────────────────────────────────────
 
 class _Bubble extends StatelessWidget {
-  const _Bubble({required this.item});
+  const _Bubble({
+    required this.item,
+    this.reactions = const <String, List<String>>{},
+    this.myUid = '',
+    this.onReact,
+  });
   final _MessageItem item;
+  final EmojiReactions reactions;
+  final String myUid;
+  final ValueChanged<String>? onReact;
 
   String _formatTime(DateTime dt) {
     final h = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
@@ -1045,37 +1220,60 @@ class _Bubble extends StatelessWidget {
                 const SizedBox(width: AppSpacing.x2),
               ],
 
-              // Bubble
+              // Bubble — long-press opens the reaction picker.
               Flexible(
-                child: Container(
-                  constraints: BoxConstraints(maxWidth: maxW),
-                  padding: msg.isImage
-                      ? const EdgeInsets.all(4)
-                      : const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.x4,
-                          vertical: AppSpacing.x3,
+                child: GestureDetector(
+                  onLongPress: onReact == null
+                      ? null
+                      : () => _ReactionPickerSheet.show(
+                            context,
+                            onPick: onReact!,
+                          ),
+                  child: Container(
+                    constraints: BoxConstraints(maxWidth: maxW),
+                    padding: msg.isImage
+                        ? const EdgeInsets.all(4)
+                        : const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.x4,
+                            vertical: AppSpacing.x3,
+                          ),
+                    decoration: BoxDecoration(
+                      color: isMine
+                          ? AppColors.primary
+                          : context.colors.surface,
+                      borderRadius: BorderRadius.only(
+                        topLeft: const Radius.circular(AppRadius.lg),
+                        topRight: const Radius.circular(AppRadius.lg),
+                        bottomLeft: Radius.circular(
+                          isMine || !item.isLastOfRun ? AppRadius.lg : 4,
                         ),
-                  decoration: BoxDecoration(
-                    color: isMine
-                        ? AppColors.primary
-                        : context.colors.surface,
-                    borderRadius: BorderRadius.only(
-                      topLeft: const Radius.circular(AppRadius.lg),
-                      topRight: const Radius.circular(AppRadius.lg),
-                      bottomLeft: Radius.circular(
-                        isMine || !item.isLastOfRun ? AppRadius.lg : 4,
+                        bottomRight: Radius.circular(
+                          !isMine || !item.isLastOfRun ? AppRadius.lg : 4,
+                        ),
                       ),
-                      bottomRight: Radius.circular(
-                        !isMine || !item.isLastOfRun ? AppRadius.lg : 4,
-                      ),
+                      boxShadow: isMine ? null : AppShadows.card,
                     ),
-                    boxShadow: isMine ? null : AppShadows.card,
+                    child: _BubbleContent(msg: msg, isMine: isMine),
                   ),
-                  child: _BubbleContent(msg: msg, isMine: isMine),
                 ),
               ),
             ],
           ),
+
+          // Reaction chips — below the bubble, above the timestamp.
+          if (reactions.isNotEmpty)
+            Padding(
+              padding: EdgeInsets.only(
+                top: 4,
+                left: isMine ? 0 : 46,
+                right: isMine ? 2 : 0,
+              ),
+              child: _ReactionChips(
+                reactions: reactions,
+                myUid: myUid,
+                onToggle: onReact,
+              ),
+            ),
 
           // Timestamp — below last bubble of run
           if (item.isLastOfRun)
@@ -1138,6 +1336,355 @@ class _BubbleContent extends StatelessWidget {
       msg.text,
       style: AppTypography.bodyReading(context).copyWith(
         color: isMine ? AppColors.textOnPrimary : context.colors.textPrimary,
+      ),
+    );
+  }
+}
+
+// ─── Reactions ────────────────────────────────────────────────────────────────
+
+/// Bottom sheet behind a bubble long-press: one tap toggles that emoji
+/// reaction for the current user.
+class _ReactionPickerSheet extends StatelessWidget {
+  const _ReactionPickerSheet({required this.onPick});
+  final ValueChanged<String> onPick;
+
+  static Future<void> show(
+    BuildContext context, {
+    required ValueChanged<String> onPick,
+  }) {
+    HapticFeedback.lightImpact();
+    return showModalBottomSheet<void>(
+      context: context,
+      // Root navigator so the scrim covers the tab bar too — otherwise
+      // (inside ShellRoute) the sheet docks flush on top of the tab bar
+      // with no gap and the bar stays bright/interactive underneath.
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black54,
+      elevation: 0,
+      builder: (_) => _ReactionPickerSheet(onPick: onPick),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Floating panel with a gap above the bottom edge — previously the
+    // sheet sat flush (viewPadding only) and looked stuck / "kurang ke atas".
+    final bottomInset = MediaQuery.of(context).viewPadding.bottom;
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.x4,
+          0,
+          AppSpacing.x4,
+          // 16px lift + home-indicator inset so it floats ke atas.
+          AppSpacing.x4 + bottomInset,
+        ),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.x5,
+            AppSpacing.x3,
+            AppSpacing.x5,
+            AppSpacing.x5,
+          ),
+          decoration: BoxDecoration(
+            color: context.colors.surface,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: AppShadows.card,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: context.colors.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.x4),
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: AppSpacing.x2,
+                runSpacing: AppSpacing.x2,
+                children: [
+                  for (final emoji in reactionEmojis)
+                    PressableScale(
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        onPick(emoji);
+                      },
+                      child: Container(
+                        width: 48,
+                        height: 48,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: context.colors.surfaceMuted,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(
+                          emoji,
+                          style: const TextStyle(fontSize: 26),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.x2),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Compact `emoji count` chips under a reacted bubble. Highlighted when
+/// the current user reacted; tapping toggles their own reaction.
+class _ReactionChips extends StatelessWidget {
+  const _ReactionChips({
+    required this.reactions,
+    required this.myUid,
+    required this.onToggle,
+  });
+  final EmojiReactions reactions;
+  final String myUid;
+  final ValueChanged<String>? onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 4,
+      runSpacing: 4,
+      children: [
+        for (final entry in reactions.entries)
+          PressableScale(
+            onTap:
+                onToggle == null ? null : () => onToggle!(entry.key),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: entry.value.contains(myUid)
+                    ? context.colors.primarySoft
+                    : context.colors.surface,
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+                border: Border.all(
+                  color: entry.value.contains(myUid)
+                      ? context.colors.primaryOnSurface
+                      : context.colors.border,
+                ),
+              ),
+              child: Text(
+                '${entry.key} ${entry.value.length}',
+                style: const TextStyle(fontSize: 12),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+// ─── Poll card ────────────────────────────────────────────────────────────────
+
+/// Inline single-choice poll card. Options render as tappable result
+/// bars (share-proportional fill, voter count, "you voted" highlight);
+/// tapping an option votes, tapping it again retracts the vote.
+class _PollCard extends StatelessWidget {
+  const _PollCard({
+    required this.item,
+    required this.creatorName,
+    required this.isMine,
+    required this.myUid,
+    required this.onVote,
+  });
+  final _PollItem item;
+  final String creatorName;
+  final bool isMine;
+  final String myUid;
+  final ValueChanged<int> onVote;
+
+  @override
+  Widget build(BuildContext context) {
+    final poll = item.poll;
+    final myVote = poll.myVote(myUid);
+    final maxW = MediaQuery.of(context).size.width * 0.78;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.x4),
+      child: Column(
+        crossAxisAlignment:
+            isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        children: [
+          if (item.showSenderName)
+            Padding(
+              padding: const EdgeInsets.only(left: 44, bottom: 4),
+              child: Text(
+                creatorName,
+                style: AppTypography.metaSub(context).copyWith(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: context.colors.textSecondary,
+                ),
+              ),
+            ),
+          Row(
+            mainAxisAlignment:
+                isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (!isMine) const SizedBox(width: 36),
+              if (!isMine) const SizedBox(width: AppSpacing.x2),
+              Flexible(
+                child: Container(
+                  constraints: BoxConstraints(maxWidth: maxW),
+                  padding: const EdgeInsets.all(AppSpacing.x3),
+                  decoration: BoxDecoration(
+                    color: context.colors.surface,
+                    borderRadius: BorderRadius.circular(AppRadius.lg),
+                    border: Border.all(
+                      color: context.colors.primaryOnSurface,
+                      width: 1.5,
+                    ),
+                    boxShadow: AppShadows.card,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.bar_chart_rounded,
+                            size: 14,
+                            color: context.colors.primaryOnSurface,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'POLL',
+                            style: AppTypography.metaSub(context).copyWith(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.0,
+                              color: context.colors.primaryOnSurface,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        poll.question,
+                        style: AppTypography.bodyMedium(context).copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.x2),
+                      for (var i = 0; i < poll.options.length; i++)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: _PollOption(
+                            label: poll.options[i],
+                            votes: poll.votesFor(i),
+                            share: poll.shareFor(i),
+                            isMyVote: myVote == i,
+                            onTap: () => onVote(i),
+                          ),
+                        ),
+                      Text(
+                        poll.totalVotes == 0
+                            ? 'No votes yet · tap to vote'
+                            : '${poll.totalVotes} vote${poll.totalVotes == 1 ? '' : 's'}'
+                                '${myVote == null ? ' · tap to vote' : ''}',
+                        style: AppTypography.metaSub(context).copyWith(
+                          fontSize: 11,
+                          color: context.colors.textTertiary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PollOption extends StatelessWidget {
+  const _PollOption({
+    required this.label,
+    required this.votes,
+    required this.share,
+    required this.isMyVote,
+    required this.onTap,
+  });
+  final String label;
+  final int votes;
+  final double share;
+  final bool isMyVote;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return PressableScale(
+      onTap: onTap,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: Stack(
+          children: [
+            FractionallySizedBox(
+              alignment: Alignment.centerLeft,
+              widthFactor: share <= 0 ? 0 : share.clamp(0.06, 1.0),
+              child: Container(
+                height: 40,
+                color: isMyVote
+                    ? context.colors.primaryOnSurface.withValues(alpha: 0.35)
+                    : context.colors.primarySoft,
+              ),
+            ),
+            Container(
+              height: 40,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              alignment: Alignment.centerLeft,
+              child: Row(
+                children: [
+                  if (isMyVote)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: Icon(
+                        Icons.check_circle_rounded,
+                        size: 16,
+                        color: context.colors.primaryOnSurface,
+                      ),
+                    ),
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: AppTypography.bodyMedium(context).copyWith(
+                        fontWeight:
+                            isMyVote ? FontWeight.w700 : FontWeight.w500,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${(share * 100).round()}%',
+                    style: AppTypography.metaSub(context).copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1507,6 +2054,14 @@ class _ChatSettingsSheet extends StatelessWidget {
             onTap: () {
               Navigator.of(context).pop();
               context.push('/activity/$activityId');
+            },
+          ),
+          _SettingsRow(
+            icon: Icons.photo_library_outlined,
+            label: 'Photo moments',
+            onTap: () {
+              Navigator.of(context).pop();
+              context.push('/chat/$activityId/moments');
             },
           ),
           _SettingsRow(

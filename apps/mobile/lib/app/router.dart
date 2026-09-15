@@ -40,6 +40,7 @@ import '../features/profile/presentation/profile_screen.dart';
 import '../features/profile/presentation/edit_profile_screen.dart';
 import '../features/profile/presentation/player_profile_screen.dart';
 import '../features/chat/presentation/chat_screen.dart';
+import '../features/chat/presentation/photo_moments_screen.dart';
 import '../features/chat/presentation/dm_screen.dart';
 import '../features/chat/presentation/messages_screen.dart';
 import 'app_shell.dart';
@@ -386,6 +387,18 @@ GoRouter buildRouter(Ref ref) {
                 state,
                 ChatScreen(activityId: id),
                 key: ValueKey('chat-$id'),
+              );
+            },
+          ),
+          GoRoute(
+            // Album of every photo shared in the activity's group chat.
+            path: '/chat/:id/moments',
+            pageBuilder: (_, state) {
+              final id = state.pathParameters['id'] ?? '';
+              return appPage(
+                state,
+                PhotoMomentsScreen(activityId: id),
+                key: ValueKey('chat-moments-$id'),
               );
             },
           ),
