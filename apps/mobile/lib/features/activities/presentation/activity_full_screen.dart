@@ -81,13 +81,15 @@ class _FullBody extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x6),
             child: Column(
               children: [
-                const _WaitingListNotice(),
-                const SizedBox(height: AppSpacing.x4),
+                if (activity.requiresApproval) ...[
+                  _WaitingListNotice(activity: activity),
+                  const SizedBox(height: AppSpacing.x4),
+                ],
                 if (similar.isNotEmpty) ...[
                   _SimilarActivities(activities: similar),
                   const SizedBox(height: AppSpacing.x4),
                 ],
-                _Actions(activityId: activity.id),
+                _Actions(activity: activity),
               ],
             ),
           ),
@@ -454,10 +456,12 @@ class _AvatarStack extends StatelessWidget {
 }
 
 class _WaitingListNotice extends StatelessWidget {
-  const _WaitingListNotice();
+  const _WaitingListNotice({required this.activity});
+  final ActivityModel activity;
 
   @override
   Widget build(BuildContext context) {
+    final waiting = activity.pendingRequestCount;
     return Container(
       padding: const EdgeInsets.all(AppSpacing.x3),
       decoration: BoxDecoration(
@@ -488,7 +492,9 @@ class _WaitingListNotice extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(left: AppSpacing.x6),
             child: Text(
-              "You'll be notified if a spot opens up.",
+              waiting > 0
+                  ? '$waiting ${waiting == 1 ? 'person' : 'people'} waiting for approval.'
+                  : 'Request to join — the host reviews each request.',
               style: AppTypography.bodySmall(context),
             ),
           ),
@@ -576,24 +582,61 @@ class _SimilarActivityRow extends StatelessWidget {
   }
 }
 
-class _Actions extends StatelessWidget {
-  const _Actions({required this.activityId});
-  final String activityId;
+class _Actions extends ConsumerStatefulWidget {
+  const _Actions({required this.activity});
+  final ActivityModel activity;
+
+  @override
+  ConsumerState<_Actions> createState() => _ActionsState();
+}
+
+class _ActionsState extends ConsumerState<_Actions> {
+  bool _sending = false;
+
+  Future<void> _requestJoin() async {
+    if (_sending) return;
+    setState(() => _sending = true);
+    try {
+      await ref
+          .read(activityRepositoryProvider)
+          .requestJoin(widget.activity.id);
+      if (!mounted) return;
+      AppSnackbar.show(
+        context,
+        message: 'Request sent! The host will review it soon.',
+        variant: AppSnackbarVariant.success,
+      );
+      Navigator.of(context).maybePop();
+    } catch (_) {
+      if (!mounted) return;
+      AppSnackbar.show(
+        context,
+        message: 'Could not send request. Please try again.',
+        variant: AppSnackbarVariant.error,
+      );
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final activity = widget.activity;
+    // Approval-gated games can still take requests while full (the
+    // host may approve when a spot frees up). Open games have no
+    // waiting list — the button stays disabled instead of faking it.
+    final canRequest =
+        activity.requiresApproval && !activity.hasPendingRequest;
     return Column(
       children: [
         AppButton(
-          label: 'Join Waiting List',
-          onPressed: () {
-            AppSnackbar.show(
-              context,
-              message: "You're on the waiting list.",
-              variant: AppSnackbarVariant.info,
-            );
-            Navigator.of(context).maybePop();
-          },
+          label: activity.hasPendingRequest
+              ? 'Request pending'
+              : activity.requiresApproval
+                  ? 'Request to Join'
+                  : 'Activity Full',
+          onPressed: canRequest ? _requestJoin : null,
+          loading: _sending,
           size: AppButtonSize.lg,
         ),
         const SizedBox(height: AppSpacing.x3),

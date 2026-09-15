@@ -1,5 +1,5 @@
 import { firestore } from '../../database/firebase.js';
-import { Timestamp } from 'firebase-admin/firestore';
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import {
     activityDocPath,
     activityJoinRequestDocPath,
@@ -30,6 +30,29 @@ export function isJoinPolicy(value: unknown): value is ActivityJoinPolicy {
     return value === 'open' || value === 'approval';
 }
 
+/**
+ * Normalises the paid/free inputs into the stored shape.
+ * Free activities never carry a `fee` (it is dropped); paid ones
+ * require a positive NZD amount. Throws on invalid input.
+ */
+export function resolvePaidFee(
+    isPaid: boolean | undefined,
+    fee: number | undefined,
+): { isPaid: boolean; fee?: number } {
+    const paid = isPaid ?? false;
+    if (typeof paid !== 'boolean') {
+        throw new Error('isPaid must be a boolean');
+    }
+    if (!paid) {
+        return { isPaid: false };
+    }
+    if (fee === undefined || typeof fee !== 'number' || !Number.isFinite(fee) || fee <= 0) {
+        throw new Error('fee must be a positive number for paid activities');
+    }
+    // Cap to cents to keep display + storage consistent.
+    return { isPaid: true, fee: Math.round(fee * 100) / 100 };
+}
+
 export type CreateActivityInput = {
     hostId: string;
     title: string;
@@ -46,6 +69,13 @@ export type CreateActivityInput = {
     capacity: number;
     coverImageUrl?: string;
     joinPolicy?: ActivityJoinPolicy;
+    /**
+     * Whether joining costs money. Defaults to `false` (free). When
+     * `true`, `fee` must be a positive number (NZD per person).
+     */
+    isPaid?: boolean;
+    /** Entry fee in NZD. Only stored when `isPaid` is true. */
+    fee?: number;
 };
 
 export type UpdateActivityStatusInput = {
@@ -78,6 +108,8 @@ export type UpdateActivityInput = {
     capacity?: number;
     coverImageUrl?: string;
     joinPolicy?: ActivityJoinPolicy;
+    isPaid?: boolean;
+    fee?: number;
 };
 
 export type ActivityRecord = {
@@ -95,10 +127,28 @@ export type ActivityRecord = {
     skillLevel: ActivitySkillLevel;
     capacity: number;
     participantCount: number;
+    /**
+     * Denormalized count of `pending` join requests (approval-gated
+     * activities). Maintained transactionally by the participants
+     * service so reads never fan out; legacy rows without the field
+     * read as 0.
+     */
+    pendingRequestCount: number;
     status: ActivityStatus;
     coverImagePath?: string;
     coverImageUrl?: string;
     joinPolicy?: ActivityJoinPolicy;
+    /**
+     * Whether joining costs money. Always present on records written
+     * after this field existed; legacy rows without it read as `false`
+     * (free) so old payloads keep rendering the Free chip.
+     */
+    isPaid: boolean;
+    /**
+     * Entry fee in NZD per person. Only present on paid activities;
+     * omitted for free ones.
+     */
+    fee?: number;
     cancelledAt?: FirebaseFirestore.Timestamp;
     cancelledBy?: string;
     createdAt: FirebaseFirestore.Timestamp;
@@ -230,6 +280,8 @@ export async function createActivity(input: CreateActivityInput): Promise<{ acti
         throw new Error('capacity must be a positive integer');
     }
 
+    const { isPaid, fee } = resolvePaidFee(input.isPaid, input.fee);
+
     const activitiesRef = firestore.collection('activities');
     const newActivityRef = activitiesRef.doc();
 
@@ -248,9 +300,12 @@ export async function createActivity(input: CreateActivityInput): Promise<{ acti
         skillLevel,
         capacity,
         participantCount: 0,
+        pendingRequestCount: 0,
         status: 'open',
         ...(coverImageUrl ? { coverImageUrl } : {}),
         joinPolicy,
+        isPaid,
+        ...(fee !== undefined ? { fee } : {}),
         createdAt: now,
         updatedAt: now,
     });
@@ -508,6 +563,18 @@ export async function updateActivity(input: UpdateActivityInput): Promise<void> 
         }
         updates.capacity = input.capacity;
     }
+
+    // Paid/free changes are resolved inside the transaction against the
+    // current doc: flipping to paid without a fee keeps the existing
+    // fee when there is one, otherwise it is a 400. Flipping to free
+    // clears any stored fee.
+    const wantsPaidChange = input.isPaid !== undefined || input.fee !== undefined;
+    if (input.isPaid !== undefined && typeof input.isPaid !== 'boolean') {
+        throw new Error('isPaid must be a boolean');
+    }
+    if (input.fee !== undefined && (typeof input.fee !== 'number' || !Number.isFinite(input.fee) || input.fee <= 0)) {
+        throw new Error('fee must be a positive number for paid activities');
+    }
     const stringFields = [
         updates.title,
         updates.sportType,
@@ -534,6 +601,21 @@ export async function updateActivity(input: UpdateActivityInput): Promise<void> 
 
         if(data?.hostId !== hostId){
             throw new Error('Only the activity host can update this activity');
+        }
+
+        if (wantsPaidChange) {
+            const currentPaid = data?.isPaid === true;
+            const currentFee = typeof data?.fee === 'number' ? (data.fee as number) : undefined;
+            const nextPaid = input.isPaid ?? currentPaid;
+            const nextFee = input.fee ?? currentFee;
+            const resolved = resolvePaidFee(nextPaid, nextFee);
+            updates.isPaid = resolved.isPaid;
+            if (resolved.fee !== undefined) {
+                updates.fee = resolved.fee;
+            } else {
+                // Clear a stale fee when the activity goes free.
+                (updates as Record<string, unknown>).fee = FieldValue.delete();
+            }
         }
 
         transaction.update(activityRef, updates);
@@ -671,10 +753,18 @@ function mapActivityDoc(activityDoc: FirebaseFirestore.DocumentSnapshot): Activi
         skillLevel: data.skillLevel as ActivitySkillLevel,
         capacity: data.capacity,
         participantCount: data.participantCount,
+        pendingRequestCount:
+            typeof data.pendingRequestCount === 'number'
+                ? data.pendingRequestCount
+                : 0,
         status: data.status as ActivityStatus,
         ...(typeof data.coverImagePath === 'string' ? { coverImagePath: data.coverImagePath } : {}),
         ...(typeof data.coverImageUrl === 'string' ? { coverImageUrl: data.coverImageUrl } : {}),
         joinPolicy: isJoinPolicy(data.joinPolicy) ? data.joinPolicy : 'open',
+        isPaid: data.isPaid === true,
+        ...(typeof data.fee === 'number' && Number.isFinite(data.fee) && data.fee > 0
+            ? { fee: data.fee }
+            : {}),
         ...(data.cancelledAt !== undefined
             ? { cancelledAt: data.cancelledAt as FirebaseFirestore.Timestamp }
             : {}),

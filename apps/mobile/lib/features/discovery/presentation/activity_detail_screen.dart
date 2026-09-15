@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dio/dio.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/network/api_client.dart';
 import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -175,11 +177,16 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       context.go('/joined-activity/${widget.activityId}');
     } catch (e) {
       if (!mounted) return;
+      // Surface precise backend rejections ("Activity is full",
+      // "Activity has already started") instead of a generic failure.
+      final message = e is DioException && e.error is ApiException
+          ? (e.error as ApiException).userMessage
+          : (widget.activity.requiresApproval && !_requestPending
+              ? 'Could not send request. Please try again.'
+              : 'Could not join. Please try again.');
       AppSnackbar.show(
         context,
-        message: widget.activity.requiresApproval && !_requestPending
-            ? 'Could not send request. Please try again.'
-            : 'Could not join. Please try again.',
+        message: message,
         variant: AppSnackbarVariant.error,
       );
     } finally {
@@ -706,6 +713,7 @@ class _ParticipantsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final waiting = activity.requiresApproval ? activity.pendingRequestCount : 0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -723,6 +731,16 @@ class _ParticipantsSection extends StatelessWidget {
             ),
           ],
         ),
+        if (waiting > 0) ...[
+          const SizedBox(height: 2),
+          Text(
+            '$waiting waiting for approval',
+            style: AppTypography.bodySmall(context).copyWith(
+              color: context.colors.warningText,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
         const SizedBox(height: AppSpacing.x3),
         _ParticipantAvatars(activityId: activity.id),
       ],
@@ -900,12 +918,15 @@ class _ActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final canJoin = !activity.isFull && !requestPending;
+    final canJoin =
+        !activity.isFull && !requestPending && !activity.hasStarted;
     final joinLabel = requestPending
         ? 'Request pending'
-        : activity.requiresApproval
-            ? 'Request to Join'
-            : (canJoin ? 'Join Game' : 'Activity Full');
+        : activity.hasStarted
+            ? 'Already started'
+            : activity.requiresApproval
+                ? 'Request to Join'
+                : (canJoin ? 'Join Game' : 'Activity Full');
 
     return Container(
       padding: const EdgeInsets.fromLTRB(
@@ -952,7 +973,9 @@ class _ActionBar extends StatelessWidget {
               button: true,
               label: requestPending
                   ? 'Join request pending'
-                  : (canJoin ? 'Join Game' : 'Activity is full'),
+                  : (activity.hasStarted
+                      ? 'Activity already started'
+                      : (canJoin ? 'Join Game' : 'Activity is full')),
               child: PressableScale(
                 onTap: canJoin ? onJoin : null,
                 child: Container(

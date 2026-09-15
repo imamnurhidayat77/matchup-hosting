@@ -25,7 +25,7 @@ ActivityModel _fixture() => ActivityModel(
   location: 'Central Park Court B',
   addressLine: 'Central Park, New York, NY',
   distanceKm: 2.4,
-  dateTime: DateTime(2026, 8, 20, 16),
+  dateTime: DateTime(2027, 8, 20, 16),
   skillLevel: 'Intermediate',
   capacity: 10,
   participantCount: 6,
@@ -39,7 +39,7 @@ ActivityModel _approvalFixture({String? joinRequestStatus}) => ActivityModel(
   description: 'Host-approved session.',
   location: 'Domain Courts',
   distanceKm: 1.2,
-  dateTime: DateTime(2026, 8, 23, 10),
+  dateTime: DateTime(2027, 8, 23, 10),
   skillLevel: 'Beginner',
   capacity: 4,
   participantCount: 1,
@@ -223,6 +223,54 @@ void main() {
 
         verify(() => repo.requestJoin('a-2')).called(1);
         expect(find.text('Request pending'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'started activity disables join with Already started label',
+      (tester) async {
+        // Backdate the fixture past its start time.
+        when(() => repo.byId(any())).thenAnswer(
+          (_) async => ActivityModel(
+            id: 'a-1',
+            title: 'Saturday Afternoon 5v5 Basketball',
+            sportType: 'Basketball',
+            description: 'Looking for intermediate players.',
+            location: 'Central Park Court B',
+            distanceKm: 2.4,
+            dateTime: DateTime.now().subtract(const Duration(hours: 1)),
+            skillLevel: 'Intermediate',
+            capacity: 10,
+            participantCount: 6,
+            hostName: 'James Wilson',
+          ),
+        );
+
+        await pumpViaRealNavigation(
+          tester,
+          repo: repo,
+          via: (context) => context.push('/activity/a-1'),
+        );
+
+        expect(find.text('Already started'), findsOneWidget);
+        verifyNever(() => repo.join(any()));
+      },
+    );
+
+    testWidgets(
+      'approval activity shows waiting count under participants',
+      (tester) async {
+        when(() => repo.byId(any())).thenAnswer(
+          (_) async => _approvalFixture().copyWith(pendingRequestCount: 3),
+        );
+
+        await pumpViaRealNavigation(
+          tester,
+          repo: repo,
+          via: (context) => context.push('/activity/a-2'),
+        );
+
+        expect(find.text('3 waiting for approval'), findsOneWidget);
       },
     );
 
