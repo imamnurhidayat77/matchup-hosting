@@ -76,7 +76,7 @@ dependencies:
   # (no API key, no billing). The venue picker opens a bottom sheet
   # with a tappable map and a search list; tapping a pin or row sets
   # the activity's location field.
-  flutter_map: ^7.0.2
+  flutter_map: ^8.3.2
   latlong2: ^0.9.1
   package_info_plus: ^10.2.1
 
