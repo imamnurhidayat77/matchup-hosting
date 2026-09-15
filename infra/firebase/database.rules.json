@@ -8,6 +8,24 @@
           "$messageId": {
             ".validate": "newData.hasChildren(['senderId', 'text', 'type', 'timestamp']) && newData.child('senderId').isString() && newData.child('text').isString() && (newData.child('type').val() == 'text' || newData.child('type').val() == 'system') && newData.child('timestamp').isNumber()"
           }
+        },
+        "reactions": {
+          ".read": "auth != null",
+          ".write": false,
+          "$messageId": {
+            "$emoji": {
+              "$uid": {
+                ".validate": "newData.isNumber()"
+              }
+            }
+          }
+        },
+        "polls": {
+          ".read": "auth != null",
+          ".write": false,
+          "$pollId": {
+            ".validate": "newData.hasChildren(['question', 'options', 'createdBy', 'createdAt']) && newData.child('question').isString() && newData.child('createdBy').isString() && newData.child('createdAt').isNumber()"
+          }
         }
       }
     },
