@@ -60,6 +60,12 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
   @override
   Widget build(BuildContext context) {
     final unreadCount = ref.watch(_unreadNotifCountProvider).valueOrNull ?? 0;
+    // Tab badges reuse the same providers the lists below watch, so no
+    // extra fetch — just a synchronous read of the cached value.
+    final groupConvos = ref.watch(_conversationsProvider).valueOrNull;
+    final dmConvos = ref.watch(_dmConversationsProvider).valueOrNull;
+    int unreadOf(List<ChatConversation>? list) =>
+        list?.fold<int>(0, (sum, c) => sum + c.unreadCount) ?? 0;
 
     return AppScaffold(
       showHomeIndicator: false,
@@ -84,12 +90,12 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
                     children: [
                       Text(
                         'Chat',
-                        style: AppTypography.headlineLarge(context),
+                        style: AppTypography.titleScreen(context),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         'Your conversations',
-                        style: AppTypography.bodyMedium(context).copyWith(
+                        style: AppTypography.bodySmall(context).copyWith(
                           color: context.colors.textSecondary,
                         ),
                       ),
@@ -124,6 +130,10 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
             child: _InboxTabs(
               tab: _tab,
               onSelect: (i) => setState(() => _tab = i),
+              groupCount: groupConvos?.length,
+              dmCount: dmConvos?.length,
+              groupUnread: unreadOf(groupConvos),
+              dmUnread: unreadOf(dmConvos),
             ),
           ),
           const SizedBox(height: AppSpacing.x3),
@@ -199,7 +209,11 @@ class _BellButton extends StatelessWidget {
 
 // ─── Search bar ───────────────────────────────────────────────────────────────
 
-class _SearchBar extends StatelessWidget {
+/// White-field search (not muted-fill) so the hint/icon in
+/// `textSecondary` sit at 4.76:1 on white — WCAG AA. The same grey on the
+/// old muted fill only reached 4.34:1 and failed. Focus is visible via a
+/// 1.5 px brand border for keyboard / switch-control users.
+class _SearchBar extends StatefulWidget {
   const _SearchBar({
     required this.controller,
     required this.onChanged,
@@ -210,13 +224,47 @@ class _SearchBar extends StatelessWidget {
   final VoidCallback onClear;
 
   @override
+  State<_SearchBar> createState() => _SearchBarState();
+}
+
+class _SearchBarState extends State<_SearchBar> {
+  final _focusNode = FocusNode();
+  bool _focused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(_onFocus);
+  }
+
+  void _onFocus() {
+    if (mounted && _focusNode.hasFocus != _focused) {
+      setState(() => _focused = _focusNode.hasFocus);
+    }
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_onFocus);
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 48,
+    final borderColor =
+        _focused ? context.colors.primaryOnSurface : context.colors.border;
+    return AnimatedContainer(
+      duration: AppDurations.fast,
+      height: 46,
       decoration: BoxDecoration(
         color: context.colors.surface,
         borderRadius: BorderRadius.circular(AppRadius.pill),
-        border: Border.all(color: context.colors.border),
+        border: Border.all(
+          color: borderColor,
+          width: _focused ? 1.5 : 1,
+        ),
+        boxShadow: _focused ? AppShadows.card : null,
       ),
       child: Row(
         children: [
@@ -224,13 +272,18 @@ class _SearchBar extends StatelessWidget {
           Icon(
             Icons.search_rounded,
             size: 20,
-            color: context.colors.textTertiary,
+            color: context.colors.textSecondary,
+            semanticLabel: 'Search',
           ),
           const SizedBox(width: AppSpacing.x2),
           Expanded(
             child: TextField(
-              controller: controller,
-              onChanged: onChanged,
+              controller: widget.controller,
+              focusNode: _focusNode,
+              onChanged: widget.onChanged,
+              onSubmitted: (_) => _focusNode.unfocus(),
+              keyboardType: TextInputType.text,
+              textInputAction: TextInputAction.search,
               cursorColor: AppColors.primary,
               cursorWidth: 1.5,
               style: AppTypography.bodyMedium(context).copyWith(
@@ -240,7 +293,7 @@ class _SearchBar extends StatelessWidget {
               decoration: InputDecoration(
                 hintText: 'Search chats, sports or matches...',
                 hintStyle: AppTypography.bodyMedium(context).copyWith(
-                  color: context.colors.textTertiary,
+                  color: context.colors.textSecondary,
                   fontSize: 15,
                 ),
                 filled: true,
@@ -253,12 +306,12 @@ class _SearchBar extends StatelessWidget {
               ),
             ),
           ),
-          if (controller.text.isNotEmpty) ...[
+          if (widget.controller.text.isNotEmpty) ...[
             Semantics(
               button: true,
               label: 'Clear search',
               child: PressableScale(
-                onTap: onClear,
+                onTap: widget.onClear,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.x3,
@@ -266,7 +319,8 @@ class _SearchBar extends StatelessWidget {
                   child: Icon(
                     Icons.close_rounded,
                     size: 18,
-                    color: context.colors.textTertiary,
+                    color: context.colors.textSecondary,
+                    semanticLabel: 'Clear search',
                   ),
                 ),
               ),
@@ -281,25 +335,54 @@ class _SearchBar extends StatelessWidget {
 
 // ─── Conversation list ────────────────────────────────────────────────────────
 
-/// Groups / Direct segmented toggle.
+/// Groups / Direct segmented toggle with count badges and unread dots.
+/// Unselected labels use `textLabel` (9.45:1 on the muted track) instead of
+/// `textSecondary`, which only reached 4.34:1 there and failed WCAG AA.
 class _InboxTabs extends StatelessWidget {
-  const _InboxTabs({required this.tab, required this.onSelect});
+  const _InboxTabs({
+    required this.tab,
+    required this.onSelect,
+    this.groupCount,
+    this.dmCount,
+    this.groupUnread = 0,
+    this.dmUnread = 0,
+  });
   final int tab;
   final ValueChanged<int> onSelect;
+  final int? groupCount;
+  final int? dmCount;
+  final int groupUnread;
+  final int dmUnread;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: context.colors.surfaceMuted,
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-      ),
-      child: Row(
-        children: [
-          _InboxTab(label: 'Groups', selected: tab == 0, onTap: () => onSelect(0)),
-          _InboxTab(label: 'Direct', selected: tab == 1, onTap: () => onSelect(1)),
-        ],
+    return Semantics(
+      label: 'Conversation type',
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: context.colors.surfaceMuted,
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          border: Border.all(color: context.colors.border),
+        ),
+        child: Row(
+          children: [
+            _InboxTab(
+              label: 'Groups',
+              selected: tab == 0,
+              count: groupCount,
+              hasUnread: groupUnread > 0,
+              onTap: () => onSelect(0),
+            ),
+            _InboxTab(
+              label: 'Direct',
+              selected: tab == 1,
+              count: dmCount,
+              hasUnread: dmUnread > 0,
+              onTap: () => onSelect(1),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -310,31 +393,80 @@ class _InboxTab extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
+    this.count,
+    this.hasUnread = false,
   });
   final String label;
   final bool selected;
   final VoidCallback onTap;
+  final int? count;
+  final bool hasUnread;
 
   @override
   Widget build(BuildContext context) {
+    final labelColor =
+        selected ? context.colors.textPrimary : context.colors.textLabel;
     return Expanded(
-      child: PressableScale(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: AppSpacing.x2),
-          decoration: BoxDecoration(
-            color: selected ? context.colors.surface : Colors.transparent,
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-            boxShadow: selected ? AppShadows.card : null,
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: AppTypography.labelField(context).copyWith(
-              color: selected
-                  ? context.colors.textPrimary
-                  : context.colors.textSecondary,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+      child: Semantics(
+        button: true,
+        selected: selected,
+        label: count == null ? label : '$label, $count conversations',
+        child: PressableScale(
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: AppDurations.fast,
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              color: selected ? context.colors.surface : Colors.transparent,
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+              border: Border.all(
+                color: selected
+                    ? context.colors.border
+                    : Colors.transparent,
+              ),
+              boxShadow: selected ? AppShadows.card : null,
+            ),
+            alignment: Alignment.center,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Flexible(
+                  child: Text(
+                    label,
+                    style: AppTypography.labelField(context).copyWith(
+                      color: labelColor,
+                      fontWeight:
+                          selected ? FontWeight.w700 : FontWeight.w600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (count != null) ...[
+                  const SizedBox(width: 6),
+                  Text(
+                    '$count',
+                    style: AppTypography.caption(context).copyWith(
+                      color: selected
+                          ? context.colors.primaryOnSurface
+                          : context.colors.textLabel,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+                if (hasUnread && !selected) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    width: 7,
+                    height: 7,
+                    decoration: const BoxDecoration(
+                      color: AppColors.primary,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
         ),
@@ -391,7 +523,7 @@ class _DmConversationList extends ConsumerWidget {
           ),
           itemCount: filtered.length,
           itemBuilder: (_, i) => Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.x3),
+            padding: const EdgeInsets.only(bottom: AppSpacing.x2),
             child: _ConversationCard(
               conversation: filtered[i],
               onTap: () => context.push(
@@ -451,7 +583,7 @@ class _ConversationList extends ConsumerWidget {
           ),
           itemCount: filtered.length,
           itemBuilder: (_, i) => Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.x3),
+            padding: const EdgeInsets.only(bottom: AppSpacing.x2),
             child: _ConversationCard(
               conversation: filtered[i],
               // `filtered[i].id` is the activity id (per the local
@@ -479,10 +611,16 @@ class _ConversationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasUnread = conversation.unreadCount > 0;
+    final isEmptyPreview = conversation.lastMessage.trim().isEmpty;
+    // Fallback keeps empty threads from rendering as a blank card —
+    // the main complaint in the current UI ("cards look empty").
+    final previewText = isEmptyPreview
+        ? 'No messages yet — say hi! 👋'
+        : conversation.lastMessage;
     final semanticLabel = hasUnread
         ? '${conversation.name}, ${conversation.unreadCount} unread, '
-              '${conversation.lastMessage}'
-        : '${conversation.name}, ${conversation.lastMessage}';
+              '$previewText'
+        : '${conversation.name}, $previewText';
 
     return Semantics(
       button: true,
@@ -490,12 +628,11 @@ class _ConversationCard extends StatelessWidget {
       child: PressableScale(
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.all(AppSpacing.x4),
+          padding: const EdgeInsets.all(AppSpacing.x3),
           decoration: BoxDecoration(
             color: context.colors.surface,
             borderRadius: BorderRadius.circular(AppRadius.card),
             border: Border.all(color: context.colors.border),
-            boxShadow: AppShadows.card,
           ),
           child: Row(
             children: [
@@ -511,6 +648,7 @@ class _ConversationCard extends StatelessWidget {
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     // Name row
                     Row(
@@ -523,24 +661,29 @@ class _ConversationCard extends StatelessWidget {
                               fontWeight: hasUnread
                                   ? FontWeight.w800
                                   : FontWeight.w700,
+                              height: 1.2,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        const SizedBox(width: AppSpacing.x2),
-                        // Timestamp
-                        Text(
-                          conversation.time,
-                          style: AppTypography.metaSub(context).copyWith(
-                            color: hasUnread
-                                ? AppColors.primary
-                                : context.colors.textSecondary,
-                            fontWeight: hasUnread
-                                ? FontWeight.w600
-                                : FontWeight.w400,
+                        if (conversation.time.trim().isNotEmpty) ...[
+                          const SizedBox(width: AppSpacing.x2),
+                          // Timestamp never shrinks the title — fixed size,
+                          // top-aligned so long names ellipsize cleanly.
+                          Text(
+                            conversation.time,
+                            style: AppTypography.bodySmall(context).copyWith(
+                              fontSize: 11,
+                              color: hasUnread
+                                  ? AppColors.primary
+                                  : context.colors.textSecondary,
+                              fontWeight: hasUnread
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
+                            ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
                     const SizedBox(height: 4),
@@ -549,14 +692,21 @@ class _ConversationCard extends StatelessWidget {
                       children: [
                         Expanded(
                           child: Text(
-                            conversation.lastMessage,
-                            style: AppTypography.metaSub(context).copyWith(
-                              color: hasUnread
-                                  ? context.colors.textPrimary
-                                  : context.colors.textSecondary,
-                              fontWeight: hasUnread
+                            previewText,
+                            style: AppTypography.bodySmall(context).copyWith(
+                              fontSize: 13,
+                              color: isEmptyPreview
+                                  ? context.colors.textSecondary
+                                  : hasUnread
+                                      ? context.colors.textPrimary
+                                      : context.colors.textSecondary,
+                              fontStyle: isEmptyPreview
+                                  ? FontStyle.italic
+                                  : FontStyle.normal,
+                              fontWeight: hasUnread && !isEmptyPreview
                                   ? FontWeight.w500
                                   : FontWeight.w400,
+                              height: 1.3,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -587,6 +737,13 @@ class _ConversationCard extends StatelessWidget {
                                 fontSize: 11,
                               ),
                             ),
+                          ),
+                        ] else ...[
+                          const SizedBox(width: AppSpacing.x2),
+                          Icon(
+                            Icons.chevron_right_rounded,
+                            size: 18,
+                            color: context.colors.textTertiary,
                           ),
                         ],
                       ],
