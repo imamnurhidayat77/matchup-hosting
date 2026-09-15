@@ -44,6 +44,10 @@ if ! git diff-index --quiet HEAD --; then
   echo "Warning: uncommitted changes will be included in this deploy." >&2
 fi
 
+# gcloud splits --set-env-vars values on commas, so use ';' as the pair
+# separator instead (^;^ prefix) — our CORS list itself contains commas.
+ENV_PAIRS="NODE_ENV=production;CORS_ORIGINS=${CORS_ORIGINS};FIREBASE_PROJECT_ID=matchup-cs734;FIREBASE_DATABASE_URL=https://matchup-cs734-default-rtdb.asia-southeast1.firebasedatabase.app;FIREBASE_STORAGE_BUCKET=matchup-cs734.firebasestorage.app"
+
 gcloud run deploy "$SERVICE" \
   --source . \
   --project "$PROJECT" \
@@ -52,5 +56,5 @@ gcloud run deploy "$SERVICE" \
   --min-instances 0 \
   --max-instances 3 \
   --memory 512Mi \
-  --set-env-vars "NODE_ENV=production,CORS_ORIGINS=${CORS_ORIGINS},FIREBASE_PROJECT_ID=matchup-cs734,FIREBASE_DATABASE_URL=https://matchup-cs734-default-rtdb.asia-southeast1.firebasedatabase.app,FIREBASE_STORAGE_BUCKET=matchup-cs734.firebasestorage.app" \
+  --set-env-vars "^;^${ENV_PAIRS}" \
   --set-secrets "AUTH_SECRET=AUTH_SECRET:latest,FIREBASE_PRIVATE_KEY=FIREBASE_PRIVATE_KEY:latest,FIREBASE_CLIENT_EMAIL=FIREBASE_CLIENT_EMAIL:latest,FIREBASE_WEB_API_KEY=FIREBASE_WEB_API_KEY:latest"
