@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
     const collection = vi.fn();
+    const collectionGroup = vi.fn();
     return {
         collection,
+        collectionGroup,
         cover: vi.fn(),
         haversine: vi.fn(),
         listSwipes: vi.fn(),
@@ -11,7 +13,7 @@ const mocks = vi.hoisted(() => {
 });
 
 vi.mock('../../database/firebase.js', () => ({
-    firestore: { collection: mocks.collection },
+    firestore: { collection: mocks.collection, collectionGroup: mocks.collectionGroup },
     auth: {},
     rtdb: {},
 }));
@@ -65,6 +67,11 @@ beforeEach(() => {
     vi.clearAllMocks();
     chain = buildQueryChain();
     mocks.collection.mockReturnValue(chain);
+    mocks.collectionGroup.mockReturnValue({
+        where: vi.fn().mockReturnValue({
+            get: vi.fn().mockResolvedValue({ docs: [] }),
+        }),
+    });
     mocks.cover.mockReturnValue([]);
     mocks.haversine.mockReturnValue(0);
     mocks.listSwipes.mockResolvedValue([]);
@@ -243,5 +250,69 @@ describe('listDiscoverActivities', () => {
         });
 
         expect(out.map((a) => a.activityId)).toEqual(['near']);
+    });
+
+    it('excludes activities that already ended (explicit endTime)', async () => {
+        const past = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+        const future = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+        chain.get.mockResolvedValue({
+            docs: [
+                { id: 'old', data: () => baseAct({ activityId: 'old', startTime: past, endTime: past }) },
+                { id: 'live', data: () => baseAct({ activityId: 'live', startTime: future, endTime: future }) },
+            ],
+        });
+
+        const out = await listDiscoverActivities({
+            limit: 10,
+            viewerUid: 'u-1',
+            discover: { sportFilters: [] },
+        });
+
+        expect(out.map((a) => a.activityId)).toEqual(['live']);
+    });
+
+    it('excludes activities past startTime + 2h fallback when endTime is missing', async () => {
+        const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+        const future = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+        chain.get.mockResolvedValue({
+            docs: [
+                { id: 'stale', data: () => baseAct({ activityId: 'stale', startTime: threeHoursAgo }) },
+                { id: 'live', data: () => baseAct({ activityId: 'live', startTime: future }) },
+            ],
+        });
+
+        const out = await listDiscoverActivities({
+            limit: 10,
+            viewerUid: 'u-1',
+            discover: { sportFilters: [] },
+        });
+
+        expect(out.map((a) => a.activityId)).toEqual(['live']);
+    });
+
+    it('excludes activities the viewer joined without swiping', async () => {
+        mocks.collectionGroup.mockReturnValue({
+            where: vi.fn().mockReturnValue({
+                get: vi.fn().mockResolvedValue({
+                    docs: [
+                        { ref: { path: 'activities/a-joined/participants/u-1' } },
+                    ],
+                }),
+            }),
+        });
+        chain.get.mockResolvedValue({
+            docs: [
+                { id: 'a-joined', data: () => baseAct({ activityId: 'a-joined' }) },
+                { id: 'a-open', data: () => baseAct({ activityId: 'a-open' }) },
+            ],
+        });
+
+        const out = await listDiscoverActivities({
+            limit: 10,
+            viewerUid: 'u-1',
+            discover: { sportFilters: [] },
+        });
+
+        expect(out.map((a) => a.activityId)).toEqual(['a-open']);
     });
 });

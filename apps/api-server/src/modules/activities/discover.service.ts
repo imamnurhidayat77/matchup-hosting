@@ -1,4 +1,5 @@
 import { firestore } from '../../database/firebase.js';
+import { COLLECTIONS, SUBCOLLECTIONS } from '../../database/paths.js';
 import type {
     ActivityWithId,
     ListActivitiesFilters,
@@ -166,6 +167,28 @@ export async function listDiscoverActivities(
         exclude = new Set(swipedIds);
     }
 
+    // Joined without swiping (detail-screen Join button, approved join
+    // requests) leaves no swipe record, so the swipe set above is not
+    // enough. One collection-group query (single-field equality, no
+    // composite index) collects every activity the viewer participates
+    // in. Best-effort: on failure the per-row checks below still apply.
+    try {
+        const partSnap = await firestore
+            .collectionGroup(SUBCOLLECTIONS.participants)
+            .where('uid', '==', viewerUid)
+            .get();
+        for (const doc of partSnap.docs) {
+            const segments = doc.ref.path.split('/');
+            const ai = segments.indexOf(COLLECTIONS.activities);
+            const joinedId = ai >= 0 ? segments[ai + 1] : undefined;
+            if (joinedId) {
+                exclude.add(joinedId);
+            }
+        }
+    } catch {
+        // Fall through — swipe + host + expiry checks still filter.
+    }
+
     const now = Date.now();
     const baseLat = filters.discover.near?.latitude;
     const baseLng = filters.discover.near?.longitude;
@@ -181,6 +204,18 @@ export async function listDiscoverActivities(
 
         const startTimeMs = Date.parse(act.startTime);
         if (Number.isNaN(startTimeMs)) continue;
+
+        // Deterministic expiry gate. The fire-and-forget sweep at the top
+        // doesn't block, so just-ended rows would otherwise leak into the
+        // first response after idle (notably on scale-to-zero hosts where
+        // the interval sweeper never runs). Same rule as the sweeper:
+        // stored endTime, else startTime + 2h mobile default.
+        const parsedEnd =
+            typeof act.endTime === 'string' ? Date.parse(act.endTime) : Number.NaN;
+        const effectiveEndMs = Number.isNaN(parsedEnd)
+            ? startTimeMs + 2 * 60 * 60 * 1000
+            : parsedEnd;
+        if (effectiveEndMs <= now) continue;
 
         const distanceKm =
             baseLat !== undefined && baseLng !== undefined
