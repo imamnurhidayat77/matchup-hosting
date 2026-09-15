@@ -19,7 +19,7 @@ dependencies:
   hive_flutter: ^1.1.0
 
   # Environment variables
-  flutter_dotenv: ^5.2.1
+  flutter_dotenv: ^6.0.1
 
   # State management (lightweight placeholder; can be replaced in MVP)
   flutter_riverpod: ^2.5.1
