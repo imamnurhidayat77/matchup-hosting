@@ -62,6 +62,14 @@ export function activityJoinRequestDocPath(activityId: string, uid: string): str
     return `${activityJoinRequestsCollectionPath(activityId)}/${uid}`;
 }
 
+export function activityAttendanceCollectionPath(activityId: string): string {
+    return `${activityDocPath(activityId)}/attendance`;
+}
+
+export function activityAttendanceDocPath(activityId: string, uid: string): string {
+    return `${activityAttendanceCollectionPath(activityId)}/${uid}`;
+}
+
 export function activityRatingsCollectionPath(activityId: string): string {
     return `${activityDocPath(activityId)}/ratings`;
 }
@@ -99,7 +107,31 @@ export function activityMessagesPath(activityId: string): string {
 }
 
 export function activityMessagePath(activityId: string, messageId: string): string {
-  return `${activityMessagesPath(activityId)}/${messageId}`;
+    return `${activityMessagesPath(activityId)}/${messageId}`;
+}
+
+export function activityReactionsPath(activityId: string): string {
+    return `${activityChatPath(activityId)}/reactions`;
+}
+
+export function activityMessageReactionsPath(activityId: string, messageId: string): string {
+    return `${activityReactionsPath(activityId)}/${messageId}`;
+}
+
+export function activityReactionPath(activityId: string, messageId: string, emoji: string, uid: string): string {
+    return `${activityMessageReactionsPath(activityId, messageId)}/${emoji}/${uid}`;
+}
+
+export function activityPollsPath(activityId: string): string {
+    return `${activityChatPath(activityId)}/polls`;
+}
+
+export function activityPollPath(activityId: string, pollId: string): string {
+    return `${activityPollsPath(activityId)}/${pollId}`;
+}
+
+export function activityPollVotesPath(activityId: string, pollId: string): string {
+    return `${activityPollPath(activityId, pollId)}/votes`;
 }
 
 /**

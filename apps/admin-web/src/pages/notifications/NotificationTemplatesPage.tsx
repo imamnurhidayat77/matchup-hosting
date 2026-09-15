@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNotifTemplates } from '../../hooks/useNotifTemplates';
 import { useToast } from '../../context/ToastContext';
 import { PageSkeleton, PageError, EmptyState, EmptyIcons } from '../../components/ui/PageStates';
-import type { NotifTemplate, TemplateCategory } from '../../data/notifTemplatesDummy';
+import type { NotifTemplate, TemplateCategory } from '../../types/templates';
 
 // ─── Category badge ───────────────────────────────────────────────────────────
 

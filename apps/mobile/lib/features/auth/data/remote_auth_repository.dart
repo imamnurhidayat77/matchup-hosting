@@ -129,6 +129,11 @@ class RemoteAuthRepository implements AuthRepository {
   @override
   Future<void> forgotPassword({required String email}) async {
     try {
+      // Firebase email/password reset is link-based: this sends an email
+      // containing a reset link that opens a Firebase-hosted page where
+      // the user sets a new password. There is no in-app OTP step, so
+      // the app navigates to a "check your email" confirmation screen
+      // after this call succeeds.
       await _fb.post(
         '$_firebaseAuthBase:sendOobCode?key=$_key',
         data: {
@@ -143,26 +148,6 @@ class RemoteAuthRepository implements AuthRepository {
       throw const AuthException(
           'Could not send reset email. Please try again.');
     }
-  }
-
-  @override
-  Future<void> verifyOtp({
-    required String email,
-    required String code,
-  }) async {
-    // Firebase email/password reset uses a link, not a 6-digit OTP.
-    // This is a no-op in the Firebase REST path — kept for interface compat.
-  }
-
-  @override
-  Future<void> resetPassword({
-    required String email,
-    required String newPassword,
-  }) async {
-    // Firebase password reset is done via the link sent in forgotPassword.
-    // If the user has a valid idToken (signed in), we can update directly.
-    // Otherwise this is handled by Firebase on the web side via the reset link.
-    debugPrint('[RemoteAuthRepository.resetPassword] handled via Firebase reset link');
   }
 
   @override

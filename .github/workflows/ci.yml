@@ -26,6 +26,11 @@ jobs:
           cache-dependency-path: apps/admin-web/package-lock.json
       - name: Install dependencies
         run: npm ci --no-audit --no-fund --legacy-peer-deps
+      - name: Audit (fail on high/critical)
+        # Production tree only: devDependency findings (vite/esbuild
+        # dev-server advisories) never ship to browsers — see
+        # docs/security/owasp-top-10.md A06 for the accepted-risk note.
+        run: npm audit --omit=dev --audit-level=high
       - name: Lint
         run: npm run lint
       - name: Build
@@ -46,10 +51,32 @@ jobs:
           cache-dependency-path: apps/api-server/package-lock.json
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
+      - name: Audit (fail on high/critical)
+        # Same production-tree scoping as admin-web (see above).
+        run: npm audit --omit=dev --audit-level=high
       - name: Test
         run: npm test
+      - name: Coverage gate
+        run: npm run test -- --coverage
       - name: Build
         run: npm run build
+
+  security-guard:
+    name: Secrets guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Private keys, service-account files, and env files must never be
+      # tracked — Firebase web API keys in firebase_options.dart /
+      # GoogleService-Info.plist are public client identifiers, not
+      # secrets, so they are deliberately NOT matched here. `*.example`
+      # and `.env.test` hold placeholder key *shapes* (XXXX/TEST), not
+      # key material, and are excluded for the same reason.
+      - name: Fail if secret material is tracked
+        run: |
+          tracked="$(git ls-files | grep -iE '(^|/)\.env$|serviceAccount.*\.json$|\.pem$' || true)"
+          if [ -n "$tracked" ]; then echo "tracked secrets:\n$tracked"; exit 1; fi
+          ! git grep -nE 'BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY' -- . | grep -vE '\.example:|\.env\.test:' || exit 1
 
   mobile:
     name: Mobile
@@ -83,5 +110,14 @@ jobs:
       - name: Analyze
         run: flutter analyze
       - name: Test
-        run: flutter test
+        run: flutter test --coverage
+      # Floor, not goal: measured ~70% lines at introduction. Parses the
+      # lcov output with awk (no extra tooling) so the gate runs on the
+      # stock ubuntu image; raise deliberately when new suites land.
+      - name: Coverage gate (lines >= 65%)
+        run: |
+          read h f <<< $(grep -E '^L[HF]:' coverage/lcov.info | awk -F: '{if($1=="LF")f+=$2; else h+=$2} END {print h, f}')
+          pct=$(awk "BEGIN {printf \"%.2f\", ($f>0 ? 100*$h/$f : 0)}")
+          echo "flutter line coverage: $h/$f = $pct%"
+          awk "BEGIN {exit !(($f>0 ? 100*$h/$f : 0) >= 65)}" || (echo "coverage below floor"; exit 1)
 

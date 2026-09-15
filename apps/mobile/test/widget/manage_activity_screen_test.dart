@@ -21,6 +21,23 @@ void main() {
     when(() => repo.joinRequests(any())).thenAnswer((_) async => []);
     when(() => repo.approveJoinRequest(any(), any())).thenAnswer((_) async {});
     when(() => repo.declineJoinRequest(any(), any())).thenAnswer((_) async {});
+    when(
+      () => repo.updateActivity(
+        activityId: any(named: 'activityId'),
+        title: any(named: 'title'),
+        sportType: any(named: 'sportType'),
+        description: any(named: 'description'),
+        locationName: any(named: 'locationName'),
+        latitude: any(named: 'latitude'),
+        longitude: any(named: 'longitude'),
+        geohash: any(named: 'geohash'),
+        startTime: any(named: 'startTime'),
+        endTime: any(named: 'endTime'),
+        skillLevel: any(named: 'skillLevel'),
+        capacity: any(named: 'capacity'),
+        joinPolicy: any(named: 'joinPolicy'),
+      ),
+    ).thenAnswer((_) async {});
   });
 
   ActivityModel activity({
@@ -41,6 +58,8 @@ void main() {
       hostName: 'Noor Haddad',
       status: status,
       joinPolicy: joinPolicy,
+      latitude: -36.8485,
+      longitude: 174.7633,
     );
   }
 
@@ -257,6 +276,58 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Profile Pending Petra'), findsOneWidget);
+    });
+
+    testWidgets('quick-edit sheet should call updateActivity on save', (
+      tester,
+    ) async {
+      when(() => repo.byId('5')).thenAnswer((_) async => activity());
+      when(() => repo.participants('5')).thenAnswer((_) async => []);
+      when(() => repo.joinRequests('5')).thenAnswer((_) async => []);
+
+      await pumpScreen(tester);
+
+      // Quick-action "Edit" opens the bottom sheet (hero edit button
+      // uses the 'Edit activity' semantics label, so text 'Edit' is unique).
+      await tester.scrollUntilVisible(
+        find.text('Edit'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.text('Edit'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Edit Activity'), findsOneWidget);
+
+      // The full edit sheet is scrollable — bring Save into view first.
+      await tester.scrollUntilVisible(
+        find.text('Save Changes'),
+        300,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.tap(find.text('Save Changes'));
+      await tester.pumpAndSettle();
+
+      verify(
+        () => repo.updateActivity(
+          activityId: '5',
+          title: 'Thursday Night Volleyball',
+          sportType: 'Volleyball',
+          description: '',
+          locationName: 'Eastside Rec Centre',
+          latitude: -36.8485,
+          longitude: 174.7633,
+          geohash: any(named: 'geohash'),
+          startTime: DateTime(2026, 8, 27, 19),
+          endTime: any(named: 'endTime'),
+          skillLevel: 'Intermediate',
+          capacity: 8,
+          joinPolicy: 'open',
+        ),
+      ).called(1);
+      // Sheet dismissed with a success confirmation.
+      expect(find.text('Save Changes'), findsNothing);
+      expect(find.text('Activity updated.'), findsOneWidget);
     });
   });
 }

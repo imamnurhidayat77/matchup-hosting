@@ -1,10 +1,5 @@
 /**
- * API client skeleton.
- *
- * Real implementation (auth header injection, refresh tokens, error
- * normalisation) will be added during the MVP phase. For now, this
- * module exposes a tiny `apiFetch` helper that points at the configured
- * base URL and returns JSON.
+ * API client for the admin backend (Firestore via api-server).
  */
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000';
@@ -21,8 +16,7 @@ export type ApiResponse<T> = ApiSuccess<T> | ApiFailure;
 
 /**
  * Firebase ID token for admin-only routes, stored by the auth service
- * after Firebase sign-in. Attached as a Bearer token when present;
- * mock mode never needs it.
+ * after Firebase sign-in. Attached as a Bearer token when present.
  */
 const ADMIN_TOKEN_KEY = 'admin_id_token';
 
@@ -50,6 +44,33 @@ export function clearAdminIdToken(): void {
   }
 }
 
+// ─── Unauthorized broadcast ─────────────────────────────────────────────────
+// Emitted whenever the backend rejects our token (HTTP 401 / code
+// UNAUTHORIZED — i.e. invalid or expired Firebase ID token). AuthContext
+// subscribes and turns it into an auto logout, so every apiFetch caller
+// gets the behaviour for free without wiring signOut manually.
+
+type UnauthorizedListener = () => void;
+
+const unauthorizedListeners = new Set<UnauthorizedListener>();
+
+export function onUnauthorized(listener: UnauthorizedListener): () => void {
+  unauthorizedListeners.add(listener);
+  return () => {
+    unauthorizedListeners.delete(listener);
+  };
+}
+
+function notifyUnauthorized(): void {
+  for (const listener of unauthorizedListeners) {
+    try {
+      listener();
+    } catch {
+      // A broken listener must never break the API call itself.
+    }
+  }
+}
+
 export async function apiFetch<T>(
   path: string,
   init: RequestInit = {},
@@ -65,7 +86,26 @@ export async function apiFetch<T>(
         ...(init.headers ?? {}),
       },
     });
-    const body = (await response.json()) as ApiResponse<T>;
+    let body: ApiResponse<T>;
+    try {
+      body = (await response.json()) as ApiResponse<T>;
+    } catch {
+      // Non-JSON response (e.g. proxy / gateway error page).
+      if (response.status === 401) notifyUnauthorized();
+      return {
+        ok: false,
+        error: {
+          code: response.status === 401 ? 'UNAUTHORIZED' : 'NETWORK_ERROR',
+          message:
+            response.status === 401
+              ? 'Session expired. Please sign in again.'
+              : `Request failed with status ${response.status}`,
+        },
+      };
+    }
+    if (response.status === 401 || (!body.ok && body.error.code === 'UNAUTHORIZED')) {
+      notifyUnauthorized();
+    }
     return body;
   } catch (err) {
     return {

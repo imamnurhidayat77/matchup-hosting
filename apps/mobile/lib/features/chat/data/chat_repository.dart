@@ -1,4 +1,6 @@
 import '../domain/chat_message.dart';
+import '../domain/chat_poll.dart';
+import '../domain/chat_reaction.dart';
 
 abstract class ChatRepository {
   /// One-shot fetch of all messages in [activityId]. Prefer [watchMessages]
@@ -27,6 +29,41 @@ abstract class ChatRepository {
     required String activityId,
     required double latitude,
     required double longitude,
+  });
+
+  /// Real-time stream of emoji reactions for [activityId], keyed by
+  /// message id (`messageId → emoji → uids`). Same broadcast contract
+  /// as [watchMessages].
+  Stream<MessageReactions> watchReactions(String activityId);
+
+  /// Toggles the current user's [emoji] reaction on one message.
+  /// Returns `true` when the reaction was added, `false` when it was
+  /// removed, `null` when the request failed.
+  Future<bool?> toggleReaction({
+    required String activityId,
+    required String messageId,
+    required String emoji,
+  });
+
+  /// Real-time stream of single-choice polls for [activityId],
+  /// oldest first. Same broadcast contract as [watchMessages].
+  Stream<List<ChatPoll>> watchPolls(String activityId);
+
+  /// Creates a poll with [question] and 2–6 [options].
+  /// Returns the new poll id, or `null` when the request failed.
+  Future<String?> createPoll({
+    required String activityId,
+    required String question,
+    required List<String> options,
+  });
+
+  /// Votes for [optionIndex] (single-choice; voting the same option
+  /// again retracts the vote). Returns the server's `voted` flag,
+  /// or `null` when the request failed.
+  Future<bool?> votePoll({
+    required String activityId,
+    required String pollId,
+    required int optionIndex,
   });
 
   Future<List<ChatConversation>> conversations();

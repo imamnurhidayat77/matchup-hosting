@@ -5,7 +5,8 @@ import { ActivitiesPageSkeleton, PageError, EmptyState, EmptyIcons } from '../..
 import { downloadCsv } from '../../utils/csvExport';
 import { useToast } from '../../context/ToastContext';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
-import type { ActivityStatus } from '../../data/activitiesDummy';
+import { Avatar } from '../../components/ui/Avatar';
+import type { ActivityStatus } from '../../types/activities';
 
 const PAGE_SIZE = 10;
 
@@ -253,7 +254,7 @@ export function ActivitiesPage() {
                   </td>
                   <td className="tbl-td">
                     <div className="flex items-center gap-2">
-                      <img src={`https://api.dicebear.com/8.x/thumbs/svg?seed=${a.hostAvatarSeed}`} alt={a.host} className="h-6 w-6 rounded-full bg-ink-200" />
+                      <Avatar name={a.host} photoUrl={a.photoUrl} seed={a.hostAvatarSeed} className="h-6 w-6 rounded-full" />
                       <span className="text-[13px] font-medium text-ink-700">{a.host}</span>
                     </div>
                   </td>
@@ -306,7 +307,7 @@ export function ActivitiesPage() {
               </div>
               <div className="flex items-center justify-between text-xs text-ink-600">
                 <span className="flex items-center gap-1.5">
-                  <img src={`https://api.dicebear.com/8.x/thumbs/svg?seed=${a.hostAvatarSeed}`} alt={a.host} className="h-5 w-5 rounded-full" />
+                  <Avatar name={a.host} photoUrl={a.photoUrl} seed={a.hostAvatarSeed} className="h-5 w-5 rounded-full" />
                   {a.host}
                 </span>
                 <span>{a.scheduledDate}</span>

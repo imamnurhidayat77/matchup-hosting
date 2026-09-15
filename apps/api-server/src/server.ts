@@ -1,5 +1,7 @@
 import { createApp } from './app/app.js';
 import { env } from './config/env.js';
+import { checkFirestoreConnection } from './database/firebase.js';
+import { firestoreAuthHint, isFirestoreAuthError } from './database/firestore-errors.js';
 import { sweepExpiredActivities } from './modules/activities/activity-lifecycle.service.js';
 
 const app = createApp();
@@ -7,6 +9,21 @@ const app = createApp();
 app.listen(env.PORT, () => {
     console.log(`API listening on port ${env.PORT}`);
 });
+
+// Fail-fast connectivity probe: an invalid/revoked service-account key
+// otherwise surfaces as generic 500s on every route (UNAUTHENTICATED /
+// ACCESS_TOKEN_EXPIRED). Log the actionable hint once at boot.
+checkFirestoreConnection()
+    .then(() => {
+        console.log('[firebase] connectivity check ok');
+    })
+    .catch((error) => {
+        if (isFirestoreAuthError(error)) {
+            console.error(`[firebase] ${firestoreAuthHint()}`);
+        } else {
+            console.error('[firebase] connectivity check failed:', error);
+        }
+    });
 
 // Expiry sweeper — flips past-endTime `open` activities to
 // `completed` (with review nudges) every 5 minutes. The read paths
@@ -21,6 +38,10 @@ setInterval(() => {
             }
         })
         .catch((error) => {
-            console.error('[sweeper] sweep failed:', error);
+            if (isFirestoreAuthError(error)) {
+                console.error(`[sweeper] sweep failed: ${firestoreAuthHint()}`);
+            } else {
+                console.error('[sweeper] sweep failed:', error);
+            }
         });
 }, FIVE_MINUTES_MS);

@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/utils/geohash.dart';
 import '../../../core/utils/geo.dart';
 import '../../../core/utils/share_helper.dart';
 import '../../../core/widgets/app_dialog.dart';
@@ -22,7 +23,10 @@ import '../../../core/widgets/label_badge.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../domain/activity_participant.dart';
+import '../domain/place_suggestion.dart';
 import '../../discovery/domain/activity_model.dart';
+import '../../sports/domain/sport_config.dart';
+import 'widgets/venue_field.dart';
 
 // ─── Data type ───────────────────────────────────────────────────────────────
 
@@ -730,7 +734,7 @@ class _QuickActions extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _EditSheet(activity: activity),
+      builder: (_) => _EditSheet(activityId: activityId, activity: activity),
     );
   }
 
@@ -800,42 +804,231 @@ class _ActionBtn extends StatelessWidget {
 
 // ─── Edit sheet ───────────────────────────────────────────────────────────────
 
-class _EditSheet extends StatefulWidget {
-  const _EditSheet({required this.activity});
+class _EditSheet extends ConsumerStatefulWidget {
+  const _EditSheet({required this.activityId, required this.activity});
+  final String activityId;
   final ActivityModel activity;
 
   @override
-  State<_EditSheet> createState() => _EditSheetState();
+  ConsumerState<_EditSheet> createState() => _EditSheetState();
 }
 
-class _EditSheetState extends State<_EditSheet> {
+class _EditSheetState extends ConsumerState<_EditSheet> {
+  static const _sportOptions = [
+    'Basketball',
+    'Tennis',
+    'Running',
+    'Volleyball',
+    'Football',
+    'Soccer',
+    'Cycling',
+    'Hiking',
+    'Golf',
+    'Swimming',
+  ];
+  static const _skillOptions = [
+    'All Level',
+    'Beginner',
+    'Intermediate',
+    'Advanced',
+  ];
+
   late final TextEditingController _titleCtrl;
-  late final TextEditingController _locationCtrl;
   late final TextEditingController _descCtrl;
+
+  late String _sport;
+  DateTime? _date;
+  int _durationMinutes = 120;
+  PlaceSuggestion? _venue;
+  late int _capacity;
+  late int _minCapacity;
+  late String _skill;
+  late String _joinPolicy;
+  bool _saving = false;
 
   @override
   void initState() {
     super.initState();
-    _titleCtrl = TextEditingController(text: widget.activity.title);
-    _locationCtrl = TextEditingController(text: widget.activity.location);
-    _descCtrl = TextEditingController(text: widget.activity.description);
+    final a = widget.activity;
+    _titleCtrl = TextEditingController(text: a.title);
+    _descCtrl = TextEditingController(text: a.description);
+    _sport = _sportOptions.contains(a.sportType)
+        ? a.sportType
+        : _sportOptions.first;
+    _date = a.dateTime;
+    _durationMinutes = a.durationMinutes;
+    _capacity = a.capacity;
+    _minCapacity = a.participantCount.clamp(2, a.capacity);
+    if (_capacity < _minCapacity) _capacity = _minCapacity;
+    _skill = _skillOptions.contains(a.skillLevel)
+        ? a.skillLevel
+        : _skillOptions.first;
+    _joinPolicy = a.joinPolicy;
+    if (a.latitude != null && a.longitude != null) {
+      _venue = PlaceSuggestion(
+        placeId: 'existing',
+        label: a.location,
+        secondary: '',
+        latitude: a.latitude!,
+        longitude: a.longitude!,
+      );
+    }
   }
 
   @override
   void dispose() {
     _titleCtrl.dispose();
-    _locationCtrl.dispose();
     _descCtrl.dispose();
     super.dispose();
   }
 
+  String? _error() {
+    if (_titleCtrl.text.trim().isEmpty) {
+      return 'Please enter a title.';
+    }
+    if (_venue == null) return 'Please pick a venue on the map.';
+    if (_date == null) return 'Please pick a date and time.';
+    return null;
+  }
+
+  Future<void> _save() async {
+    if (_saving) return;
+    final err = _error();
+    if (err != null) {
+      AppSnackbar.show(
+        context,
+        message: err,
+        variant: AppSnackbarVariant.error,
+      );
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      final venue = _venue!;
+      final start = _date!;
+      await ref.read(activityRepositoryProvider).updateActivity(
+            activityId: widget.activityId,
+            title: _titleCtrl.text.trim(),
+            sportType: _sport,
+            description: _descCtrl.text.trim(),
+            locationName: venue.label,
+            latitude: venue.latitude,
+            longitude: venue.longitude,
+            geohash: geohashEncode(venue.latitude, venue.longitude),
+            startTime: start,
+            endTime: start.add(Duration(minutes: _durationMinutes)),
+            skillLevel: _skill,
+            capacity: _capacity,
+            joinPolicy: _joinPolicy,
+          );
+      ref.invalidate(_manageProvider(widget.activityId));
+      if (!mounted) return;
+      AppSnackbar.show(
+        context,
+        message: 'Activity updated.',
+        variant: AppSnackbarVariant.success,
+      );
+      Navigator.of(context).pop();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      AppSnackbar.show(
+        context,
+        message: 'Could not save changes. Please try again.',
+        variant: AppSnackbarVariant.error,
+      );
+    }
+  }
+
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _date ?? now.add(const Duration(days: 1)),
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 365)),
+    );
+    if (date == null || !mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_date ?? now),
+    );
+    if (time == null) return;
+    setState(() {
+      _date = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    });
+  }
+
+  Future<void> _pickOption({
+    required String title,
+    required List<String> options,
+    required String current,
+    required ValueChanged<String> onSelect,
+  }) async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => Container(
+        decoration: BoxDecoration(
+          color: context.colors.surface,
+          borderRadius:
+              const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.x4,
+          AppSpacing.x3,
+          AppSpacing.x4,
+          AppSpacing.x5 + MediaQuery.of(sheetContext).viewPadding.bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: context.colors.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.x3),
+            Text(title, style: AppTypography.titleMedium(context)),
+            const SizedBox(height: AppSpacing.x2),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: options.length,
+                itemBuilder: (_, i) => ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(options[i]),
+                  trailing: options[i] == current
+                      ? Icon(Icons.check_rounded,
+                          color: context.colors.primaryOnSurface)
+                      : null,
+                  onTap: () => Navigator.of(sheetContext).pop(options[i]),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (selected != null) onSelect(selected);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final maxHeight = MediaQuery.of(context).size.height * 0.92;
     return Padding(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
       child: Container(
+        constraints: BoxConstraints(maxHeight: maxHeight),
         decoration: BoxDecoration(
           color: context.colors.surface,
           borderRadius: const BorderRadius.vertical(
@@ -866,31 +1059,130 @@ class _EditSheetState extends State<_EditSheet> {
             ),
             Text('Edit Activity', style: AppTypography.titleSheet(context)),
             const SizedBox(height: AppSpacing.x4),
-            _SheetField(label: 'TITLE', controller: _titleCtrl),
-            const SizedBox(height: AppSpacing.x3),
-            _SheetField(label: 'LOCATION', controller: _locationCtrl),
-            const SizedBox(height: AppSpacing.x3),
-            _SheetField(
-              label: 'DESCRIPTION',
-              controller: _descCtrl,
-              maxLines: 3,
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _SheetField(label: 'TITLE', controller: _titleCtrl),
+                    const SizedBox(height: AppSpacing.x3),
+                    const _SheetLabel('SPORT'),
+                    _SheetOptionRow(
+                      value: _sport,
+                      onTap: () => _pickOption(
+                        title: 'Sport',
+                        options: pickSportNames(
+                          ref.watch(sportsConfigProvider).valueOrNull ??
+                              const [],
+                          (s) => s.canHost,
+                          _sportOptions,
+                        ),
+                        current: _sport,
+                        onSelect: (v) => setState(() => _sport = v),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.x3),
+                    const _SheetLabel('DATE & TIME'),
+                    _SheetOptionRow(
+                      value: _date == null
+                          ? 'Pick a date'
+                          : DateFormat('EEE, MMM d · h:mm a').format(_date!),
+                      onTap: _pickDate,
+                    ),
+                    const SizedBox(height: AppSpacing.x3),
+                    const _SheetLabel('DURATION'),
+                    _SheetStepper(
+                      value: _formatDuration(_durationMinutes),
+                      onMinus: _durationMinutes > 30
+                          ? () => setState(
+                              () => _durationMinutes -= 15)
+                          : null,
+                      onPlus: _durationMinutes < 480
+                          ? () => setState(
+                              () => _durationMinutes += 15)
+                          : null,
+                    ),
+                    const SizedBox(height: AppSpacing.x3),
+                    VenueField(
+                      value: _venue,
+                      onSuggestionSelected: (s) =>
+                          setState(() => _venue = s),
+                    ),
+                    const SizedBox(height: AppSpacing.x3),
+                    const _SheetLabel('MAX PARTICIPANTS'),
+                    _SheetStepper(
+                      value: '$_capacity players',
+                      onMinus: _capacity > _minCapacity
+                          ? () => setState(() => _capacity -= 1)
+                          : null,
+                      onPlus: _capacity < 50
+                          ? () => setState(() => _capacity += 1)
+                          : null,
+                    ),
+                    const SizedBox(height: AppSpacing.x3),
+                    const _SheetLabel('SKILL LEVEL'),
+                    _SheetOptionRow(
+                      value: _skill,
+                      onTap: () => _pickOption(
+                        title: 'Skill level',
+                        options: _skillOptions,
+                        current: _skill,
+                        onSelect: (v) => setState(() => _skill = v),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.x3),
+                    const _SheetLabel('WHO CAN JOIN'),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _SheetPolicyCard(
+                            title: 'Open',
+                            subtitle: 'Instant join',
+                            selected: _joinPolicy == 'open',
+                            onTap: () =>
+                                setState(() => _joinPolicy = 'open'),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.x3),
+                        Expanded(
+                          child: _SheetPolicyCard(
+                            title: 'Approval',
+                            subtitle: 'Host approves',
+                            selected: _joinPolicy == 'approval',
+                            onTap: () => setState(
+                                () => _joinPolicy = 'approval'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.x3),
+                    _SheetField(
+                      label: 'DESCRIPTION',
+                      controller: _descCtrl,
+                      maxLines: 4,
+                    ),
+                    const SizedBox(height: AppSpacing.x5),
+                  ],
+                ),
+              ),
             ),
-            const SizedBox(height: AppSpacing.x5),
             _SheetPrimaryBtn(
               label: 'Save Changes',
-              onTap: () {
-                AppSnackbar.show(
-                  context,
-                  message: 'Activity updated.',
-                  variant: AppSnackbarVariant.success,
-                );
-                Navigator.of(context).pop();
-              },
+              loading: _saving,
+              onTap: _save,
             ),
           ],
         ),
       ),
     );
+  }
+
+  static String _formatDuration(int minutes) {
+    if (minutes < 60) return '$minutes min';
+    final h = minutes ~/ 60;
+    final m = minutes % 60;
+    if (m == 0) return h == 1 ? '1 hour' : '$h hours';
+    return '$h h $m min';
   }
 }
 
@@ -1290,6 +1582,185 @@ class _SheetField extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _SheetLabel extends StatelessWidget {
+  const _SheetLabel(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Text(
+        text,
+        style: AppTypography.metaSub(context).copyWith(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.8,
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetOptionRow extends StatelessWidget {
+  const _SheetOptionRow({required this.value, required this.onTap});
+  final String value;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return PressableScale(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.x4,
+          vertical: AppSpacing.x3,
+        ),
+        decoration: BoxDecoration(
+          color: context.colors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.input),
+          border: Border.all(color: context.colors.border),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                value,
+                style: AppTypography.bodyMedium(context).copyWith(
+                  color: context.colors.textPrimary,
+                  fontSize: 15,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Icon(
+              Icons.chevron_right_rounded,
+              size: 18,
+              color: context.colors.textTertiary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetStepper extends StatelessWidget {
+  const _SheetStepper({
+    required this.value,
+    required this.onMinus,
+    required this.onPlus,
+  });
+  final String value;
+  final VoidCallback? onMinus;
+  final VoidCallback? onPlus;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.x4,
+        vertical: AppSpacing.x2,
+      ),
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.input),
+        border: Border.all(color: context.colors.border),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              value,
+              style: AppTypography.bodyMedium(context).copyWith(
+                color: context.colors.textPrimary,
+                fontSize: 15,
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: onMinus,
+            child: Container(
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: context.colors.border),
+              ),
+              child: Icon(Icons.remove_rounded,
+                  size: 18, color: context.colors.textPrimary),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.x2),
+          GestureDetector(
+            onTap: onPlus,
+            child: Container(
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: const BoxDecoration(
+                color: AppColors.primary,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.add_rounded,
+                  size: 18, color: AppColors.textOnPrimary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SheetPolicyCard extends StatelessWidget {
+  const _SheetPolicyCard({
+    required this.title,
+    required this.subtitle,
+    required this.selected,
+    required this.onTap,
+  });
+  final String title;
+  final String subtitle;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return PressableScale(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.x3),
+        decoration: BoxDecoration(
+          color:
+              selected ? context.colors.primarySoft : context.colors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.input),
+          border: Border.all(
+            color: selected
+                ? context.colors.primaryOnSurface
+                : context.colors.border,
+            width: selected ? 1.5 : 1,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: AppTypography.labelField(context).copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(subtitle, style: AppTypography.metaSub(context)),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -49,7 +49,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
         email: _emailController.text.trim(),
       );
       if (!mounted) return;
-      context.push('/otp-verification', extra: _emailController.text.trim());
+      context.push('/reset-link-sent', extra: _emailController.text.trim());
     } catch (e) {
       if (!mounted) return;
       AppSnackbar.show(
@@ -139,7 +139,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
                     ),
                     const SizedBox(height: AppSpacing.x2),
                     Text(
-                      "Enter your email address and we'll send a 6-digit verification code to reset your password.",
+                      "Enter your email address and we'll send you a link to reset your password.",
                       style: AppTypography.bodyFormSecondary(context),
                     ),
                     const SizedBox(height: AppSpacing.x5),
@@ -183,7 +183,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
                                   ),
                                 ),
                               )
-                            : Text('Send Code', style: AppTypography.buttonPrimary),
+                            : Text('Send Reset Link', style: AppTypography.buttonPrimary),
                       ),
                     ),
                     const SizedBox(height: AppSpacing.x4),

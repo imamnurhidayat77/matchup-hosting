@@ -20,8 +20,6 @@ matchup/
 │   ├── mobile/                  # Flutter mobile app
 │   ├── admin-web/               # React + Tailwind admin dashboard
 │   └── api-server/              # Node.js + Express backend (Firebase)
-│       # NOTE: `apps/api/` is a dead leftover (build output only, no source).
-│       # The live backend is `apps/api-server/`. Safe to delete `apps/api/`.
 ├── packages/
 │   ├── shared-types/            # shared enums, DTO placeholders, constants
 │   ├── shared-config/           # eslint, prettier, tsconfig, conventions
@@ -184,7 +182,7 @@ flutter doctor
 Use `--legacy-peer-deps`:
 
 ```bash
-cd apps/api && npm install --legacy-peer-deps
+cd apps/api-server && npm install --legacy-peer-deps
 ```
 
 ### Port 4000 or 5173 already in use
@@ -195,7 +193,7 @@ Stop any running services:
 ./run.sh stop
 ```
 
-Or override ports in `apps/api/.env` and `apps/admin-web/.env`.
+Or override ports in `apps/api-server/.env` and `apps/admin-web/.env`.
 
 ### API health returns `DB_UNAVAILABLE`
 

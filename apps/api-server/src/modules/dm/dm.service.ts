@@ -129,14 +129,23 @@ export async function sendDmMessage(
         recipientUid: peer,
         type: 'dm_message',
         title: `New message from ${senderName}`,
-        body:
-            normalizedText.length > 100
-                ? `${normalizedText.slice(0, 100)}…`
-                : normalizedText,
+        body: dmPreviewBody(normalizedText),
         senderUid: me,
     }).catch(() => undefined);
 
     return { messageId: newMessageRef.key as string, conversationId };
+}
+
+/**
+ * Push/inbox preview: never leak a raw Storage URL or maps link into a
+ * notification body. Mirrors the mobile `ChatMessage.previewText` and
+ * `parseSharedLocation` conventions (same wire format).
+ */
+export function dmPreviewBody(text: string): string {
+    const trimmed = text.trim();
+    if (trimmed.startsWith('📍 Shared location:')) return '📍 Shared location';
+    if (/^https?:\/\/\S+$/.test(trimmed)) return '📷 Photo';
+    return trimmed.length > 100 ? `${trimmed.slice(0, 100)}…` : trimmed;
 }
 
 export type DmConversationView = {

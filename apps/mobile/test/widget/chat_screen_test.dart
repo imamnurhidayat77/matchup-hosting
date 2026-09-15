@@ -12,6 +12,7 @@ import 'package:matchup_mobile/features/activities/domain/activity_participant.d
 import 'package:matchup_mobile/features/chat/data/chat_repository.dart';
 import 'package:matchup_mobile/features/chat/data/typing_repository.dart';
 import 'package:matchup_mobile/features/chat/domain/chat_message.dart';
+import 'package:matchup_mobile/features/chat/domain/chat_poll.dart';
 import 'package:matchup_mobile/features/chat/presentation/chat_screen.dart';
 import 'package:matchup_mobile/features/discovery/data/activity_repository.dart';
 
@@ -75,6 +76,12 @@ void main() {
     when(
       () => repo.watchMessages(any()),
     ).thenAnswer((_) => Stream.value(const <ChatMessage>[]));
+    when(
+      () => repo.watchReactions(any()),
+    ).thenAnswer((_) => Stream.value(const <String, Map<String, List<String>>>{}));
+    when(
+      () => repo.watchPolls(any()),
+    ).thenAnswer((_) => Stream.value(const <ChatPoll>[]));
     when(
       () => activityRepo.byId(any()),
     ).thenAnswer((_) async => testActivity());
@@ -258,8 +265,7 @@ void main() {
       expect(find.text('Report activity'), findsOneWidget);
     });
 
-    testWidgets(
-      'should hide the Check In button outside the check-in window',
+    testWidgets('should hide the Check In button outside the check-in window',
       (tester) async {
         // Default testActivity starts tomorrow — far outside the window.
         await pumpScreen(tester);
@@ -267,5 +273,189 @@ void main() {
         expect(find.text('Check In'), findsNothing);
       },
     );
+
+    testWidgets('should render a photo message inline, not as raw text', (
+      tester,
+    ) async {
+      final today = DateTime.now();
+      when(() => repo.watchMessages(any())).thenAnswer(
+        (_) => Stream.value([
+          ChatMessage(
+            id: 'img-1',
+            senderId: 'alex',
+            senderName: 'Alex',
+            // Backend shape: the download URL travels as the text.
+            text: 'https://firebasestorage.googleapis.com/v0/b/app/o/x?alt=media',
+            sentAt: DateTime(today.year, today.month, today.day, 9, 0),
+            imageUrl:
+                'https://firebasestorage.googleapis.com/v0/b/app/o/x?alt=media',
+          ),
+        ]),
+      );
+
+      await pumpScreen(tester);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // The raw URL must never leak into the bubble as text.
+      expect(
+        find.text(
+          'https://firebasestorage.googleapis.com/v0/b/app/o/x?alt=media',
+        ),
+        findsNothing,
+      );
+      // The bubble renders an image (network fetch fails in tests, so
+      // the broken-image fallback proves the image branch was taken).
+      expect(find.byIcon(Icons.broken_image_outlined), findsOneWidget);
+    });
+
+    testWidgets('should render reaction chips under a reacted bubble', (
+      tester,
+    ) async {
+      final today = DateTime.now();
+      when(() => repo.watchMessages(any())).thenAnswer(
+        (_) => Stream.value([
+          ChatMessage(
+            id: '1',
+            senderId: 'alex',
+            senderName: 'Alex',
+            text: 'Hey there',
+            sentAt: DateTime(today.year, today.month, today.day, 9, 0),
+          ),
+        ]),
+      );
+      when(() => repo.watchReactions(any())).thenAnswer(
+        (_) => Stream.value(const {
+          '1': {
+            '🔥': ['alex', 'me'],
+            '👍': ['alex'],
+          },
+        }),
+      );
+
+      await pumpScreen(tester);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('🔥 2'), findsOneWidget);
+      expect(find.text('👍 1'), findsOneWidget);
+    });
+
+    testWidgets('should call toggleReaction when an emoji is picked', (
+      tester,
+    ) async {      final today = DateTime.now();
+      when(() => repo.watchMessages(any())).thenAnswer(
+        (_) => Stream.value([
+          ChatMessage(
+            id: '1',
+            senderId: 'alex',
+            senderName: 'Alex',
+            text: 'Hey there',
+            sentAt: DateTime(today.year, today.month, today.day, 9, 0),
+          ),
+        ]),
+      );
+      when(
+        () => repo.toggleReaction(
+          activityId: any(named: 'activityId'),
+          messageId: any(named: 'messageId'),
+          emoji: any(named: 'emoji'),
+        ),
+      ).thenAnswer((_) async => true);
+
+      await pumpScreen(tester);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.longPress(find.text('Hey there'));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // Reaction picker sheet offers the closed emoji set.
+      expect(find.text('🔥'), findsWidgets);
+
+      await tester.tap(find.text('🔥').last);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      verify(
+        () => repo.toggleReaction(
+          activityId: 'Test Group',
+          messageId: '1',
+          emoji: '🔥',
+        ),
+      ).called(1);
+    });
+
+    ChatPoll testPoll() {
+      final today = DateTime.now();
+      return ChatPoll(
+        pollId: 'p1',
+        question: 'What time shall we play?',
+        options: const ['4 PM', '5 PM'],
+        createdBy: 'alex',
+        createdAt: DateTime(today.year, today.month, today.day, 9, 5),
+        votes: const {
+          0: ['alex'],
+        },
+      );
+    }
+
+    testWidgets('should render a poll inline with options and vote shares', (
+      tester,
+    ) async {
+      final today = DateTime.now();
+      when(() => repo.watchMessages(any())).thenAnswer(
+        (_) => Stream.value([
+          ChatMessage(
+            id: '1',
+            senderId: 'alex',
+            senderName: 'Alex',
+            text: 'Hey there',
+            sentAt: DateTime(today.year, today.month, today.day, 9, 0),
+          ),
+        ]),
+      );
+      when(() => repo.watchPolls(any())).thenAnswer(
+        (_) => Stream.value([testPoll()]),
+      );
+
+      await pumpScreen(tester);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('What time shall we play?'), findsOneWidget);
+      expect(find.text('4 PM'), findsOneWidget);
+      expect(find.text('5 PM'), findsOneWidget);
+      expect(find.text('100%'), findsOneWidget);
+      expect(find.text('0%'), findsOneWidget);
+      expect(find.text('1 vote · tap to vote'), findsOneWidget);
+    });
+
+    testWidgets('should call votePoll when a poll option is tapped', (
+      tester,
+    ) async {
+      when(() => repo.watchMessages(any())).thenAnswer(
+        (_) => Stream.value(const <ChatMessage>[]),
+      );
+      when(() => repo.watchPolls(any())).thenAnswer(
+        (_) => Stream.value([testPoll()]),
+      );
+      when(
+        () => repo.votePoll(
+          activityId: any(named: 'activityId'),
+          pollId: any(named: 'pollId'),
+          optionIndex: any(named: 'optionIndex'),
+        ),
+      ).thenAnswer((_) async => true);
+
+      await pumpScreen(tester);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.text('5 PM'));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      verify(
+        () => repo.votePoll(
+          activityId: 'Test Group',
+          pollId: 'p1',
+          optionIndex: 1,
+        ),
+      ).called(1);
+    });
   });
 }

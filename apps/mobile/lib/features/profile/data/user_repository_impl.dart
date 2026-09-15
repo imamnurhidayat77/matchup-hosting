@@ -55,6 +55,13 @@ class LocalUserRepository implements UserRepository {
   }
 }
 
+/// Null when [value] is null/blank, otherwise the trimmed value.
+/// Keeps blank photo URLs from masquerading as real avatars.
+String? _nonEmpty(String? value) {
+  final v = value?.trim();
+  return v == null || v.isEmpty ? null : v;
+}
+
 /// Normalises a UI skill label ('Beginner') to the backend wire value
 /// ('beginner'). Returns null when there is no usable level, so the
 /// caller can omit it instead of persisting a bogus value.
@@ -241,8 +248,7 @@ class RemoteUserRepository implements UserRepository {
   }
 
   UserModel? _parse(Map<String, dynamic>? json) {
-    if (json == null) return null;
-    // Backend returns `preferredSports` as a list of sport-name strings
+    if (json == null) return null;    // Backend returns `preferredSports` as a list of sport-name strings
     // plus `sportSkillLevels` (`{ Tennis: 'intermediate' }`) with the
     // per-sport wire levels. The mobile model expects a list of
     // `(sport, level)` records where level is used to render the
@@ -276,7 +282,17 @@ class RemoteUserRepository implements UserRepository {
           json['display_name'] as String? ??
           '',
       avatarAsset: json['avatar_asset'] as String?,
-      avatarUrl: json['avatarUrl'] as String? ?? json['avatar_url'] as String?,
+      // Backend user docs carry the photo under `photoUrl`
+      // (`UserRecord.photoUrl`); `avatarUrl` variants are kept for
+      // older payloads so cached/offline shapes keep working. Empty
+      // strings normalise to null so the UI falls back to initials
+      // instead of attempting a broken image load.
+      avatarUrl: _nonEmpty(
+        json['avatarUrl'] as String? ??
+            json['avatar_url'] as String? ??
+            json['photoUrl'] as String? ??
+            json['photo_url'] as String?,
+      ),
       rating: (json['rating'] as num?)?.toDouble(),
       bio: json['bio'] as String?,
       location: (json['preferredLocations'] as List?)?.isNotEmpty == true

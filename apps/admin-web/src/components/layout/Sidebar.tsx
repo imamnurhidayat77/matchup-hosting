@@ -1,6 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { cn } from '../../utils/cn';
 import { useAuth } from '../../context/AuthContext';
+import { Avatar } from '../ui/Avatar';
 import { useTheme } from '../../context/ThemeContext';
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -88,9 +89,9 @@ const NAV_ITEMS = [
   { to: '/',           label: 'Dashboard',  icon: <IconDashboard />, end: true  },
   { to: '/members',    label: 'Members',    icon: <IconUsers />                  },
   { to: '/activities',             label: 'Activities',    icon: <IconCalendar />               },
-  { to: '/reports',                label: 'Reports',       icon: <IconBell />,   badge: '14'    },
+  { to: '/reports',                label: 'Reports',       icon: <IconBell />                  },
   { to: '/broadcasts',             label: 'Broadcasts',    icon: <IconAirplay />                },
-  { to: '/appeals',                label: 'Appeals',       icon: <IconAppeals />, badge: '2'    },
+  { to: '/appeals',                label: 'Appeals',       icon: <IconAppeals />                },
   { to: '/sports',                 label: 'Sports',        icon: <IconSports />                 },
   { to: '/analytics',              label: 'Analytics',     icon: <IconChart />                  },
   { to: '/notification-templates', label: 'Notif Templates', icon: <IconTemplate />             },
@@ -163,11 +164,6 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                   {item.icon}
                 </span>
                 <span className="flex-1">{item.label}</span>
-                {'badge' in item && item.badge && (
-                  <span className="flex h-[17px] min-w-[28px] items-center justify-center rounded-full bg-danger-500 px-1.5 text-[11px] font-semibold text-white">
-                    {item.badge}
-                  </span>
-                )}
               </span>
             )}
           </NavLink>
@@ -180,10 +176,11 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         style={{ borderColor: colors.border }}
       >
         <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full bg-ink-200">
-          <img
-            src={`https://api.dicebear.com/8.x/thumbs/svg?seed=${user && typeof user === 'object' ? user.avatarSeed : 'Devon'}`}
-            alt="Avatar"
-            className="h-full w-full object-cover"
+          <Avatar
+            name={user && typeof user === 'object' ? user?.name ?? 'Admin' : 'Admin'}
+            photoUrl={user && typeof user === 'object' ? user.photoUrl : undefined}
+            seed={user && typeof user === 'object' ? user.avatarSeed : undefined}
+            className="h-9 w-9 rounded-full"
           />
         </div>
         <div className="min-w-0 flex-1">

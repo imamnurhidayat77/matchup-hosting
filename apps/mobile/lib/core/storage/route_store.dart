@@ -23,8 +23,7 @@ class RouteStore {
     '/login',
     '/register',
     '/forgot-password',
-    '/otp-verification',
-    '/new-password',
+    '/reset-link-sent',
   };
 
   Future<void> save(String location) async {

@@ -17,10 +17,15 @@ const EnvSchema = z.object({
   FIREBASE_STORAGE_BUCKET: z
     .string()
     .regex(/^[a-z0-9][a-z0-9._-]*[a-z0-9]$/, 'FIREBASE_STORAGE_BUCKET must be a valid bucket name'),
-  // Comma-separated Firebase auth uids allowed onto admin-only routes
-  // (report triage). Empty = nobody is admin. Team members add their
-  // uid here; no console custom-claims step needed for the demo.
+  // Bootstrap admin allowlist (comma-separated Firebase auth uids).
+  // The primary admin source is the Firestore `admins` collection
+  // (doc id = uid — see requireAdmin); this env fallback exists so the
+  // very first admin can be set before any DB row exists. Empty = nobody
+  // via env (DB grants still apply).
   ADMIN_UIDS: z.string().default(''),
+  // Browser origins allowed to call the API (comma-separated).
+  // Empty = none configured (app.ts keeps the permissive default and warns).
+  CORS_ORIGINS: z.string().default(''),
 });
 
 const parsed = EnvSchema.safeParse(process.env);
@@ -35,6 +40,13 @@ export const env = parsed.data;
 /** Firebase auth uids allowed onto admin-only routes. */
 export function adminUids(): string[] {
     return env.ADMIN_UIDS.split(',')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+}
+
+/** Browser origins allowed by CORS. Empty = not configured. */
+export function corsOrigins(): string[] {
+    return env.CORS_ORIGINS.split(',')
         .map((s) => s.trim())
         .filter((s) => s.length > 0);
 }

@@ -22,12 +22,29 @@ import '../domain/user_model.dart';
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
 class PlayerProfileScreen extends ConsumerWidget {
-  const PlayerProfileScreen({super.key, required this.playerName});
+  /// Opens by display name (legacy callers: activity screens). Falls
+  /// back to an exact-name lookup on the backend — names are not
+  /// unique, so prefer [PlayerProfileScreen.byUid] when the auth uid
+  /// is known (e.g. from personal chat).
+  const PlayerProfileScreen({super.key, required this.playerName})
+    : userId = null;
+
+  /// Opens by auth uid — exact, URL-safe, and unambiguous.
+  const PlayerProfileScreen.byUid({super.key, required this.userId})
+    : playerName = '';
+
+  /// Display-name lookup key (legacy route `/player-profile/:name`).
   final String playerName;
+
+  /// Auth-uid lookup key (route `/player-profile/uid/:uid`). When
+  /// set, this wins over [playerName].
+  final String? userId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final playerAsync = ref.watch(playerProfileProvider(playerName));
+    final lookupKey =
+        (userId != null && userId!.isNotEmpty) ? userId! : playerName;
+    final playerAsync = ref.watch(playerProfileProvider(lookupKey));
 
     return AppScaffold(
       showHomeIndicator: false, // inside ShellRoute — AppShell draws its own.
@@ -35,7 +52,7 @@ class PlayerProfileScreen extends ConsumerWidget {
         loading: () => const SkeletonList(count: 6),
         error: (_, _) => ErrorRetry(
           message: 'Could not load profile.',
-          onRetry: () => ref.invalidate(playerProfileProvider(playerName)),
+          onRetry: () => ref.invalidate(playerProfileProvider(lookupKey)),
         ),
         data: (user) {
           if (user == null) {

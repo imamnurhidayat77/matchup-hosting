@@ -1,10 +1,13 @@
 # Admin API Contract (`/api/admin/*`)
 
 Admin-web ↔ api-server contract for the moderation dashboard. All routes
-require a Firebase ID token **and** an allowlisted uid (`ADMIN_UIDS`):
+require a Firebase ID token **and** admin rights:
 `401 UNAUTHORIZED` without a token, `403 FORBIDDEN` for non-admins or
 suspended accounts. Envelope is always `{ ok: true, data }` or
 `{ ok: false, error: { code, message } }`.
+
+> Admin source: Firestore `admins/{uid}` doc (managed in Firebase
+> Console, no restart) with `ADMIN_UIDS` env as bootstrap fallback.
 
 > Namespace note: there is deliberately **no `/v1`** — the backend never
 > had versioning (`/api/*` everywhere). The old `/api/v1/admin/*` paths in

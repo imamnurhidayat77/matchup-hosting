@@ -5,6 +5,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_client.dart';
+import '../../../core/services/rtdb_auth_service.dart';
 import '../../../core/storage/secure_token_store.dart';
 import '../domain/presence_state.dart';
 import 'local_presence_repository.dart';
@@ -68,6 +69,12 @@ class RemotePresenceRepository implements PresenceRepository {
   Future<void> _armOfflineOnDisconnect() async {
     try {
       if (Firebase.apps.isEmpty) return;
+      // The RTDB rule only allows an authenticated user to write their
+      // own `presence/$uid` node (`auth.uid == $uid`). The app signs
+      // into the SDK via custom token (see RtdbAuthService), but the
+      // REST auth flow leaves the SDK anonymous until then — arming
+      // without a signed-in user always fails with permission-denied.
+      await RtdbAuthService.instance.ensureSignedIn();
       final uid = await SecureTokenStore.instance.readUserId();
       if (uid == null || uid.isEmpty) return;
       await FirebaseDatabase.instance

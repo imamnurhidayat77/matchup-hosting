@@ -44,6 +44,24 @@ class _FakeDmRepo implements DmRepository {
   Future<void> markRead(String otherUid) async {}
 
   @override
+  Future<ChatMessage> sendImage({
+    required String otherUid,
+    required String imagePath,
+  }) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<ChatMessage> sendLocation({
+    required String otherUid,
+    required double latitude,
+    required double longitude,
+  }) async {
+    throw UnimplementedError();
+  }
+
+
+  @override
   Future<ChatMessage> send({required String otherUid, required String text}) async {
     sent.add(text);
     final m = ChatMessage(
@@ -173,6 +191,59 @@ void main() {
     // falls back to initials when the photo can't load in tests.
     expect(find.text('Sam Rivera'), findsOneWidget);
     expect(find.text('SR'), findsOneWidget);
+  });
+
+  testWidgets('settings sheet offers view profile and report user',
+      (tester) async {
+    await _pump(tester, _FakeDmRepo());
+
+    await tester.tap(find.bySemanticsLabel('Conversation settings'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('View profile'), findsOneWidget);
+    expect(find.text('Report Sam Rivera'), findsOneWidget);
+  });
+
+  testWidgets('renders photo and location bubbles', (tester) async {
+    // Mirrors what RemoteDmRepository produces when parsing the
+    // text wire format (image URL / maps link inside `text`).
+    final photo = ChatMessage(
+      id: 'm-1',
+      senderId: 'u-9',
+      senderName: 'Sam',
+      text: 'https://example.com/uploads/photo.jpg',
+      sentAt: DateTime.now(),
+      imageUrl: 'https://example.com/uploads/photo.jpg',
+    );
+    final location = ChatMessage(
+      id: 'm-2',
+      senderId: 'me',
+      senderName: 'You',
+      text: '📍 Shared location: https://maps.google.com/?q=-36.85,174.76',
+      sentAt: DateTime.now(),
+      isMine: true,
+      latitude: -36.85,
+      longitude: 174.76,
+    );
+    await _pump(tester, _FakeDmRepo(seed: [photo, location]));
+
+    // Photo bubble shows the network image; location bubble shows the
+    // map card instead of the raw link.
+    final photoImage = find.byWidgetPredicate(
+      (w) =>
+          w is Image &&
+          w.image is NetworkImage &&
+          (w.image as NetworkImage).url ==
+              'https://example.com/uploads/photo.jpg',
+    );
+    expect(photoImage, findsOneWidget);
+    expect(find.text('My Location'), findsOneWidget);
+    expect(find.text('Tap to open in Maps'), findsOneWidget);
+    expect(
+      find.textContaining('maps.google.com'),
+      findsNothing,
+    );
   });
 }
 

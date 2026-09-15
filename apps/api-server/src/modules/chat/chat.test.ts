@@ -5,6 +5,12 @@ vi.mock('./chat.service.js', () => {
     return {
         sendMessage: vi.fn().mockResolvedValue({ messageId: 'msg-1' }),
         getMessages: vi.fn(),
+        toggleReaction: vi.fn().mockResolvedValue({ reacted: true }),
+        getReactions: vi.fn().mockResolvedValue({}),
+        getMessageReactions: vi.fn().mockResolvedValue({}),
+        createPoll: vi.fn().mockResolvedValue({ pollId: 'poll-1' }),
+        getPolls: vi.fn().mockResolvedValue([]),
+        votePoll: vi.fn().mockResolvedValue({ voted: true }),
     };
 });
 
@@ -85,11 +91,12 @@ describe('chat routes', () => {
             });
 
             expect(response.status).toBe(400);
-            expect(response.body).toEqual({
+            expect(response.body).toMatchObject({
                 ok: false,
                 error: {
                     code: 'INVALID_INPUT',
-                    message: 'activityId and text must be strings',
+                    message: 'Invalid request body',
+                    details: { activityId: expect.any(Array) },
                 },
             });
         });
@@ -104,11 +111,12 @@ describe('chat routes', () => {
             });
 
             expect(response.status).toBe(400);
-            expect(response.body).toEqual({
+            expect(response.body).toMatchObject({
                 ok: false,
                 error: {
                     code: 'INVALID_INPUT',
-                    message: 'activityId and text must be strings',
+                    message: 'Invalid request body',
+                    details: { text: expect.any(Array) },
                 },
             });
         });
@@ -123,11 +131,12 @@ describe('chat routes', () => {
             });
 
             expect(response.status).toBe(400);
-            expect(response.body).toEqual({
+            expect(response.body).toMatchObject({
                 ok: false,
                 error: {
                     code: 'INVALID_INPUT',
-                    message: 'type must be text or system',
+                    message: 'Invalid request body',
+                    details: { type: expect.any(Array) },
                 },
             });
         });
@@ -141,17 +150,36 @@ describe('chat routes', () => {
                 name: 'text is blank',
                 body: { activityId: 'activity-1', text: '   ', type: 'text' },
             },
-        ])('when $name => expected 400 w/ EMPTY_INPUT', async ({ body }) => {
+        ])('when $name => expected 400 w/ INVALID_INPUT', async ({ body }) => {
             const app = createApp();
 
             const response = await request(app).post('/api/chat/messages').send(body);
 
             expect(response.status).toBe(400);
-            expect(response.body).toEqual({
+            expect(response.body).toMatchObject({
                 ok: false,
                 error: {
-                    code: 'EMPTY_INPUT',
-                    message: 'activityId and text are required',
+                    code: 'INVALID_INPUT',
+                    message: 'Invalid request body',
+                },
+            });
+        });
+
+        it('when text exceeds 2000 chars => expected 400 w/ INVALID_INPUT', async () => {
+            const app = createApp();
+
+            const response = await request(app).post('/api/chat/messages').send({
+                activityId: 'activity-1',
+                text: 'x'.repeat(2001),
+                type: 'text',
+            });
+
+            expect(response.status).toBe(400);
+            expect(response.body).toMatchObject({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    details: { text: expect.any(Array) },
                 },
             });
         });
@@ -349,4 +377,306 @@ describe('chat routes', () => {
             expect(chatService.getMessages).not.toHaveBeenCalled();
         });
     })
+
+    describe('POST /api/chat/:activityId/messages/:messageId/reactions', () => {
+        beforeEach(() => {
+            vi.clearAllMocks();
+        });
+
+        it('when emoji is supported => expected 200 with reacted flag', async () => {
+            vi.mocked(chatService.toggleReaction).mockResolvedValueOnce({ reacted: true });
+
+            const app = createApp();
+
+            const response = await request(app)
+                .post('/api/chat/activity-1/messages/msg-1/reactions')
+                .send({ emoji: '🔥' });
+
+            expect(response.status).toBe(200);
+            expect(response.body).toEqual({
+                ok: true,
+                data: { reacted: true },
+            });
+            expect(chatService.toggleReaction).toHaveBeenCalledWith(
+                'activity-1',
+                'msg-1',
+                'test-uid-1',
+                '🔥',
+            );
+        });
+
+        it('when emoji is not in the allowlist => expected 400 w/ INVALID_INPUT', async () => {
+            const app = createApp();
+
+            const response = await request(app)
+                .post('/api/chat/activity-1/messages/msg-1/reactions')
+                .send({ emoji: 'not-an-emoji' });
+
+            expect(response.status).toBe(400);
+            expect(response.body).toMatchObject({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    details: { emoji: expect.any(Array) },
+                },
+            });
+            expect(chatService.toggleReaction).not.toHaveBeenCalled();
+        });
+
+        it('when message does not exist => expected 404 w/ NOT_FOUND', async () => {
+            vi.mocked(chatService.toggleReaction).mockRejectedValueOnce(
+                new Error('Message not found'),
+            );
+
+            const app = createApp();
+
+            const response = await request(app)
+                .post('/api/chat/activity-1/messages/missing/reactions')
+                .send({ emoji: '👍' });
+
+            expect(response.status).toBe(404);
+            expect(response.body).toEqual({
+                ok: false,
+                error: {
+                    code: 'NOT_FOUND',
+                    message: 'Message not found',
+                },
+            });
+        });
+
+        it('when authenticated user is not host or participant => expected 403 w/ FORBIDDEN', async () => {
+            vi.mocked(activityParticipantsService.canAccessActivityChat).mockResolvedValueOnce(false);
+
+            const app = createApp();
+
+            const response = await request(app)
+                .post('/api/chat/activity-1/messages/msg-1/reactions')
+                .send({ emoji: '👍' });
+
+            expect(response.status).toBe(403);
+            expect(chatService.toggleReaction).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('GET /api/chat/:activityId/reactions', () => {
+        beforeEach(() => {
+            vi.clearAllMocks();
+        });
+
+        it('when reactions exist => expected 200', async () => {
+            vi.mocked(chatService.getReactions).mockResolvedValueOnce({
+                'msg-1': { '🔥': ['test-uid-1', 'uid-2'] },
+            });
+
+            const app = createApp();
+
+            const response = await request(app).get('/api/chat/activity-1/reactions');
+
+            expect(response.status).toBe(200);
+            expect(response.body).toEqual({
+                ok: true,
+                data: { 'msg-1': { '🔥': ['test-uid-1', 'uid-2'] } },
+            });
+        });
+
+        it('when messageId is given => expected 200 with that message reactions', async () => {
+            vi.mocked(chatService.getMessageReactions).mockResolvedValueOnce({
+                '👍': ['test-uid-1'],
+            });
+
+            const app = createApp();
+
+            const response = await request(app).get(
+                '/api/chat/activity-1/messages/msg-1/reactions',
+            );
+
+            expect(response.status).toBe(200);
+            expect(response.body).toEqual({
+                ok: true,
+                data: { '👍': ['test-uid-1'] },
+            });
+            expect(chatService.getMessageReactions).toHaveBeenCalledWith(
+                'activity-1',
+                'msg-1',
+            );
+            expect(chatService.getReactions).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('POST /api/chat/:activityId/polls', () => {
+        beforeEach(() => {
+            vi.clearAllMocks();
+        });
+
+        it('when question + options are valid => expected 201', async () => {
+            vi.mocked(chatService.createPoll).mockResolvedValueOnce({ pollId: 'poll-1' });
+
+            const app = createApp();
+
+            const response = await request(app)
+                .post('/api/chat/activity-1/polls')
+                .send({ question: 'What time shall we play?', options: ['4 PM', '5 PM'] });
+
+            expect(response.status).toBe(201);
+            expect(response.body).toEqual({
+                ok: true,
+                data: { pollId: 'poll-1' },
+            });
+            expect(chatService.createPoll).toHaveBeenCalledWith(
+                'activity-1',
+                'test-uid-1',
+                'What time shall we play?',
+                ['4 PM', '5 PM'],
+            );
+        });
+
+        it.each([
+            {
+                name: 'fewer than 2 options',
+                body: { question: 'Q?', options: ['Only one'] },
+            },
+            {
+                name: 'blank question',
+                body: { question: '   ', options: ['A', 'B'] },
+            },
+            {
+                name: 'more than 6 options',
+                body: { question: 'Q?', options: ['1', '2', '3', '4', '5', '6', '7'] },
+            },
+        ])('when $name => expected 400 w/ INVALID_INPUT', async ({ body }) => {
+            const app = createApp();
+
+            const response = await request(app)
+                .post('/api/chat/activity-1/polls')
+                .send(body);
+
+            expect(response.status).toBe(400);
+            expect(response.body).toMatchObject({
+                ok: false,
+                error: { code: 'INVALID_INPUT' },
+            });
+            expect(chatService.createPoll).not.toHaveBeenCalled();
+        });
+
+        it('when authenticated user is not host or participant => expected 403 w/ FORBIDDEN', async () => {
+            vi.mocked(activityParticipantsService.canAccessActivityChat).mockResolvedValueOnce(false);
+
+            const app = createApp();
+
+            const response = await request(app)
+                .post('/api/chat/activity-1/polls')
+                .send({ question: 'Q?', options: ['A', 'B'] });
+
+            expect(response.status).toBe(403);
+            expect(chatService.createPoll).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('GET /api/chat/:activityId/polls', () => {
+        beforeEach(() => {
+            vi.clearAllMocks();
+        });
+
+        it('when polls exist => expected 200', async () => {
+            vi.mocked(chatService.getPolls).mockResolvedValueOnce([
+                {
+                    pollId: 'poll-1',
+                    question: 'What time shall we play?',
+                    options: ['4 PM', '5 PM'],
+                    createdBy: 'test-uid-1',
+                    createdAt: 1787000000000,
+                    votes: { '0': ['test-uid-1'] },
+                },
+            ]);
+
+            const app = createApp();
+
+            const response = await request(app).get('/api/chat/activity-1/polls');
+
+            expect(response.status).toBe(200);
+            expect(response.body).toEqual({
+                ok: true,
+                data: [
+                    {
+                        pollId: 'poll-1',
+                        question: 'What time shall we play?',
+                        options: ['4 PM', '5 PM'],
+                        createdBy: 'test-uid-1',
+                        createdAt: 1787000000000,
+                        votes: { '0': ['test-uid-1'] },
+                    },
+                ],
+            });
+        });
+    });
+
+    describe('POST /api/chat/:activityId/polls/:pollId/votes', () => {
+        beforeEach(() => {
+            vi.clearAllMocks();
+        });
+
+        it('when optionIndex is valid => expected 200 with voted flag', async () => {
+            vi.mocked(chatService.votePoll).mockResolvedValueOnce({ voted: true });
+
+            const app = createApp();
+
+            const response = await request(app)
+                .post('/api/chat/activity-1/polls/poll-1/votes')
+                .send({ optionIndex: 1 });
+
+            expect(response.status).toBe(200);
+            expect(response.body).toEqual({
+                ok: true,
+                data: { voted: true },
+            });
+            expect(chatService.votePoll).toHaveBeenCalledWith(
+                'activity-1',
+                'poll-1',
+                'test-uid-1',
+                1,
+            );
+        });
+
+        it('when optionIndex is out of range => expected 400', async () => {
+            vi.mocked(chatService.votePoll).mockRejectedValueOnce(
+                new Error('optionIndex is out of range'),
+            );
+
+            const app = createApp();
+
+            const response = await request(app)
+                .post('/api/chat/activity-1/polls/poll-1/votes')
+                .send({ optionIndex: 9 });
+
+            expect(response.status).toBe(400);
+            expect(response.body).toEqual({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message: 'optionIndex is out of range',
+                },
+            });
+        });
+
+        it('when poll does not exist => expected 404 w/ NOT_FOUND', async () => {
+            vi.mocked(chatService.votePoll).mockRejectedValueOnce(
+                new Error('Poll not found'),
+            );
+
+            const app = createApp();
+
+            const response = await request(app)
+                .post('/api/chat/activity-1/polls/missing/votes')
+                .send({ optionIndex: 0 });
+
+            expect(response.status).toBe(404);
+            expect(response.body).toEqual({
+                ok: false,
+                error: {
+                    code: 'NOT_FOUND',
+                    message: 'Poll not found',
+                },
+            });
+        });
+    });
 })

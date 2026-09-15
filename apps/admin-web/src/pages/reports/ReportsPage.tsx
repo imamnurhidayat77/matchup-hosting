@@ -4,7 +4,8 @@ import { ReportsPageSkeleton, PageError, EmptyState, EmptyIcons } from '../../co
 import { downloadCsv } from '../../utils/csvExport';
 import { useToast } from '../../context/ToastContext';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
-import type { Report, ReportStatus } from '../../data/reportsDummy';
+import { Avatar } from '../../components/ui/Avatar';
+import type { Report, ReportStatus } from '../../types/reports';
 import type { ReportAction } from '../../services/reportsService';
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
@@ -143,10 +144,11 @@ function ReportCard({
       {/* Top row */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 flex-wrap">
-          <img
-            src={`https://api.dicebear.com/8.x/thumbs/svg?seed=${report.reporterAvatarSeed}`}
-            alt={report.reporter}
-            className="h-6 w-6 rounded-full bg-ink-200"
+          <Avatar
+            name={report.reporter}
+            photoUrl={report.reporterPhotoUrl}
+            seed={report.reporterAvatarSeed}
+            className="h-6 w-6 rounded-full"
           />
           <p className="text-[13px]">
             <span className="font-semibold text-ink-900">{report.reporter}</span>
@@ -232,14 +234,19 @@ export function ReportsPage() {
   if (loading) return <ReportsPageSkeleton />;
   if (error)   return <PageError message={error} onRetry={reload} />;
 
-  function handleConfirm(note: string) {
+  async function handleConfirm(note: string) {
     if (!modal) return;
-    handleAction(modal.report.id, modal.action, note);
-    toast(
-      modal.action === 'resolve' ? 'Report resolved.' : 'Report dismissed.',
-      modal.action === 'resolve' ? 'success' : 'info',
-    );
-    setModal(null);
+    const { report, action } = modal;
+    try {
+      await handleAction(report.id, action, note);
+      toast(
+        action === 'resolve' ? 'Report resolved.' : 'Report dismissed.',
+        action === 'resolve' ? 'success' : 'info',
+      );
+      setModal(null);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to update report.', 'error');
+    }
   }
 
   // Bulk actions
@@ -250,10 +257,27 @@ export function ReportsPage() {
     const pendingIds = filtered.filter(r => r.status === 'Pending').map(r => r.id);
     setSelectedIds(prev => prev.size === pendingIds.length ? new Set() : new Set(pendingIds));
   }
-  function executeBulkAction(action: ReportAction) {
-    selectedIds.forEach(id => handleAction(id, action, 'Bulk action'));
-    toast(`${selectedIds.size} report(s) ${action === 'resolve' ? 'resolved' : 'dismissed'}.`, action === 'resolve' ? 'success' : 'info');
-    setSelectedIds(new Set());
+  async function executeBulkAction(action: ReportAction) {
+    const ids = [...selectedIds];
+    let succeeded = 0;
+    const failed: string[] = [];
+    for (const id of ids) {
+      try {
+        await handleAction(id, action, 'Bulk action');
+        succeeded += 1;
+      } catch (err) {
+        failed.push(id);
+        toast(err instanceof Error ? err.message : `Failed to ${action} report.`, 'error');
+      }
+    }
+    if (succeeded > 0) {
+      toast(
+        `${succeeded} report(s) ${action === 'resolve' ? 'resolved' : 'dismissed'}.`,
+        action === 'resolve' ? 'success' : 'info',
+      );
+    }
+    // Keep failed ids selected so they can be retried; clear the rest.
+    setSelectedIds(new Set(failed));
     setBulkConfirm(null);
   }
 
@@ -304,7 +328,7 @@ export function ReportsPage() {
         description="This will apply to every selected report and cannot be undone."
         confirmLabel={bulkConfirm === 'resolve' ? 'Resolve all' : 'Dismiss all'}
         destructive={bulkConfirm === 'dismiss'}
-        onConfirm={() => { if (bulkConfirm) executeBulkAction(bulkConfirm); }}
+        onConfirm={() => { if (bulkConfirm) void executeBulkAction(bulkConfirm); }}
         onCancel={() => setBulkConfirm(null)}
       />
 

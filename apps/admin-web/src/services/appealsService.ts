@@ -1,34 +1,15 @@
 /**
- * Appeals service — user recourse against moderation actions.
- *
- * HOW TO SWITCH TO REAL API:
- *   Set VITE_USE_MOCK_API=false in .env (plus an admin Firebase ID token
- *   under `admin_id_token` in localStorage — see reportsService header).
+ * Appeals service — database-backed (Firestore `appeals` via api-server).
  *
  * Live endpoints (api-server):
  *   GET  /api/admin/appeals?status=pending|approved|rejected → Appeal[]
  *   POST /api/admin/appeals/:id/approve { note? }            → Appeal
  *   POST /api/admin/appeals/:id/reject  { note? }            → Appeal
- *
- * Type mapping (frontend ⇄ backend):
- *   Suspension ⇄ suspension · Activity Removal ⇄ activity_removal
- *   Account Ban ⇄ account_ban · Content Removal ⇄ content_removal
- * Approving a Suspension/Account Ban appeal reactivates the account;
- * approving Activity Removal reopens the activity when still removed.
  */
 import { apiFetch } from './api';
-import { DUMMY_APPEALS } from '../data/appealsDummy';
-import type {
-  Appeal,
-  AppealStatus,
-  AppealType,
-} from '../data/appealsDummy';
+import type { Appeal, AppealStatus, AppealType } from '../types/appeals';
 
 export type { Appeal, AppealStatus, AppealType };
-
-const USE_MOCK = (import.meta.env.VITE_USE_MOCK_API ?? 'true') === 'true';
-const delay = <T,>(ms: number, v: T): Promise<T> =>
-  new Promise((r) => setTimeout(() => r(v), ms));
 
 const TO_BACKEND: Record<AppealType, string> = {
   Suspension: 'suspension',
@@ -55,6 +36,7 @@ interface AppealView {
   appellantUid: string;
   userName: string;
   userEmail: string;
+  userPhotoUrl?: string;
   type: string;
   originalAction: string;
   statement: string;
@@ -72,6 +54,7 @@ function toAppeal(view: AppealView): Appeal {
     userId: view.appellantUid,
     userName: view.userName,
     userAvatarSeed: view.appellantUid,
+    userPhotoUrl: view.userPhotoUrl,
     userEmail: view.userEmail,
     type: FROM_BACKEND[view.type] ?? 'Suspension',
     originalAction: view.originalAction,
@@ -87,12 +70,6 @@ function toAppeal(view: AppealView): Appeal {
 export async function fetchAppeals(
   status: AppealStatus = 'Pending',
 ): Promise<Appeal[]> {
-  if (USE_MOCK) {
-    return delay(
-      300,
-      DUMMY_APPEALS.filter((a) => a.status === status),
-    );
-  }
   const backendStatus =
     status === 'Approved'
       ? 'approved'
@@ -113,16 +90,6 @@ export async function decideAppeal(
   decision: AppealDecision,
   response: string,
 ): Promise<Appeal> {
-  if (USE_MOCK) {
-    const found = DUMMY_APPEALS.find((a) => a.id === id);
-    if (!found) throw new Error('Appeal not found');
-    return delay(300, {
-      ...found,
-      status: (decision === 'approve' ? 'Approved' : 'Rejected') as AppealStatus,
-      adminResponse: response,
-      resolvedAt: new Date().toISOString(),
-    });
-  }
   const action = decision === 'approve' ? 'approve' : 'reject';
   const res = await apiFetch<AppealView>(
     `/api/admin/appeals/${encodeURIComponent(id)}/${action}`,

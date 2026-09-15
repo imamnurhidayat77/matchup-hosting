@@ -36,6 +36,24 @@ class _FakeDmRepository implements DmRepository {
   Future<void> markRead(String otherUid) async {}
 
   @override
+  Future<ChatMessage> sendImage({
+    required String otherUid,
+    required String imagePath,
+  }) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<ChatMessage> sendLocation({
+    required String otherUid,
+    required double latitude,
+    required double longitude,
+  }) async {
+    throw UnimplementedError();
+  }
+
+
+  @override
   Stream<List<ChatMessage>> watchMessages(String otherUid) async* {
     yield const [];
   }

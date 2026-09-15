@@ -1,9 +1,15 @@
 import { useEffect, useState, useRef } from 'react';
-import { DEFAULT_SPORTS } from '../../data/sportsDummy';
-import { fetchSports, replaceSports } from '../../services/sportsService';
+import { fetchSports, replaceSports, updateSport } from '../../services/sportsService';
 import { downloadCsv } from '../../utils/csvExport';
 import { useToast } from '../../context/ToastContext';
-import type { SportConfig } from '../../data/sportsDummy';
+import { SportsPageSkeleton, PageError } from '../../components/ui/PageStates';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
+import type { SportConfig } from '../../types/sports';
+
+// Flag fields persist immediately via PATCH /:id. Everything structural
+// (add / remove / reorder) has no per-row endpoint, so it stays staged
+// until the atomic PUT publish.
+const FLAG_FIELDS = ['enabled', 'showInFilter', 'showInOnboarding', 'canHost'] as const;
 
 // ─── Sports emoji palette ─────────────────────────────────────────────────────
 
@@ -313,27 +319,58 @@ function MobilePreview({ sports }: { sports: SportConfig[] }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function SportsPage() {
-  const [sports, setSports] = useState<SportConfig[]>(DEFAULT_SPORTS);
+  const [sports, setSports] = useState<SportConfig[]>([]);
+  const [baseline, setBaseline] = useState<SportConfig[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [search, setSearch] = useState('');
   const [saving, setSaving] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<SportConfig | null>(null);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
   const dragId = useRef<string | null>(null);
   const { push: toast } = useToast();
 
-  // Live source of truth is the backend; local defaults only seed first paint.
+  // Staged structural edits (add/remove/reorder) differ from the last
+  // saved baseline. Flag toggles sync the baseline on PATCH success, and
+  // activityCount is server-computed, so both are excluded here.
+  const dirty =
+    sports.length !== baseline.length ||
+    sports.some((s) => {
+      const b = baseline.find((x) => x.id === s.id);
+      return (
+        !b ||
+        b.name !== s.name ||
+        b.emoji !== s.emoji ||
+        b.enabled !== s.enabled ||
+        b.showInFilter !== s.showInFilter ||
+        b.showInOnboarding !== s.showInOnboarding ||
+        b.canHost !== s.canHost ||
+        b.sortOrder !== s.sortOrder
+      );
+    });
+
+  // Database is the source of truth — no local defaults.
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
     fetchSports()
       .then((rows) => {
-        if (!cancelled && rows.length > 0) setSports(rows);
+        if (!cancelled) {
+          setSports(rows);
+          setBaseline(rows);
+          setLoadError(null);
+        }
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          toast(
-            err instanceof Error ? err.message : 'Failed to load sports.',
-            'error',
-          );
+          const message = err instanceof Error ? err.message : 'Failed to load sports.';
+          setLoadError(message);
+          toast(message, 'error');
         }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
     return () => {
       cancelled = true;
@@ -341,14 +378,65 @@ export function SportsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function update(id: string, patch: Partial<SportConfig>) {
-    setSports((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+  async function reload() {
+    setLoading(true);
+    try {
+      const rows = await fetchSports();
+      setSports(rows);
+      setBaseline(rows);
+      setLoadError(null);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to load sports.';
+      setLoadError(message);
+      toast(message, 'error');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Flag toggles persist immediately via PATCH with rollback on error.
+  // Structural edits (add/remove/reorder) stay staged until Publish.
+  async function update(id: string, patch: Partial<SportConfig>) {
+    const onlyFlags = Object.keys(patch).every((k) =>
+      (FLAG_FIELDS as readonly string[]).includes(k),
+    );
+    if (!onlyFlags) {
+      setSports((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+      return;
+    }
+    const prevRow = sports.find((s) => s.id === id);
+    if (!prevRow) return;
+    const nextRow = { ...prevRow, ...patch };
+    setSports((prev) => prev.map((s) => (s.id === id ? nextRow : s)));
+    try {
+      const saved = await updateSport(id, patch);
+      // Sync baseline flags so a successful toggle never shows as unsaved.
+      // Preserve local sortOrder in case a staged reorder is pending.
+      setBaseline((prev) =>
+        prev.map((s) =>
+          s.id === id
+            ? { ...s, enabled: saved.enabled, showInFilter: saved.showInFilter, showInOnboarding: saved.showInOnboarding, canHost: saved.canHost, activityCount: saved.activityCount }
+            : s,
+        ),
+      );
+    } catch (err: unknown) {
+      setSports((prev) => prev.map((s) => (s.id === id ? prevRow : s)));
+      toast(err instanceof Error ? err.message : 'Failed to update sport.', 'error');
+    }
   }
 
   function handleDelete(id: string) {
-    const sport = sports.find(s => s.id === id);
+    const sport = sports.find((s) => s.id === id);
+    if (sport) setPendingDelete(sport);
+  }
+
+  function confirmDelete() {
+    if (!pendingDelete) return;
+    const { id, name } = pendingDelete;
     setSports((prev) => prev.filter((s) => s.id !== id));
-    if (sport) toast(`"${sport.name}" removed.`, 'info');
+    // Keep the baseline row so Reload (after confirm) can still restore it.
+    toast(`"${name}" will be removed when you publish.`, 'info');
+    setPendingDelete(null);
   }
 
   function handleAdd(sport: SportConfig) {
@@ -356,7 +444,7 @@ export function SportsPage() {
       const maxOrder = Math.max(...prev.map((s) => s.sortOrder), 0);
       return [...prev, { ...sport, sortOrder: maxOrder + 1 }];
     });
-    toast(`"${sport.name}" added.`, 'success');
+    toast(`"${sport.name}" staged — Publish to save.`, 'success');
   }
 
   async function handleSave() {
@@ -366,6 +454,7 @@ export function SportsPage() {
     try {
       const published = await replaceSports(sorted);
       setSports(published);
+      setBaseline(published);
       toast('Changes published.', 'success');
     } catch (err: unknown) {
       toast(err instanceof Error ? err.message : 'Failed to publish.', 'error');
@@ -375,10 +464,19 @@ export function SportsPage() {
   }
 
   function handleReset() {
-    if (confirm('Reset all sports to default configuration?')) {
-      setSports(DEFAULT_SPORTS);
-      toast('Sports reset to defaults.', 'info');
+    // Never silently discard staged edits — confirm first when dirty.
+    if (dirty) {
+      setShowResetConfirm(true);
+      return;
     }
+    void reload();
+    toast('Reloaded from database.', 'info');
+  }
+
+  function confirmReset() {
+    setShowResetConfirm(false);
+    void reload();
+    toast('Unsaved changes discarded.', 'info');
   }
 
   function handleExport() {
@@ -389,7 +487,7 @@ export function SportsPage() {
     toast('Sports exported as CSV.', 'info');
   }
 
-  // Drag reorder
+  // Drag reorder (staged until Publish — no per-row reorder endpoint)
   function onDragStart(id: string) { dragId.current = id; }
   function onDragOver(e: React.DragEvent) { e.preventDefault(); }
   function onDrop(targetId: string) {
@@ -397,8 +495,10 @@ export function SportsPage() {
     setSports((prev) => {
       const from = prev.findIndex((s) => s.id === dragId.current);
       const to   = prev.findIndex((s) => s.id === targetId);
+      if (from < 0 || to < 0) return prev;
       const arr = [...prev];
       const [item] = arr.splice(from, 1);
+      if (!item) return prev;
       arr.splice(to, 0, item);
       return arr.map((s, i) => ({ ...s, sortOrder: i + 1 }));
     });
@@ -414,9 +514,37 @@ export function SportsPage() {
   const filterCount    = sports.filter((s) => s.enabled && s.showInFilter).length;
   const onboardingCount = sports.filter((s) => s.enabled && s.showInOnboarding).length;
 
+  if (loading) {
+    return <SportsPageSkeleton />;
+  }
+
+  if (loadError) {
+    return <PageError message={loadError} onRetry={() => void reload()} />;
+  }
+
   return (
     <div className="page-container space-y-5">
       {showAdd && <AddSportModal onClose={() => setShowAdd(false)} onAdd={handleAdd} />}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title={pendingDelete ? `Remove "${pendingDelete.name}"?` : 'Remove sport?'}
+        description="This stages the removal. The sport is permanently deleted only when you Publish Changes."
+        confirmLabel="Stage removal"
+        destructive
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
+
+      <ConfirmDialog
+        open={showResetConfirm}
+        title="Discard unsaved changes?"
+        description="Your staged adds, removals, and reorders will be lost and the list reloaded from the database."
+        confirmLabel="Discard & reload"
+        destructive
+        onConfirm={confirmReset}
+        onCancel={() => setShowResetConfirm(false)}
+      />
 
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -425,10 +553,16 @@ export function SportsPage() {
           <p className="mt-1 text-xs text-ink-600 sm:text-sm">
             Configure which sports appear in onboarding, discovery filter, and activity creation on the mobile app
           </p>
+          {dirty && (
+            <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-warning-100 px-2.5 py-0.5 text-[11px] font-semibold text-warning-700">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-warning-500" />
+              Unsaved changes — Publish to save
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           <button onClick={handleExport} className="btn-outline rounded-lg px-3 py-1.5 text-sm">Export CSV</button>
-          <button onClick={handleReset}  className="btn-outline rounded-lg px-3 py-1.5 text-sm text-danger-600 border-danger-200 hover:bg-danger-50">Reset</button>
+          <button onClick={handleReset}  className="btn-outline rounded-lg px-3 py-1.5 text-sm text-danger-600 border-danger-200 hover:bg-danger-50">Reload</button>
           <button onClick={() => setShowAdd(true)} className="btn-outline rounded-lg px-3 py-1.5 text-sm">+ Add Sport</button>
           <button
             onClick={handleSave}

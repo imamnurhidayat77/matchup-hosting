@@ -12,8 +12,7 @@ import '../features/auth/presentation/onboarding_screen.dart';
 import '../features/auth/presentation/splash_screen.dart';
 import '../features/auth/presentation/welcome_screen.dart';
 import '../features/auth/recovery/forgot_password_screen.dart';
-import '../features/auth/recovery/new_password_screen.dart';
-import '../features/auth/recovery/otp_verification_screen.dart';
+import '../features/auth/recovery/reset_link_sent_screen.dart';
 import '../features/appeals/presentation/suspended_screen.dart';
 import '../features/calendar/presentation/calendar_screen.dart';
 import '../features/discovery/presentation/discovery_screen.dart';
@@ -41,6 +40,7 @@ import '../features/profile/presentation/profile_screen.dart';
 import '../features/profile/presentation/edit_profile_screen.dart';
 import '../features/profile/presentation/player_profile_screen.dart';
 import '../features/chat/presentation/chat_screen.dart';
+import '../features/chat/presentation/photo_moments_screen.dart';
 import '../features/chat/presentation/dm_screen.dart';
 import '../features/chat/presentation/messages_screen.dart';
 import 'app_shell.dart';
@@ -54,8 +54,7 @@ const _publicPaths = {
   '/login',
   '/register',
   '/forgot-password',
-  '/otp-verification',
-  '/new-password',
+  '/reset-link-sent',
 };
 
 // ─── AuthNotifier → Listenable bridge ────────────────────────────────────────
@@ -171,24 +170,13 @@ GoRouter buildRouter(Ref ref) {
         builder: (_, _) => const ForgotPasswordScreen(),
       ),
       GoRoute(
-        path: '/otp-verification',
+        path: '/reset-link-sent',
         pageBuilder: (_, state) {
           final email = state.extra as String? ?? '';
           return appPage(
             state,
-            OtpVerificationScreen(email: email),
-            key: ValueKey('otp-$email'),
-          );
-        },
-      ),
-      GoRoute(
-        path: '/new-password',
-        pageBuilder: (_, state) {
-          final email = state.extra as String? ?? '';
-          return appPage(
-            state,
-            NewPasswordScreen(email: email),
-            key: ValueKey('new-password-$email'),
+            ResetLinkSentScreen(email: email),
+            key: ValueKey('reset-link-sent-$email'),
           );
         },
       ),
@@ -403,6 +391,18 @@ GoRouter buildRouter(Ref ref) {
             },
           ),
           GoRoute(
+            // Album of every photo shared in the activity's group chat.
+            path: '/chat/:id/moments',
+            pageBuilder: (_, state) {
+              final id = state.pathParameters['id'] ?? '';
+              return appPage(
+                state,
+                PhotoMomentsScreen(activityId: id),
+                key: ValueKey('chat-moments-$id'),
+              );
+            },
+          ),
+          GoRoute(
             // 1-on-1 thread with another user. Peer display name rides
             // along as route `extra` (falls back to a generic label on
             // cold-start push taps where no name is available).
@@ -445,6 +445,19 @@ GoRouter buildRouter(Ref ref) {
                 state,
                 PlayerProfileScreen(playerName: name),
                 key: ValueKey('player-profile-$name'),
+              );
+            },
+          ),
+          GoRoute(
+            // Same screen by auth uid — exact and URL-safe. Preferred
+            // when the uid is known (e.g. personal-chat settings).
+            path: '/player-profile/uid/:uid',
+            pageBuilder: (_, state) {
+              final uid = state.pathParameters['uid'] ?? '';
+              return appPage(
+                state,
+                PlayerProfileScreen.byUid(userId: uid),
+                key: ValueKey('player-profile-uid-$uid'),
               );
             },
           ),

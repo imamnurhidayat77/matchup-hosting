@@ -24,6 +24,7 @@ vi.mock('../notifications/notifications.service.js', () => ({
 }));
 
 import {
+    dmPreviewBody,
     listDmMessages,
     resolveThread,
     sendDmMessage,
@@ -128,6 +129,71 @@ describe('sendDmMessage', () => {
         await expect(
             sendDmMessage('me-1', 'peer-1', 'x'.repeat(2001)),
         ).rejects.toThrow('at most 2000 characters');
+    });
+
+    it('sends a photo URL and notifies with a photo label', async () => {
+        const set = vi.fn().mockResolvedValue(undefined);
+        mocks.ref.mockReturnValue({
+            push: () => ({ key: 'msg-photo', set }),
+        });
+        const url =
+            'https://firebasestorage.googleapis.com/v0/b/app/o/uploads%2Fimg.jpg?alt=media';
+
+        const res = await sendDmMessage('me-1', 'peer-1', url);
+
+        expect(res.messageId).toBe('msg-photo');
+        expect(set).toHaveBeenCalledWith(
+            expect.objectContaining({ senderId: 'me-1', text: url }),
+        );
+        expect(mocks.createNotification).toHaveBeenCalledWith(
+            expect.objectContaining({ body: '📷 Photo' }),
+        );
+    });
+
+    it('sends a shared location and notifies with a location label', async () => {
+        const set = vi.fn().mockResolvedValue(undefined);
+        mocks.ref.mockReturnValue({
+            push: () => ({ key: 'msg-loc', set }),
+        });
+        const text =
+            '📍 Shared location: https://maps.google.com/?q=-36.85,174.76';
+
+        const res = await sendDmMessage('me-1', 'peer-1', text);
+
+        expect(res.messageId).toBe('msg-loc');
+        expect(set).toHaveBeenCalledWith(
+            expect.objectContaining({ senderId: 'me-1', text }),
+        );
+        expect(mocks.createNotification).toHaveBeenCalledWith(
+            expect.objectContaining({ body: '📍 Shared location' }),
+        );
+    });
+});
+
+describe('dmPreviewBody', () => {
+    it('maps photo URLs to a label', () => {
+        expect(
+            dmPreviewBody('https://example.com/uploads/img.jpg'),
+        ).toBe('📷 Photo');
+    });
+
+    it('maps shared locations to a label', () => {
+        expect(
+            dmPreviewBody(
+                '📍 Shared location: https://maps.google.com/?q=1,2',
+            ),
+        ).toBe('📍 Shared location');
+    });
+
+    it('passes plain text through (truncated at 100 chars)', () => {
+        expect(dmPreviewBody('hello')).toBe('hello');
+        expect(dmPreviewBody('x'.repeat(150))).toBe(`${'x'.repeat(100)}…`);
+    });
+
+    it('does not mistake text containing a URL for a photo', () => {
+        expect(dmPreviewBody('see https://example.com/a please')).toBe(
+            'see https://example.com/a please',
+        );
     });
 });
 

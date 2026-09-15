@@ -32,7 +32,15 @@ async function verifyBearer(
             ok: true,
             identity: { uid: decodedToken.uid, token: decodedToken },
         };
-    } catch {
+    } catch (error) {
+        // Log the Firebase error code server-side only (auth/id-token-expired
+        // vs auth/id-token-revoked vs auth/invalid-id-token …). The client
+        // keeps the generic message so token validity details never leak.
+        const code =
+            typeof error === 'object' && error !== null && 'code' in error
+                ? String((error as { code: unknown }).code)
+                : 'unknown';
+        console.warn(`[auth] verifyIdToken rejected: ${code}`);
         return { ok: false, message: 'Invalid or expired Firebase ID token' };
     }
 }
@@ -123,10 +131,19 @@ export async function requireAuthAllowSuspended(
 /**
  * Admin gate for triage routes (report list/resolve/dismiss). Must run
  * after [requireAuth] — returns 401 without a verified uid, 403 when
- * the uid is not in `ADMIN_UIDS`. An empty allowlist denies everyone
- * (fail-closed) so the routes are safe by default.
+ * the uid is not an admin.
+ *
+ * Admin sources (either grants access):
+ *   1. Firestore `admins/{uid}` doc exists — managed from the Firebase
+ *      Console (or any Admin SDK script), no server restart needed.
+ *   2. `ADMIN_UIDS` env allowlist — bootstrap fallback so the first
+ *      admin can be set before any DB row exists.
+ *
+ * Fail-closed: an unreadable `admins` lookup denies (unlike the
+ * suspension check, which fails open for availability — an admin gate
+ * must never fail open).
  */
-export function requireAdmin(
+export async function requireAdmin(
     req: Request,
     res: Response,
     next: NextFunction,
@@ -141,14 +158,24 @@ export function requireAdmin(
             },
         });
     }
-    if (!adminUids().includes(uid)) {
-        return res.status(403).json({
-            ok: false,
-            error: {
-                code: 'FORBIDDEN',
-                message: 'Admin access is required',
-            },
-        });
+    if (adminUids().includes(uid)) {
+        next();
+        return;
     }
-    next();
+    try {
+        const adminSnap = await firestore.collection('admins').doc(uid).get();
+        if (adminSnap.exists) {
+            next();
+            return;
+        }
+    } catch {
+        // Fall through to 403 — fail closed (see above).
+    }
+    return res.status(403).json({
+        ok: false,
+        error: {
+            code: 'FORBIDDEN',
+            message: 'Admin access is required',
+        },
+    });
 }

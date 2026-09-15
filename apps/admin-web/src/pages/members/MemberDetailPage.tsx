@@ -2,14 +2,13 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { fetchMember } from '../../services/membersService';
 import type { Member } from '../../services/membersService';
-import type { MemberStatus } from '../../data/membersDummy';
+import type { MemberStatus } from '../../types/members';
+import { Avatar } from '../../components/ui/Avatar';
 
 function StatusBadge({ status }: { status: MemberStatus }) {
   const map: Record<MemberStatus, { cls: string; dot: string }> = {
     Active:    { cls: 'bg-brand-50 text-brand-700 border-brand-200',        dot: 'bg-brand-500' },
-    Inactive:  { cls: 'bg-ink-100 text-ink-600 border-ink-200',             dot: 'bg-ink-400' },
     Suspended: { cls: 'bg-danger-50 text-danger-700 border-danger-200',     dot: 'bg-danger-500' },
-    Pending:   { cls: 'bg-warning-100 text-warning-700 border-warning-200', dot: 'bg-warning-500' },
   };
   const { cls, dot } = map[status];
   return (
@@ -104,7 +103,7 @@ export function MemberDetailPage() {
             <div className="px-5 pb-5">
               <div className="relative -mt-8 mb-3 flex items-end justify-between">
                 <div className="h-[60px] w-[60px] overflow-hidden rounded-xl ring-4 ring-white shadow-sm">
-                  <img src={`https://api.dicebear.com/8.x/thumbs/svg?seed=${member.avatarSeed}`} alt={member.name} className="h-full w-full object-cover" />
+                  <Avatar name={member.name} photoUrl={member.photoUrl} seed={member.avatarSeed} className="h-full w-full text-lg rounded-2xl" />
                 </div>
                 <StatusBadge status={member.status} />
               </div>

@@ -41,24 +41,5 @@ class LocalAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<void> verifyOtp({required String email, required String code}) async {
-    throw const AuthException(
-      'OTP verification requires a live backend.',
-      code: 'NO_BACKEND',
-    );
-  }
-
-  @override
-  Future<void> resetPassword({
-    required String email,
-    required String newPassword,
-  }) async {
-    throw const AuthException(
-      'Password reset requires a live backend.',
-      code: 'NO_BACKEND',
-    );
-  }
-
-  @override
   Future<void> signOut() async {}
 }

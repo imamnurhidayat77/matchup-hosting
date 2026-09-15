@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useDashboard } from '../../hooks/useDashboard';
 import { downloadCsv } from '../../utils/csvExport';
 import { useTheme } from '../../context/ThemeContext';
+import { Avatar } from '../../components/ui/Avatar';
 import type { KpiData, ModerationItem, ActivityRow, TrendPoint } from '../../types/dashboard';
 
 function exportCsv(activities: ActivityRow[]) {
@@ -81,10 +82,10 @@ function IconAirplay() {
 }
 
 const KPI_ICONS: Record<string, React.ReactNode> = {
-  'Active Match Seekers': <IconUsers />,
-  'Total Sports Activities': <IconCalendar />,
+  'Total Users': <IconUsers />,
+  'Active Activities': <IconCalendar />,
   'Pending Reports': <IconBell />,
-  'Active Broadcasts': <IconAirplay />,
+  'New Users (7d)': <IconAirplay />,
 };
 
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
@@ -292,7 +293,7 @@ function ActivitiesTable({
                 </td>
                 <td className="tbl-td">
                   <div className="flex items-center gap-2">
-                    <img src={`https://api.dicebear.com/8.x/thumbs/svg?seed=${row.hostAvatarSeed}`} alt={row.host} className="h-6 w-6 shrink-0 rounded-full bg-ink-200 object-cover" />
+                    <Avatar name={row.host} photoUrl={row.photoUrl} seed={row.hostAvatarSeed} className="h-6 w-6 shrink-0 rounded-full" />
                     <span className="text-[13px] font-medium text-ink-700 truncate">{row.host}</span>
                   </div>
                 </td>
@@ -332,7 +333,7 @@ function ActivitiesTable({
             </div>
             <div className="flex items-center justify-between text-xs text-ink-600">
               <span className="flex items-center gap-1.5">
-                <img src={`https://api.dicebear.com/8.x/thumbs/svg?seed=${row.hostAvatarSeed}`} alt={row.host} className="h-5 w-5 rounded-full bg-ink-200" />
+                <Avatar name={row.host} photoUrl={row.photoUrl} seed={row.hostAvatarSeed} className="h-5 w-5 rounded-full" />
                 {row.host}
               </span>
               <span>{row.scheduledDate}</span>

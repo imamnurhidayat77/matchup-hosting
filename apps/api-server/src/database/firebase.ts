@@ -1,3 +1,4 @@
+import { createPrivateKey } from 'node:crypto';
 import { cert, getApp, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getDatabase } from 'firebase-admin/database';
@@ -5,6 +6,20 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { getMessaging } from 'firebase-admin/messaging';
 import { getStorage, type Storage } from 'firebase-admin/storage';
 import { env } from '../config/env.js';
+
+function privateKey(): string {
+  const key = env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n');
+  try {
+    createPrivateKey(key);
+  } catch {
+    throw new Error(
+      'FIREBASE_PRIVATE_KEY is not a valid PEM private key. ' +
+        'Re-copy the full key from Firebase Console → Project settings → ' +
+        'Service accounts → Generate new private key (keep the \\n escapes on one line).',
+    );
+  }
+  return key;
+}
 
 function createFirebaseApp() {
   if (getApps().length > 0) {
@@ -23,7 +38,7 @@ function createFirebaseApp() {
     credential: cert({
       projectId: env.FIREBASE_PROJECT_ID,
       clientEmail: env.FIREBASE_CLIENT_EMAIL,
-      privateKey: env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+      privateKey: privateKey(),
     }),
     databaseURL: env.FIREBASE_DATABASE_URL,
     storageBucket: env.FIREBASE_STORAGE_BUCKET,
@@ -31,6 +46,14 @@ function createFirebaseApp() {
 }
 
 const firebaseApp = createFirebaseApp();
+
+// Non-secret boot log: lets operators spot a project/email mismatch
+// (the usual cause of UNAUTHENTICATED / ACCESS_TOKEN_EXPIRED) at a glance.
+if (!process.env.VITEST) {
+  console.log(
+    `[firebase] project=${env.FIREBASE_PROJECT_ID} clientEmail=${env.FIREBASE_CLIENT_EMAIL}`,
+  );
+}
 
 export const auth = getAuth(firebaseApp);
 export const firestore = getFirestore(firebaseApp);

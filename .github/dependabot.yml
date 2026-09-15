@@ -1,0 +1,20 @@
+# Dependabot — weekly dependency updates for both npm apps and Flutter.
+# Security-only pressure is handled by CI (`npm audit` gates); these PRs
+# keep the tree fresh so upgrades stay small.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /apps/api-server
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: npm
+    directory: /apps/admin-web
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: pub
+    directory: /apps/mobile
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5

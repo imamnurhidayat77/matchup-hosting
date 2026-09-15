@@ -1,5 +1,15 @@
 import { rtdb } from '../../database/firebase.js';
-import { activityMessagesPath } from '../../database/paths.js';
+import {
+    activityMessagePath,
+    activityMessageReactionsPath,
+    activityMessagesPath,
+    activityPollPath,
+    activityPollVotesPath,
+    activityPollsPath,
+    activityReactionPath,
+    activityReactionsPath,
+} from '../../database/paths.js';
+import type { ReactionEmoji } from './chat.schema.js';
 
 export type ChatMessageType = 'text' | 'system';
 
@@ -63,13 +73,18 @@ export async function getMessages(activityId: string): Promise<ChatMessageWithId
     for(const [messageId, value] of Object.entries(data)){
         if (!value) continue
 
-        if (typeof value.senderId !== 'string') throw new Error ('Invalid chat message: senderId must be a string');
+        // Skip malformed rows instead of throwing: one corrupt message
+        // must never 500 the whole thread (the inbox fans out one
+        // `GET messages` per activity, so a single bad row blanked every
+        // preview into "No messages yet"). Mirrors the mobile RTDB parser
+        // which also skips bad rows.
+        if (typeof value.senderId !== 'string' || value.senderId.trim() === '') continue;
 
-        if (typeof value.text !== 'string') throw new Error ('Invalid chat message: text must be a string');
+        if (typeof value.text !== 'string' || value.text.trim() === '') continue;
 
-        if (value.type !== 'text' && value.type !== 'system') throw new Error ('Invalid chat message: type must be text or system');
+        if (value.type !== 'text' && value.type !== 'system') continue;
 
-        if (typeof value.timestamp !== 'number') throw new Error ('Invalid chat message: timestamp must be a number');
+        if (typeof value.timestamp !== 'number') continue;
 
         messages.push({
             messageId,
@@ -84,4 +99,215 @@ export async function getMessages(activityId: string): Promise<ChatMessageWithId
     messages.sort((a,b) => a.timestamp - b.timestamp);
 
     return messages;
+}
+
+/**
+ * Reactions live beside messages, not inside them:
+ * `activityChats/{activityId}/reactions/{messageId}/{emoji}/{uid} = timestamp`.
+ * A separate node keeps the closed `messages` validation untouched and
+ * lets clients listen to reactions independently of the message stream.
+ */
+export type ReactionMap = Record<string, Record<string, string[]>>;
+
+export async function toggleReaction(
+    activityId: string,
+    messageId: string,
+    uid: string,
+    emoji: ReactionEmoji,
+): Promise<{ reacted: boolean }> {
+    const normalizedActivityId = activityId.trim();
+    const normalizedMessageId = messageId.trim();
+    const normalizedUid = uid.trim();
+
+    if (!normalizedActivityId) throw new Error('activityId is required');
+    if (!normalizedMessageId) throw new Error('messageId is required');
+    if (!normalizedUid) throw new Error('uid is required');
+
+    const messageSnap = await rtdb.ref(activityMessagePath(normalizedActivityId, normalizedMessageId)).get();
+    if (!messageSnap.exists()) throw new Error('Message not found');
+
+    const reactionRef = rtdb.ref(activityReactionPath(normalizedActivityId, normalizedMessageId, emoji, normalizedUid));
+    const existing = await reactionRef.get();
+
+    if (existing.exists()) {
+        await reactionRef.remove();
+        return { reacted: false };
+    }
+
+    await reactionRef.set(Date.now());
+    return { reacted: true };
+}
+
+export async function getReactions(activityId: string): Promise<ReactionMap> {
+    const normalizedActivityId = activityId.trim();
+
+    if (!normalizedActivityId) throw new Error('activityId is required');
+
+    const snapshot = await rtdb.ref(activityReactionsPath(normalizedActivityId)).get();
+
+    if (!snapshot.exists()) return {};
+
+    const data = snapshot.val() as Record<string, Record<string, Record<string, unknown>>> | null;
+
+    if (!data) return {};
+
+    const reactions: ReactionMap = {};
+
+    for (const [messageId, byEmoji] of Object.entries(data)) {
+        if (!byEmoji || typeof byEmoji !== 'object') continue;
+        for (const [emoji, byUid] of Object.entries(byEmoji)) {
+            if (!byUid || typeof byUid !== 'object') continue;
+            const uids = Object.keys(byUid).filter((uid) => typeof uid === 'string' && uid.length > 0);
+            if (uids.length === 0) continue;
+            (reactions[messageId] ??= {})[emoji] = uids;
+        }
+    }
+
+    return reactions;
+}
+
+export async function getMessageReactions(activityId: string, messageId: string): Promise<Record<string, string[]>> {
+    const all = await getReactions(activityId);
+    return all[messageId.trim()] ?? {};
+}
+
+export type PollRecord = {
+    question: string;
+    options: string[];
+    createdBy: string;
+    createdAt: number;
+    votes: Record<string, string[]>;
+};
+
+export type PollWithId = PollRecord & {
+    pollId: string;
+};
+
+export async function createPoll(
+    activityId: string,
+    uid: string,
+    question: string,
+    options: string[],
+): Promise<{ pollId: string }> {
+    const normalizedActivityId = activityId.trim();
+    const normalizedUid = uid.trim();
+    const normalizedQuestion = question.trim();
+    const normalizedOptions = options.map((o) => o.trim()).filter((o) => o.length > 0);
+
+    if (!normalizedActivityId) throw new Error('activityId is required');
+    if (!normalizedUid) throw new Error('uid is required');
+    if (!normalizedQuestion) throw new Error('question is required');
+    if (normalizedOptions.length < 2) throw new Error('at least 2 options are required');
+
+    const pollsRef = rtdb.ref(activityPollsPath(normalizedActivityId));
+    const newPollRef = pollsRef.push();
+
+    await newPollRef.set({
+        question: normalizedQuestion,
+        options: normalizedOptions.slice(0, 6),
+        createdBy: normalizedUid,
+        createdAt: Date.now(),
+        votes: {},
+    });
+
+    return { pollId: newPollRef.key as string };
+}
+
+function normalizePollVotes(raw: unknown): Record<string, string[]> {
+    const votes: Record<string, string[]> = {};
+    if (!raw || typeof raw !== 'object') return votes;
+    for (const [optionIndex, byUid] of Object.entries(raw as Record<string, unknown>)) {
+        if (!byUid || typeof byUid !== 'object') continue;
+        if (!/^\d+$/.test(optionIndex)) continue;
+        const uids = Object.keys(byUid as Record<string, unknown>).filter(
+            (uid) => typeof uid === 'string' && uid.length > 0,
+        );
+        if (uids.length === 0) continue;
+        votes[optionIndex] = uids;
+    }
+    return votes;
+}
+
+export async function getPolls(activityId: string): Promise<PollWithId[]> {
+    const normalizedActivityId = activityId.trim();
+
+    if (!normalizedActivityId) throw new Error('activityId is required');
+
+    const snapshot = await rtdb.ref(activityPollsPath(normalizedActivityId)).get();
+
+    if (!snapshot.exists()) return [];
+
+    const data = snapshot.val() as Record<string, Record<string, unknown>> | null;
+
+    if (!data) return [];
+
+    const polls: PollWithId[] = [];
+
+    for (const [pollId, value] of Object.entries(data)) {
+        if (!value || typeof value !== 'object') continue;
+        if (typeof value.question !== 'string' || !Array.isArray(value.options)) continue;
+        if (typeof value.createdBy !== 'string' || typeof value.createdAt !== 'number') continue;
+        const options = (value.options as unknown[]).filter(
+            (o): o is string => typeof o === 'string' && o.length > 0,
+        );
+        if (options.length < 2) continue;
+        polls.push({
+            pollId,
+            question: value.question,
+            options,
+            createdBy: value.createdBy,
+            createdAt: value.createdAt,
+            votes: normalizePollVotes(value.votes),
+        });
+    }
+
+    polls.sort((a, b) => a.createdAt - b.createdAt);
+
+    return polls;
+}
+
+/**
+ * Single-choice vote: the member's uid is removed from every option,
+ * then added to [optionIndex] — unless they already voted there, in
+ * which case the vote is retracted (toggle off).
+ */
+export async function votePoll(
+    activityId: string,
+    pollId: string,
+    uid: string,
+    optionIndex: number,
+): Promise<{ voted: boolean }> {
+    const normalizedActivityId = activityId.trim();
+    const normalizedPollId = pollId.trim();
+    const normalizedUid = uid.trim();
+
+    if (!normalizedActivityId) throw new Error('activityId is required');
+    if (!normalizedPollId) throw new Error('pollId is required');
+    if (!normalizedUid) throw new Error('uid is required');
+
+    const pollSnap = await rtdb.ref(activityPollPath(normalizedActivityId, normalizedPollId)).get();
+    if (!pollSnap.exists()) throw new Error('Poll not found');
+
+    const poll = pollSnap.val() as { options?: unknown; votes?: unknown };
+    const options = Array.isArray(poll?.options) ? poll.options : [];
+    if (!Number.isInteger(optionIndex) || optionIndex < 0 || optionIndex >= options.length) {
+        throw new Error('optionIndex is out of range');
+    }
+
+    const votesRef = rtdb.ref(activityPollVotesPath(normalizedActivityId, normalizedPollId));
+    const votesSnap = await votesRef.get();
+    const current = normalizePollVotes(votesSnap.exists() ? votesSnap.val() : {});
+
+    const alreadyThere = (current[String(optionIndex)] ?? []).includes(normalizedUid);
+
+    const updates: Record<string, unknown> = {};
+    for (const key of Object.keys(current)) {
+        updates[`${key}/${normalizedUid}`] = null;
+    }
+    if (!alreadyThere) {
+        updates[`${optionIndex}/${normalizedUid}`] = Date.now();
+    }
+    await votesRef.update(updates);
+
+    return { voted: !alreadyThere };
 }
