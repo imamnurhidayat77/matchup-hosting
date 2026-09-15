@@ -25,8 +25,17 @@ void main() {
       () => repo.updateActivity(
         activityId: any(named: 'activityId'),
         title: any(named: 'title'),
-        locationName: any(named: 'locationName'),
+        sportType: any(named: 'sportType'),
         description: any(named: 'description'),
+        locationName: any(named: 'locationName'),
+        latitude: any(named: 'latitude'),
+        longitude: any(named: 'longitude'),
+        geohash: any(named: 'geohash'),
+        startTime: any(named: 'startTime'),
+        endTime: any(named: 'endTime'),
+        skillLevel: any(named: 'skillLevel'),
+        capacity: any(named: 'capacity'),
+        joinPolicy: any(named: 'joinPolicy'),
       ),
     ).thenAnswer((_) async {});
   });
@@ -49,6 +58,8 @@ void main() {
       hostName: 'Noor Haddad',
       status: status,
       joinPolicy: joinPolicy,
+      latitude: -36.8485,
+      longitude: 174.7633,
     );
   }
 
@@ -288,6 +299,12 @@ void main() {
 
       expect(find.text('Edit Activity'), findsOneWidget);
 
+      // The full edit sheet is scrollable — bring Save into view first.
+      await tester.scrollUntilVisible(
+        find.text('Save Changes'),
+        300,
+        scrollable: find.byType(Scrollable).last,
+      );
       await tester.tap(find.text('Save Changes'));
       await tester.pumpAndSettle();
 
@@ -295,8 +312,17 @@ void main() {
         () => repo.updateActivity(
           activityId: '5',
           title: 'Thursday Night Volleyball',
-          locationName: 'Eastside Rec Centre',
+          sportType: 'Volleyball',
           description: '',
+          locationName: 'Eastside Rec Centre',
+          latitude: -36.8485,
+          longitude: 174.7633,
+          geohash: any(named: 'geohash'),
+          startTime: DateTime(2026, 8, 27, 19),
+          endTime: any(named: 'endTime'),
+          skillLevel: 'Intermediate',
+          capacity: 8,
+          joinPolicy: 'open',
         ),
       ).called(1);
       // Sheet dismissed with a success confirmation.

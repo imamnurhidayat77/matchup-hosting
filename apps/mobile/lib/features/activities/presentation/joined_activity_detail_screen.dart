@@ -899,7 +899,10 @@ class _ChatMsgRow extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                message.text,
+                message.isImage ||
+                        ChatMessage.imageUrlFromText(message.text) != null
+                    ? '[photo]'
+                    : message.text,
                 style: AppTypography.bodyReading(context).copyWith(
                   color: context.colors.textSecondary,
                   fontSize: 13,
