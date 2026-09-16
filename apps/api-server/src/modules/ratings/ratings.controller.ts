@@ -16,10 +16,11 @@ export async function submitActivityRatingHandler(
     try {
         const raterUid = req.auth?.uid;
         const { activityId } = req.params;
-        const { sportType, comment, participantRatings } = (req.body ?? {}) as {
+        const { sportType, comment, participantRatings, activityStars } = (req.body ?? {}) as {
             sportType?: unknown;
             comment?: unknown;
             participantRatings?: unknown;
+            activityStars?: unknown;
         };
 
         if (!raterUid) {
@@ -72,6 +73,22 @@ export async function submitActivityRatingHandler(
             });
         }
 
+        if (
+            activityStars !== undefined &&
+            (typeof activityStars !== 'number' ||
+                !Number.isInteger(activityStars) ||
+                activityStars < 1 ||
+                activityStars > 5)
+        ) {
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message: 'Invalid rating for activity: stars must be an integer between 1 and 5',
+                },
+            });
+        }
+
         for (const entry of participantRatings) {
             if (!isRecord(entry) || typeof entry.rateeUid !== 'string') {
                 return res.status(400).json({
@@ -93,6 +110,7 @@ export async function submitActivityRatingHandler(
             ...(typeof comment === 'string' && comment.trim()
                 ? { comment: comment.trim() }
                 : {}),
+            ...(typeof activityStars === 'number' ? { activityStars } : {}),
             participantRatings: participantRatings.map((entry) => ({
                 rateeUid: (entry as Record<string, unknown>).rateeUid as string,
                 stars: (entry as Record<string, unknown>).stars as number,

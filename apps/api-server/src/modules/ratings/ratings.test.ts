@@ -131,6 +131,66 @@ describe('ratings routes', () => {
             expect(res.status).toBe(409);
             expect(res.body.ok).toBe(false);
         });
+
+        it('when activityStars is valid => forwarded to the service', async () => {
+            vi.mocked(ratingsService.submitActivityRating).mockResolvedValue({
+                ratingId: 'test-uid-1',
+                updated: false,
+            });
+            const app = createApp();
+
+            const res = await request(app)
+                .post('/api/activities/activity-1/ratings')
+                .send({
+                    sportType: 'Basketball',
+                    activityStars: 4,
+                    participantRatings: [{ rateeUid: 'user-2', stars: 5 }],
+                });
+
+            expect(res.status).toBe(200);
+            expect(res.body.ok).toBe(true);
+            expect(ratingsService.submitActivityRating).toHaveBeenCalledWith(
+                expect.objectContaining({ activityStars: 4 }),
+            );
+        });
+
+        it('when activityStars is out of range => expected 400', async () => {
+            const app = createApp();
+
+            for (const activityStars of [0, 6]) {
+                vi.clearAllMocks();
+                const res = await request(app)
+                    .post('/api/activities/activity-1/ratings')
+                    .send({
+                        activityStars,
+                        participantRatings: [{ rateeUid: 'user-2', stars: 5 }],
+                    });
+
+                expect(res.status).toBe(400);
+                expect(res.body.ok).toBe(false);
+                expect(ratingsService.submitActivityRating).not.toHaveBeenCalled();
+            }
+        });
+
+        it('when activityStars is absent => service input stays undefined', async () => {
+            vi.mocked(ratingsService.submitActivityRating).mockResolvedValue({
+                ratingId: 'test-uid-1',
+                updated: false,
+            });
+            const app = createApp();
+
+            const res = await request(app)
+                .post('/api/activities/activity-1/ratings')
+                .send({
+                    sportType: 'Basketball',
+                    participantRatings: [{ rateeUid: 'user-2', stars: 5 }],
+                });
+
+            expect(res.status).toBe(200);
+            const call =
+                vi.mocked(ratingsService.submitActivityRating).mock.calls[0][0];
+            expect(call).not.toHaveProperty('activityStars');
+        });
     });
 
     describe('GET /api/activities/:activityId/my-rating', () => {
