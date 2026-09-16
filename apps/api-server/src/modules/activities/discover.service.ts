@@ -321,6 +321,10 @@ function mapDocForDiscover(
                 ? data.pendingRequestCount
                 : 0,
         status: data.status as ActivityWithId['status'],
+        isPaid: data.isPaid === true,
+        ...(typeof data.fee === 'number' && Number.isFinite(data.fee) && data.fee > 0
+            ? { fee: data.fee }
+            : {}),
         ...(typeof data.coverImageUrl === 'string'
             ? { coverImageUrl: data.coverImageUrl }
             : {}),
