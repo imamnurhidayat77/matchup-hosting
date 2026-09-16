@@ -114,6 +114,18 @@ abstract class ActivityRepository {
     String? joinPolicy,
   });
 
+  /// Host-only cover update (`PATCH /api/activities/:activityId/cover`).
+  /// The image bytes must already live at [coverImagePath] in Storage
+  /// (`activities/{id}/cover/…`, uploaded with [StorageService]);
+  /// [coverImageUrl] is its download URL. Both are required by the
+  /// backend, which validates the path prefix. Throws on failure so the
+  /// caller can warn while keeping the already-created activity.
+  Future<void> updateCover({
+    required String activityId,
+    required String coverImagePath,
+    required String coverImageUrl,
+  });
+
   /// Generic host-only status update. [status] is the wire value the
   /// backend accepts: `'open' | 'cancelled' | 'completed' | 'removed'`.
   /// Use this for "mark as completed" once the activity time has passed;

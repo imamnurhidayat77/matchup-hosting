@@ -806,24 +806,24 @@ class _LogoutRow extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
               alignment: Alignment.center,
-              child: const Icon(
+              child: Icon(
                 Icons.logout_rounded,
                 size: 18,
-                color: AppColors.dangerAccent,
+                color: context.colors.errorText,
               ),
             ),
             const SizedBox(width: AppSpacing.x4),
             Text(
               'Log Out',
               style: AppTypography.labelField(context).copyWith(
-                color: AppColors.dangerAccent,
+                color: context.colors.errorText,
               ),
             ),
             const Spacer(),
             Icon(
               Icons.chevron_right_rounded,
               size: 20,
-              color: AppColors.dangerAccent.withValues(alpha: 0.5),
+              color: context.colors.errorText.withValues(alpha: 0.5),
             ),
           ],
         ),
@@ -896,10 +896,13 @@ class _LogoutSheet extends StatelessWidget {
               shape: BoxShape.circle,
             ),
             alignment: Alignment.center,
-            child: const Icon(
+            // Theme-aware red: dangerAccent as text is 3.7:1 on white
+            // and raw danger is 3.5:1 on dark surfaces — errorText
+            // clears AA both themes (6.5/9.4:1).
+            child: Icon(
               Icons.logout_rounded,
               size: 26,
-              color: AppColors.dangerAccent,
+              color: context.colors.errorText,
             ),
           ),
           const SizedBox(height: AppSpacing.x3),
@@ -908,7 +911,7 @@ class _LogoutSheet extends StatelessWidget {
           Text(
             'Log Out',
             style: AppTypography.titleSheet(context).copyWith(
-              color: AppColors.dangerAccent,
+              color: context.colors.errorText,
             ),
           ),
           const SizedBox(height: AppSpacing.x2),
@@ -927,7 +930,9 @@ class _LogoutSheet extends StatelessWidget {
             height: 52,
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.dangerAccent,
+                // Solid danger red: white label clears AA (5.1:1) both
+                // themes, unlike dangerAccent (3.7:1).
+                backgroundColor: AppColors.danger,
                 foregroundColor: context.colors.textOnPrimary,
                 elevation: 0,
                 shape: RoundedRectangleBorder(

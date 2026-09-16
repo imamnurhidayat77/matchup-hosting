@@ -14,7 +14,7 @@ class LocationTimeoutException implements Exception {
 
 /// Thin wrapper around [geolocator] for the chat "share location" attachment
 /// (`_InputBar`'s `+` menu in `chat_screen.dart`). Mirrors the degrade-
-/// gracefully pattern used by [BiometricService] / [CalendarService]: every
+/// gracefully pattern used by [CalendarService]: every
 /// failure mode (services disabled, permission denied, permission denied
 /// forever) returns `null` instead of throwing, so the call site only needs
 /// to branch on "did we get a position". The one exception is a GPS

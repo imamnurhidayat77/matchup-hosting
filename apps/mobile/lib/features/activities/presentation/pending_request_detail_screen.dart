@@ -9,6 +9,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/utils/geo.dart';
+import '../../../core/utils/nav_guard.dart';
 import '../../../core/widgets/app_avatar.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_dialog.dart';
@@ -316,8 +317,12 @@ class _HostRow extends StatelessWidget {
       button: canOpen,
       label: canOpen ? 'View host profile: ${activity.hostName}' : null,
       child: GestureDetector(
+        // Same double-tap guard as the standard detail host card.
         onTap: canOpen
-            ? () => context.push('/player-profile/uid/$hostId')
+            ? () => NavGuard.onceFor(
+                  'host-profile-$hostId',
+                  () => context.push('/player-profile/uid/$hostId'),
+                )
             : null,
         behavior: HitTestBehavior.opaque,
         child: Container(

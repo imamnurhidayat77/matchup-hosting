@@ -535,6 +535,10 @@ class _CompactCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Past-tab rows for called-off games. `lifecycleStatus` carries the
+    // raw backend string; payloads without one never match.
+    final isCancelled =
+        activity.lifecycleStatus.toLowerCase() == 'cancelled';
     return Semantics(
       button: true,
       label: activity.title,
@@ -568,7 +572,8 @@ class _CompactCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Sport badge + joined count (or the pending pill).
+                    // Sport badge + joined count (pending pill / cancelled
+                    // pill instead where applicable).
                     Row(
                       children: [
                         _SportBadge(label: activity.sportType, small: true),
@@ -588,6 +593,27 @@ class _CompactCard extends StatelessWidget {
                               'WAITING APPROVAL',
                               style: AppTypography.chipLabel(context).copyWith(
                                 color: context.colors.warningText,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.4,
+                              ),
+                            ),
+                          )
+                        else if (isCancelled)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: context.colors.errorLight,
+                              borderRadius:
+                                  BorderRadius.circular(AppRadius.pill),
+                            ),
+                            child: Text(
+                              'CANCELLED',
+                              style: AppTypography.chipLabel(context).copyWith(
+                                color: context.colors.errorText,
                                 fontSize: 10,
                                 fontWeight: FontWeight.w800,
                                 letterSpacing: 0.4,
@@ -657,7 +683,9 @@ class _SimpleList extends ConsumerStatefulWidget {
   final bool past;
 
   /// Pending-request rows render an amber "waiting approval" badge
-  /// instead of the joined count.
+  /// instead of the joined count. Cancelled games (Past tab) render a
+  /// red "cancelled" badge the same way so a called-off game never
+  /// reads as a normal completed one.
   final bool pending;
   final String? emptyActionLabel;
   final VoidCallback? onEmptyAction;

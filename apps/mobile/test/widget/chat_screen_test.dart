@@ -111,6 +111,30 @@ void main() {
           builder: (_, state) =>
               ChatScreen(activityId: state.pathParameters['id']!),
         ),
+        GoRoute(
+          path: '/joined-activity/:id',
+          builder: (_, state) => Scaffold(
+            body: Text('Joined ${state.pathParameters['id']}'),
+          ),
+        ),
+        GoRoute(
+          path: '/manage-activity/:id',
+          builder: (_, state) => Scaffold(
+            body: Text('Manage ${state.pathParameters['id']}'),
+          ),
+        ),
+        GoRoute(
+          path: '/past-activity/:id/review',
+          builder: (_, state) => Scaffold(
+            body: Text('Past ${state.pathParameters['id']}'),
+          ),
+        ),
+        GoRoute(
+          path: '/activity/:id',
+          builder: (_, state) => Scaffold(
+            body: Text('Discover ${state.pathParameters['id']}'),
+          ),
+        ),
       ],
     );
 
@@ -376,7 +400,21 @@ void main() {
       await pumpScreen(tester);
       await tester.pump(const Duration(milliseconds: 100));
 
-      await tester.longPress(find.text('Hey there'));
+      // Message text is SelectableText (long-press selects for copy), so
+      // the reaction picker is targeted via the bubble padding: a press
+      // inside the 16x12 padding hits the bubble's own GestureDetector
+      // instead of the text selection gesture.
+      final textFinder = find.text('Hey there');
+      final bubbleDetector = tester
+          .widgetList<GestureDetector>(
+            find.ancestor(
+              of: textFinder,
+              matching: find.byType(GestureDetector),
+            ),
+          )
+          .firstWhere((d) => d.onLongPress != null);
+      final bubbleRect = tester.getRect(find.byWidget(bubbleDetector));
+      await tester.longPressAt(bubbleRect.topLeft + const Offset(6, 6));
       await tester.pump(const Duration(milliseconds: 100));
 
       // Reaction picker sheet offers the closed emoji set.
@@ -468,6 +506,56 @@ void main() {
           optionIndex: 1,
         ),
       ).called(1);
+    });
+
+    group('View activity details routing', () {
+      Future<void> openDetails(WidgetTester tester) async {
+        await pumpScreen(tester);
+        await tester.pump(const Duration(milliseconds: 100));
+        final settings = find.bySemanticsLabel('Chat settings');
+        await tester.ensureVisible(settings);
+        await tester.pumpAndSettle();
+        await tester.tap(settings);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('View activity details'));
+        await tester.pumpAndSettle();
+      }
+
+      testWidgets('participant sees the joined detail, not discover', (
+        tester,
+      ) async {
+        when(() => activityRepo.byId(any())).thenAnswer(
+          (_) async => testActivity().copyWith(isParticipant: true),
+        );
+
+        await openDetails(tester);
+
+        expect(find.text('Joined Test Group'), findsOneWidget);
+        expect(find.text('Discover Test Group'), findsNothing);
+      });
+
+      testWidgets('host sees the manage screen', (tester) async {
+        when(() => activityRepo.byId(any())).thenAnswer(
+          (_) async => testActivity().copyWith(isHost: true),
+        );
+
+        await openDetails(tester);
+
+        expect(find.text('Manage Test Group'), findsOneWidget);
+      });
+
+      testWidgets('past games open the review screen', (tester) async {
+        when(() => activityRepo.byId(any())).thenAnswer(
+          (_) async => testActivity().copyWith(
+            isParticipant: true,
+            status: ActivityStatus.past,
+          ),
+        );
+
+        await openDetails(tester);
+
+        expect(find.text('Past Test Group'), findsOneWidget);
+      });
     });
   });
 }

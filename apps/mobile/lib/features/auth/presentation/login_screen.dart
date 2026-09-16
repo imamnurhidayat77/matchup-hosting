@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../../../core/providers/auth_state_provider.dart';
 import '../../../core/providers/repository_providers.dart';
 import '../data/auth_repository.dart';
-import '../../../core/services/biometric_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
@@ -25,8 +24,6 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen>
     with SecureScreenMixin {
-  bool _biometricAvailable = false;
-
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -34,56 +31,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   bool _isLoading = false;
 
   @override
-  void initState() {
-    super.initState();
-    _detectBiometrics();
-  }
-
-  @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
-  }
-
-  Future<void> _detectBiometrics() async {
-    final available = await BiometricService.instance.isAvailable;
-    if (mounted) setState(() => _biometricAvailable = available);
-  }
-
-  Future<void> _onBiometricLogin() async {
-    final result = await BiometricService.instance.authenticateDetailed(
-      reason: 'Authenticate to sign in to MatchUp',
-    );
-    if (!mounted) return;
-    switch (result) {
-      case BiometricResult.cancelled:
-        // User dismissed the prompt — silently return, no snackbar.
-        return;
-      case BiometricResult.failed:
-        AppSnackbar.show(
-          context,
-          message: 'Biometric authentication failed.',
-          variant: AppSnackbarVariant.error,
-        );
-        return;
-      case BiometricResult.success:
-        break;
-    }
-    await ref.read(authStateProvider.notifier).checkSession();
-    if (!mounted) return;
-    final status = ref.read(authStatusProvider);
-    if (status != AuthStatus.authenticated) {
-      AppSnackbar.show(
-        context,
-        message: 'No saved session. Please sign in with your password.',
-        variant: AppSnackbarVariant.info,
-      );
-      return;
-    }
-    // Mirror the password path: navigate explicitly instead of relying
-    // on the async router redirect.
-    context.go('/discovery');
   }
 
   Future<void> _onClose() async {
@@ -361,49 +312,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                       ),
                     ),
 
-                    // Biometric login
-                    if (_biometricAvailable) ...[
-                      const SizedBox(height: AppSpacing.x3),
-                      Semantics(
-                        button: true,
-                        label: 'Use biometrics',
-                        child: PressableScale(
-                          onTap: _onBiometricLogin,
-                          child: Container(
-                            width: double.infinity,
-                            height: 54,
-                            decoration: BoxDecoration(
-                              color: context.colors.surface,
-                              borderRadius:
-                                  BorderRadius.circular(AppRadius.lg),
-                              border: Border.all(
-                                color: context.colors.primaryOnSurface,
-                              ),
-                            ),
-                            alignment: Alignment.center,
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.fingerprint_rounded,
-                                  size: 20,
-                                  color: context.colors.primaryOnSurface,
-                                ),
-                                const SizedBox(width: AppSpacing.x2),
-                                Text(
-                                  'Use Biometrics',
-                                  style: AppTypography.labelField(context)
-                                      .copyWith(
-                                        color: context.colors.primaryOnSurface,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
                     const SizedBox(height: AppSpacing.x4),
 
                     // Don't have an account? Sign Up

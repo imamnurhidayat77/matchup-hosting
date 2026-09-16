@@ -365,6 +365,52 @@ describe('users routes', () => {
       });
     });
 
+    it('when heightCm is valid => forwards it to the service', async () => {
+      vi.mocked(usersService.updateUserProfile).mockResolvedValueOnce({
+        authUid: 'test-uid-1',
+        email: 'user@example.com',
+        heightCm: 178,
+        createdAt: {
+          toDate: () => new Date('2026-08-18T00:00:00Z'),
+        } as never,
+        updatedAt: {
+          toDate: () => new Date('2026-09-06T00:00:00Z'),
+        } as never,
+      });
+
+      const app = createApp();
+
+      const response = await request(app)
+        .patch('/api/users/me')
+        .send({ heightCm: 178 });
+
+      expect(response.status).toBe(200);
+      expect(usersService.updateUserProfile).toHaveBeenCalledWith(
+        'test-uid-1',
+        { heightCm: 178 },
+      );
+    });
+
+    it.each([199.5, 20, 400, 'tall', true])(
+      'when heightCm is %p => expected 400 w/ INVALID_INPUT',
+      async (heightCm) => {
+        const app = createApp();
+
+        const response = await request(app)
+          .patch('/api/users/me')
+          .send({ heightCm });
+
+        expect(response.status).toBe(400);
+        expect(response.body).toEqual({
+          ok: false,
+          error: {
+            code: 'INVALID_INPUT',
+            message: 'heightCm must be an integer between 50 and 300',
+          },
+        });
+      },
+    );
+
     it('when displayName is not a string => expected 400 w/ INVALID_INPUT', async () => {
       const app = createApp();
 

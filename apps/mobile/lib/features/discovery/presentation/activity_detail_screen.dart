@@ -10,6 +10,7 @@ import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/utils/geo.dart';
+import '../../../core/utils/nav_guard.dart';
 import '../../../core/utils/share_helper.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/dark_colors.dart';
@@ -23,6 +24,7 @@ import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../../activities/domain/activity_model.dart';
 import '../../activities/domain/activity_participant.dart';
+import '../../activities/presentation/my_activities_screen.dart';
 import '../../report/presentation/report_activity_sheet.dart';
 import 'widgets/venue_map_card.dart';
 
@@ -235,6 +237,8 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
         // Refresh the detail (viewer context now carries the pending
         // request) so a remount renders the pending pill from data.
         ref.invalidate(_activityDetailProvider(widget.activityId));
+        // And the Pending tab, which caches keepAlive-side.
+        ref.invalidate(pendingGamesProvider);
         AppSnackbar.show(
           context,
           message: 'Request sent! The host will review it soon.',
@@ -245,6 +249,9 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       await ref.read(activityRepositoryProvider).join(widget.activityId);
       if (!mounted) return;
       HapticFeedback.heavyImpact();
+      // Upcoming caches keepAlive-side — refresh it now so the game is
+      // there when the user opens My Games.
+      ref.invalidate(joinedGamesProvider);
       AppSnackbar.show(
         context,
         message: 'You\'ve joined ${widget.activity.title}!',
@@ -606,8 +613,14 @@ class _HostCard extends StatelessWidget {
       button: canOpen,
       label: canOpen ? 'View host profile: $hostName' : null,
       child: PressableScale(
+        // Double-tap guard: a second push before the first registers
+        // creates two pages with the same key and red-screens
+        // ('!keyReservation.contains(key)'). See NavGuard.
         onTap: canOpen
-            ? () => context.push('/player-profile/uid/${hostId.trim()}')
+            ? () => NavGuard.onceFor(
+                  'host-profile-$hostId',
+                  () => context.push('/player-profile/uid/${hostId.trim()}'),
+                )
             : null,
         child: Container(
           padding: const EdgeInsets.symmetric(

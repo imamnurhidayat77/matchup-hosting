@@ -603,6 +603,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 child: _Header(
                   title: title,
                   activityId: widget.activityId,
+                  activity: activityAsync.valueOrNull,
                 ),
               ),
             ),
@@ -650,9 +651,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 const _chatHeaderNavyTop = Color(0xFF1B2BA3);
 
 class _Header extends ConsumerWidget {
-  const _Header({required this.title, required this.activityId});
+  const _Header({
+    required this.title,
+    required this.activityId,
+    this.activity,
+  });
   final String title;
   final String activityId;
+
+  /// Viewer-context snapshot for routing "View activity details".
+  /// Null while the activity is still loading — the sheet then falls
+  /// back to the discover detail route.
+  final ActivityModel? activity;
 
   /// Maps a backend uid to a friendly display name. Used by the typing
   /// indicator so "alex is typing..." reads as "Alex is typing..."
@@ -803,6 +813,7 @@ class _Header extends ConsumerWidget {
                     context,
                     activityId: activityId,
                     activityTitle: title,
+                    activity: activity,
                   ),
                 ),
               ],
@@ -1543,8 +1554,13 @@ class _BubbleContent extends StatelessWidget {
     return _bubbleText(context);
   }
 
+  /// Plain-text bubble. Selectable so users can copy message text with
+  /// the native long-press toolbar. Verified: a long-press on the text
+  /// is claimed by the selection gesture, so the bubble's reaction
+  /// picker (parent onLongPress) does NOT also fire — reactions stay
+  /// reachable via long-press on the bubble padding around the text.
   Widget _bubbleText(BuildContext context) {
-    return Text(
+    return SelectableText(
       msg.text,
       style: AppTypography.bodyReading(context).copyWith(
         color: isMine ? AppColors.textOnPrimary : context.colors.textPrimary,
@@ -2272,20 +2288,40 @@ class _InputBar extends StatelessWidget {
 
 // ─── Chat settings sheet ─────────────────────────────────────────────────────
 
+/// Route for "View activity details" from chat: the viewer is a member
+/// here, so never the discover (join-flow) detail — host → manage,
+/// participant → joined, past lifecycle → review. Null (still loading)
+/// falls back to the discover route.
+String _detailsRoute(ActivityModel? activity, String activityId) {
+  if (activity == null) return '/activity/$activityId';
+  if (activity.status == ActivityStatus.past) {
+    return '/past-activity/$activityId/review';
+  }
+  if (activity.isHost) return '/manage-activity/$activityId';
+  if (activity.isParticipant) return '/joined-activity/$activityId';
+  return '/activity/$activityId';
+}
+
 /// Bottom sheet behind the header settings button: view the activity,
 /// open its photo album, toggle the local mute, or report it.
 class _ChatSettingsSheet extends StatefulWidget {
   const _ChatSettingsSheet({
     required this.activityId,
     required this.activityTitle,
+    this.activity,
   });
   final String activityId;
   final String activityTitle;
+
+  /// Viewer-context snapshot for routing "View activity details"
+  /// (host → manage, participant → joined, past → review).
+  final ActivityModel? activity;
 
   static Future<void> show(
     BuildContext context, {
     required String activityId,
     required String activityTitle,
+    ActivityModel? activity,
   }) {
     return showModalBottomSheet<void>(
       context: context,
@@ -2294,6 +2330,7 @@ class _ChatSettingsSheet extends StatefulWidget {
       builder: (_) => _ChatSettingsSheet(
         activityId: activityId,
         activityTitle: activityTitle,
+        activity: activity,
       ),
     );
   }
@@ -2352,7 +2389,7 @@ class _ChatSettingsSheetState extends State<_ChatSettingsSheet> {
             label: 'View activity details',
             onTap: () {
               Navigator.of(context).pop();
-              context.push('/activity/${widget.activityId}');
+              context.push(_detailsRoute(widget.activity, widget.activityId));
             },
           ),
           _SettingsRow(

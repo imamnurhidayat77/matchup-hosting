@@ -122,6 +122,20 @@ class UserModel {
     );
   }
 
+  /// Whole years since [dateOfBirth]. Null when unknown or in the
+  /// future. Screens show this ("24") — never the raw birthdate.
+  int? get age {
+    final dob = dateOfBirth;
+    if (dob == null) return null;
+    final now = DateTime.now();
+    var years = now.year - dob.year;
+    if (now.month < dob.month ||
+        (now.month == dob.month && now.day < dob.day)) {
+      years--;
+    }
+    return years < 0 ? null : years;
+  }
+
   /// Returns the rating summary for a given sport, falling back to the
   /// legacy [rating] field for seed users that pre-date the rating system.
   /// Returns `null` when there is genuinely no data to display.

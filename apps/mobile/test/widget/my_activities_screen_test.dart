@@ -19,6 +19,7 @@ class _MockNotificationRepository extends Mock
 ActivityModel _fixture({
   String id = '1',
   String title = 'Saturday Basketball',
+  String lifecycleStatus = '',
 }) => ActivityModel(
   id: id,
   title: title,
@@ -31,6 +32,7 @@ ActivityModel _fixture({
   capacity: 10,
   participantCount: 6,
   hostName: 'Alex',
+  lifecycleStatus: lifecycleStatus,
 );
 
 void main() {
@@ -201,14 +203,39 @@ void main() {
           (_) async => [_fixture(id: '9', title: 'Evening Tennis')],
         );
 
-        await pumpScreen(tester);
-        await tester.tap(find.text('Pending'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Evening Tennis'));
-        await tester.pumpAndSettle();
+      await pumpScreen(tester);
+      await tester.tap(find.text('Pending'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Evening Tennis'));
+      await tester.pumpAndSettle();
 
-        expect(find.text('Pending Detail 9'), findsOneWidget);
-      });
+      expect(find.text('Pending Detail 9'), findsOneWidget);
     });
+  });
+
+  group('Past tab', () {
+    testWidgets('should label a cancelled game instead of a normal one', (
+      tester,
+    ) async {
+      when(() => activityRepo.joinedByUser(any())).thenAnswer((_) async => []);
+      when(() => activityRepo.hostedByUser(any())).thenAnswer((_) async => []);
+      when(() => activityRepo.pastByUser(any())).thenAnswer(
+        (_) async => [
+          _fixture(
+            id: '7',
+            title: 'Called-off Tennis',
+            lifecycleStatus: 'cancelled',
+          ),
+        ],
+      );
+
+      await pumpScreen(tester);
+      await tester.tap(find.text('Past'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Called-off Tennis'), findsOneWidget);
+      expect(find.text('CANCELLED'), findsOneWidget);
+    });
+  });
   });
 }

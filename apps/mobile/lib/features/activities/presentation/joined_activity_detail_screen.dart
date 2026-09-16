@@ -8,6 +8,7 @@ import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/utils/geo.dart';
+import '../../../core/utils/nav_guard.dart';
 import '../../../core/utils/share_helper.dart';
 import '../../../core/widgets/app_dialog.dart';
 import '../../../core/theme/dark_colors.dart';
@@ -18,6 +19,7 @@ import '../../../core/widgets/asset_image.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_tappable.dart';
 import '../../../core/widgets/error_retry.dart';
+import '../../../core/widgets/label_badge.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../../calendar/domain/calendar_event.dart';
@@ -132,6 +134,12 @@ class _DetailBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // A cancelled game keeps rendering (history, chat, roster) but must
+    // say so loudly — same red CANCELLED language as the host's manage
+    // screen. `lifecycleStatus` carries the raw backend string; payloads
+    // without one never match, so this only fires on explicit cancels.
+    final isCancelled =
+        activity.lifecycleStatus.toLowerCase() == 'cancelled';
     return Stack(
       children: [
         // ── Hero ─────────────────────────────────────────────────────────
@@ -165,15 +173,33 @@ class _DetailBody extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Title
-                  Text(
-                    activity.title,
-                    style: AppTypography.headingDisplay(context),
+                  // Title + cancelled badge (host parity).
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          activity.title,
+                          style: AppTypography.headingDisplay(context),
+                        ),
+                      ),
+                      if (isCancelled) ...[
+                        const SizedBox(width: AppSpacing.x3),
+                        LabelBadge(
+                          label: 'CANCELLED',
+                          background: context.colors.errorLight,
+                          foreground: context.colors.errorText,
+                        ),
+                      ],
+                    ],
                   ),
                   const SizedBox(height: AppSpacing.x4),
 
-                  // You're in banner
-                  _JoinedBanner(dateTime: activity.dateTime),
+                  // Status banner: cancelled notice replaces "You're in".
+                  if (isCancelled)
+                    const _CancelledBanner()
+                  else
+                    _JoinedBanner(dateTime: activity.dateTime),
                   const SizedBox(height: AppSpacing.x4),
 
                   // Host card
@@ -300,7 +326,7 @@ class _Hero extends StatelessWidget {
           ),
         ),
 
-        // Sport + JOINED badges — bottom-left
+        // Sport + JOINED badges — bottom-left (CANCELLED when cancelled)
         Positioned(
           left: AppSpacing.x5,
           bottom: AppSpacing.x4 + 40,
@@ -312,11 +338,18 @@ class _Hero extends StatelessWidget {
                 textColor: AppColors.textPrimary,
               ),
               const SizedBox(width: AppSpacing.x2),
-              _PillBadge(
-                label: '✓  JOINED',
-                bgColor: AppColors.avatarSecondary,
-                textColor: AppColors.textOnPrimary,
-              ),
+              if (activity.lifecycleStatus.toLowerCase() == 'cancelled')
+                _PillBadge(
+                  label: 'CANCELLED',
+                  bgColor: context.colors.errorLight,
+                  textColor: context.colors.errorText,
+                )
+              else
+                _PillBadge(
+                  label: '✓  JOINED',
+                  bgColor: AppColors.avatarSecondary,
+                  textColor: AppColors.textOnPrimary,
+                ),
             ],
           ),
         ),
@@ -421,18 +454,20 @@ class _JoinedBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.x4),
       decoration: BoxDecoration(
-        color: AppColors.statusSuccessBg,
+        // Theme-aware bg: the hardcoded light success fill glowed
+        // neon against a dark screen.
+        color: context.colors.statusSuccessBg,
         borderRadius: BorderRadius.circular(AppRadius.card),
         border: Border.all(
-          color: AppColors.avatarSecondary.withValues(alpha: 0.3),
+          color: context.colors.successText.withValues(alpha: 0.3),
         ),
       ),
       child: Row(
         children: [
-          const Icon(
+          Icon(
             Icons.check_circle_rounded,
             size: 22,
-            color: AppColors.avatarSecondary,
+            color: context.colors.successText,
           ),
           const SizedBox(width: AppSpacing.x3),
           Expanded(
@@ -442,14 +477,64 @@ class _JoinedBanner extends StatelessWidget {
                 Text(
                   "You're in!",
                   style: AppTypography.labelField(context).copyWith(
-                    color: AppColors.avatarSecondary,
+                    color: context.colors.successText,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   'See you on ${fmt.format(dateTime)}',
                   style: AppTypography.metaSub(context).copyWith(
-                    color: AppColors.avatarSecondary,
+                    color: context.colors.successText,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Shown in place of [_JoinedBanner] when the host cancelled the game —
+/// same red-tint language as the host's CANCELLED badge.
+class _CancelledBanner extends StatelessWidget {
+  const _CancelledBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.x4),
+      decoration: BoxDecoration(
+        color: context.colors.errorLight,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        border: Border.all(
+          color: context.colors.errorText.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.cancel_outlined,
+            size: 22,
+            color: context.colors.errorText,
+          ),
+          const SizedBox(width: AppSpacing.x3),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'This game was cancelled',
+                  style: AppTypography.labelField(context).copyWith(
+                    color: context.colors.errorText,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'The host called it off. Chat history stays readable.',
+                  style: AppTypography.metaSub(context).copyWith(
+                    color: context.colors.errorText,
                   ),
                 ),
               ],
@@ -490,10 +575,15 @@ class _HostCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return PressableScale(
-      onTap: () => context.push(
-        hostId.trim().isNotEmpty
-            ? '/player-profile/uid/${hostId.trim()}'
-            : '/player-profile/$hostName',
+      // Double-tap guard: duplicate pushes share a page key and
+      // red-screen ('!keyReservation.contains(key)'). See NavGuard.
+      onTap: () => NavGuard.onceFor(
+        'host-profile-${hostId.trim().isNotEmpty ? hostId.trim() : hostName}',
+        () => context.push(
+          hostId.trim().isNotEmpty
+              ? '/player-profile/uid/${hostId.trim()}'
+              : '/player-profile/$hostName',
+        ),
       ),
       child: Container(
         padding: const EdgeInsets.symmetric(

@@ -91,15 +91,23 @@ class AppShell extends StatelessWidget {
       // which is what lets a step spotlight a tab-bar item even though the
       // tab bar lives outside `body`.
       body: TourHost(location: location, child: child),
-      bottomNavigationBar: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _TabBar(
-            currentIndex: index,
-            onTap: (i) => context.go(_tabs[i].route),
-          ),
-          const HomeIndicator(),
-        ],
+      // SafeArea (bottom) keeps the bar above the system navigation /
+      // gesture pill on real devices — without it the labels + home
+      // indicator render underneath the system bar and look cut off.
+      // The custom HomeIndicator stays (Figma reference); SafeArea only
+      // adds the OS-reserved inset below it.
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _TabBar(
+              currentIndex: index,
+              onTap: (i) => context.go(_tabs[i].route),
+            ),
+            const HomeIndicator(),
+          ],
+        ),
       ),
     );
   }
@@ -113,23 +121,38 @@ class _TabBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: context.colors.surface,
-        border: Border(top: BorderSide(color: context.colors.border, width: 1)),
-      ),
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: List.generate(AppShell._tabs.length, (i) {
-          final tab = AppShell._tabs[i];
-          final isSelected = i == currentIndex;
-          return _NavItem(
-            tab: tab,
-            isSelected: isSelected,
-            onTap: () => onTap(i),
-          );
-        }),
+    // Clamp system text scaling inside the bar so huge accessibility
+    // fonts can't blow the fixed-height items apart on narrow screens.
+    // Labels already ellipsis; this just bounds the worst case.
+    final scaler = MediaQuery.textScalerOf(
+      context,
+    ).clamp(minScaleFactor: 1.0, maxScaleFactor: 1.3);
+    return MediaQuery(
+      data: MediaQuery.of(context).copyWith(textScaler: scaler),
+      child: Container(
+        decoration: BoxDecoration(
+          color: context.colors.surface,
+          border: Border(
+            top: BorderSide(color: context.colors.border, width: 1),
+          ),
+        ),
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: List.generate(AppShell._tabs.length, (i) {
+            final tab = AppShell._tabs[i];
+            final isSelected = i == currentIndex;
+            // Expanded (not fixed 64 px) so the five items always share
+            // whatever width the device has — 320 dp phones included.
+            return Expanded(
+              child: _NavItem(
+                tab: tab,
+                isSelected: isSelected,
+                onTap: () => onTap(i),
+              ),
+            );
+          }),
+        ),
       ),
     );
   }
@@ -160,9 +183,10 @@ class _NavItem extends StatelessWidget {
       label: tab.label,
       child: PressableScale(
         onTap: onTap,
+        // Width comes from the parent Expanded — only the height is
+        // fixed, so narrow screens share space instead of overflowing.
         child: SizedBox(
           key: tab.tourKey,
-          width: 64,
           height: 52,
           child: Column(
             mainAxisSize: MainAxisSize.min,

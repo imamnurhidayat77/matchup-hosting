@@ -23,6 +23,7 @@ const editableProfileFields = [
   'bio',
   'gender',
   'dateOfBirth',
+  'heightCm',
   'skillLevel',
   'preferredSports',
   'sportSkillLevels',
@@ -69,6 +70,10 @@ function buildProfileInput(body: Record<string, unknown>): UpdateUserProfileInpu
 
   if (isSkillLevel(body.skillLevel)) {
     input.skillLevel = body.skillLevel;
+  }
+
+  if (typeof body.heightCm === 'number') {
+    input.heightCm = body.heightCm;
   }
 
   if (isStringArray(body.preferredSports)) {
@@ -331,6 +336,22 @@ export async function updateMyUserProfileHandler(req: Request, res: Response) {
         error: {
           code: 'INVALID_INPUT',
           message: 'skillLevel must be beginner, intermediate, advanced, or any',
+        },
+      });
+    }
+
+    if (
+      body.heightCm !== undefined &&
+      (typeof body.heightCm !== 'number' ||
+        !Number.isInteger(body.heightCm) ||
+        body.heightCm < 50 ||
+        body.heightCm > 300)
+    ) {
+      return res.status(400).json({
+        ok: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'heightCm must be an integer between 50 and 300',
         },
       });
     }

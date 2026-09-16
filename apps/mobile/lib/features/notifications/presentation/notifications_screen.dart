@@ -404,7 +404,13 @@ class _TabItem extends StatelessWidget {
           duration: const Duration(milliseconds: 150),
           curve: Curves.easeOutCubic,
           decoration: BoxDecoration(
-            color: selected ? AppColors.textPrimary : Colors.transparent,
+            // Theme-aware pair: a hardcoded near-black pill is
+            // invisible on a dark background (and white-on-black text
+            // only works when the pill itself reads as a pill).
+            // textPrimary/background clears AA both themes (~13-15:1).
+            color: selected
+                ? context.colors.textPrimary
+                : Colors.transparent,
             borderRadius: BorderRadius.circular(AppRadius.pill),
           ),
           alignment: Alignment.center,
@@ -415,7 +421,7 @@ class _TabItem extends StatelessWidget {
                 label,
                 style: AppTypography.labelField(context).copyWith(
                   color: selected
-                      ? AppColors.textOnPrimary
+                      ? context.colors.background
                       : context.colors.textSecondary,
                   fontWeight:
                       selected ? FontWeight.w700 : FontWeight.w500,

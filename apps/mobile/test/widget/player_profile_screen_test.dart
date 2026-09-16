@@ -84,6 +84,42 @@ void main() {
       expect(find.text('Player not found.'), findsOneWidget);
     });
 
+    testWidgets('should show age and height chips when shared', (
+      tester,
+    ) async {
+      final now = DateTime.now();
+      final dob = DateTime(now.year - 24, now.month, now.day);
+      when(() => userRepo.byId('james')).thenAnswer(
+        (_) async => UserModel(
+          id: 'james',
+          displayName: 'James Wilson',
+          dateOfBirth: dob,
+          heightCm: 178,
+        ),
+      );
+
+      await pumpScreen(tester);
+
+      expect(find.text('24 yrs'), findsOneWidget);
+      expect(find.text('178 cm'), findsOneWidget);
+    });
+
+    testWidgets('should hide physical chips when not shared', (
+      tester,
+    ) async {
+      when(() => userRepo.byId('james')).thenAnswer(
+        (_) async => const UserModel(
+          id: 'james',
+          displayName: 'James Wilson',
+        ),
+      );
+
+      await pumpScreen(tester);
+
+      expect(find.textContaining('yrs'), findsNothing);
+      expect(find.textContaining('cm'), findsNothing);
+    });
+
     testWidgets('name constructor shows the unavailable empty state', (
       tester,
     ) async {

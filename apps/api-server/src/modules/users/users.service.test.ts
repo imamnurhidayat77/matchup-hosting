@@ -101,6 +101,38 @@ describe('user activity counts', () => {
         expect(profile?.activitiesCount).toBe(1);
         expect(profile?.hostedCount).toBe(0);
     });
+
+    it('getPublicUserProfile exposes dateOfBirth and heightCm', async () => {
+        const userGet = vi.fn().mockResolvedValue({
+            id: 'user-1',
+            exists: true,
+            data: () => ({
+                email: 'user@example.com',
+                createdAt: Timestamp.now(),
+                dateOfBirth: '2000-01-15',
+                heightCm: 178,
+            }),
+        });
+        const joinedGet = vi.fn().mockResolvedValue({ data: () => ({ count: 0 }) });
+        const hostedGet = vi.fn().mockResolvedValue({ data: () => ({ count: 0 }) });
+        vi.mocked(firestore.collectionGroup).mockReturnValue({
+            where: () => ({ count: () => ({ get: joinedGet }) }),
+        } as never);
+        vi.mocked(firestore.collection).mockImplementation(
+            ((name: string) => {
+                if (name === 'users') return { doc: () => ({ get: userGet }) };
+                if (name === 'activities') {
+                    return { where: () => ({ count: () => ({ get: hostedGet }) }) };
+                }
+                throw new Error(`unexpected collection: ${name}`);
+            }) as never,
+        );
+
+        const profile = await getPublicUserProfile('user-1');
+
+        expect(profile?.dateOfBirth).toBe('2000-01-15');
+        expect(profile?.heightCm).toBe(178);
+    });
 });
 
 describe('getPublicUserProfile displayName fallback', () => {

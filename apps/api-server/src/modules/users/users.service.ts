@@ -34,6 +34,8 @@ export type UserRecord = {
   bio?: string;
   gender?: string;
   dateOfBirth?: string;
+  /** Height in centimetres. Optional; shown publicly on the profile. */
+  heightCm?: number;
   skillLevel?: SkillLevel;
   preferredSports?: string[];
   /** Per-sport skill levels, e.g. `{ Tennis: 'intermediate' }`. */
@@ -62,6 +64,8 @@ export type UpdateUserProfileInput = {
   bio?: string;
   gender?: string;
   dateOfBirth?: string;
+  /** Height in centimetres (integer 50–300). */
+  heightCm?: number;
   skillLevel?: SkillLevel;
   preferredSports?: string[];
   sportSkillLevels?: Record<string, SkillLevel>;
@@ -76,6 +80,10 @@ export type PublicUserProfile = {
   displayName?: string;
   photoUrl?: string;
   bio?: string;
+  /** ISO date of birth — clients render age, never the raw date. */
+  dateOfBirth?: string;
+  /** Height in centimetres. */
+  heightCm?: number;
   skillLevel?: SkillLevel;
   preferredSports?: string[];
   sportSkillLevels?: Record<string, SkillLevel>;
@@ -206,6 +214,7 @@ function mapUserDoc(userDoc: FirebaseFirestore.DocumentSnapshot): UserRecord | n
     ...(typeof data.bio === 'string' ? { bio: data.bio } : {}),
     ...(typeof data.gender === 'string' ? { gender: data.gender } : {}),
     ...(typeof data.dateOfBirth === 'string' ? { dateOfBirth: data.dateOfBirth } : {}),
+    ...(Number.isInteger(data.heightCm) ? { heightCm: data.heightCm as number } : {}),
     ...(isSkillLevel(data.skillLevel) ? { skillLevel: data.skillLevel } : {}),
     ...(data.preferredSports !== undefined
       ? { preferredSports: assertStringArray(data.preferredSports, 'preferredSports') }
@@ -240,6 +249,8 @@ function toPublicUserProfile(user: UserRecord): PublicUserProfile {
     ...(user.displayName !== undefined ? { displayName: user.displayName } : {}),
     ...(user.photoUrl !== undefined ? { photoUrl: user.photoUrl } : {}),
     ...(user.bio !== undefined ? { bio: user.bio } : {}),
+    ...(user.dateOfBirth !== undefined ? { dateOfBirth: user.dateOfBirth } : {}),
+    ...(user.heightCm !== undefined ? { heightCm: user.heightCm } : {}),
     ...(user.skillLevel !== undefined ? { skillLevel: user.skillLevel } : {}),
     ...(user.preferredSports !== undefined ? { preferredSports: user.preferredSports } : {}),
     ...(user.sportSkillLevels !== undefined ? { sportSkillLevels: user.sportSkillLevels } : {}),

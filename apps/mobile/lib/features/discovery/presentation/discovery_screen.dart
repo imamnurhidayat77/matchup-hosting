@@ -20,6 +20,7 @@ import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../../tour/presentation/tour_anchors.dart';
 import '../../tour/presentation/tour_controller.dart';
+import '../../activities/presentation/my_activities_screen.dart';
 import '../domain/activity_model.dart';
 import '../data/remote_activity_repository.dart';
 import '../domain/discovery_filter.dart';
@@ -554,6 +555,9 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
     _persistSwipe(activityId: activity.id, decision: SwipeDecision.join);
     final repo = ref.read(activityRepositoryProvider);
     if (repo is RemoteActivityRepository) repo.invalidateFeed();
+    // The Upcoming tab caches keepAlive-side: without this it keeps
+    // serving the pre-join list until a manual pull-to-refresh.
+    ref.invalidate(joinedGamesProvider);
     setState(() => _topIndex += 1);
     HapticFeedback.heavyImpact();
     // The joined activity rides along as route extra so the match
@@ -596,6 +600,8 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
     _persistSwipe(activityId: activity.id, decision: SwipeDecision.join);
     final repo = ref.read(activityRepositoryProvider);
     if (repo is RemoteActivityRepository) repo.invalidateFeed();
+    // Same staleness contract as _openMatch, for the Pending tab.
+    ref.invalidate(pendingGamesProvider);
     setState(() => _topIndex += 1);
     HapticFeedback.heavyImpact();
     context.go('/request-sent/${activity.id}', extra: activity);

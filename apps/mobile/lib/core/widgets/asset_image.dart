@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
@@ -22,7 +24,8 @@ bool isRemoteImage(String? path) =>
 class AssetImageWithFallback extends StatelessWidget {
   const AssetImageWithFallback({
     super.key,
-    required this.imagePath,
+    this.imagePath,
+    this.memoryBytes,
     this.width,
     this.height,
     this.fit = BoxFit.cover,
@@ -32,11 +35,18 @@ class AssetImageWithFallback extends StatelessWidget {
     this.placeholderIcon = Icons.image_outlined,
     this.isAvatar = false,
     this.decodeWidth,
-  });
+  }) : assert(
+          imagePath != null || memoryBytes != null,
+          'Provide either imagePath or memoryBytes',
+        );
 
-  /// Bundled asset path (e.g. `assets/images/discovery/covers/foo.png`)
-  /// or remote `http(s)` URL.
-  final String imagePath;
+  /// Bundled asset path (e.g. `assets/...`) or remote `http(s)` URL.
+  /// Null when [memoryBytes] carries the image instead.
+  final String? imagePath;
+
+  /// In-memory image bytes (e.g. a just-picked cover photo that hasn't
+  /// been uploaded yet). Takes precedence over [imagePath] when set.
+  final Uint8List? memoryBytes;
   final double? width;
   final double? height;
   final BoxFit fit;
@@ -74,10 +84,28 @@ class AssetImageWithFallback extends StatelessWidget {
           );
 
     if (!isRemoteImage(imagePath)) {
+      // In-memory bytes (e.g. create-flow preview) render directly with
+      // no loader — same treatment as bundled assets below.
+      final bytes = memoryBytes;
+      if (bytes != null) {
+        final image = Image.memory(
+          bytes,
+          width: width,
+          height: height,
+          fit: fit,
+          semanticLabel: semanticLabel,
+          gaplessPlayback: true,
+          errorBuilder: (context, error, stackTrace) => placeholder,
+        );
+        if (borderRadius != null) {
+          return ClipRRect(borderRadius: borderRadius!, child: image);
+        }
+        return image;
+      }
       // Bundled assets resolve synchronously — render directly with no
       // loader (and no animation that could perturb golden tests).
       final image = Image.asset(
-        imagePath,
+        imagePath!,
         width: width,
         height: height,
         fit: fit,
@@ -109,7 +137,9 @@ class AssetImageWithFallback extends StatelessWidget {
         height != null ? (height! * dpr).round().clamp(1, 800) : null;
 
     final image = CachedNetworkImage(
-      imageUrl: imagePath,
+      // Non-null here: the memory/asset branches above already returned
+      // for every non-remote path.
+      imageUrl: imagePath!,
       width: width,
       height: height,
       fit: fit,

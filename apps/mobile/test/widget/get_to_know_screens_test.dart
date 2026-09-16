@@ -184,7 +184,7 @@ void main() {
       await tester.tap(find.text('Skip for now'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Give us some final details'), findsOneWidget);
+      expect(find.text('Almost done — a few quick details'), findsOneWidget);
       // Skipping sends no sports to the backend.
       expect(userRepo.lastSports, isNull);
     });
@@ -211,7 +211,7 @@ void main() {
       await tester.tap(find.text('Next (1 selected)'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Give us some final details'), findsOneWidget);
+      expect(find.text('Almost done — a few quick details'), findsOneWidget);
       expect(userRepo.lastSports, hasLength(1));
       expect(userRepo.lastSports!.single.sport, 'Basketball');
       expect(userRepo.lastSports!.single.level, 'Intermediate');
@@ -231,7 +231,7 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.text('Height'), findsOneWidget);
-      expect(find.text('Select Weight'), findsOneWidget);
+      expect(find.text('Weight'), findsOneWidget);
       expect(find.text('Date of Birth'), findsOneWidget);
       expect(find.text('3/3'), findsOneWidget);
     });
@@ -245,13 +245,13 @@ void main() {
         await tester.tap(find.text('Skip for now'));
         await tester.pumpAndSettle();
 
-        // Weight starts unset (no fabricated prefill); + sets the minimum.
-        expect(find.text('Not set yet — tap − or +'), findsOneWidget);
+        // Weight starts at the sensible default (70); + increments it.
+        expect(find.text('70'), findsOneWidget);
 
         await tester.tap(find.bySemanticsLabel('Increase weight'));
         await tester.pumpAndSettle();
 
-        expect(find.text('30'), findsWidgets);
+        expect(find.text('71'), findsOneWidget);
     });
   });
 }

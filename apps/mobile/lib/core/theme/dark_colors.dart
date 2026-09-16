@@ -16,7 +16,11 @@ class DarkPalette {
   static const shadow = Color(0x66000000);
   static const textPrimary = Color(0xFFE2E8F0);
   static const textSecondary = Color(0xFF94A3B8);
-  static const textTertiary = Color(0xFF64748B);
+  /// Tertiary slate lightened vs the `textSecondary` value (not the
+  /// near-black light-mode tertiary): 6.1:1 on surface, 4.7:1 on
+  /// surfaceMuted, 6.5:1 on background — clears WCAG AA everywhere it
+  /// appears as text in dark mode.
+  static const textTertiary = Color(0xFF8A99AD);
   static const iconPrimary = Color(0xFFA8B5C7);
 
   /// Dark-mode container for the primary brand colour — used for

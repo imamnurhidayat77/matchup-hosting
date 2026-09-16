@@ -55,9 +55,6 @@ dependencies:
   # SVG rendering for icons exported from Figma
   flutter_svg: ^2.0.10+1
 
-  # Biometric authentication (optional / class-two feature)
-  local_auth: ^2.3.0
-
   # Secure storage for tokens/PII (Keychain iOS, Keystore Android)
   flutter_secure_storage: ^11.1.0
 

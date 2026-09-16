@@ -8,6 +8,7 @@ import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/utils/geo.dart';
+import '../../../core/utils/nav_guard.dart';
 import '../../../core/utils/share_helper.dart';
 import '../../../core/widgets/app_dialog.dart';
 import '../../../core/theme/dark_colors.dart';
@@ -298,7 +299,10 @@ class _ManageBody extends StatelessWidget {
             ? context.colors.textSecondary
             : badgeLabel == 'FULL'
                 ? context.colors.warningText
-                : AppColors.avatarSecondary;
+                // successText, not raw avatarSecondary: #097044 on the
+                // dark success bg is 2.4:1; the token clears AA both
+                // themes.
+                : context.colors.successText;
     // "Mark as completed" is available once the game started and while
     // its lifecycle is still open (not cancelled/completed/removed).
     final bool showComplete =
@@ -416,8 +420,13 @@ class _ManageBody extends StatelessWidget {
                     const SizedBox(height: AppSpacing.x3),
                   ],
 
-                  // Cancel
-                  _CancelButton(onTap: onCancel),
+                  // Cancel — hidden once terminal, same rule as Mark as
+                  // Completed above: a cancelled/completed/removed game
+                  // has no further host transitions, so offering "Cancel
+                  // Activity" again would just 409/fail server-side.
+                  if (!_isTerminalLifecycle(lc)) ...[
+                    _CancelButton(onTap: onCancel),
+                  ],
                 ],
               ),
             ),
@@ -1555,10 +1564,14 @@ class _JoinRequestRow extends StatelessWidget {
             child: AppTappable(
               semanticLabel: 'View ${item.name} profile',
               feedback: AppTapFeedback.scale,
-              onTap: () => context.push(
-                item.userId.isNotEmpty
-                    ? '/player-profile/uid/${item.userId}'
-                    : '/player-profile/${item.name}',
+              // Double-tap guard (duplicate page keys red-screen).
+              onTap: () => NavGuard.onceFor(
+                'profile-${item.userId.isNotEmpty ? item.userId : item.name}',
+                () => context.push(
+                  item.userId.isNotEmpty
+                      ? '/player-profile/uid/${item.userId}'
+                      : '/player-profile/${item.name}',
+                ),
               ),
               child: Row(
                 children: [
@@ -1768,7 +1781,7 @@ class _CompleteButton extends StatelessWidget {
           color: context.colors.statusSuccessBg,
           borderRadius: BorderRadius.circular(AppRadius.pill),
           border: Border.all(
-            color: AppColors.avatarSecondary,
+            color: context.colors.successText,
             width: 1.5,
           ),
         ),
@@ -1778,13 +1791,13 @@ class _CompleteButton extends StatelessWidget {
             Icon(
               Icons.check_circle_outline_rounded,
               size: 18,
-              color: AppColors.avatarSecondary,
+              color: context.colors.successText,
             ),
             const SizedBox(width: AppSpacing.x2),
             Text(
               'Mark as Completed',
               style: AppTypography.labelField(context).copyWith(
-                color: AppColors.avatarSecondary,
+                color: context.colors.successText,
                 fontSize: 15,
               ),
             ),
