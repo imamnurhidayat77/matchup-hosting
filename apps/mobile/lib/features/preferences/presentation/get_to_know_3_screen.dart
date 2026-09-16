@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/providers/profile_providers.dart';
 import '../../../core/providers/repository_providers.dart';
@@ -14,7 +15,6 @@ import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../tour/presentation/tour_controller.dart';
-import '../../tour/presentation/tour_steps.dart';
 import 'get_to_know_1_screen.dart' show OnboardingProgressHeader;
 
 /// Final onboarding step — collects the physical details that live on
@@ -28,14 +28,16 @@ class GetToKnow3Screen extends ConsumerStatefulWidget {
 }
 
 class _GetToKnow3ScreenState extends ConsumerState<GetToKnow3Screen> {
-  final _heightController = TextEditingController(text: '183');
+  final _heightController = TextEditingController();
 
-  int _weightKg = 73;
+  /// Null until the user taps the stepper — no pre-selected weight.
+  int? _weightKg;
 
   // Date of birth, split so each wheel can be driven independently.
-  int _day = 29;
-  int _month = 3;
-  int _year = 1996;
+  // Null until the user scrolls each wheel — nothing is pre-filled.
+  int? _day;
+  int? _month;
+  int? _year;
 
   bool _saving = false;
 
@@ -52,13 +54,22 @@ class _GetToKnow3ScreenState extends ConsumerState<GetToKnow3Screen> {
   }
 
   /// Clamps the day when the selected month/year can't hold it (e.g. 31 Feb).
-  int get _daysInMonth => DateTime(_year, _month + 1, 0).day;
+  /// Falls back to neutral wheel positions until the user picks each part.
+  int get _daysInMonth =>
+      DateTime(_year ?? _maxYear, (_month ?? 1) + 1, 0).day;
 
   void _normaliseDay() {
-    if (_day > _daysInMonth) _day = _daysInMonth;
+    if ((_day ?? 1) > _daysInMonth) _day = _daysInMonth;
   }
 
-  DateTime get _dateOfBirth => DateTime(_year, _month, _day);
+  /// Null until the user has scrolled every wheel — submit is blocked then.
+  DateTime? get _dateOfBirth {
+    final day = _day;
+    final month = _month;
+    final year = _year;
+    if (day == null || month == null || year == null) return null;
+    return DateTime(year, month, day);
+  }
 
   Future<void> _onNext() async {
     final heightCm = int.tryParse(_heightController.text.trim());
@@ -71,26 +82,51 @@ class _GetToKnow3ScreenState extends ConsumerState<GetToKnow3Screen> {
       return;
     }
 
+    final weightKg = _weightKg;
+    if (weightKg == null) {
+      AppSnackbar.show(
+        context,
+        message: 'Select your weight.',
+        variant: AppSnackbarVariant.error,
+      );
+      return;
+    }
+
+    final dateOfBirth = _dateOfBirth;
+    if (dateOfBirth == null) {
+      AppSnackbar.show(
+        context,
+        message: 'Select your date of birth.',
+        variant: AppSnackbarVariant.error,
+      );
+      return;
+    }
+
     setState(() => _saving = true);
     try {
       await ref.read(userRepositoryProvider).updateProfile(
         heightCm: heightCm,
-        weightKg: _weightKg,
-        dateOfBirth: _dateOfBirth,
+        weightKg: weightKg,
+        dateOfBirth: dateOfBirth,
       );
       ref.invalidate(myProfileProvider);
+      // Onboarding complete — splash must not resume GTK on next cold start.
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('gtk_done', true);
+      } catch (_) {
+        // Fail-open: next splash treats missing as done for old accounts,
+        // and new accounts will simply resume GTK once more.
+      }
       if (!mounted) return;
-      // Arm the first-run tour. Deferred to the post-frame callback of
-      // the *next* frame so Discovery's anchors (swipeDeck, actionRow,
-      // tab bar) are mounted and measurable before the overlay tries
-      // to spotlight them — without this the holeRect comes back null
-      // and the overlay renders off-screen / clipped.
+      // Arm the first-run tour for the next Discovery visit. The
+      // destination (TourHost) decides when to start it — only while
+      // Discovery is actually showing with content ready — so a
+      // redirect/deep-link landing elsewhere never spotlights nothing,
+      // and no navigator-key lookup is needed here (this State is
+      // disposed by the go() below, so mounted/context are useless).
+      ref.read(tourControllerProvider.notifier).armFirstRun();
       context.go('/discovery');
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        ref
-            .read(tourControllerProvider.notifier)
-            .maybeStart(kFirstRunTourId, kFirstRunTour);
-      });
     } catch (_) {
       if (!mounted) return;
       AppSnackbar.show(
@@ -163,9 +199,9 @@ class _GetToKnow3ScreenState extends ConsumerState<GetToKnow3Screen> {
                   _DobField(date: _dateOfBirth),
                   const SizedBox(height: AppSpacing.x3),
                   _DobPicker(
-                    day: _day,
-                    month: _month,
-                    year: _year,
+                    day: _day ?? 1,
+                    month: _month ?? 1,
+                    year: _year ?? _maxYear,
                     daysInMonth: _daysInMonth,
                     minYear: _minYear,
                     maxYear: _maxYear,
@@ -238,8 +274,8 @@ TextStyle _fieldLabel(BuildContext context) =>
       fontWeight: FontWeight.w800,
     );
 
-const Color _fieldBorder = Color(0xFFE5E7EB);
-const Color _pickerFill = Color(0xFFF9FAFB);
+// Theme tokens (light values match the old literals: divider 0xFFE5E7EB;
+// surfaceSubtle 0xFFF8FAFC vs old 0xFFF9FAFB — visually identical).
 
 // ─── Height field ─────────────────────────────────────────────────────────────
 
@@ -278,18 +314,18 @@ class _HeightField extends StatelessWidget {
           color: context.colors.textPrimary,
         ),
         filled: true,
-        fillColor: AppColors.textOnPrimary,
+        fillColor: context.colors.surface,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.x4,
           vertical: AppSpacing.x4,
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.card),
-          borderSide: const BorderSide(color: _fieldBorder),
+          borderSide: BorderSide(color: context.colors.divider),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.card),
-          borderSide: const BorderSide(color: _fieldBorder),
+          borderSide: BorderSide(color: context.colors.divider),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.card),
@@ -312,19 +348,20 @@ class _WeightCard extends StatelessWidget {
     required this.onChanged,
   });
 
-  final int value;
+  final int? value;
   final int min;
   final int max;
   final ValueChanged<int> onChanged;
 
   @override
   Widget build(BuildContext context) {
+    final current = value;
     return Container(
       padding: const EdgeInsets.all(AppSpacing.x4),
       decoration: BoxDecoration(
-        color: AppColors.textOnPrimary,
+        color: context.colors.surface,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: _fieldBorder),
+        border: Border.all(color: context.colors.divider),
       ),
       child: Column(
         children: [
@@ -345,29 +382,42 @@ class _WeightCard extends StatelessWidget {
             children: [
               _StepButton(
                 icon: Icons.remove_rounded,
-                enabled: value > min,
+                enabled: current == null || current > min,
                 emphasised: false,
-                onTap: () => onChanged(value - 1),
+                onTap: () =>
+                    onChanged(current == null ? min : (current - 1).clamp(min, max)),
                 semanticLabel: 'Decrease weight',
               ),
               Expanded(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    for (var offset = -2; offset <= 2; offset++)
-                      _WeightTick(
-                        value: value + offset,
-                        selected: offset == 0,
-                        visible: value + offset >= min && value + offset <= max,
+                child: current == null
+                    ? Text(
+                        'Not set yet — tap − or +',
+                        textAlign: TextAlign.center,
+                        style: AppTypography.bodyReading(context).copyWith(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                          color: context.colors.textTertiary,
+                        ),
+                      )
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          for (var offset = -2; offset <= 2; offset++)
+                            _WeightTick(
+                              value: current + offset,
+                              selected: offset == 0,
+                              visible: current + offset >= min &&
+                                  current + offset <= max,
+                            ),
+                        ],
                       ),
-                  ],
-                ),
               ),
               _StepButton(
                 icon: Icons.add_rounded,
-                enabled: value < max,
+                enabled: current == null || current < max,
                 emphasised: true,
-                onTap: () => onChanged(value + 1),
+                onTap: () =>
+                    onChanged(current == null ? min : (current + 1).clamp(min, max)),
                 semanticLabel: 'Increase weight',
               ),
             ],
@@ -464,7 +514,7 @@ class _StepButton extends StatelessWidget {
               border: Border.all(
                 color: emphasised
                     ? context.colors.primaryOnSurface
-                    : _fieldBorder,
+                    : context.colors.divider,
               ),
             ),
             alignment: Alignment.center,
@@ -480,17 +530,18 @@ class _StepButton extends StatelessWidget {
 
 class _DobField extends StatelessWidget {
   const _DobField({required this.date});
-  final DateTime date;
+  final DateTime? date;
 
   @override
   Widget build(BuildContext context) {
+    final selected = date;
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.x4,
         vertical: AppSpacing.x4,
       ),
       decoration: BoxDecoration(
-        color: AppColors.textOnPrimary,
+        color: context.colors.surface,
         borderRadius: BorderRadius.circular(AppRadius.card),
         border: Border.all(color: AppColors.primary, width: 1.5),
       ),
@@ -502,11 +553,20 @@ class _DobField extends StatelessWidget {
             color: AppColors.primary,
           ),
           const SizedBox(width: AppSpacing.x3),
-          Text(
-            DateFormat('d MMMM yyyy').format(date),
-            style: AppTypography.bodyReading(context).copyWith(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
+          Expanded(
+            child: Text(
+              selected == null
+                  ? 'Select your date of birth'
+                  : DateFormat('d MMMM yyyy').format(selected),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.bodyReading(context).copyWith(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: selected == null
+                    ? context.colors.textTertiary
+                    : context.colors.textPrimary,
+              ),
             ),
           ),
         ],
@@ -547,9 +607,9 @@ class _DobPicker extends StatelessWidget {
     return Container(
       height: _height,
       decoration: BoxDecoration(
-        color: _pickerFill,
+        color: context.colors.surfaceSubtle,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: _fieldBorder),
+        border: Border.all(color: context.colors.divider),
       ),
       clipBehavior: Clip.hardEdge,
       child: Stack(
@@ -563,7 +623,7 @@ class _DobPicker extends StatelessWidget {
             child: DecoratedBox(
               decoration: BoxDecoration(
                 border: Border.symmetric(
-                  horizontal: BorderSide(color: _fieldBorder),
+                  horizontal: BorderSide(color: context.colors.divider),
                 ),
               ),
             ),

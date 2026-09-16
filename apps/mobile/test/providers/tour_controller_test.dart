@@ -2,8 +2,22 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:matchup_mobile/features/tour/data/prefs_tour_store.dart';
+import 'package:matchup_mobile/features/tour/data/tour_store.dart';
 import 'package:matchup_mobile/features/tour/domain/tour_step.dart';
 import 'package:matchup_mobile/features/tour/presentation/tour_controller.dart';
+
+class _FailingTourStore implements TourStore {
+  @override
+  Future<bool> hasSeen(String tourId) async => false;
+
+  @override
+  Future<void> markSeen(String tourId) async {
+    throw StateError('disk full');
+  }
+
+  @override
+  Future<void> reset(String tourId) async {}
+}
 
 void main() {
   const tourId = 'first_run';
@@ -70,6 +84,9 @@ void main() {
       controller.next(); // index 2 (last)
 
       controller.next(); // should complete, not overflow
+      // complete() persists the seen flag BEFORE going idle — allow the
+      // async write to land.
+      await Future<void>.delayed(Duration.zero);
 
       expect(controller.state.isActive, isFalse);
     });
@@ -129,6 +146,16 @@ void main() {
 
       expect(controller.state.isActive, isFalse);
       expect(controller.state.steps, isEmpty);
+    });
+
+    test('should stay active and report false when persistence fails', () async {
+      final controller = TourController(_FailingTourStore());
+      controller.start(tourId, steps);
+
+      final ok = await controller.complete();
+
+      expect(ok, isFalse);
+      expect(controller.state.isActive, isTrue);
     });
   });
 

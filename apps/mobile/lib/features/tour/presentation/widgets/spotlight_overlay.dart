@@ -21,6 +21,7 @@ class SpotlightOverlay extends StatelessWidget {
     required this.holeRadius,
     required this.child,
     required this.onTapScrim,
+    this.scrimColor,
   });
 
   /// `null` → no cut-out, scrim only, callout centered on screen (the
@@ -33,9 +34,14 @@ class SpotlightOverlay extends StatelessWidget {
   /// about [TourStep] copy — just where to place it.
   final Widget child;
 
-  /// Invoked when the user taps the dimmed scrim area (outside both the
-  /// hole and the callout). Wired to `skip()` by [TourHost].
+  /// Invoked when the user taps the dimmed scrim area OUTSIDE the hole
+  /// and the callout. Wired to `skip()` by [TourHost].
   final VoidCallback onTapScrim;
+
+  /// Overrides the scrim fill. Null keeps the legacy light scrim
+  /// ([AppColors.scrimIllustration]) — callers pass a theme-aware value
+  /// for dark mode.
+  final Color? scrimColor;
 
   static const double _gap = AppSpacing.x3;
   static const double _edgeInset = AppSpacing.x4;
@@ -47,12 +53,15 @@ class SpotlightOverlay extends StatelessWidget {
 
     return Stack(
       children: [
-        // Scrim + cut-out. Tapping it (including on the "hole" — the hole
-        // is only a hole in the *painted* scrim, drawn by CustomPaint;
-        // there is no separate widget or hit-test target underneath it
-        // that a tap could fall through to) skips the tour. This
-        // `HitTestBehavior.opaque` `GestureDetector`, filling the whole
-        // screen, is what makes plan §7's "tap tembus scrim" risk a
+        // Scrim + cut-out. Tapping it skips the tour — EXCEPT inside the
+        // "hole", where a transparent absorber below swallows the tap as
+        // a no-op (tapping the spotlighted control itself must not skip
+        // the tour out from under the user). The hole is only a hole in
+        // the *painted* scrim, drawn by CustomPaint; there is no separate
+        // widget or hit-test target underneath it that a tap could fall
+        // through to, hence the explicit absorber.
+        // This `HitTestBehavior.opaque` `GestureDetector`, filling the
+        // whole screen, is what makes plan §7's "tap tembus scrim" risk a
         // non-issue: nothing below this Positioned.fill in the widget tree
         // — i.e. the actual app content this OverlayEntry sits on top of —
         // can ever receive a pointer event while the tour is active,
@@ -67,11 +76,26 @@ class SpotlightOverlay extends StatelessWidget {
                 holeRect: holeRect,
                 shape: shape,
                 holeRadius: holeRadius,
-                scrimColor: AppColors.scrimIllustration,
+                scrimColor: scrimColor ?? AppColors.scrimIllustration,
               ),
             ),
           ),
         ),
+
+        // No-op absorber over the spotlighted control: taps inside the
+        // hole land here (topmost hit target) and do nothing, so they
+        // neither skip the tour nor reach the app beneath. Must sit
+        // ABOVE the scrim detector but BELOW the callout so Skip/Next
+        // keep working.
+        if (holeRect != null)
+          Positioned.fromRect(
+            rect: holeRect!,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {},
+              child: const ColoredBox(color: Colors.transparent),
+            ),
+          ),
 
         // Callout, positioned relative to the hole (or centered if none).
         if (holeRect == null)
