@@ -75,6 +75,12 @@ class ActivityModel {
   /// backend didn't send viewer context (e.g. hand-built fixtures).
   final String? joinRequestStatus;
 
+  /// Denormalized count of pending join requests
+  /// (`ActivityRecord.pendingRequestCount`). Drives the public "N
+  /// waiting" display on approval-gated activities. Defaults to 0 for
+  /// payloads written before the field existed.
+  final int pendingRequestCount;
+
   const ActivityModel({
     required this.id,
     required this.title,
@@ -104,6 +110,7 @@ class ActivityModel {
     this.longitude,
     this.joinPolicy = 'open',
     this.joinRequestStatus,
+    this.pendingRequestCount = 0,
   });
 
   /// The activity's end time, derived from [dateTime] + [durationMinutes].
@@ -132,6 +139,7 @@ class ActivityModel {
     String? joinPolicy,
     String? joinRequestStatus,
     double? fee,
+    int? pendingRequestCount,
   }) {
     return ActivityModel(
       id: id,
@@ -162,6 +170,7 @@ class ActivityModel {
       longitude: longitude ?? this.longitude,
       joinPolicy: joinPolicy ?? this.joinPolicy,
       joinRequestStatus: joinRequestStatus ?? this.joinRequestStatus,
+      pendingRequestCount: pendingRequestCount ?? this.pendingRequestCount,
     );
   }
 
@@ -173,6 +182,11 @@ class ActivityModel {
   /// True when newcomers must be approved by the host instead of
   /// joining instantly.
   bool get requiresApproval => joinPolicy == 'approval';
+
+  /// True once the start time has passed. Joining/requesting is
+  /// server-cut off at this point, so the UI disables join actions
+  /// instead of letting the backend 409.
+  bool get hasStarted => !dateTime.isAfter(DateTime.now());
 
   /// True when the viewer already has a pending request on an
   /// approval-gated activity.
@@ -211,6 +225,7 @@ class ActivityModel {
       'longitude': longitude,
       'join_policy': joinPolicy,
       'join_request_status': joinRequestStatus,
+      'pending_request_count': pendingRequestCount,
     };
   }
 
@@ -316,6 +331,9 @@ class ActivityModel {
       joinPolicy: json['joinPolicy'] as String? ?? json['join_policy'] as String? ?? 'open',
       joinRequestStatus: json['joinRequestStatus'] as String? ??
           json['join_request_status'] as String?,
+      pendingRequestCount: (json['pendingRequestCount'] as num?)?.toInt() ??
+          (json['pending_request_count'] as num?)?.toInt() ??
+          0,
     );
   }
 

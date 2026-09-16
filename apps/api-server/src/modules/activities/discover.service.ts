@@ -202,6 +202,11 @@ export async function listDiscoverActivities(
         if (act.hostId === viewerUid) continue;
         if (exclude.has(act.activityId)) continue;
 
+        // Belt and suspenders for "full": the status machine flips to
+        // `full` at capacity, but legacy/seeded rows can carry
+        // participantCount >= capacity while still `open`. Count wins.
+        if (act.participantCount >= act.capacity) continue;
+
         const startTimeMs = Date.parse(act.startTime);
         if (Number.isNaN(startTimeMs)) continue;
 
@@ -311,6 +316,10 @@ function mapDocForDiscover(
         skillLevel: data.skillLevel as ActivityWithId['skillLevel'],
         capacity: data.capacity,
         participantCount: data.participantCount,
+        pendingRequestCount:
+            typeof data.pendingRequestCount === 'number'
+                ? data.pendingRequestCount
+                : 0,
         status: data.status as ActivityWithId['status'],
         ...(typeof data.coverImageUrl === 'string'
             ? { coverImageUrl: data.coverImageUrl }

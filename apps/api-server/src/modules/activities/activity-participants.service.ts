@@ -1,4 +1,4 @@
-import { Timestamp } from 'firebase-admin/firestore';
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { firestore } from '../../database/firebase.js';
 import {
   activityDocPath,
@@ -33,6 +33,21 @@ export type ActivityParticipantWithId = ActivityParticipantRecord & {
 type ActivityParticipantBaseWithId = ActivityParticipantRecord & {
   participantId: string;
 };
+
+/**
+ * Join cutoff (best practice, Meetup/OpenSports-style): nobody can join
+ * or request to join once the game has started. Guests discover games
+ * to attend, not games already in play — and an organizer adding
+ * someone mid-game does it out-of-band. Hosts may still approve
+ * pre-start pending requests afterwards at their discretion.
+ */
+function assertJoinableStartTime(activityData: FirebaseFirestore.DocumentData): void {
+  const raw = activityData?.startTime;
+  const startMs = typeof raw === 'string' ? Date.parse(raw) : Number.NaN;
+  if (!Number.isNaN(startMs) && startMs <= Date.now()) {
+    throw new Error('Activity has already started');
+  }
+}
 
 export async function joinActivity(
   activityId: string,
@@ -86,6 +101,8 @@ export async function joinActivity(
     if (activityData.status !== 'open') {
       throw new Error('Activity is not open for joining');
     }
+
+    assertJoinableStartTime(activityData);
 
     if (activityData.joinPolicy === 'approval') {
       throw new Error('This activity requires host approval — request to join instead');
@@ -243,9 +260,15 @@ export async function leaveActivity(
     ]);
 
     if (!memberSnap.exists && pendingSnap.exists && pendingSnap.data()?.status === 'pending') {
-      await firestore
-        .doc(activityJoinRequestDocPath(normalizedActivityId, normalizedTargetUid))
-        .delete();
+      const batch = firestore.batch();
+      batch.delete(
+        firestore.doc(activityJoinRequestDocPath(normalizedActivityId, normalizedTargetUid)),
+      );
+      // Keep the denormalized waiting-list counter in sync.
+      batch.update(activityRef, {
+        pendingRequestCount: FieldValue.increment(-1),
+      });
+      await batch.commit();
       return;
     }
   }
@@ -393,6 +416,8 @@ export async function requestToJoin(activityId: string, uid: string): Promise<vo
       throw new Error('Activity is not open for joining');
     }
 
+    assertJoinableStartTime(activityData);
+
     if (activityData.joinPolicy !== 'approval') {
       throw new Error('This activity does not require approval — join directly');
     }
@@ -418,6 +443,13 @@ export async function requestToJoin(activityId: string, uid: string): Promise<vo
         : now,
       updatedAt: now,
     } satisfies JoinRequestRecord);
+
+    // Denormalized waiting-list counter for the public "N waiting"
+    // display. Missing on legacy rows → increment treats it as 0.
+    transaction.update(activityRef, {
+      pendingRequestCount: FieldValue.increment(1),
+      updatedAt: now,
+    });
   });
 
   const activitySnap = await activityRef.get();
@@ -530,6 +562,10 @@ async function decideJoinRequest(
         decidedAt: now,
         updatedAt: now,
       });
+      transaction.update(activityRef, {
+        pendingRequestCount: FieldValue.increment(-1),
+        updatedAt: now,
+      });
       return;
     }
 
@@ -565,6 +601,7 @@ async function decideJoinRequest(
     transaction.update(activityRef, {
       participantCount: nextParticipantCount,
       status: nextParticipantCount >= activityData.capacity ? 'full' : 'open',
+      pendingRequestCount: FieldValue.increment(-1),
       updatedAt: now,
     });
     transaction.update(requestRef, {

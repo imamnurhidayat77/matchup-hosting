@@ -960,6 +960,7 @@ describe('activities routes', () => {
 
         it.each([
             'Activity is not open for joining',
+            'Activity has already started',
             'Activity is full',
             'User already joined this activity',
             'This activity requires host approval — request to join instead',
@@ -1544,6 +1545,7 @@ describe('activities routes', () => {
 
         it.each([
             'Activity is not open for joining',
+            'Activity has already started',
             'User already joined this activity',
             'The host is already in this activity',
             'Join request already pending',

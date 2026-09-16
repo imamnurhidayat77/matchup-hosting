@@ -197,6 +197,23 @@ describe('listDiscoverActivities', () => {
         expect(out.map((a) => a.activityId)).toEqual(['theirs']);
     });
 
+    it('excludes full activities even when status is still open', async () => {
+        chain.get.mockResolvedValue({
+            docs: [
+                { id: 'full', data: () => baseAct({ activityId: 'full', participantCount: 10, capacity: 10, status: 'open' }) },
+                { id: 'room', data: () => baseAct({ activityId: 'room', participantCount: 9, capacity: 10, status: 'open' }) },
+            ],
+        });
+
+        const out = await listDiscoverActivities({
+            limit: 10,
+            viewerUid: 'u-1',
+            discover: { sportFilters: [] },
+        });
+
+        expect(out.map((a) => a.activityId)).toEqual(['room']);
+    });
+
     it('keeps passed activities when includeSwiped is set (lookup still runs to drop joins)', async () => {
         mocks.listSwipes.mockResolvedValue([
             {

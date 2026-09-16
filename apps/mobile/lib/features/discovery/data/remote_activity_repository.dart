@@ -395,16 +395,15 @@ class RemoteActivityRepository implements ActivityRepository {
 
   @override
   Future<void> join(String activityId) async {
-    try {
-      _invalidateDetails();
-      // Backend route is `POST /api/activities/:activityId/participants`.
-      // The previous `$_base/$activityId/join` returned 404 because that
-      // sub-path doesn't exist on the backend.
-      await _client.dio.post('$_base/$activityId/participants');
-    } catch (e, st) {
-      debugPrint('[RemoteActivityRepository.join] $e\n$st');
-      await _fallback.join(activityId);
-    }
+    // No local fallback: the backend owns membership state (full,
+    // started, already joined), and its 409 answers carry the reason
+    // the screen shows. The old fallback swallowed rejections, so a
+    // failed join navigated to the joined screen as if it succeeded.
+    _invalidateDetails();
+    // Backend route is `POST /api/activities/:activityId/participants`.
+    // The previous `$_base/$activityId/join` returned 404 because that
+    // sub-path doesn't exist on the backend.
+    await _client.dio.post('$_base/$activityId/participants');
   }
 
   @override

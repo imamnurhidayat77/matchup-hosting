@@ -94,6 +94,7 @@ export async function joinActivityHandler(req: Request<ActivityParams>, res: Res
         }
 
         if (message === 'Activity is not open for joining' ||
+            message === 'Activity has already started' ||
             message === 'Activity is full' ||
             message === 'User already joined this activity' ||
             message === 'This activity requires host approval — request to join instead'
@@ -343,6 +344,7 @@ export async function requestJoinActivityHandler(
         }
 
         if (message === 'Activity is not open for joining' ||
+            message === 'Activity has already started' ||
             message === 'Activity is full' ||
             message === 'User already joined this activity' ||
             message === 'The host is already in this activity' ||

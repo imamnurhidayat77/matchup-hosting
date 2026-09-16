@@ -49,6 +49,8 @@ export async function createActivityHandler(req: Request, res: Response) {
             capacity,
             coverImageUrl,
             joinPolicy,
+            isPaid,
+            fee,
         } = req.body as {
             title?: unknown;
             sportType?: unknown;
@@ -64,6 +66,8 @@ export async function createActivityHandler(req: Request, res: Response) {
             capacity?: unknown;
             coverImageUrl?: unknown;
             joinPolicy?: unknown;
+            isPaid?: unknown;
+            fee?: unknown;
         };
 
         if (!hostId) {
@@ -125,6 +129,36 @@ export async function createActivityHandler(req: Request, res: Response) {
                 error: {
                     code: 'INVALID_INPUT',
                     message: 'joinPolicy must be open or approval',
+                },
+            });
+        }
+
+        if (isPaid !== undefined && typeof isPaid !== 'boolean') {
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message: 'isPaid must be a boolean',
+                },
+            });
+        }
+
+        if (fee !== undefined && (typeof fee !== 'number' || !Number.isFinite(fee) || fee <= 0)) {
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message: 'fee must be a positive number for paid activities',
+                },
+            });
+        }
+
+        if (isPaid === true && fee === undefined) {
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message: 'fee is required when isPaid is true',
                 },
             });
         }
@@ -192,6 +226,8 @@ export async function createActivityHandler(req: Request, res: Response) {
             ...(typeof endTime === 'string' ? { endTime } : {}),
             ...(typeof coverImageUrl === 'string' ? { coverImageUrl } : {}),
             ...(joinPolicy === 'open' || joinPolicy === 'approval' ? { joinPolicy } : {}),
+            ...(typeof isPaid === 'boolean' ? { isPaid } : {}),
+            ...(typeof fee === 'number' ? { fee } : {}),
         });
 
         return res.status(201).json({
@@ -202,6 +238,19 @@ export async function createActivityHandler(req: Request, res: Response) {
         });
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
+
+        if (
+            message === 'isPaid must be a boolean' ||
+            message === 'fee must be a positive number for paid activities'
+        ) {
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message,
+                },
+            });
+        }
 
         return res.status(500).json({
             ok: false,
@@ -232,6 +281,8 @@ export async function updateActivityHandler(req: Request<UpdateActivityParams>, 
             capacity,
             coverImageUrl,
             joinPolicy,
+            isPaid,
+            fee,
         } = req.body as {
             title?: unknown;
             sportType?: unknown;
@@ -247,6 +298,8 @@ export async function updateActivityHandler(req: Request<UpdateActivityParams>, 
             capacity?: unknown;
             coverImageUrl?: unknown;
             joinPolicy?: unknown;
+            isPaid?: unknown;
+            fee?: unknown;
         };
 
         if (!hostId) {
@@ -316,6 +369,26 @@ export async function updateActivityHandler(req: Request<UpdateActivityParams>, 
             });
         }
 
+        if (isPaid !== undefined && typeof isPaid !== 'boolean') {
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message: 'isPaid must be a boolean',
+                },
+            });
+        }
+
+        if (fee !== undefined && (typeof fee !== 'number' || !Number.isFinite(fee) || fee <= 0)) {
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message: 'fee must be a positive number for paid activities',
+                },
+            });
+        }
+
         if (capacity !== undefined && (typeof capacity !== 'number' || !Number.isInteger(capacity) || capacity <= 0)) {
             return res.status(400).json({
                 ok: false,
@@ -363,6 +436,8 @@ export async function updateActivityHandler(req: Request<UpdateActivityParams>, 
             ...(typeof capacity === 'number' ? { capacity } : {}),
             ...(typeof coverImageUrl === 'string' ? { coverImageUrl } : {}),
             ...(joinPolicy === 'open' || joinPolicy === 'approval' ? { joinPolicy } : {}),
+            ...(typeof isPaid === 'boolean' ? { isPaid } : {}),
+            ...(typeof fee === 'number' ? { fee } : {}),
         });
 
         return res.status(200).json({
@@ -399,6 +474,19 @@ export async function updateActivityHandler(req: Request<UpdateActivityParams>, 
                 ok: false,
                 error: {
                     code: 'EMPTY_INPUT',
+                    message,
+                },
+            });
+        }
+
+        if (
+            message === 'isPaid must be a boolean' ||
+            message === 'fee must be a positive number for paid activities'
+        ) {
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
                     message,
                 },
             });
