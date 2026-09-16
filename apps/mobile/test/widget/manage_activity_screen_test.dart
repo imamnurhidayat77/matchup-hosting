@@ -82,9 +82,19 @@ void main() {
               Scaffold(body: Text('Edit ${state.pathParameters['id']}')),
         ),
         GoRoute(
+          path: '/chat/:id',
+          builder: (_, state) =>
+              Scaffold(body: Text('Chat ${state.pathParameters['id']}')),
+        ),
+        GoRoute(
           path: '/player-profile/:name',
           builder: (_, state) =>
               Scaffold(body: Text('Profile ${state.pathParameters['name']}')),
+        ),
+        GoRoute(
+          path: '/player-profile/uid/:uid',
+          builder: (_, state) =>
+              Scaffold(body: Text('Profile uid:${state.pathParameters['uid']}')),
         ),
       ],
     );
@@ -132,7 +142,7 @@ void main() {
         expect(find.text('Tavita Faleolo'), findsOneWidget);
         expect(find.text('Participants (2)'), findsOneWidget);
         expect(find.text('CHECKED IN'), findsOneWidget);
-        expect(find.text('PENDING'), findsOneWidget);
+        expect(find.text('JOINED'), findsOneWidget);
         // Old hardcoded seed content must be gone.
         expect(find.text('Friendly 5v5 Run at Prospect'), findsNothing);
         expect(find.text('James Wilson'), findsNothing);
@@ -275,10 +285,10 @@ void main() {
       await tester.tap(find.text('Pending Petra'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Profile Pending Petra'), findsOneWidget);
+      expect(find.text('Profile uid:u9'), findsOneWidget);
     });
 
-    testWidgets('quick-edit sheet should call updateActivity on save', (
+    testWidgets('quick-action Edit should push the edit screen', (
       tester,
     ) async {
       when(() => repo.byId('5')).thenAnswer((_) async => activity());
@@ -287,8 +297,8 @@ void main() {
 
       await pumpScreen(tester);
 
-      // Quick-action "Edit" opens the bottom sheet (hero edit button
-      // uses the 'Edit activity' semantics label, so text 'Edit' is unique).
+      // Quick-action "Edit" navigates to the full edit screen (same as
+      // the hero edit button) — no more inline quick-edit sheet.
       await tester.scrollUntilVisible(
         find.text('Edit'),
         300,
@@ -297,37 +307,45 @@ void main() {
       await tester.tap(find.text('Edit'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Edit Activity'), findsOneWidget);
-
-      // The full edit sheet is scrollable — bring Save into view first.
-      await tester.scrollUntilVisible(
-        find.text('Save Changes'),
-        300,
-        scrollable: find.byType(Scrollable).last,
+      expect(find.text('Edit 5'), findsOneWidget);
+      // Nothing saved inline.
+      verifyNever(
+        () => repo.updateActivity(
+          activityId: any(named: 'activityId'),
+          title: any(named: 'title'),
+          sportType: any(named: 'sportType'),
+          description: any(named: 'description'),
+          locationName: any(named: 'locationName'),
+          latitude: any(named: 'latitude'),
+          longitude: any(named: 'longitude'),
+          geohash: any(named: 'geohash'),
+          startTime: any(named: 'startTime'),
+          endTime: any(named: 'endTime'),
+          skillLevel: any(named: 'skillLevel'),
+          capacity: any(named: 'capacity'),
+          joinPolicy: any(named: 'joinPolicy'),
+        ),
       );
-      await tester.tap(find.text('Save Changes'));
+    });
+
+    testWidgets('quick-action Chat should push the group chat', (
+      tester,
+    ) async {
+      when(() => repo.byId('5')).thenAnswer((_) async => activity());
+      when(() => repo.participants('5')).thenAnswer((_) async => []);
+      when(() => repo.joinRequests('5')).thenAnswer((_) async => []);
+
+      await pumpScreen(tester);
+
+      await tester.scrollUntilVisible(
+        find.text('Chat'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.text('Chat'));
       await tester.pumpAndSettle();
 
-      verify(
-        () => repo.updateActivity(
-          activityId: '5',
-          title: 'Thursday Night Volleyball',
-          sportType: 'Volleyball',
-          description: '',
-          locationName: 'Eastside Rec Centre',
-          latitude: -36.8485,
-          longitude: 174.7633,
-          geohash: any(named: 'geohash'),
-          startTime: DateTime(2026, 8, 27, 19),
-          endTime: any(named: 'endTime'),
-          skillLevel: 'Intermediate',
-          capacity: 8,
-          joinPolicy: 'open',
-        ),
-      ).called(1);
-      // Sheet dismissed with a success confirmation.
-      expect(find.text('Save Changes'), findsNothing);
-      expect(find.text('Activity updated.'), findsOneWidget);
+      expect(find.text('Chat 5'), findsOneWidget);
     });
   });
 }

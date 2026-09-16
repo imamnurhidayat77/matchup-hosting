@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:matchup_mobile/core/providers/repository_providers.dart';
 import 'package:matchup_mobile/features/activities/domain/activity_participant.dart';
@@ -20,6 +21,7 @@ void main() {
 
   setUp(() {
     repo = _MockActivityRepository();
+    SharedPreferences.setMockInitialValues({});
   });
 
   ActivityModel activity() => ActivityModel(
@@ -194,6 +196,15 @@ void main() {
       ).thenAnswer((_) async => participants());
 
       await pumpScreen(tester, pushed: true);
+      // Submit requires stars>=1 AND (comment non-empty OR >=1
+      // participant rated) — leave a comment so the button enables.
+      await tester.enterText(
+        find.byWidgetPredicate(
+          (w) => w is TextField && w.maxLength == 500,
+        ),
+        'Great game!',
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Submit Review'));
       await tester.pumpAndSettle();
 

@@ -94,6 +94,8 @@ void main() {
         overrides: [
           activityRepositoryProvider.overrideWithValue(activityRepo),
           notificationRepositoryProvider.overrideWithValue(notifRepo),
+          // Bypass real SecureTokenStore (no platform channel in tests).
+          myGamesUidProvider.overrideWith((ref) => Future.value('test-uid')),
         ],
         child: MaterialApp.router(routerConfig: router),
       ),

@@ -75,6 +75,8 @@ void main() {
     testWidgets('should withdraw the request on confirm', (tester) async {
       await pumpScreen(tester);
 
+      await tester.ensureVisible(find.text('Cancel Request'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Cancel Request'));
       await tester.pumpAndSettle();
 

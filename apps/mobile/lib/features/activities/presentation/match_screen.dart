@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -30,9 +31,23 @@ final _matchActivityProvider = FutureProvider.autoDispose
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
+/// Back to the deck without recreating it (preserves the swipe
+/// position). Falls back to `/discovery` when there's nothing to pop
+/// (e.g. a cold start straight into the match route).
+Future<void> _popOrDiscovery(BuildContext context) async {
+  final popped = await Navigator.of(context).maybePop();
+  if (!popped && context.mounted) context.go('/discovery');
+}
+
 class MatchScreen extends ConsumerStatefulWidget {
-  const MatchScreen({super.key, required this.activityId});
+  const MatchScreen({super.key, required this.activityId, this.initialActivity});
   final String activityId;
+
+  /// The just-joined activity passed as route `extra` by the discovery
+  /// flow. Used as fallback content when the [byId] refetch fails
+  /// (offline right after joining) so a successful join never renders
+  /// a full error screen.
+  final ActivityModel? initialActivity;
 
   @override
   ConsumerState<MatchScreen> createState() => _MatchScreenState();
@@ -45,13 +60,31 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
     duration: AppDurations.emphasized * 5,
   );
 
-  @override
-  void initState() {
-    super.initState();
+  /// Confetti starts only once the activity data has arrived. Firing it
+  /// in initState rained confetti over the loading skeleton: join()
+  /// invalidates the detail cache, so byId almost always refetches and
+  /// the content pops in long after the celebration started.
+  bool _confettiStarted = false;
+
+  void _maybeStartConfetti(bool hasData) {
+    if (!hasData || _confettiStarted) return;
+    _confettiStarted = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       HapticFeedback.heavyImpact();
       _confettiCtrl.forward();
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Confetti trigger lives here (and in the provider listener in
+    // [build]) — never in [build] itself, so rebuilds stay side-effect
+    // free. Covers data that was already cached on first mount.
+    if (ref.read(_matchActivityProvider(widget.activityId)).hasValue) {
+      _maybeStartConfetti(true);
+    }
   }
 
   @override
@@ -62,7 +95,22 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Route extra (the just-joined activity) doubles as the offline
+    // fallback — read here so no router change is needed.
+    final routeExtra = GoRouterState.of(context).extra;
+    final fallback = routeExtra is ActivityModel
+        ? routeExtra
+        : widget.initialActivity;
     final async = ref.watch(_matchActivityProvider(widget.activityId));
+    // Idempotent: fires once, on the first frame that actually has data.
+    ref.listen<AsyncValue<ActivityModel>>(
+      _matchActivityProvider(widget.activityId),
+      (prev, next) {
+        if (next.hasValue || (next.hasError && fallback != null)) {
+          _maybeStartConfetti(true);
+        }
+      },
+    );
 
     return AppScaffold(
       backgroundColor: context.colors.background,
@@ -71,11 +119,18 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
         children: [
           async.when(
             loading: () => const SkeletonList(count: 3),
-            error: (_, _) => ErrorRetry(
-              message: 'Could not load this match.',
-              onRetry: () =>
-                  ref.invalidate(_matchActivityProvider(widget.activityId)),
-            ),
+            error: (_, _) => fallback != null
+                // Offline after a successful join: the join happened
+                // (the activity is in My Games), only the refetch
+                // failed — show the cached copy with an offline note
+                // instead of a full error.
+                ? _MatchBody(activity: fallback, offline: true)
+                : ErrorRetry(
+                    message: 'Could not load this match.',
+                    onRetry: () => ref.invalidate(
+                      _matchActivityProvider(widget.activityId),
+                    ),
+                  ),
             data: (activity) => _MatchBody(activity: activity),
           ),
           // Confetti overlay
@@ -98,8 +153,12 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
 // ─── Body ─────────────────────────────────────────────────────────────────────
 
 class _MatchBody extends StatelessWidget {
-  const _MatchBody({required this.activity});
+  const _MatchBody({required this.activity, this.offline = false});
   final ActivityModel activity;
+
+  /// True when [activity] is cached fallback content (offline after a
+  /// successful join) rather than a fresh fetch.
+  final bool offline;
 
   @override
   Widget build(BuildContext context) {
@@ -174,6 +233,14 @@ class _MatchBody extends StatelessWidget {
               style: AppTypography.bodyFormSecondary(context),
               textAlign: TextAlign.center,
             ),
+            if (offline) ...[
+              const SizedBox(height: AppSpacing.x2),
+              Text(
+                'Details unavailable offline — showing saved info.',
+                style: AppTypography.metaSub(context),
+                textAlign: TextAlign.center,
+              ),
+            ],
             const SizedBox(height: AppSpacing.x5),
 
             // Activity card
@@ -203,12 +270,17 @@ class _MatchBody extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.x4),
 
-            // Keep Swiping — underlined blue link
+            // Keep Swiping — underlined blue link. Pops back to the
+            // live deck (position preserved) instead of go()ing, which
+            // would recreate Discover and rewind to the top.
             Semantics(
               button: true,
               label: 'Keep swiping',
               child: PressableScale(
-                onTap: () => context.go('/discovery'),
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  unawaited(_popOrDiscovery(context));
+                },
                 child: Text(
                   'Keep Swiping',
                   style: AppTypography.labelField(context).copyWith(
@@ -515,7 +587,9 @@ class _AvatarStack extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final shown = count.clamp(0, _maxShown);
-    if (shown == 0) return const SizedBox(width: 66, height: 28);
+    // No placeholder gap when nobody joined yet — the spots label
+    // beside it already carries the count.
+    if (shown == 0) return const SizedBox.shrink();
     return SizedBox(
       width: 66,
       height: 28,

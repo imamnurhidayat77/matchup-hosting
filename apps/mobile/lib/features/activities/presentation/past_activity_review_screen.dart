@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/providers/profile_providers.dart';
 import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -63,18 +64,27 @@ class _PastActivityReviewScreenState
   bool _submitting = false;
 
   @override
+  void initState() {
+    super.initState();
+    // Re-evaluate [_canSubmit] as the comment is typed.
+    _commentController.addListener(_onCommentChanged);
+  }
+
+  void _onCommentChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
   void dispose() {
+    _commentController.removeListener(_onCommentChanged);
     _commentController.dispose();
     super.dispose();
   }
 
-  bool _canSubmit(List<ActivityParticipant> participants) {
-    // Activity-level rating is always required.
+  bool _canSubmit() {
     if (_stars < 1) return false;
-    // At least one participant row must have a rating OR all skipped
-    // intentionally — the user can rely on the activity-level rating alone.
-    // The MVP requires at least the activity rating, not the per-row ones.
-    return true;
+    if (_commentController.text.trim().isNotEmpty) return true;
+    return _participantRatings.isNotEmpty;
   }
 
   Future<void> _submit({
@@ -83,12 +93,16 @@ class _PastActivityReviewScreenState
   }) async {
     if (_submitting) return;
     final repo = ref.read(ratingsRepositoryProvider);
+    // Defensive self-exclusion — the visible list is already filtered,
+    // but never send our own uid (backend rejects self-rating too).
+    final myUid = ref.read(myProfileProvider).valueOrNull?.id;
 
     final trimmedComment = _commentController.text.trim();
     final comment = trimmedComment.isEmpty ? null : trimmedComment;
 
     final rated = participants
         .where((p) => _participantRatings.containsKey(p.userId))
+        .where((p) => myUid == null || p.userId != myUid)
         .map(
           (p) => ParticipantRatingSubmission(
             rateeUserId: p.userId,
@@ -102,6 +116,7 @@ class _PastActivityReviewScreenState
     final submission = ActivityRatingSubmission(
       activityId: widget.activityId,
       activitySportType: sportType,
+      activityStars: _stars,
       participants: rated,
       comment: comment,
     );
@@ -140,10 +155,16 @@ class _PastActivityReviewScreenState
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(_reviewDataProvider(widget.activityId));
-    // Already-rated state loads in parallel — null (still loading
-    // or failed) renders as a fresh review, never blocks submit.
-    final alreadyRated =
-        ref.watch(_ratedProvider(widget.activityId)).valueOrNull ?? false;
+    // Already-rated state loads in parallel. Distinguish loading (disabled
+    // "Loading…" submit) from loaded-not-rated ("Submit Review") vs rated
+    // ("Update Review") so the button never flickers from Submit → Update.
+    final ratedAsync = ref.watch(_ratedProvider(widget.activityId));
+    final ratedLoading = ratedAsync.isLoading;
+    final alreadyRated = ratedAsync.valueOrNull ?? false;
+    // Current user is never rateable (UX mirror of the backend
+    // self-rating rejection). While the profile is still loading show
+    // everyone rather than flashing a filtered list.
+    final myUid = ref.watch(myProfileProvider).valueOrNull?.id;
 
     return AppScaffold(
       safeAreaTop: true,
@@ -156,7 +177,16 @@ class _PastActivityReviewScreenState
           onRetry: () =>
               ref.invalidate(_reviewDataProvider(widget.activityId)),
         ),
-        data: (data) => Column(
+        data: (data) {
+          final rateable = myUid == null
+              ? data.participants
+              : data.participants.where((p) => p.userId != myUid).toList();
+          final submitLabel = ratedLoading
+              ? 'Loading…'
+              : alreadyRated
+                  ? 'Update Review'
+                  : 'Submit Review';
+          return Column(
           children: [
             // Header
             const _Header(),
@@ -193,7 +223,7 @@ class _PastActivityReviewScreenState
 
                     // Rate participants
                     _RateParticipantsSection(
-                      participants: data.participants,
+                      participants: rateable,
                       ratings: _participantRatings,
                       onRate: (id, stars) => setState(
                         () => _participantRatings[id] = stars,
@@ -205,20 +235,22 @@ class _PastActivityReviewScreenState
               ),
             ),
 
-            // Pinned submit button — "Update" wording when a
-            // previous review exists (resubmit edits it).
+            // Pinned submit button — loading disables with "Loading…",
+            // "Update" wording when a previous review exists (resubmit
+            // edits it), otherwise "Submit Review".
             _SubmitBar(
-              submitting: _submitting,
-              label: alreadyRated ? 'Update Review' : 'Submit Review',
-              onTap: _canSubmit(data.participants)
+              submitting: _submitting || ratedLoading,
+              label: submitLabel,
+              onTap: !ratedLoading && _canSubmit()
                   ? () => _submit(
                         sportType: data.activity.sportType,
-                        participants: data.participants,
+                        participants: rateable,
                       )
                   : null,
             ),
           ],
-        ),
+        );
+        },
       ),
     );
   }
@@ -501,6 +533,7 @@ class _RateActivitySection extends StatelessWidget {
             controller: commentController,
             minLines: 3,
             maxLines: 5,
+            maxLength: 500,
             cursorColor: AppColors.primary,
             cursorWidth: 1.5,
             style: AppTypography.bodyReading(context),
@@ -516,6 +549,7 @@ class _RateActivitySection extends StatelessWidget {
               focusedBorder: InputBorder.none,
               isDense: true,
               contentPadding: EdgeInsets.zero,
+              counterStyle: AppTypography.metaSub(context),
             ),
           ),
         ),
@@ -549,6 +583,12 @@ class _RateParticipantsSection extends StatelessWidget {
           style: AppTypography.metaSub(context),
         ),
         const SizedBox(height: AppSpacing.x3),
+        if (participants.isEmpty)
+          Text(
+            'No one else to rate',
+            style: AppTypography.metaSub(context),
+          )
+        else
         Container(
           decoration: BoxDecoration(
             color: context.colors.surface,

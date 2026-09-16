@@ -8,6 +8,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/geohash.dart';
+import '../../../core/widgets/app_dialog.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/error_retry.dart';
@@ -16,14 +17,18 @@ import '../../../core/widgets/skeleton.dart';
 import '../../discovery/domain/activity_model.dart';
 import '../../sports/domain/sport_config.dart';
 import '../domain/place_suggestion.dart';
+import 'my_activities_screen.dart';
 import 'widgets/venue_field.dart';
 
 /// Host-only edit screen for an existing activity.
 ///
-/// Prefills every field from the loaded activity and PATCHes only what
-/// the host changed (venue coordinates travel along when the venue is
-/// re-picked). Returns `true` via pop on success so the caller
-/// (manage screen) can refresh its detail provider.
+/// Prefills every field from the loaded activity and PATCHes only the
+/// fields the host actually changed — unchanged fields are passed as
+/// `null` to [updateActivity], which skips nulls server-side (see
+/// `RemoteActivityRepository.updateActivity`). Venue coordinates travel
+/// along only when the venue was re-picked. Returns `true` via pop on
+/// success so the caller (manage screen) can refresh its detail
+/// provider.
 class EditActivityScreen extends ConsumerStatefulWidget {
   const EditActivityScreen({super.key, required this.activityId});
   final String activityId;
@@ -72,6 +77,21 @@ class _EditActivityScreenState extends ConsumerState<EditActivityScreen> {
   String _skill = 'All Level';
   String _joinPolicy = 'open';
 
+  // Snapshot of the loaded activity, taken in [_initFrom] — [_save]
+  // diffs the current inputs against these and sends only what changed
+  // (null for the rest), and [_isDirty] compares against the same.
+  String _initTitle = '';
+  String _initDescription = '';
+  String _initSport = 'Basketball';
+  DateTime? _initDate;
+  int _initDurationMinutes = 120;
+  String? _initVenueLabel;
+  double? _initVenueLat;
+  double? _initVenueLng;
+  int _initCapacity = 10;
+  String _initSkill = 'All Level';
+  String _initJoinPolicy = 'open';
+
   @override
   void dispose() {
     _titleController.dispose();
@@ -90,6 +110,14 @@ class _EditActivityScreenState extends ConsumerState<EditActivityScreen> {
     if (_capacity < _minCapacity) _capacity = _minCapacity;
     _skill = _skillOptions.contains(a.skillLevel) ? a.skillLevel : 'All Level';
     _joinPolicy = a.joinPolicy;
+    _initTitle = a.title;
+    _initDescription = a.description;
+    _initSport = _sport;
+    _initDate = a.dateTime;
+    _initDurationMinutes = a.durationMinutes;
+    _initCapacity = a.capacity;
+    _initSkill = _skill;
+    _initJoinPolicy = a.joinPolicy;
     if (a.latitude != null && a.longitude != null) {
       _venue = PlaceSuggestion(
         placeId: 'existing',
@@ -99,6 +127,9 @@ class _EditActivityScreenState extends ConsumerState<EditActivityScreen> {
         longitude: a.longitude!,
       );
     }
+    _initVenueLabel = _venue?.label;
+    _initVenueLat = _venue?.latitude;
+    _initVenueLng = _venue?.longitude;
     _initialised = true;
   }
 
@@ -119,25 +150,47 @@ class _EditActivityScreenState extends ConsumerState<EditActivityScreen> {
       return;
     }
     if (_saving) return;
+    // The date picker still opens at today, so a host correcting an
+    // already-started game gets a heads-up instead of a silent no-op.
+    if (original.dateTime.isBefore(DateTime.now())) {
+      AppSnackbar.show(
+        context,
+        message: 'This game already started — time edits are limited.',
+        variant: AppSnackbarVariant.warning,
+      );
+    }
     setState(() => _saving = true);
     try {
+      final title = _titleController.text.trim();
+      final description = _descriptionController.text.trim();
       final venue = _venue!;
       final start = _date!;
+      final venueChanged = venue.label != _initVenueLabel ||
+          venue.latitude != _initVenueLat ||
+          venue.longitude != _initVenueLng;
+      final timeChanged =
+          start != _initDate || _durationMinutes != _initDurationMinutes;
       await ref.read(activityRepositoryProvider).updateActivity(
             activityId: widget.activityId,
-            title: _titleController.text.trim(),
-            sportType: _sport,
-            description: _descriptionController.text.trim(),
-            locationName: venue.label,
-            latitude: venue.latitude,
-            longitude: venue.longitude,
-            geohash: geohashEncode(venue.latitude, venue.longitude),
-            startTime: start,
-            endTime: start.add(Duration(minutes: _durationMinutes)),
-            skillLevel: _skill,
-            capacity: _capacity,
-            joinPolicy: _joinPolicy,
+            title: title == _initTitle ? null : title,
+            sportType: _sport == _initSport ? null : _sport,
+            description: description == _initDescription ? null : description,
+            locationName: venueChanged ? venue.label : null,
+            latitude: venueChanged ? venue.latitude : null,
+            longitude: venueChanged ? venue.longitude : null,
+            geohash: venueChanged
+                ? geohashEncode(venue.latitude, venue.longitude)
+                : null,
+            startTime: timeChanged ? start : null,
+            endTime: timeChanged
+                ? start.add(Duration(minutes: _durationMinutes))
+                : null,
+            skillLevel: _skill == _initSkill ? null : _skill,
+            capacity: _capacity == _initCapacity ? null : _capacity,
+            joinPolicy: _joinPolicy == _initJoinPolicy ? null : _joinPolicy,
           );
+      ref.invalidate(hostedGamesProvider);
+      ref.invalidate(joinedGamesProvider);
       if (!mounted) return;
       // Pop silent — the manage screen shows the confirmation snackbar
       // (a snackbar shown here would die with this route).
@@ -151,6 +204,43 @@ class _EditActivityScreenState extends ConsumerState<EditActivityScreen> {
         variant: AppSnackbarVariant.error,
       );
     }
+  }
+
+  /// True when any input differs from the loaded activity snapshot.
+  bool _isDirty() {
+    if (!_initialised) return false;
+    if (_titleController.text.trim() != _initTitle) return true;
+    if (_descriptionController.text.trim() != _initDescription) return true;
+    if (_sport != _initSport) return true;
+    if (_date != _initDate) return true;
+    if (_durationMinutes != _initDurationMinutes) return true;
+    if (_venue?.label != _initVenueLabel ||
+        _venue?.latitude != _initVenueLat ||
+        _venue?.longitude != _initVenueLng) {
+      return true;
+    }
+    if (_capacity != _initCapacity) return true;
+    if (_skill != _initSkill) return true;
+    if (_joinPolicy != _initJoinPolicy) return true;
+    return false;
+  }
+
+  /// Pops straight away when nothing changed; otherwise asks the host
+  /// to confirm discarding their edits.
+  Future<void> _maybePop() async {
+    if (!_isDirty()) {
+      Navigator.of(context).maybePop();
+      return;
+    }
+    final discard = await AppDialog.confirm(
+      context,
+      title: 'Discard changes?',
+      body: 'You have unsaved changes. They will be lost if you go back.',
+      confirmLabel: 'Discard',
+      cancelLabel: 'Keep editing',
+      destructive: true,
+    );
+    if (discard == true && mounted) Navigator.of(context).maybePop();
   }
 
   Future<void> _pickDate() async {
@@ -263,7 +353,7 @@ class _EditActivityScreenState extends ConsumerState<EditActivityScreen> {
             children: [
               _Header(
                 saving: _saving,
-                onBack: () => Navigator.of(context).maybePop(),
+                onBack: () => _maybePop(),
                 onSave: () => _save(activity),
               ),
               Expanded(

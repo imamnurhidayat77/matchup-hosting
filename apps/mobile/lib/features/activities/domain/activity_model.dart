@@ -34,7 +34,27 @@ class ActivityModel {
 
   /// Joining fee amount, set only when [isPaid] is true. Null for free
   /// games and for payloads written before the field existed.
+  ///
+  /// Semantics depend on [feeMode]: `fixed` = price per person,
+  /// `split` = worst-case price per person (`totalCost / minPlayers`).
+  /// Old clients ignore the mode and just render this number, so every
+  /// write path must keep it populated.
   final double? fee;
+
+  /// Pricing mode for paid games: `'fixed'` (flat price per person,
+  /// the default) or `'split'` (total venue cost shared among players).
+  /// Defaults to fixed for payloads written before the field existed.
+  final String feeMode;
+
+  /// Total cost to split (venue booking etc.), set only for `split`
+  /// mode. Null otherwise.
+  final double? totalCost;
+
+  /// Minimum players the host needs for the game to run. Only
+  /// meaningful for `split` mode — the displayed per-person price is
+  /// `totalCost / minPlayers` (worst case; cheaper when full).
+  /// Null means "full capacity".
+  final int? minPlayers;
 
   /// Host's average rating (0–5) and the number of games they've hosted —
   /// shown as "★ 4.8 (32 games)" on the discovery card's social row.
@@ -81,6 +101,15 @@ class ActivityModel {
   /// payloads written before the field existed.
   final int pendingRequestCount;
 
+  /// Raw backend lifecycle string (`open` / `full` / `cancelled` /
+  /// `completed` / `removed`) as sent in `json['status']`, preserved
+  /// verbatim. [status] collapses `cancelled` / `completed` / `removed`
+  /// all into [ActivityStatus.past] (and viewer context then overrides to
+  /// `hosted` / `joined`), so without this field the UI cannot tell a
+  /// cancelled game from a completed one. Empty when the payload carried
+  /// no status (e.g. hand-built fixtures).
+  final String lifecycleStatus;
+
   const ActivityModel({
     required this.id,
     required this.title,
@@ -99,6 +128,9 @@ class ActivityModel {
     this.durationMinutes = 120,
     this.isPaid = false,
     this.fee,
+    this.feeMode = 'fixed',
+    this.totalCost,
+    this.minPlayers,
     this.hostRating = 4.8,
     this.hostGamesCount = 32,
     this.vibeTags = const ['Friendly people', 'Great vibes'],
@@ -111,6 +143,7 @@ class ActivityModel {
     this.joinPolicy = 'open',
     this.joinRequestStatus,
     this.pendingRequestCount = 0,
+    this.lifecycleStatus = '',
   });
 
   /// The activity's end time, derived from [dateTime] + [durationMinutes].
@@ -126,42 +159,100 @@ class ActivityModel {
     return '~${durationMinutes}m';
   }
 
+  /// True when the game splits a total cost instead of charging a
+  /// flat per-person price.
+  bool get isSplitCost => isPaid && feeMode == 'split';
+
+  /// Per-person price the joiner sees. Fixed mode: [fee] as-is.
+  /// Split mode: worst case (`totalCost / minPlayers`, or full capacity
+  /// when no minimum set) — the game only gets cheaper from here.
+  double? get displayFee {
+    if (!isPaid) return null;
+    if (!isSplitCost) return fee;
+    if (totalCost == null) return fee;
+    final divisor = (minPlayers ?? capacity).clamp(1, 1000);
+    return totalCost! / divisor;
+  }
+
+  /// Short price label for detail rows, e.g. `$10.00 /person` or
+  /// `≈$12.50 /person · split`. Null when free or amount unknown.
+  String? get feeLabel {
+    final amount = displayFee;
+    if (amount == null) return null;
+    final formatted = '\$${amount.toStringAsFixed(2)} /person';
+    return isSplitCost ? '≈$formatted · split' : formatted;
+  }
+
+  /// One-line split explainer for detail screens, e.g.
+  /// `Total $60 · min 4 · max $15 each, cheaper when full`.
+  /// Null when not split or total unknown.
+  String? get splitExplainer {
+    if (!isSplitCost || totalCost == null) return null;
+    final min = minPlayers ?? capacity;
+    final worst = displayFee;
+    final total = '\$${totalCost!.toStringAsFixed(totalCost! == totalCost!.roundToDouble() ? 0 : 2)}';
+    final each = worst != null ? '\$${worst.toStringAsFixed(2)}' : '—';
+    return 'Total $total · min $min · max $each each, cheaper when full';
+  }
+
   ActivityModel copyWith({
+    String? title,
+    String? sportType,
+    String? description,
+    String? location,
+    String? addressLine,
+    double? distanceKm,
+    DateTime? dateTime,
+    String? skillLevel,
+    int? capacity,
+    String? hostName,
+    String? coverImageUrl,
+    int? durationMinutes,
+    bool? isPaid,
+    double? hostRating,
+    int? hostGamesCount,
+    List<String>? vibeTags,
+    String? lifecycleStatus,
     ActivityStatus? status,
     int? participantCount,
     bool? isParticipant,
     bool? isHost,
     String? mySwipeDecision,
     String? hostId,
-    double? distanceKm,
     double? latitude,
     double? longitude,
     String? joinPolicy,
     String? joinRequestStatus,
     double? fee,
+    String? feeMode,
+    double? totalCost,
+    int? minPlayers,
     int? pendingRequestCount,
   }) {
     return ActivityModel(
       id: id,
-      title: title,
-      sportType: sportType,
-      description: description,
-      location: location,
-      addressLine: addressLine,
+      title: title ?? this.title,
+      sportType: sportType ?? this.sportType,
+      description: description ?? this.description,
+      location: location ?? this.location,
+      addressLine: addressLine ?? this.addressLine,
       distanceKm: distanceKm ?? this.distanceKm,
-      dateTime: dateTime,
-      skillLevel: skillLevel,
-      capacity: capacity,
+      dateTime: dateTime ?? this.dateTime,
+      skillLevel: skillLevel ?? this.skillLevel,
+      capacity: capacity ?? this.capacity,
       participantCount: participantCount ?? this.participantCount,
-      hostName: hostName,
-      coverImageUrl: coverImageUrl,
+      hostName: hostName ?? this.hostName,
+      coverImageUrl: coverImageUrl ?? this.coverImageUrl,
       status: status ?? this.status,
-      durationMinutes: durationMinutes,
-      isPaid: isPaid,
+      durationMinutes: durationMinutes ?? this.durationMinutes,
+      isPaid: isPaid ?? this.isPaid,
       fee: fee ?? this.fee,
-      hostRating: hostRating,
-      hostGamesCount: hostGamesCount,
-      vibeTags: vibeTags,
+      feeMode: feeMode ?? this.feeMode,
+      totalCost: totalCost ?? this.totalCost,
+      minPlayers: minPlayers ?? this.minPlayers,
+      hostRating: hostRating ?? this.hostRating,
+      hostGamesCount: hostGamesCount ?? this.hostGamesCount,
+      vibeTags: vibeTags ?? this.vibeTags,
       isParticipant: isParticipant ?? this.isParticipant,
       isHost: isHost ?? this.isHost,
       mySwipeDecision: mySwipeDecision ?? this.mySwipeDecision,
@@ -171,13 +262,14 @@ class ActivityModel {
       joinPolicy: joinPolicy ?? this.joinPolicy,
       joinRequestStatus: joinRequestStatus ?? this.joinRequestStatus,
       pendingRequestCount: pendingRequestCount ?? this.pendingRequestCount,
+      lifecycleStatus: lifecycleStatus ?? this.lifecycleStatus,
     );
   }
 
-  bool get isFull => participantCount >= capacity;
+  bool get isFull => capacity > 0 && participantCount >= capacity;
   bool get isAlmostFull => participantCount >= (capacity * 0.8).ceil();
 
-  int get spotsLeft => capacity - participantCount;
+  int get spotsLeft => (capacity - participantCount).clamp(0, capacity);
 
   /// True when newcomers must be approved by the host instead of
   /// joining instantly.
@@ -187,6 +279,18 @@ class ActivityModel {
   /// server-cut off at this point, so the UI disables join actions
   /// instead of letting the backend 409.
   bool get hasStarted => !dateTime.isAfter(DateTime.now());
+
+  /// True when this activity's chat is read-only archived. Archived once
+  /// the activity is past its end by more than the 7-day grace window
+  /// (`CHAT_ARCHIVE_GRACE_MS` on the backend). History stays readable,
+  /// writes stop.
+  bool get isChatArchived {
+    if (status == ActivityStatus.past) {
+      final threshold = DateTime.now().subtract(const Duration(days: 7));
+      return endTime.isBefore(threshold);
+    }
+    return false;
+  }
 
   /// True when the viewer already has a pending request on an
   /// approval-gated activity.
@@ -214,6 +318,9 @@ class ActivityModel {
       'duration_minutes': durationMinutes,
       'is_paid': isPaid,
       'fee': fee,
+      'fee_mode': feeMode,
+      'total_cost': totalCost,
+      'min_players': minPlayers,
       'host_rating': hostRating,
       'host_games_count': hostGamesCount,
       'vibe_tags': vibeTags,
@@ -286,7 +393,10 @@ class ActivityModel {
     // Backend lifecycle states (`open`/`full`/`cancelled`/`completed`/
     // `removed`) map onto the mobile enum; the viewer's relationship
     // then wins — a host always sees `hosted`, a joiner always sees
-    // `joined`, regardless of lifecycle.
+    // `joined`, regardless of lifecycle. The raw string is preserved on
+    // [lifecycleStatus] so the UI can still tell cancelled apart from
+    // completed.
+    final rawLifecycle = json['status']?.toString() ?? '';
     var status = _statusFromString(json['status'] as String?);
     if (isHost) {
       status = ActivityStatus.hosted;
@@ -317,6 +427,12 @@ class ActivityModel {
       durationMinutes: resolvedDuration,
       isPaid: json['is_paid'] as bool? ?? json['isPaid'] as bool? ?? false,
       fee: (json['fee'] as num?)?.toDouble(),
+      feeMode: _feeModeFromString(
+          json['fee_mode'] as String? ?? json['feeMode'] as String?),
+      totalCost: (json['total_cost'] as num?)?.toDouble() ??
+          (json['totalCost'] as num?)?.toDouble(),
+      minPlayers: (json['min_players'] as num?)?.toInt() ??
+          (json['minPlayers'] as num?)?.toInt(),
       hostRating: (json['host_rating'] as num?)?.toDouble() ?? 4.8,
       hostGamesCount: (json['host_games_count'] as num?)?.toInt() ?? 0,
       vibeTags:
@@ -334,8 +450,14 @@ class ActivityModel {
       pendingRequestCount: (json['pendingRequestCount'] as num?)?.toInt() ??
           (json['pending_request_count'] as num?)?.toInt() ??
           0,
+      lifecycleStatus: rawLifecycle,
     );
   }
+
+  static String _feeModeFromString(String? s) => switch (s) {
+        'split' => 'split',
+        _ => 'fixed',
+      };
 
   static ActivityStatus _statusFromString(String? s) => switch (s) {
     'available' => ActivityStatus.available,

@@ -1,10 +1,10 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/providers/repository_providers.dart';
-import '../../../core/services/calendar_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/utils/geo.dart';
@@ -20,10 +20,12 @@ import '../../../core/widgets/app_tappable.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
+import '../../calendar/domain/calendar_event.dart';
 import '../../chat/domain/chat_message.dart';
 import '../../discovery/domain/activity_model.dart';
 import '../../discovery/presentation/widgets/venue_map_card.dart';
 import '../domain/activity_participant.dart';
+import 'my_activities_screen.dart';
 
 // ─── Data type ───────────────────────────────────────────────────────────────
 
@@ -67,6 +69,9 @@ class JoinedActivityDetailScreen extends ConsumerWidget {
       await ref.read(activityRepositoryProvider).leave(activityId);
       ref.invalidate(_detailProvider(activityId));
       ref.invalidate(activityFeedProvider);
+      ref.invalidate(joinedGamesProvider);
+      ref.invalidate(hostedGamesProvider);
+      ref.invalidate(pastGamesProvider);
       if (!context.mounted) return;
       AppSnackbar.show(
         context,
@@ -173,7 +178,9 @@ class _DetailBody extends StatelessWidget {
 
                   // Host card
                   _HostCard(
+                    activityId: activity.id,
                     hostName: activity.hostName,
+                    hostId: activity.hostId,
                     hostRating: activity.hostRating,
                   ),
                   const SizedBox(height: AppSpacing.x3),
@@ -457,14 +464,37 @@ class _JoinedBanner extends StatelessWidget {
 // ─── Host card (matches activity_detail_screen._HostCard) ─────────────────────
 
 class _HostCard extends StatelessWidget {
-  const _HostCard({required this.hostName, required this.hostRating});
+  const _HostCard({
+    required this.activityId,
+    required this.hostName,
+    required this.hostId,
+    required this.hostRating,
+  });
+  final String activityId;
   final String hostName;
+  final String hostId;
   final double hostRating;
+
+  /// Opens a 1-on-1 thread with the host (`/dm/:uid`). Falls back to
+  /// the group chat when the host uid is unknown — never the host's
+  /// display name, which is not a valid chat id.
+  void _messageHost(BuildContext context) {
+    final id = hostId.trim();
+    if (id.isNotEmpty) {
+      context.push('/dm/$id');
+    } else {
+      context.push('/chat/$activityId');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return PressableScale(
-      onTap: () => context.push('/player-profile/$hostName'),
+      onTap: () => context.push(
+        hostId.trim().isNotEmpty
+            ? '/player-profile/uid/${hostId.trim()}'
+            : '/player-profile/$hostName',
+      ),
       child: Container(
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.x4,
@@ -503,7 +533,7 @@ class _HostCard extends StatelessWidget {
               semanticLabel: 'Message host',
               feedback: AppTapFeedback.scale,
               minSize: 36,
-              onTap: () => context.push('/chat/$hostName'),
+              onTap: () => _messageHost(context),
               child: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
@@ -581,8 +611,16 @@ class _MetaCard extends StatelessWidget {
           Divider(height: 1, color: context.colors.border, indent: 60),
           _MetaRow(
             icon: Icons.attach_money_rounded,
-            title: activity.isPaid ? 'Paid Activity' : 'Free Activity',
-            sub: activity.isPaid ? 'Fee required to join' : 'No cost to join',
+            title: !activity.isPaid
+                ? 'Free Activity'
+                : activity.isSplitCost
+                    ? 'Split Cost'
+                    : 'Paid Activity',
+            sub: !activity.isPaid
+                ? 'No cost to join'
+                : activity.splitExplainer ??
+                    activity.feeLabel ??
+                    'Fee required to join',
             trailingChip: _FeeChip(isPaid: activity.isPaid),
           ),
         ],
@@ -709,8 +747,24 @@ class _ParticipantsSection extends ConsumerWidget {
         ),
         const SizedBox(height: AppSpacing.x3),
         roster.when(
-          loading: () => const SizedBox(height: _size),
-          error: (_, _) => const SizedBox(height: _size),
+          loading: () => SizedBox(
+            height: _size,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: context.colors.primaryOnSurface,
+                ),
+              ),
+            ),
+          ),
+          error: (_, _) => ErrorRetry(
+            message: 'Could not load participants.',
+            onRetry: () => ref.invalidate(_rosterProvider(activity.id)),
+          ),
           data: (members) {
             if (members.isEmpty) {
               return Text(
@@ -868,6 +922,9 @@ class _ChatMsgRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final time = DateFormat('h:mm a').format(message.sentAt);
+    final imageUrl =
+        message.imageUrl ?? ChatMessage.imageUrlFromText(message.text);
+    final isPhoto = message.isImage || imageUrl != null;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -898,16 +955,16 @@ class _ChatMsgRow extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 2),
-              Text(
-                message.isImage ||
-                        ChatMessage.imageUrlFromText(message.text) != null
-                    ? '[photo]'
-                    : message.text,
-                style: AppTypography.bodyReading(context).copyWith(
-                  color: context.colors.textSecondary,
-                  fontSize: 13,
+              if (isPhoto)
+                _PhotoThumbnail(imageUrl: imageUrl)
+              else
+                Text(
+                  message.text,
+                  style: AppTypography.bodyReading(context).copyWith(
+                    color: context.colors.textSecondary,
+                    fontSize: 13,
+                  ),
                 ),
-              ),
             ],
           ),
         ),
@@ -916,30 +973,114 @@ class _ChatMsgRow extends StatelessWidget {
   }
 }
 
+/// 56px photo thumbnail for image messages, with an icon fallback when
+/// the remote image fails (or only a local path exists).
+class _PhotoThumbnail extends StatelessWidget {
+  const _PhotoThumbnail({required this.imageUrl});
+  final String? imageUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    if (imageUrl == null || imageUrl!.isEmpty) {
+      return Container(
+        width: 56,
+        height: 56,
+        decoration: BoxDecoration(
+          color: context.colors.surfaceMuted,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+        ),
+        alignment: Alignment.center,
+        child: Icon(
+          Icons.photo_outlined,
+          size: 24,
+          color: context.colors.textSecondary,
+        ),
+      );
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppRadius.sm),
+      child: CachedNetworkImage(
+        imageUrl: imageUrl!,
+        width: 56,
+        height: 56,
+        fit: BoxFit.cover,
+        placeholder: (_, _) => Container(
+          width: 56,
+          height: 56,
+          color: context.colors.surfaceMuted,
+        ),
+        errorWidget: (_, _, _) => Container(
+          width: 56,
+          height: 56,
+          color: context.colors.surfaceMuted,
+          alignment: Alignment.center,
+          child: Icon(
+            Icons.broken_image_outlined,
+            size: 24,
+            color: context.colors.textSecondary,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ─── Action buttons ───────────────────────────────────────────────────────────
 
-class _AddToCalendarButton extends StatelessWidget {
+class _AddToCalendarButton extends ConsumerStatefulWidget {
   const _AddToCalendarButton({required this.activity});
   final ActivityModel activity;
 
   @override
+  ConsumerState<_AddToCalendarButton> createState() =>
+      _AddToCalendarButtonState();
+}
+
+class _AddToCalendarButtonState
+    extends ConsumerState<_AddToCalendarButton> {
+  bool _added = false;
+  bool _saving = false;
+
+  Future<void> _add() async {
+    if (_added || _saving) return;
+    setState(() => _saving = true);
+    try {
+      final activity = widget.activity;
+      await ref.read(calendarRepositoryProvider).addToDeviceCalendar(
+            CalendarEvent(
+              id: activity.id,
+              activityId: activity.id,
+              title: activity.title,
+              start: activity.dateTime,
+              end: activity.endTime,
+              location: activity.location,
+            ),
+          );
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _added = true;
+      });
+      AppSnackbar.show(
+        context,
+        message: 'Added to calendar',
+        variant: AppSnackbarVariant.success,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      AppSnackbar.show(
+        context,
+        message: 'Could not add to calendar',
+        variant: AppSnackbarVariant.error,
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return PressableScale(
-      onTap: () async {
-        final ok = await CalendarService.instance.addEvent(
-          title: activity.title,
-          start: activity.dateTime,
-          end: activity.endTime,
-          description: 'MatchUp activity — check the app for details.',
-          location: activity.location,
-        );
-        if (!context.mounted) return;
-        AppSnackbar.show(
-          context,
-          message: ok ? 'Added to calendar' : 'Could not add to calendar',
-          variant: ok ? AppSnackbarVariant.success : AppSnackbarVariant.error,
-        );
-      },
+      onTap: _added ? null : _add,
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.x3 + 2),
@@ -952,14 +1093,28 @@ class _AddToCalendarButton extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.calendar_month_outlined,
-              size: 18,
-              color: context.colors.textPrimary,
-            ),
+            if (_saving)
+              SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: context.colors.textPrimary,
+                ),
+              )
+            else
+              Icon(
+                _added
+                    ? Icons.check_circle_rounded
+                    : Icons.calendar_month_outlined,
+                size: 18,
+                color: _added
+                    ? context.colors.successText
+                    : context.colors.textPrimary,
+              ),
             const SizedBox(width: AppSpacing.x2),
             Text(
-              'Add to Calendar',
+              _added ? 'Added to Calendar' : 'Add to Calendar',
               style: AppTypography.labelField(context),
             ),
           ],

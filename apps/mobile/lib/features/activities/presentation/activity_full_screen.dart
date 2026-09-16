@@ -18,6 +18,7 @@ import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../../discovery/domain/activity_model.dart';
+import 'my_activities_screen.dart';
 
 typedef _FullData = ({ActivityModel activity, List<ActivityModel> similar});
 
@@ -30,10 +31,16 @@ final _fullProvider = FutureProvider.autoDispose.family<_FullData, String>((
   if (activity == null) throw StateError('Activity not found');
   final matches = await repo.search(sport: activity.sportType);
   final similar = matches
-      .where((a) => a.id != activityId && !a.isFull)
-      .take(3)
-      .toList();
-  return (activity: activity, similar: similar);
+      .where(
+        (a) =>
+            a.id != activityId &&
+            !a.isFull &&
+            !a.isParticipant &&
+            !a.isHost,
+      )
+      .toList()
+    ..sort((a, b) => a.distanceKm.compareTo(b.distanceKm));
+  return (activity: activity, similar: similar.take(3).toList());
 });
 
 class ActivityFullScreen extends ConsumerWidget {
@@ -535,7 +542,7 @@ class _SimilarActivityRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final timeFmt = DateFormat('EEE, h:mm a');
     return PressableScale(
-      onTap: () => context.push('/activity/${activity.id}'),
+      onTap: () => context.pushReplacement('/activity/${activity.id}'),
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.x3),
         decoration: BoxDecoration(
@@ -600,6 +607,7 @@ class _ActionsState extends ConsumerState<_Actions> {
       await ref
           .read(activityRepositoryProvider)
           .requestJoin(widget.activity.id);
+      ref.invalidate(pendingGamesProvider);
       if (!mounted) return;
       AppSnackbar.show(
         context,
@@ -625,8 +633,11 @@ class _ActionsState extends ConsumerState<_Actions> {
     // Approval-gated games can still take requests while full (the
     // host may approve when a spot frees up). Open games have no
     // waiting list — the button stays disabled instead of faking it.
-    final canRequest =
-        activity.requiresApproval && !activity.hasPendingRequest;
+    // Either way the game must not have started yet.
+    final canRequest = activity.requiresApproval &&
+        !activity.hasPendingRequest &&
+        !activity.hasStarted;
+    final isFullButton = !activity.requiresApproval;
     return Column(
       children: [
         AppButton(
@@ -639,6 +650,18 @@ class _ActionsState extends ConsumerState<_Actions> {
           loading: _sending,
           size: AppButtonSize.lg,
         ),
+        // Explainer under the disabled full-state button, pointing at
+        // the alternatives below.
+        if (isFullButton && !canRequest) ...[
+          const SizedBox(height: AppSpacing.x2),
+          Text(
+            'This game is full — check similar games below',
+            style: AppTypography.bodySmall(context).copyWith(
+              color: context.colors.textSecondary,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
         const SizedBox(height: AppSpacing.x3),
         PressableScale(
           onTap: () => Navigator.of(context).maybePop(),

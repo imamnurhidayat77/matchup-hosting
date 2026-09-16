@@ -36,14 +36,23 @@ class _FakeActivities implements ActivityRepository {
     int offset = 0,
     filter,
     bool forceRefresh = false,
+    bool strict = false,
   }) async =>
       const [];
 
   @override
-  Future<List<ActivityModel>> joinedByUser(String userId) async => joined;
+  Future<List<ActivityModel>> joinedByUser(
+    String userId, {
+    int limit = 20,
+    int offset = 0,
+  }) async => joined;
 
   @override
-  Future<List<ActivityModel>> hostedByUser(String userId) async => hosted;
+  Future<List<ActivityModel>> hostedByUser(
+    String userId, {
+    int limit = 20,
+    int offset = 0,
+  }) async => hosted;
 
   @override
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);

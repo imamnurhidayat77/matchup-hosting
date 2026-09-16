@@ -1,9 +1,12 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/providers/auth_state_provider.dart';
 import '../../../core/providers/repository_providers.dart';
+import '../../../core/storage/secure_token_store.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
@@ -19,22 +22,42 @@ import '../../../core/widgets/skeleton.dart';
 import '../../activities/domain/activity_model.dart';
 
 // ─── Providers ───────────────────────────────────────────────────────────────
+// keepAlive (bukan autoDispose): pindah tab tidak dispose + fetch ulang.
+// Tab tetap di-cache selama My Games masih di navigation stack.
 
-const _mockUserId = 'me';
+/// Signed-in uid used by the My Games tabs. Watches the auth uid so an
+/// account switch (logout Benjamin → login Lisa) re-reads secure storage
+/// and cascades a refetch to every tab below — otherwise the keepAlive
+/// tabs keep serving Benjamin's cached UID + cached lists to Lisa.
+/// The backend also derives the viewer from the Bearer token, so an empty
+/// uid still returns the viewer's own lists server-side.
+final myGamesUidProvider = FutureProvider<String>((ref) async {
+  ref.watch(authStateProvider.select((s) => s.userId));
+  return await SecureTokenStore.instance.readUserId() ?? '';
+});
 
-final _joinedProvider = FutureProvider.autoDispose<List<ActivityModel>>(
-  (ref) => ref.watch(activityRepositoryProvider).joinedByUser(_mockUserId),
-);
+/// Ukuran satu halaman My Games. List merender bertahap 15-15
+/// agar 100+ activity tidak di-layout sekaligus.
+const _pageSize = 15;
 
-final _hostedProvider = FutureProvider.autoDispose<List<ActivityModel>>(
-  (ref) => ref.watch(activityRepositoryProvider).hostedByUser(_mockUserId),
-);
+// Public (bukan private) agar layar detail bisa invalidate tab My Games
+// yang relevan setelah mutasi (leave/cancel/approve/dll).
+final joinedGamesProvider = FutureProvider<List<ActivityModel>>((ref) async {
+  final uid = await ref.watch(myGamesUidProvider.future);
+  return ref.watch(activityRepositoryProvider).joinedByUser(uid);
+});
 
-final _pastProvider = FutureProvider.autoDispose<List<ActivityModel>>(
-  (ref) => ref.watch(activityRepositoryProvider).pastByUser(_mockUserId),
-);
+final hostedGamesProvider = FutureProvider<List<ActivityModel>>((ref) async {
+  final uid = await ref.watch(myGamesUidProvider.future);
+  return ref.watch(activityRepositoryProvider).hostedByUser(uid);
+});
 
-final _pendingProvider = FutureProvider.autoDispose<List<ActivityModel>>(
+final pastGamesProvider = FutureProvider<List<ActivityModel>>((ref) async {
+  final uid = await ref.watch(myGamesUidProvider.future);
+  return ref.watch(activityRepositoryProvider).pastByUser(uid);
+});
+
+final pendingGamesProvider = FutureProvider<List<ActivityModel>>(
   (ref) => ref.watch(activityRepositoryProvider).pendingRequests(),
 );
 
@@ -69,6 +92,21 @@ String _dayBadge(DateTime dt) {
   return DateFormat('EEE').format(dt).toUpperCase();
 }
 
+/// Soonest-first for Upcoming / Hosting / Pending (featured card =
+/// the closest game). Most-recent-first for Past.
+List<ActivityModel> _sortedForMyGames(
+  List<ActivityModel> activities, {
+  bool mostRecentFirst = false,
+}) {
+  final sorted = List<ActivityModel>.of(activities);
+  sorted.sort(
+    (a, b) => mostRecentFirst
+        ? b.dateTime.compareTo(a.dateTime)
+        : a.dateTime.compareTo(b.dateTime),
+  );
+  return sorted;
+}
+
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
 class MyActivitiesScreen extends ConsumerStatefulWidget {
@@ -81,6 +119,14 @@ class MyActivitiesScreen extends ConsumerStatefulWidget {
 class _MyActivitiesScreenState extends ConsumerState<MyActivitiesScreen> {
   int _tab = 0;
   static const _tabLabels = ['Upcoming', 'Hosting', 'Pending', 'Past'];
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Same one-shot badge as Messages: re-fetch on (re)show so reads
+    // done on /notifications are reflected.
+    ref.invalidate(_unreadNotifCountProvider);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -103,7 +149,11 @@ class _MyActivitiesScreenState extends ConsumerState<MyActivitiesScreen> {
               HomeHeaderAction(
                 icon: Icons.notifications_none_rounded,
                 semanticLabel: 'Notifications',
-                onTap: () => context.push('/notifications'),
+                onTap: () {
+                  context.push('/notifications').then(
+                    (_) => ref.invalidate(_unreadNotifCountProvider),
+                  );
+                },
                 showDot: unreadCount > 0,
               ),
             ],
@@ -125,9 +175,41 @@ class _MyActivitiesScreenState extends ConsumerState<MyActivitiesScreen> {
           ),
 
           Expanded(
-            child: AnimatedSwitcher(
-              duration: AppDurations.fast,
-              child: _buildTab(_tab),
+            // IndexedStack (bukan AnimatedSwitcher): state + scroll position
+            // tiap tab tetap hidup, tidak rebuild + skeleton ulang tiap tap.
+            child: IndexedStack(
+              index: _tab,
+              children: [
+                _UpcomingList(
+                  onTap: (a) => context.push('/joined-activity/${a.id}'),
+                ),
+                _SimpleList(
+                  provider: hostedGamesProvider,
+                  onTap: (a) => context.push('/manage-activity/${a.id}'),
+                  emptyTitle: "You haven't hosted yet",
+                  emptySubtitle: 'Create an activity and invite others to join.',
+                  emptyIcon: Icons.emoji_events_outlined,
+                  emptyActionLabel: 'Create activity',
+                  onEmptyAction: () => context.push('/create'),
+                ),
+                _SimpleList(
+                  provider: pendingGamesProvider,
+                  onTap: (a) => context.push('/pending-request/${a.id}'),
+                  pending: true,
+                  emptyTitle: 'No pending requests',
+                  emptySubtitle:
+                      'Request to join an approval-gated game and it will wait here.',
+                  emptyIcon: Icons.hourglass_top_rounded,
+                ),
+                _SimpleList(
+                  provider: pastGamesProvider,
+                  onTap: (a) => context.push('/past-activity/${a.id}/review'),
+                  past: true,
+                  emptyTitle: 'No past activities',
+                  emptySubtitle: 'Your completed activities will appear here.',
+                  emptyIcon: Icons.history_rounded,
+                ),
+              ],
             ),
           ),
         ],
@@ -135,111 +217,174 @@ class _MyActivitiesScreenState extends ConsumerState<MyActivitiesScreen> {
     );
   }
 
-  Widget _buildTab(int tab) => switch (tab) {
-    0 => _UpcomingList(
-        key: const ValueKey('upcoming'),
-        onTap: (a) => context.push('/joined-activity/${a.id}'),
-      ),
-    1 => _SimpleList(
-        key: const ValueKey('hosting'),
-        provider: _hostedProvider,
-        onTap: (a) => context.push('/manage-activity/${a.id}'),
-        emptyTitle: "You haven't hosted yet",
-        emptySubtitle: 'Create an activity and invite others to join.',
-        emptyIcon: Icons.emoji_events_outlined,
-        emptyActionLabel: 'Create activity',
-        onEmptyAction: () => context.push('/create'),
-      ),
-    2 => _SimpleList(
-        key: const ValueKey('pending'),
-        provider: _pendingProvider,
-        onTap: (a) => context.push('/pending-request/${a.id}'),
-        pending: true,
-        emptyTitle: 'No pending requests',
-        emptySubtitle:
-            'Request to join an approval-gated game and it will wait here.',
-        emptyIcon: Icons.hourglass_top_rounded,
-      ),
-    _ => _SimpleList(
-        key: const ValueKey('past'),
-        provider: _pastProvider,
-        onTap: (a) => context.push('/past-activity/${a.id}/review'),
-        past: true,
-        emptyTitle: 'No past activities',
-        emptySubtitle: 'Your completed activities will appear here.',
-        emptyIcon: Icons.history_rounded,
-      ),
-  };
+  // Tab bodies live in the IndexedStack above so each tab keeps its
+  // scroll position + cached provider data across tab switches.
 }
 
 // ─── Upcoming tab — featured card + "Other Registered" ───────────────────────
 
-class _UpcomingList extends ConsumerWidget {
-  const _UpcomingList({super.key, required this.onTap});
+class _UpcomingList extends ConsumerStatefulWidget {
+  const _UpcomingList({required this.onTap});
   final ValueChanged<ActivityModel> onTap;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(_joinedProvider);
+  ConsumerState<_UpcomingList> createState() => _UpcomingListState();
+}
+
+class _UpcomingListState extends ConsumerState<_UpcomingList>
+    with AutomaticKeepAliveClientMixin {
+  int _visibleOthers = _pageSize;
+  final _scroll = ScrollController();
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (!_scroll.hasClients) return;
+    if (_scroll.position.pixels >
+        _scroll.position.maxScrollExtent - 400) {
+      setState(() => _visibleOthers += _pageSize);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    final async = ref.watch(joinedGamesProvider);
+    // Stale-while-revalidate: saat refresh, tampilkan data lama
+    // jangan balik ke skeleton kosong.
+    if (async.isLoading && async.hasValue) {
+      return _buildList(context, ref, async.valueOrNull!, isRefreshing: true);
+    }
     return async.when(
-      loading: () => const SkeletonList(count: 3),
+      loading: () => const _MyGamesSkeleton(count: 4),
       error: (_, _) => ErrorRetry(
         message: 'Could not load activities.',
-        onRetry: () => ref.invalidate(_joinedProvider),
+        onRetry: () => ref.invalidate(joinedGamesProvider),
       ),
-      data: (activities) {
-        if (activities.isEmpty) {
-          return EmptyState(
-            icon: Icons.calendar_today_outlined,
-            title: 'No upcoming activities',
-            subtitle: 'Discover activities near you and join one!',
-            actionLabel: 'Discover',
-            onAction: () => GoRouter.of(context).go('/discovery'),
-          );
-        }
+      data: (activities) => _buildList(context, ref, activities),
+    );
+  }
 
-        final featured = activities.first;
-        final others = activities.skip(1).toList();
+  Widget _buildList(
+    BuildContext context,
+    WidgetRef ref,
+    List<ActivityModel> activities, {
+    bool isRefreshing = false,
+  }) {
+    if (activities.isEmpty) {
+      return EmptyState(
+        icon: Icons.calendar_today_outlined,
+        title: 'No upcoming activities',
+        subtitle: 'Discover activities near you and join one!',
+        actionLabel: 'Discover',
+        onAction: () => GoRouter.of(context).go('/discovery'),
+      );
+    }
 
-        return RefreshIndicator(
-          onRefresh: () async => ref.invalidate(_joinedProvider),
-          color: AppColors.primary,
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.x5,
-              0,
-              AppSpacing.x5,
-              AppSpacing.x8,
-            ),
-            children: [
-              // Featured card
-              _FeaturedCard(
-                activity: featured,
-                onTap: () => onTap(featured),
-              ),
+    _precacheCovers(context, activities.take(6));
 
-              // "Other Registered" section
-              if (others.isNotEmpty) ...[
-                const SizedBox(height: AppSpacing.x5),
-                Text(
+    // Defensive: backend + repository already sort soonest-first, but
+    // re-sort here so the featured card is always the closest game even
+    // when a mocked/fallback repository returns unsorted rows.
+    final sorted = _sortedForMyGames(activities);
+    final featured = sorted.first;
+    final others = sorted.skip(1).toList();
+    final shownOthers = others.take(_visibleOthers).toList();
+    final hasMore = shownOthers.length < others.length;
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        setState(() => _visibleOthers = _pageSize);
+        ref.invalidate(joinedGamesProvider);
+        // Tunggu fetch selesai agar indikator tidak hilang duluan.
+        await ref.read(joinedGamesProvider.future).then((_) {}).catchError((_) {});
+      },
+      color: AppColors.primary,
+      child: ListView.builder(
+        controller: _scroll,
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.x5,
+          0,
+          AppSpacing.x5,
+          AppSpacing.x8,
+        ),
+        // featured + header + shownOthers + loader
+        itemCount: 1 + (shownOthers.isEmpty ? 0 : 1 + shownOthers.length) + (hasMore ? 1 : 0),
+        itemBuilder: (context, i) {
+          if (i == 0) {
+            return Stack(
+              children: [
+                _FeaturedCard(
+                  activity: featured,
+                  onTap: () => widget.onTap(featured),
+                ),
+                if (isRefreshing)
+                  const Positioned(
+                    top: 8,
+                    right: 8,
+                    child: SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+              ],
+            );
+          }
+          var idx = i - 1;
+          if (shownOthers.isNotEmpty) {
+            if (idx == 0) {
+              return Padding(
+                padding: const EdgeInsets.only(
+                  top: AppSpacing.x5,
+                  bottom: AppSpacing.x3,
+                ),
+                child: Text(
                   'Other Registered',
                   style: AppTypography.titleMedium(context),
                 ),
-                const SizedBox(height: AppSpacing.x3),
-                ...others.map(
-                  (a) => Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.x3),
-                    child: _CompactCard(
-                      activity: a,
-                      onTap: () => onTap(a),
-                    ),
+              );
+            }
+            idx -= 1;
+            if (idx < shownOthers.length) {
+              final a = shownOthers[idx];
+              return Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.x3),
+                child: RepaintBoundary(
+                  child: _CompactCard(
+                    activity: a,
+                    onTap: () => widget.onTap(a),
                   ),
                 ),
-              ],
-            ],
-          ),
-        );
-      },
+              );
+            }
+          }
+          // Tail loader saat masih ada sisa yang belum dirender.
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }
@@ -491,9 +636,8 @@ class _CompactCard extends StatelessWidget {
 
 // ─── Simple list (Hosting + Past) ────────────────────────────────────────────
 
-class _SimpleList extends ConsumerWidget {
+class _SimpleList extends ConsumerStatefulWidget {
   const _SimpleList({
-    super.key,
     required this.provider,
     required this.onTap,
     required this.emptyTitle,
@@ -505,7 +649,7 @@ class _SimpleList extends ConsumerWidget {
     this.onEmptyAction,
   });
 
-  final ProviderListenable<AsyncValue<List<ActivityModel>>> provider;
+  final FutureProvider<List<ActivityModel>> provider;
   final ValueChanged<ActivityModel> onTap;
   final String emptyTitle;
   final String emptySubtitle;
@@ -519,47 +663,172 @@ class _SimpleList extends ConsumerWidget {
   final VoidCallback? onEmptyAction;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(provider);
+  ConsumerState<_SimpleList> createState() => _SimpleListState();
+}
+
+class _SimpleListState extends ConsumerState<_SimpleList>
+    with AutomaticKeepAliveClientMixin {
+  int _visible = _pageSize;
+  final _scroll = ScrollController();
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (!_scroll.hasClients) return;
+    if (_scroll.position.pixels >
+        _scroll.position.maxScrollExtent - 400) {
+      setState(() => _visible += _pageSize);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    final async = ref.watch(widget.provider);
+    if (async.isLoading && async.hasValue) {
+      return _buildList(context, async.valueOrNull!, isRefreshing: true);
+    }
     return async.when(
-      loading: () => const SkeletonList(count: 4),
+      loading: () => const _MyGamesSkeleton(count: 5),
       error: (_, _) => ErrorRetry(
         message: 'Could not load activities.',
-        onRetry: () => ref.invalidate(provider as ProviderOrFamily),
+        onRetry: () => ref.invalidate(widget.provider),
       ),
-      data: (activities) {
-        if (activities.isEmpty) {
-          return EmptyState(
-            icon: emptyIcon,
-            title: emptyTitle,
-            subtitle: emptySubtitle,
-            actionLabel: emptyActionLabel,
-            onAction: onEmptyAction,
-          );
-        }
-        return RefreshIndicator(
-          onRefresh: () async => ref.invalidate(provider as ProviderOrFamily),
-          color: AppColors.primary,
-          child: ListView.separated(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.x5,
-              0,
-              AppSpacing.x5,
-              AppSpacing.x8,
-            ),
-            itemCount: activities.length,
-            separatorBuilder: (_, _) =>
-                const SizedBox(height: AppSpacing.x3),
-            itemBuilder: (_, i) => _CompactCard(
-              activity: activities[i],
-              pending: pending,
-              onTap: () => onTap(activities[i]),
-            ),
-          ),
-        );
-      },
+      data: (activities) => _buildList(context, activities),
     );
   }
+
+  Widget _buildList(
+    BuildContext context,
+    List<ActivityModel> activities, {
+    bool isRefreshing = false,
+  }) {
+    if (activities.isEmpty) {
+      return EmptyState(
+        icon: widget.emptyIcon,
+        title: widget.emptyTitle,
+        subtitle: widget.emptySubtitle,
+        actionLabel: widget.emptyActionLabel,
+        onAction: widget.onEmptyAction,
+      );
+    }
+    _precacheCovers(context, activities.take(6));
+
+    // Same defensive sort as Upcoming: Hosting + Pending soonest-first,
+    // Past most-recent-first.
+    final sorted = _sortedForMyGames(
+      activities,
+      mostRecentFirst: widget.past,
+    );
+    final shown = sorted.take(_visible).toList();
+    final hasMore = shown.length < sorted.length;
+    return RefreshIndicator(
+      onRefresh: () async {
+        setState(() => _visible = _pageSize);
+        ref.invalidate(widget.provider);
+        await ref.read(widget.provider.future).then((_) {}).catchError((_) {});
+      },
+      color: AppColors.primary,
+      child: ListView.separated(
+        controller: _scroll,
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.x5,
+          0,
+          AppSpacing.x5,
+          AppSpacing.x8,
+        ),
+        // Optimasi list panjang: matikan keepAlive per-item, nyalakan
+        // repaint boundary agar scroll 100+ card tidak jank.
+        addAutomaticKeepAlives: false,
+        addRepaintBoundaries: true,
+        // Selalu scrollable agar pull-to-refresh hidup walau item sedikit.
+        physics: const AlwaysScrollableScrollPhysics(),
+        itemCount: shown.length + (hasMore ? 1 : 0),
+        separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.x3),
+        itemBuilder: (_, i) {
+          if (i >= shown.length) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Center(
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            );
+          }
+          final a = shown[i];
+          return RepaintBoundary(
+            child: _CompactCard(
+              activity: a,
+              pending: widget.pending,
+              onTap: () => widget.onTap(a),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ─── Skeleton yang mirror card asli ──────────────────────────────────────────
+// SkeletonList generik (avatar 44px) bentuknya beda dari _CompactCard
+// (thumbnail 72px) sehingga terjadi layout jump. Versi ini memakai
+// ActivityListCardSkeleton agar tinggi tiap placeholder ≈ card asli.
+
+class _MyGamesSkeleton extends StatelessWidget {
+  const _MyGamesSkeleton({this.count = 5});
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.x5,
+        0,
+        AppSpacing.x5,
+        AppSpacing.x8,
+      ),
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: count,
+      itemBuilder: (_, _) => const Padding(
+        padding: EdgeInsets.only(bottom: AppSpacing.x3),
+        child: ActivityListCardSkeleton(),
+      ),
+    );
+  }
+}
+
+/// Precache cover pertama agar thumbnail tidak muncul satu-satu rebutan
+/// bandwidth saat list pertama render. Pakai [CachedNetworkImageProvider]
+/// agar SHARE cache dengan [AssetImageWithFallback] — jangan NetworkImage
+/// polos (itu fetch dobel di luar cache). Best-effort: gagal precache
+/// dibiarkan, gambar tetap load seperti biasa.
+void _precacheCovers(BuildContext context, Iterable<ActivityModel> items) {
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (!context.mounted) return;
+    for (final a in items) {
+      final url = a.coverImageUrl;
+      if (url == null || !isRemoteImage(url)) continue;
+      precacheImage(CachedNetworkImageProvider(url), context).catchError(
+        (_) {},
+      );
+    }
+  });
 }
 
 // ─── Shared widgets ───────────────────────────────────────────────────────────

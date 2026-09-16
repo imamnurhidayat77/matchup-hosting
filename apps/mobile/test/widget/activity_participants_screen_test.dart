@@ -33,6 +33,10 @@ void main() {
           path: '/player-profile/:name',
           builder: (_, _) => const Scaffold(body: Text('Player Profile')),
         ),
+        GoRoute(
+          path: '/player-profile/uid/:uid',
+          builder: (_, _) => const Scaffold(body: Text('Player Profile')),
+        ),
       ],
     );
 

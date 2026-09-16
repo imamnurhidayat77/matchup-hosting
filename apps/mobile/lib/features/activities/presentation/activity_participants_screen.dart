@@ -9,9 +9,11 @@ import '../../../core/theme/dark_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/app_avatar.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
+import '../../discovery/domain/activity_model.dart';
 import '../domain/activity_participant.dart';
 
 typedef _ParticipantsData = ({
@@ -23,8 +25,13 @@ typedef _ParticipantsData = ({
 final _participantsProvider = FutureProvider.autoDispose
     .family<_ParticipantsData, String>((ref, activityId) async {
       final activityRepo = ref.watch(activityRepositoryProvider);
-      final activity = await activityRepo.byId(activityId);
-      final roster = await activityRepo.participants(activityId);
+      // Fetch in parallel — the detail and the roster are independent.
+      final results = await Future.wait([
+        activityRepo.byId(activityId),
+        activityRepo.participants(activityId),
+      ]);
+      final activity = results[0] as ActivityModel?;
+      final roster = results[1] as List<ActivityParticipant>;
       return (
         roster: roster,
         capacity: activity?.capacity ?? roster.length,
@@ -108,24 +115,46 @@ class ActivityParticipantsScreen extends ConsumerWidget {
                 onlineCount: onlineUids.length,
               ),
               Expanded(
-                child: ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.x4,
-                    AppSpacing.x4,
-                    AppSpacing.x4,
-                    AppSpacing.x4,
-                  ),
-                  itemCount: roster.length,
-                  separatorBuilder: (_, _) =>
-                      const SizedBox(height: AppSpacing.x3),
-                  itemBuilder: (_, i) {
-                    final p = roster[i];
-                    return _ParticipantCard(
-                      item: p,
-                      isOnline: onlineUids.contains(p.userId),
-                    );
-                  },
-                ),
+                child: roster.isEmpty
+                    ? const EmptyState(
+                        icon: Icons.people_outline_rounded,
+                        title: 'No participants yet',
+                        subtitle:
+                            'Approved players will appear here once they join.',
+                      )
+                    : RefreshIndicator(
+                        onRefresh: () async {
+                          ref.invalidate(
+                            _participantsProvider(activityId),
+                          );
+                          await ref
+                              .read(_participantsProvider(activityId).future)
+                              .then((_) {})
+                              .catchError((_) {});
+                        },
+                        color: AppColors.primary,
+                        child: ListView.separated(
+                          physics:
+                              const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.fromLTRB(
+                            AppSpacing.x4,
+                            AppSpacing.x4,
+                            AppSpacing.x4,
+                            AppSpacing.x4,
+                          ),
+                          itemCount: roster.length,
+                          separatorBuilder: (_, _) =>
+                              const SizedBox(height: AppSpacing.x3),
+                          itemBuilder: (_, i) {
+                            final p = roster[i];
+                            return _ParticipantCard(
+                              item: p,
+                              isOnline:
+                                  onlineUids.contains(p.userId),
+                            );
+                          },
+                        ),
+                      ),
               ),
             ],
           );
@@ -248,7 +277,11 @@ class _ParticipantCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return PressableScale(
-      onTap: () => context.push('/player-profile/${item.name}'),
+      onTap: () => context.push(
+        item.userId.isNotEmpty
+            ? '/player-profile/uid/${item.userId}'
+            : '/player-profile/${item.name}',
+      ),
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.x3),
         decoration: BoxDecoration(
@@ -341,6 +374,8 @@ class _ParticipantCard extends StatelessWidget {
 
   String _timeAgo(DateTime joinedAt) {
     final diff = DateTime.now().difference(joinedAt);
+    // Clamp clock-skewed future timestamps to "Just now".
+    if (diff.isNegative || diff.inMinutes < 1) return 'Just now';
     if (diff.inHours < 1) return 'Joined ${diff.inMinutes}m ago';
     if (diff.inHours < 24) return 'Joined ${diff.inHours}h ago';
     if (diff.inDays == 1) return 'Joined 1 day ago';

@@ -10,6 +10,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/widgets/app_icon.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/notification_icon_button.dart';
 import '../../../core/widgets/pressable_scale.dart';
@@ -42,7 +43,14 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   void _shiftMonth(int delta) {
     setState(() {
       _viewMonth = DateTime(_viewMonth.year, _viewMonth.month + delta);
-      _selectedDay = null; // clear selection when switching month
+      // Keep the selected day when it exists in the newly viewed
+      // month; otherwise fall back to the 1st instead of null so the
+      // list below never silently switches back to whole-month mode.
+      final daysInMonth =
+          DateTime(_viewMonth.year, _viewMonth.month + 1, 0).day;
+      if (_selectedDay == null || _selectedDay! > daysInMonth) {
+        _selectedDay = 1;
+      }
     });
   }
 
@@ -96,7 +104,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   }
 }
 
-class _CalendarBody extends StatelessWidget {
+class _CalendarBody extends ConsumerWidget {
   const _CalendarBody({
     required this.viewMonth,
     required this.selectedDay,
@@ -114,7 +122,7 @@ class _CalendarBody extends StatelessWidget {
   final void Function(int day, bool faded) onSelectDay;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final today = DateTime.now();
     final isCurrentMonth =
         today.year == viewMonth.year && today.month == viewMonth.month;
@@ -155,14 +163,17 @@ class _CalendarBody extends StatelessWidget {
       cells.add(_DayCell(day: nextDay++, faded: true));
     }
 
-    final showingAllDay = selectedDay == null;
-    final dayEvents = showingAllDay
+    final showingMonth = selectedDay == null;
+    // No day selected (tapping the selected day again toggles it off):
+    // list the whole viewed month, not today — the header shows the
+    // viewed month, so filtering to today would look broken whenever
+    // they differ.
+    final dayEvents = showingMonth
         ? events
               .where(
                 (e) =>
-                    e.start.year == today.year &&
-                    e.start.month == today.month &&
-                    e.start.day == today.day,
+                    e.start.year == viewMonth.year &&
+                    e.start.month == viewMonth.month,
               )
               .toList()
         : events
@@ -176,36 +187,48 @@ class _CalendarBody extends StatelessWidget {
 
     final dateLabel = selectedDay != null
         ? '$monthLabel, $selectedDay'
-        : todayLabel;
+        : monthLabel;
 
     return Column(
       children: [
         _CalendarGrid(cells: cells),
         Divider(height: 1, color: context.colors.border),
         Expanded(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.x5,
-              AppSpacing.x4,
-              AppSpacing.x5,
-              AppSpacing.x4,
-            ),
-            children: [
-              _ScheduleHeader(label: dateLabel, count: dayEvents.length),
-              const SizedBox(height: AppSpacing.x3),
-              if (dayEvents.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.x8),
-                  child: Center(
-                    child: Text(
-                      'No activities on this day.',
-                      style: AppTypography.bodyMedium(context),
+          child: RefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(_upcomingEventsProvider);
+              await ref
+                  .read(_upcomingEventsProvider.future)
+                  .then((_) {})
+                  .catchError((_) {});
+            },
+            color: AppColors.primary,
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.x5,
+                AppSpacing.x4,
+                AppSpacing.x5,
+                AppSpacing.x4,
+              ),
+              children: [
+                _ScheduleHeader(label: dateLabel, count: dayEvents.length),
+                const SizedBox(height: AppSpacing.x3),
+                if (dayEvents.isEmpty)
+                  const Padding(
+                    padding:
+                        EdgeInsets.symmetric(vertical: AppSpacing.x8),
+                    child: EmptyState(
+                      icon: Icons.calendar_today_outlined,
+                      title: 'No activities on this day',
+                      subtitle:
+                          'Games you join or host will appear here.',
                     ),
-                  ),
-                )
-              else
-                for (final event in dayEvents) _EventCard(event: event),
-            ],
+                  )
+                else
+                  for (final event in dayEvents) _EventCard(event: event),
+              ],
+            ),
           ),
         ),
       ],
@@ -392,14 +415,22 @@ class _DayCell extends StatelessWidget {
                       : textColor,
                 ),
               ),
-              if (hasActivity && !isToday && !isSelected)
+              // Event dot always renders when the day has events —
+              // including on highlighted days (today / selected),
+              // where it uses a contrasting tone so it still reads on
+              // the filled circle behind it.
+              if (hasActivity)
                 Positioned(
                   bottom: 4,
                   child: Container(
                     width: 4,
                     height: 4,
-                    decoration: const BoxDecoration(
-                      color: AppColors.primary,
+                    decoration: BoxDecoration(
+                      color: isToday
+                          ? AppColors.textOnPrimary
+                          : isSelected
+                              ? context.colors.primaryOnSurface
+                              : AppColors.primary,
                       shape: BoxShape.circle,
                     ),
                   ),
@@ -448,6 +479,14 @@ class _EventCard extends StatelessWidget {
   const _EventCard({required this.event});
   final CalendarEvent event;
 
+  /// Hosted games manage from the host screen, past games from the
+  /// review screen, everything else from the joined detail screen.
+  String get _destination {
+    if (event.isHost) return '/manage-activity/${event.activityId}';
+    if (event.isPast) return '/past-activity/${event.activityId}/review';
+    return '/joined-activity/${event.activityId}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final timeFmt = DateFormat('h:mm a');
@@ -458,7 +497,7 @@ class _EventCard extends StatelessWidget {
         button: true,
         label: event.title,
         child: PressableScale(
-          onTap: () => context.push('/joined-activity/${event.activityId}'),
+          onTap: () => context.push(_destination),
           child: Container(
             padding: const EdgeInsets.all(AppSpacing.x3),
             decoration: BoxDecoration(

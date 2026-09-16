@@ -10,11 +10,13 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/asset_image.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../../discovery/domain/activity_model.dart';
+import 'my_activities_screen.dart';
 
 /// Shown after requesting to join an approval-gated activity.
 ///
@@ -42,7 +44,76 @@ class JoinRequestSentScreen extends ConsumerWidget {
         ),
         data: (activity) {
           if (activity == null) {
-            return const Center(child: Text('Activity not found.'));
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.x5),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('Activity not found.'),
+                    const SizedBox(height: AppSpacing.x4),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        PressableScale(
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            if (context.canPop()) {
+                              context.pop();
+                            } else {
+                              context.go('/discovery');
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.x5,
+                              vertical: AppSpacing.x3,
+                            ),
+                            decoration: BoxDecoration(
+                              borderRadius:
+                                  BorderRadius.circular(AppRadius.pill),
+                              border: Border.all(
+                                color: context.colors.border,
+                              ),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              'Back',
+                              style: AppTypography.buttonPrimary.copyWith(
+                                color: context.colors.textPrimary,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.x3),
+                        PressableScale(
+                          onTap: () => ref.invalidate(
+                            _requestActivityProvider(activityId),
+                          ),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.x5,
+                              vertical: AppSpacing.x3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary,
+                              borderRadius:
+                                  BorderRadius.circular(AppRadius.pill),
+                              boxShadow: AppShadows.glowPrimary,
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              'Retry',
+                              style: AppTypography.buttonPrimary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
           }
           return _RequestBody(activity: activity);
         },
@@ -56,12 +127,53 @@ final _requestActivityProvider = FutureProvider.autoDispose
   return ref.watch(activityRepositoryProvider).byId(id);
 });
 
-class _RequestBody extends StatelessWidget {
+class _RequestBody extends ConsumerStatefulWidget {
   const _RequestBody({required this.activity});
   final ActivityModel activity;
 
   @override
+  ConsumerState<_RequestBody> createState() => _RequestBodyState();
+}
+
+class _RequestBodyState extends ConsumerState<_RequestBody> {
+  bool _withdrawing = false;
+
+  /// Withdraws the pending join request. On success the My Games
+  /// pending tab is invalidated and the screen pops with a
+  /// confirmation; on failure the request stays and an error shows.
+  Future<void> _withdraw() async {
+    if (_withdrawing) return;
+    setState(() => _withdrawing = true);
+    try {
+      await ref.read(activityRepositoryProvider).leave(widget.activity.id);
+      ref.invalidate(pendingGamesProvider);
+      if (!mounted) return;
+      HapticFeedback.mediumImpact();
+      AppSnackbar.show(
+        context,
+        message: 'Request withdrawn.',
+        variant: AppSnackbarVariant.success,
+      );
+      if (context.canPop()) {
+        context.pop();
+      } else {
+        context.go('/discovery');
+      }
+    } catch (_) {
+      if (!mounted) return;
+      AppSnackbar.show(
+        context,
+        message: 'Could not withdraw the request. Please try again.',
+        variant: AppSnackbarVariant.error,
+      );
+    } finally {
+      if (mounted) setState(() => _withdrawing = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final activity = widget.activity;
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.x5,
@@ -138,11 +250,12 @@ class _RequestBody extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.x3),
 
-          // View details — secondary
+          // View details — secondary (the pending-request detail, not
+          // the public activity page: this request is still undecided).
           PressableScale(
             onTap: () {
               HapticFeedback.lightImpact();
-              context.go('/activity/${activity.id}');
+              context.go('/pending-request/${activity.id}');
             },
             child: Container(
               width: double.infinity,
@@ -158,6 +271,35 @@ class _RequestBody extends StatelessWidget {
                 style: AppTypography.buttonPrimary.copyWith(
                   color: context.colors.textPrimary,
                 ),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.x2),
+
+          // Withdraw request — tertiary text action.
+          Semantics(
+            button: true,
+            label: 'Withdraw request',
+            child: PressableScale(
+              onTap: _withdrawing ? null : _withdraw,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.x4,
+                  vertical: AppSpacing.x2,
+                ),
+                child: _withdrawing
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Text(
+                        'Withdraw request',
+                        style: AppTypography.labelField(context).copyWith(
+                          color: context.colors.errorText,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
               ),
             ),
           ),

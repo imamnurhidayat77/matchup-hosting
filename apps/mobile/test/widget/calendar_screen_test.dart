@@ -83,7 +83,7 @@ void main() {
 
       await pumpScreen(tester);
 
-      expect(find.text('No activities on this day.'), findsOneWidget);
+      expect(find.text('No activities on this day'), findsOneWidget);
     });
 
     testWidgets(
