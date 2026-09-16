@@ -4,6 +4,7 @@ import type {
     ActivityWithId,
     ListActivitiesFilters,
 } from './activities.service.js';
+import { isFeeMode, isJoinPolicy } from './activities.service.js';
 import { listSwipeDecisions } from '../swipes/swipes.service.js';
 import { sweepExpiredActivities } from './activity-lifecycle.service.js';
 import { geohashCover, geohashEncode, geohashNeighbors, haversineKm } from './geohash.js';
@@ -321,9 +322,17 @@ function mapDocForDiscover(
                 ? data.pendingRequestCount
                 : 0,
         status: data.status as ActivityWithId['status'],
+        joinPolicy: isJoinPolicy(data.joinPolicy) ? data.joinPolicy : 'open',
         isPaid: data.isPaid === true,
         ...(typeof data.fee === 'number' && Number.isFinite(data.fee) && data.fee > 0
             ? { fee: data.fee }
+            : {}),
+        ...(isFeeMode(data.feeMode) ? { feeMode: data.feeMode } : {}),
+        ...(typeof data.totalCost === 'number' && Number.isFinite(data.totalCost) && data.totalCost > 0
+            ? { totalCost: data.totalCost }
+            : {}),
+        ...(Number.isInteger(data.minPlayers) && (data.minPlayers as number) >= 2
+            ? { minPlayers: data.minPlayers as number }
             : {}),
         ...(typeof data.coverImageUrl === 'string'
             ? { coverImageUrl: data.coverImageUrl }

@@ -136,6 +136,14 @@ type SeedActivity = {
     coverFile?: string;
     /** 'approval' parks joiners in a pending request; omit for instant join. */
     joinPolicy?: 'approval';
+    /** Flat per-person price (NZD). Omit for free games. */
+    fee?: number;
+    /** Split mode: total venue cost shared. Requires totalCost. */
+    feeMode?: 'split';
+    /** Total cost to split (NZD). Only for feeMode 'split'. */
+    totalCost?: number;
+    /** Minimum players for split mode. Omit = full capacity. */
+    minPlayers?: number;
 };
 
 const ACTIVITIES: SeedActivity[] = [
@@ -159,6 +167,7 @@ const ACTIVITIES: SeedActivity[] = [
         status: 'open',
         memberKeys: ['alex', 'sarah', 'mike', 'lisa'],
         coverFile: 'covers/basketball_full.png',
+        fee: 5,
     },
     {
         id: 'seed-act-tennis-1',
@@ -202,6 +211,11 @@ const ACTIVITIES: SeedActivity[] = [
         status: 'full',
         memberKeys: ['alex', 'sarah', 'mike', 'james', 'lisa'],
         coverFile: 'sports/volleyball.png',
+        // Indoor court hire split: $60 total, min 4 to run ($15 worst).
+        feeMode: 'split',
+        totalCost: 60,
+        minPlayers: 4,
+        fee: 15,
     },
     {
         id: 'seed-act-running-1',
@@ -615,6 +629,21 @@ async function main(): Promise<void> {
             status,
             ...(coverImageUrl ? { coverImageUrl } : {}),
             ...(activity.joinPolicy ? { joinPolicy: activity.joinPolicy } : {}),
+            // Pricing: free by default; fixed `fee` or split
+            // (`feeMode` + `totalCost` + worst-case `fee`) when set.
+            ...((activity.fee ?? 0) > 0 || activity.feeMode === 'split'
+                ? { isPaid: true }
+                : { isPaid: false }),
+            ...((activity.fee ?? 0) > 0 ? { fee: activity.fee! } : {}),
+            ...(activity.feeMode === 'split'
+                ? {
+                        feeMode: 'split' as const,
+                        totalCost: activity.totalCost!,
+                        ...(activity.minPlayers !== undefined
+                            ? { minPlayers: activity.minPlayers }
+                            : {}),
+                    }
+                : {}),
             createdAt: daysAgo(7),
             updatedAt: daysAgo(1),
         });

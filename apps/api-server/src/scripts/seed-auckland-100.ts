@@ -414,6 +414,11 @@ const PAID_MSGS = [
     'The entry fee is ${fee} per person — cash or bank transfer on the day works.',
     'Fee of ${fee} covers the venue booking. Flick me a message if you need the account number.',
 ];
+const SPLIT_TOTALS = [40, 60, 80, 100, 120] as const;
+const SPLIT_MSGS = [
+    'Venue hire is ${total} total split between us — about ${fee} each if ${min} join, cheaper when full.',
+    'We split the ${total} court cost — works out to max ${fee} per person, less if more show up.',
+];
 const APPROVAL_MSGS = [
     'Thanks for your patience — I approve requests every evening, so sit tight!',
     'Quick note: please add a line about your experience level when you request to join.',
@@ -687,11 +692,21 @@ async function main(): Promise<void> {
         });
 
         const positiveFees = sportCfg.fees.filter((f) => f > 0);
-        const fee = slot.paid
-            ? positiveFees.length > 0 && rand() < 0.7
-                ? pick(positiveFees)
-                : pick([...PAID_FEES])
+        // ~30% paid; of the paid ones ~1/3 are split-cost (total shared)
+        // and the rest are fixed per-person. Split worst-case `fee` is
+        // derived so old clients still render a number.
+        const isSplit = slot.paid && rand() < 0.35;
+        const totalCost = isSplit ? pick([...SPLIT_TOTALS]) : undefined;
+        const minPlayers = isSplit
+            ? Math.max(2, Math.min(capacity, Math.floor(capacity / 2)))
             : undefined;
+        const fee = !slot.paid
+            ? undefined
+            : isSplit && totalCost !== undefined && minPlayers !== undefined
+              ? Math.round((totalCost / minPlayers) * 100) / 100
+              : positiveFees.length > 0 && rand() < 0.7
+                ? pick(positiveFees)
+                : pick([...PAID_FEES]);
         const isPaid = slot.paid;
         if (isPaid) stats.paid += 1;
         else stats.free += 1;
@@ -747,6 +762,13 @@ async function main(): Promise<void> {
                 joinPolicy: slot.joinPolicy,
                 isPaid,
                 ...(isPaid && fee !== undefined ? { fee } : {}),
+                ...(isSplit
+                    ? {
+                            feeMode: 'split' as const,
+                            totalCost: totalCost!,
+                            minPlayers: minPlayers!,
+                        }
+                    : {}),
                 createdAt: daysAgo(createdDaysAgo),
                 updatedAt: daysAgo(0),
             },
@@ -774,7 +796,18 @@ async function main(): Promise<void> {
             { sender: host, text: pick(HOST_OPENERS) },
         ];
         if (isPaid && fee !== undefined) {
-            chatTexts.push({ sender: host, text: fillTemplate(pick(PAID_MSGS), { fee: String(fee) }) });
+            if (isSplit && totalCost !== undefined && minPlayers !== undefined) {
+                chatTexts.push({
+                    sender: host,
+                    text: fillTemplate(pick(SPLIT_MSGS), {
+                        fee: String(fee),
+                        total: String(totalCost),
+                        min: String(minPlayers),
+                    }),
+                });
+            } else {
+                chatTexts.push({ sender: host, text: fillTemplate(pick(PAID_MSGS), { fee: String(fee) }) });
+            }
         }
         if (slot.joinPolicy === 'approval' && rand() < 0.5) {
             chatTexts.push({ sender: host, text: pick(APPROVAL_MSGS) });

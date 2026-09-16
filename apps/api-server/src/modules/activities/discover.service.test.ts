@@ -332,4 +332,24 @@ describe('listDiscoverActivities', () => {
 
         expect(out.map((a) => a.activityId)).toEqual(['a-open']);
     });
+
+    it('carries joinPolicy through so cards show NEEDS APPROVAL, not INSTANT JOIN', async () => {
+        chain.get.mockResolvedValue({
+            docs: [
+                {
+                    id: 'gated',
+                    data: () => baseAct({ activityId: 'gated', joinPolicy: 'approval' }),
+                },
+            ],
+        });
+
+        const out = await listDiscoverActivities({
+            limit: 10,
+            viewerUid: 'u-1',
+            discover: { sportFilters: [] },
+        });
+
+        expect(out).toHaveLength(1);
+        expect(out[0].joinPolicy).toBe('approval');
+    });
 });

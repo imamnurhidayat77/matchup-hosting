@@ -29,6 +29,8 @@ interface AdminActivityView {
   hostDisplayName: string;
   hostPhotoUrl?: string;
   createdAt: string | null;
+  isPaid?: boolean;
+  fee?: number;
 }
 
 function formatDateTime(iso: string | null): {
@@ -83,7 +85,8 @@ function toAdminActivity(view: AdminActivityView): AdminActivity {
     capacity: view.capacity,
     status,
     description: '',
-    isPaid: false,
+    isPaid: view.isPaid === true,
+    ...(typeof view.fee === 'number' ? { fee: view.fee } : {}),
     vibeTags: [],
   };
 }

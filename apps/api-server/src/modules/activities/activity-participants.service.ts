@@ -1,6 +1,7 @@
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { firestore } from '../../database/firebase.js';
 import {
+  activityAttendanceCollectionPath,
   activityDocPath,
   activityJoinRequestDocPath,
   activityJoinRequestsCollectionPath,
@@ -28,10 +29,16 @@ export type LeaveActivityInput = {
 export type ActivityParticipantWithId = ActivityParticipantRecord & {
   participantId: string;
   profile: PublicUserProfile | null;
+  /** True when this row is the activity host. */
+  isOrganizer: boolean;
+  /** True when an attendance row exists (checked in). */
+  isCheckedIn: boolean;
 };
 
 type ActivityParticipantBaseWithId = ActivityParticipantRecord & {
   participantId: string;
+  isOrganizer: boolean;
+  isCheckedIn: boolean;
 };
 
 /**
@@ -144,9 +151,20 @@ export async function getParticipants(
     throw new Error('activityId is required');
   }
 
-  const participantsSnap = await firestore
-    .collection(activityParticipantsCollectionPath(normalizedActivityId))
-    .get();
+  const [participantsSnap, activitySnap, attendanceSnap] = await Promise.all([
+    firestore
+      .collection(activityParticipantsCollectionPath(normalizedActivityId))
+      .get(),
+    firestore.doc(activityDocPath(normalizedActivityId)).get(),
+    firestore
+      .collection(activityAttendanceCollectionPath(normalizedActivityId))
+      .get(),
+  ]);
+
+  const hostData = activitySnap.exists ? activitySnap.data() : undefined;
+  const hostId =
+    typeof hostData?.hostId === 'string' ? hostData.hostId : null;
+  const checkedInUids = new Set(attendanceSnap.docs.map((doc) => doc.id));
 
   const participants = participantsSnap.docs.map((doc) => {
     const data = doc.data();
@@ -169,6 +187,8 @@ export async function getParticipants(
       participantId: doc.id,
       uid: data.uid,
       joinedAt: data.joinedAt as FirebaseFirestore.Timestamp,
+      isOrganizer: hostId !== null && data.uid === hostId,
+      isCheckedIn: checkedInUids.has(data.uid),
     };
   });
 
@@ -648,6 +668,11 @@ export type MyJoinRequestView = {
     startTime: string | null;
     status: 'pending';
     requestedAt: FirebaseFirestore.Timestamp | null;
+    /** Cover for the Pending tab thumbnail; absent when unset. */
+    coverImageUrl?: string;
+    /** Paid flag + fee, so rows render the correct chip without refetch. */
+    isPaid?: boolean;
+    fee?: number;
 };
 
 /**
@@ -684,6 +709,9 @@ export async function listMyJoinRequests(
         let sportType = '';
         let locationName = '';
         let startTime: string | null = null;
+        let coverImageUrl: string | undefined;
+        let isPaid: boolean | undefined;
+        let fee: number | undefined;
         try {
             const activitySnap = await firestore
                 .doc(activityDocPath(activityId))
@@ -693,6 +721,13 @@ export async function listMyJoinRequests(
             if (typeof a?.sportType === 'string') sportType = a.sportType;
             if (typeof a?.locationName === 'string') locationName = a.locationName;
             if (typeof a?.startTime === 'string') startTime = a.startTime;
+            if (typeof a?.coverImageUrl === 'string' && a.coverImageUrl) {
+                coverImageUrl = a.coverImageUrl;
+            }
+            if (typeof a?.isPaid === 'boolean') isPaid = a.isPaid;
+            if (typeof a?.fee === 'number' && Number.isFinite(a.fee) && a.fee > 0) {
+                fee = a.fee;
+            }
         } catch {
             // Best-effort enrichment — the row still renders from ids.
         }
@@ -705,8 +740,23 @@ export async function listMyJoinRequests(
             startTime,
             status: 'pending',
             requestedAt: (data.createdAt as FirebaseFirestore.Timestamp | undefined) ?? null,
+            ...(coverImageUrl !== undefined ? { coverImageUrl } : {}),
+            ...(isPaid !== undefined ? { isPaid } : {}),
+            ...(fee !== undefined ? { fee } : {}),
         });
     }
+
+    // Soonest event first (rows without a parseable start go last):
+    // on a waiting list the most urgent decision is the nearest game.
+    // Sorted in memory — a user has few pending requests, and a
+    // server-side orderBy would need a composite index.
+    views.sort((a, b) => {
+        const aMs = a.startTime !== null ? Date.parse(a.startTime) : Number.NaN;
+        const bMs = b.startTime !== null ? Date.parse(b.startTime) : Number.NaN;
+        if (Number.isNaN(aMs)) return Number.isNaN(bMs) ? 0 : 1;
+        if (Number.isNaN(bMs)) return -1;
+        return aMs - bMs;
+    });
 
     return views;
 }

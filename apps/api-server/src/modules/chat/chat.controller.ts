@@ -63,6 +63,10 @@ export async function sendMessageHandler(req: Request, res: Response) {
             });
         }
 
+        if (message === 'Chat is archived') {
+            return archivedChat(res, message);
+        }
+
         return res.status(500).json({
             ok: false,
             error:{
@@ -164,6 +168,14 @@ function unauthorized(res: Response) {
     });
 }
 
+/** Read-only archive: history stays readable, writes stop. */
+function archivedChat(res: Response, message: string) {
+    return res.status(403).json({
+        ok: false,
+        error: { code: 'CHAT_ARCHIVED', message },
+    });
+}
+
 export async function toggleReactionHandler(req: Request<ReactionParams>, res: Response) {
     try {
         const uid = req.auth?.uid;
@@ -198,6 +210,10 @@ export async function toggleReactionHandler(req: Request<ReactionParams>, res: R
                 ok: false,
                 error: { code: 'NOT_FOUND', message },
             });
+        }
+
+        if (message === 'Chat is archived') {
+            return archivedChat(res, message);
         }
 
         return res.status(500).json({
@@ -288,6 +304,10 @@ export async function createPollHandler(req: Request<PollParams>, res: Response)
             });
         }
 
+        if (message === 'Chat is archived') {
+            return archivedChat(res, message);
+        }
+
         return res.status(500).json({
             ok: false,
             error: { code: 'INTERNAL_ERROR', message },
@@ -352,6 +372,10 @@ export async function votePollHandler(req: Request<PollParams>, res: Response) {
                 ok: false,
                 error: { code: 'NOT_FOUND', message },
             });
+        }
+
+        if (message === 'Chat is archived') {
+            return archivedChat(res, message);
         }
 
         if (message === 'optionIndex is out of range') {
