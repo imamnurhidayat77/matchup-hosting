@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -303,9 +304,20 @@ void main() {
         ),
         findsNothing,
       );
-      // The bubble renders an image (network fetch fails in tests, so
-      // the broken-image fallback proves the image branch was taken).
-      expect(find.byIcon(Icons.broken_image_outlined), findsOneWidget);
+      // The bubble renders an image for the URL. The image stack is
+      // CachedNetworkImage (its network error state never surfaces under
+      // the test binding's fake HttpClient), so assert the image widget
+      // itself with the right URL — this proves the image branch was
+      // taken just as directly as the old broken-image fallback did.
+      expect(
+        find.byWidgetPredicate(
+          (w) =>
+              w is CachedNetworkImage &&
+              w.imageUrl ==
+                  'https://firebasestorage.googleapis.com/v0/b/app/o/x?alt=media',
+        ),
+        findsOneWidget,
+      );
     });
 
     testWidgets('should render reaction chips under a reacted bubble', (

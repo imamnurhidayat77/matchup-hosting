@@ -68,3 +68,6 @@ apps/api-server/src/modules/auth-dev-only/
 # Kiro (local only, not committed)
 .kiro/
 figma-cli.ts
+
+# Personal notes (local only, not committed)
+docs/interview-prep.md

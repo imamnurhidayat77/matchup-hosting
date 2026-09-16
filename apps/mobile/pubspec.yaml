@@ -45,6 +45,10 @@ dependencies:
   # Image processing (decode/encode/crop for wizard uploads)
   image: ^4.2.0
 
+  # Disk + memory image cache for remote covers/avatars.
+  # Thumbnail 72px jangan decode full-size: pakai memCacheWidth/Height.
+  cached_network_image: ^3.4.1
+
   # Date formatting
   intl: ^0.19.0
 

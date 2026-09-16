@@ -1,7 +1,9 @@
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import '../storage/local_storage.dart';
+import '../utils/logger.dart';
 
 // ─── Keys ─────────────────────────────────────────────────────────────────────
 
@@ -30,42 +32,46 @@ class SportPreferencesNotifier extends StateNotifier<Map<String, String>> {
   }
 
   Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_kSportPrefs);
+    final storage = await LocalStorage.create();
+    final raw = storage.getString(_kSportPrefs);
     if (raw == null) return;
     try {
       final decoded = json.decode(raw) as Map<String, dynamic>;
       state = decoded.map((k, v) => MapEntry(k, v as String));
     } catch (_) {
       // Corrupt data — start fresh.
-      await prefs.remove(_kSportPrefs);
+      await storage.remove(_kSportPrefs);
     }
   }
 
   Future<void> _persist() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_kSportPrefs, json.encode(state));
+    try {
+      final storage = await LocalStorage.create();
+      await storage.setString(_kSportPrefs, json.encode(state));
+    } catch (e) {
+      logError('SportPreferences persist failed', e);
+    }
   }
 
-  void setSport(String sport, String level) {
+  Future<void> setSport(String sport, String level) async {
     state = {...state, sport: level};
-    _persist();
+    await _persist();
   }
 
-  void removeSport(String sport) {
+  Future<void> removeSport(String sport) async {
     final updated = Map<String, String>.from(state)..remove(sport);
     state = updated;
-    _persist();
+    await _persist();
   }
 
-  void setAll(Map<String, String> prefs) {
+  Future<void> setAll(Map<String, String> prefs) async {
     state = Map.unmodifiable(prefs);
-    _persist();
+    await _persist();
   }
 
-  void reset() {
+  Future<void> reset() async {
     state = const {};
-    _persist();
+    await _persist();
   }
 }
 
@@ -86,14 +92,23 @@ class _DoubleNotifier extends StateNotifier<double> {
   final String _key;
 
   Future<void> _load(double fallback) async {
-    final prefs = await SharedPreferences.getInstance();
-    final v = prefs.getDouble(_key);
+    final storage = await LocalStorage.create();
+    final v = storage.getDouble(_key);
     if (v != null) state = v;
   }
 
   void set(double value) {
     state = value;
-    SharedPreferences.getInstance().then((p) => p.setDouble(_key, value));
+    _persist(value);
+  }
+
+  Future<void> _persist(double value) async {
+    try {
+      final storage = await LocalStorage.create();
+      await storage.setDouble(_key, value);
+    } catch (e) {
+      logError('DistanceFilter persist failed', e);
+    }
   }
 }
 
@@ -114,13 +129,22 @@ class _StringNotifier extends StateNotifier<String> {
   final String _key;
 
   Future<void> _load(String fallback) async {
-    final prefs = await SharedPreferences.getInstance();
-    final v = prefs.getString(_key);
+    final storage = await LocalStorage.create();
+    final v = storage.getString(_key);
     if (v != null) state = v;
   }
 
   void set(String value) {
     state = value;
-    SharedPreferences.getInstance().then((p) => p.setString(_key, value));
+    _persist(value);
+  }
+
+  Future<void> _persist(String value) async {
+    try {
+      final storage = await LocalStorage.create();
+      await storage.setString(_key, value);
+    } catch (e) {
+      logError('PriceFilter persist failed', e);
+    }
   }
 }

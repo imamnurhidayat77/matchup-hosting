@@ -1,5 +1,6 @@
-import { rtdb } from '../../database/firebase.js';
+import { firestore, rtdb } from '../../database/firebase.js';
 import {
+    activityDocPath,
     activityMessagePath,
     activityMessageReactionsPath,
     activityMessagesPath,
@@ -9,6 +10,7 @@ import {
     activityReactionPath,
     activityReactionsPath,
 } from '../../database/paths.js';
+import { resolveEndMs } from '../activities/activity-lifecycle.service.js';
 import type { ReactionEmoji } from './chat.schema.js';
 
 export type ChatMessageType = 'text' | 'system';
@@ -23,6 +25,51 @@ export type ChatMessageRecord = {
 export type ChatMessageWithId = ChatMessageRecord & {
     messageId: string;
 };
+
+/**
+ * Archive policy (best practice, Meetup/TeamSnap-style): chats stay
+ * readable forever, but writes stop after a grace period so dead games
+ * don't accumulate zombie threads. Post-game talk, photos and rematch
+ * planning happen in the days after the event — hence the grace.
+ */
+export const CHAT_ARCHIVE_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Pure archive rule — unit-testable without Firestore. */
+export function isChatArchived(input: {
+    status: unknown;
+    endMs: number | null;
+    nowMs: number;
+}): boolean {
+    const { status, endMs, nowMs } = input;
+    // Cancelled/removed games will never happen — close immediately.
+    if (status === 'cancelled' || status === 'removed') return true;
+    if (endMs === null || Number.isNaN(endMs)) return false;
+    return endMs + CHAT_ARCHIVE_GRACE_MS <= nowMs;
+}
+
+/**
+ * Throws `Activity not found` / `Chat is archived` unless the thread
+ * accepts writes. Called at the top of every chat *write* path (reads
+ * stay open — the archive is read-only, not deleted).
+ */
+export async function assertChatWritable(activityId: string): Promise<void> {
+    const normalizedActivityId = activityId.trim();
+    if (!normalizedActivityId) throw new Error('activityId is required');
+
+    const snap = await firestore.doc(activityDocPath(normalizedActivityId)).get();
+    if (!snap.exists) throw new Error('Activity not found');
+
+    const data = snap.data();
+    if (
+        isChatArchived({
+            status: data?.status,
+            endMs: data ? resolveEndMs(data) : null,
+            nowMs: Date.now(),
+        })
+    ) {
+        throw new Error('Chat is archived');
+    }
+}
 
 export async function sendMessage(activityId: string, senderId: string, text: string, messageType: ChatMessageType = 'text',): Promise<{ messageId: string }> {
 
@@ -39,6 +86,8 @@ export async function sendMessage(activityId: string, senderId: string, text: st
     }
 
     if (messageType !== 'text' && messageType !== 'system') throw new Error ('messageType must be text or system');
+
+    await assertChatWritable(normalizedActivityId);
 
     const messageRef = rtdb.ref(activityMessagesPath(normalizedActivityId)); 
     const newMessageRef = messageRef.push();
@@ -126,6 +175,8 @@ export async function toggleReaction(
     const messageSnap = await rtdb.ref(activityMessagePath(normalizedActivityId, normalizedMessageId)).get();
     if (!messageSnap.exists()) throw new Error('Message not found');
 
+    await assertChatWritable(normalizedActivityId);
+
     const reactionRef = rtdb.ref(activityReactionPath(normalizedActivityId, normalizedMessageId, emoji, normalizedUid));
     const existing = await reactionRef.get();
 
@@ -198,6 +249,8 @@ export async function createPoll(
     if (!normalizedUid) throw new Error('uid is required');
     if (!normalizedQuestion) throw new Error('question is required');
     if (normalizedOptions.length < 2) throw new Error('at least 2 options are required');
+
+    await assertChatWritable(normalizedActivityId);
 
     const pollsRef = rtdb.ref(activityPollsPath(normalizedActivityId));
     const newPollRef = pollsRef.push();
@@ -287,6 +340,8 @@ export async function votePoll(
 
     const pollSnap = await rtdb.ref(activityPollPath(normalizedActivityId, normalizedPollId)).get();
     if (!pollSnap.exists()) throw new Error('Poll not found');
+
+    await assertChatWritable(normalizedActivityId);
 
     const poll = pollSnap.val() as { options?: unknown; votes?: unknown };
     const options = Array.isArray(poll?.options) ? poll.options : [];

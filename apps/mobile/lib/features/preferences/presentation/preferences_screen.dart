@@ -8,9 +8,11 @@ import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/utils/nav_guard.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/pill_buttons.dart';
+import '../../sports/domain/sport_config.dart';
 import 'widgets/preference_types.dart';
 import 'widgets/preferences_distance_card.dart';
 import 'widgets/preferences_hero_summary.dart';
@@ -26,7 +28,9 @@ class PreferencesScreen extends ConsumerStatefulWidget {
 }
 
 class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
-  static const List<SportOption> _sports = [
+  /// Offline fallback catalog — used only when the server sports config
+  /// is empty/unreachable (same pattern as onboarding/filter/create).
+  static const List<SportOption> _fallbackSports = [
     SportOption(name: 'Basketball', icon: Icons.sports_basketball),
     SportOption(name: 'Tennis', icon: Icons.sports_tennis),
     SportOption(name: 'Soccer', icon: Icons.sports_soccer),
@@ -39,12 +43,20 @@ class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
     SportOption(name: 'Golf', icon: Icons.sports_golf),
   ];
 
+  /// Best-effort icon for a server-driven sport name.
+  static IconData _iconFor(String name) {
+    for (final s in _fallbackSports) {
+      if (s.name == name) return s.icon;
+    }
+    return Icons.sports_soccer;
+  }
+
   final Map<String, SkillLevel> _selected = <String, SkillLevel>{};
   double _distanceKm = 5;
   PricePreference _price = PricePreference.both;
 
   static const double _minDistance = 1;
-  static const double _maxDistance = 30;
+  static const double _maxDistance = 50;
 
   // ── Read initial values from providers on first build ─────────────────────
   bool _initialised = false;
@@ -160,12 +172,23 @@ class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
       }
     }
     if (!mounted) return;
-    context.go('/discovery');
+    // Per-key guard: rapid double-tap Apply would double-sync and double-go.
+    NavGuard.onceFor('preferences-apply', () => context.go('/discovery'));
   }
 
   @override
   Widget build(BuildContext context) {
     _initFromProviders();
+    // Server-driven catalog (filter surface); bundled list is the
+    // offline fallback so a failed fetch never empties the grid.
+    final sports = [
+      for (final name in pickSportNames(
+        ref.watch(sportsConfigProvider).valueOrNull ?? const [],
+        (s) => s.showInFilter,
+        [for (final s in _fallbackSports) s.name],
+      ))
+        SportOption(name: name, icon: _iconFor(name)),
+    ];
     return AppScaffold.detail(
       title: 'Filters',
       showHomeIndicator: false, // reached from inside ShellRoute screens.
@@ -192,7 +215,7 @@ class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
                   const PreferencesSectionLabel(label: 'Your sports'),
                   const SizedBox(height: AppSpacing.x3),
                   PreferencesSportGrid(
-                    sports: _sports,
+                    sports: sports,
                     selected: _selected,
                     onTap: _onTapSport,
                   ),
@@ -243,6 +266,13 @@ class _PreferencesScreenState extends ConsumerState<PreferencesScreen> {
                 const SizedBox(height: AppSpacing.x2),
                 Text(
                   _filterSummary,
+                  textAlign: TextAlign.center,
+                  style: AppTypography.metaSub(context),
+                ),
+                // Honest sync scope: only sports reach the backend profile;
+                // distance/price are SharedPreferences-only on this device.
+                Text(
+                  'Sports sync to your profile · Distance & price stay on this device',
                   textAlign: TextAlign.center,
                   style: AppTypography.metaSub(context),
                 ),

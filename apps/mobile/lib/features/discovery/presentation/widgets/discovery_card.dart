@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
@@ -78,6 +79,9 @@ class _HeroImage extends StatelessWidget {
             AssetImageWithFallback(
               imagePath: activity.coverImageUrl!,
               fit: BoxFit.cover,
+              // Hero fills the card width (~deck width): cap decode at
+              // that instead of the full-resolution photo.
+              decodeWidth: 400,
             )
           else
             const _CoverPlaceholder(),
@@ -132,37 +136,37 @@ class _HeroImage extends StatelessWidget {
             ),
           ),
 
-          // Distance pill — dark translucent, top-right. Hidden when
-          // the distance is unknown (see [distanceLabel]).
-          if (distanceLabel(activity.distanceKm) case final label?)
-            Positioned(
-              top: AppSpacing.x3,
-              right: AppSpacing.x3,
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(12, 8, 14, 8),
-                decoration: BoxDecoration(
-                  color: const Color(0xCC0F172A),
-                  borderRadius: AppRadius.pillR,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    AppIcon(
-                      AppIcons.mapPin,
-                      size: AppIconSize.sm,
-                      color: AppColors.textOnPrimary,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      label,
-                      style: AppTypography.chipLabel(
-                        context,
-                      ).copyWith(color: AppColors.textOnPrimary),
-                    ),
-                  ],
-                ),
+          // Distance pill — dark translucent, top-right. The slot is
+          // always rendered (same padding, so same height) to avoid a
+          // layout shift; unknown distances show an em dash.
+          Positioned(
+            top: AppSpacing.x3,
+            right: AppSpacing.x3,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(12, 8, 14, 8),
+              decoration: BoxDecoration(
+                color: const Color(0xCC0F172A),
+                borderRadius: AppRadius.pillR,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AppIcon(
+                    AppIcons.mapPin,
+                    size: AppIconSize.sm,
+                    color: AppColors.textOnPrimary,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    distanceLabel(activity.distanceKm) ?? '—',
+                    style: AppTypography.chipLabel(
+                      context,
+                    ).copyWith(color: AppColors.textOnPrimary),
+                  ),
+                ],
               ),
             ),
+          ),
         ],
       ),
     );
@@ -198,7 +202,7 @@ class _CardInfo extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.x3),
 
-          // Skill · time · location chips.
+          // Skill · time · location · price chips.
           Wrap(
             spacing: AppSpacing.x2,
             runSpacing: AppSpacing.x2,
@@ -217,6 +221,13 @@ class _CardInfo extends StatelessWidget {
                 icon: AppIcons.mapPin,
                 label: activity.location,
                 iconColor: c.textSecondary,
+              ),
+              _InfoChip(
+                icon: AppIcons.dollarSign,
+                label: _priceLabel(activity),
+                iconColor: activity.isPaid
+                    ? c.warningText
+                    : c.successText,
               ),
             ],
           ),
@@ -359,16 +370,18 @@ class _StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    // Joined/hosted games never reach the deck (filtered upstream), so
+    // they share the "Open" treatment — no dedicated dead branches.
     final (Color bg, Color fg, String label) = switch (status) {
-      ActivityStatus.available => (
+      ActivityStatus.available ||
+      ActivityStatus.joined ||
+      ActivityStatus.hosted => (
         c.successBg,
         c.successText,
         'Open',
       ),
       ActivityStatus.almostFull => (c.warningBg, c.warningText, 'Few left'),
       ActivityStatus.full => (c.errorLight, c.errorText, 'Full'),
-      ActivityStatus.joined => (c.primarySoft, c.primaryOnSurface, 'Joined'),
-      ActivityStatus.hosted => (c.primarySoft, c.primaryOnSurface, 'Hosting'),
       ActivityStatus.past => (c.surfaceMuted, c.textSecondary, 'Past'),
     };
     return Container(
@@ -384,6 +397,9 @@ class _StatusChip extends StatelessWidget {
   }
 }
 
+/// Honest participant count: a single group icon plus "N joined".
+/// No stacked face placeholders — the card has no roster data, and
+/// fake faces imply real people.
 class _ParticipantAvatars extends StatelessWidget {
   const _ParticipantAvatars({required this.count});
   final int count;
@@ -391,37 +407,34 @@ class _ParticipantAvatars extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final visible = count.clamp(0, 3);
-    const size = 34.0;
-    const step = 22.0;
-    if (visible == 0) return const SizedBox.shrink();
-    return SizedBox(
-      height: size,
-      width: step * (visible - 1) + size,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          for (var i = 0; i < visible; i++)
-            Positioned(
-              left: i * step,
-              child: Container(
-                width: size,
-                height: size,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: c.primaryLight,
-                  border: Border.all(color: c.surface, width: 2),
-                ),
-                alignment: Alignment.center,
-                child: Icon(
-                  Icons.person_rounded,
-                  size: 17,
-                  color: c.primaryOnSurface,
-                ),
-              ),
-            ),
-        ],
-      ),
+    if (count <= 0) return const SizedBox.shrink();
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: c.primaryLight,
+            border: Border.all(color: c.surface, width: 2),
+          ),
+          alignment: Alignment.center,
+          child: Icon(
+            Icons.group_rounded,
+            size: 17,
+            color: c.primaryOnSurface,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          '$count joined',
+          style: AppTypography.chipLabel(context).copyWith(
+            fontSize: 13,
+            color: c.textSecondary,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -449,31 +462,30 @@ class _CoverPlaceholder extends StatelessWidget {
   }
 }
 
+/// Price chip label: "FREE", fixed fee ("$8", "$12.50"), or split
+/// ("≈$12 SPLIT"). Split games store the worst-case per-person price
+/// in `fee`, so old readers stay correct — the `≈` + SPLIT suffix is
+/// the split signal on the card.
+String _priceLabel(ActivityModel activity) {
+  final amount = activity.displayFee;
+  if (!activity.isPaid || amount == null || amount <= 0) return 'FREE';
+  final text = amount == amount.roundToDouble()
+      ? amount.toInt().toString()
+      : amount.toStringAsFixed(2);
+  if (activity.isSplitCost) return '≈\$$text SPLIT';
+  return '\$$text';
+}
+
 String _formatDateTime(DateTime dt) {
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
   final eventDate = DateTime(dt.year, dt.month, dt.day);
-  final hour12 = dt.hour == 0 ? 12 : (dt.hour > 12 ? dt.hour - 12 : dt.hour);
-  final period = dt.hour >= 12 ? 'PM' : 'AM';
-  final minute = dt.minute.toString().padLeft(2, '0');
-  final time = '$hour12:$minute $period';
+  final time = DateFormat('h:mm a').format(dt);
   if (eventDate == today) return 'Today, $time';
-  if (eventDate == today.add(const Duration(days: 1))) return 'Tomorrow, $time';
-  const months = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
-  return '${months[dt.month - 1]} ${dt.day}, $time';
+  if (eventDate == today.add(const Duration(days: 1))) {
+    return 'Tomorrow, $time';
+  }
+  return '${DateFormat('MMM d').format(dt)}, $time';
 }
 
 /// Small join-policy pill under the sport badge: green "INSTANT JOIN"

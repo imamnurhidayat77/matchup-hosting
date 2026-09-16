@@ -10,6 +10,13 @@ class CalendarEvent {
   final String location;
   final bool addedToDeviceCalendar;
 
+  /// True when the viewer hosts this activity (populated from the
+  /// hosted source in [RemoteCalendarRepository.upcoming]).
+  final bool isHost;
+
+  /// True for past/completed activities, routed to the review screen.
+  final bool isPast;
+
   const CalendarEvent({
     required this.id,
     required this.activityId,
@@ -18,5 +25,7 @@ class CalendarEvent {
     required this.end,
     required this.location,
     this.addedToDeviceCalendar = false,
+    this.isHost = false,
+    this.isPast = false,
   });
 }

@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:matchup_mobile/core/providers/repository_providers.dart';
 import 'package:matchup_mobile/features/activities/data/local_places_repository.dart';
 import 'package:matchup_mobile/features/activities/presentation/widgets/venue_field.dart';
+import 'package:matchup_mobile/features/activities/domain/place_suggestion.dart';
 
 void main() {
   testWidgets(
@@ -40,6 +41,45 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Pick a venue on the map'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'VenueField shows the picked venue address under its name',
+    (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            placesRepositoryProvider.overrideWith((_) => LocalPlacesRepository()),
+          ],
+          child: MaterialApp(
+            home: Material(
+              child: Scaffold(
+                body: SizedBox(
+                  width: 360,
+                  child: VenueField(
+                    value: const PlaceSuggestion(
+                      placeId: 'p1',
+                      label: 'Eden Park',
+                      secondary: 'Reimers Ave, Kingsland, Auckland',
+                      latitude: -36.875,
+                      longitude: 174.745,
+                    ),
+                    onSuggestionSelected: (_) {},
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Eden Park'), findsOneWidget);
+      expect(
+        find.text('Reimers Ave, Kingsland, Auckland'),
+        findsOneWidget,
+      );
     },
   );
 }

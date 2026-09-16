@@ -30,7 +30,9 @@ class RemoteRatingsRepository implements RatingsRepository {
         '/activities/${submission.activityId}/ratings',
         data: {
           'sportType': submission.activitySportType,
-          'comment': ?submission.comment,
+          if (submission.comment != null) 'comment': submission.comment,
+          if (submission.activityStars != null)
+            'activityStars': submission.activityStars,
           'participantRatings': submission.participants
               .map(
                 (p) => {'rateeUid': p.rateeUserId, 'stars': p.stars},
@@ -45,9 +47,13 @@ class RemoteRatingsRepository implements RatingsRepository {
         submittedAt: DateTime.now(),
         remoteError: accepted ? null : 'Server returned ${res.statusCode}',
       );
-    } catch (e, st) {
-      debugPrint('[RemoteRatingsRepository] submit failed, falling back: $e\n$st');
-      return _fallback.submitActivityRating(submission);
+    } catch (e) {
+      debugPrint('[RemoteRatingsRepository] submit failed: $e');
+      return RatingSubmissionResult(
+        accepted: false,
+        submittedAt: DateTime.now(),
+        remoteError: e.toString(),
+      );
     }
   }
 

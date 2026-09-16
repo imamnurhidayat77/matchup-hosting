@@ -1,5 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+/// Sentinel distinguishing "argument omitted" from an explicit null
+/// (needed for [ActivityFormData.copyWith] to clear [minPlayers]).
+const _unset = Object();
+
 /// Form data model for the wizard
 class ActivityFormData {
   final String title;
@@ -13,11 +17,29 @@ class ActivityFormData {
   final String? coverImagePath;
   final DateTime? selectedDate;
   final String location;
+
+  /// Full address of the picked venue (`PlaceSuggestion.secondary`).
+  /// Empty when the user typed a custom location or nothing was picked
+  /// — the backend then stores no `address`.
+  final String venueAddress;
+
+  /// Picked venue coordinates. Persisted so a restored draft keeps the
+  /// accurate pin instead of falling back to the default on submit.
+  final double? venueLatitude;
+  final double? venueLongitude;
   final String description;
   final int maxParticipants;
   final String skillLevel;
   final int feeType; // 0 = Free, 1 = Paid
   final String? price;
+
+  /// Paid pricing mode: 0 = Fixed per person, 1 = Split total cost.
+  /// Only meaningful when [feeType] == 1.
+  final int priceMode;
+
+  /// Minimum players for split mode (worst-case divisor). Null (or <= 0)
+  /// means full capacity. Clamped to 2..maxParticipants at submit.
+  final int? minPlayers;
 
   /// How long the activity runs, in minutes. Default 120 (2h) matches the
   /// assumption the detail screen used before this field existed.
@@ -37,11 +59,16 @@ class ActivityFormData {
     this.coverImagePath,
     this.selectedDate,
     this.location = '',
+    this.venueAddress = '',
+    this.venueLatitude,
+    this.venueLongitude,
     this.description = '',
     this.maxParticipants = 10,
     this.skillLevel = 'Intermediate',
     this.feeType = 0,
     this.price,
+    this.priceMode = 0,
+    this.minPlayers,
     this.durationMinutes = 120,
     this.visibility = 'Public',
     this.joinPolicy = 'open',
@@ -53,11 +80,19 @@ class ActivityFormData {
     String? coverImagePath,
     DateTime? selectedDate,
     String? location,
+    String? venueAddress,
+    double? venueLatitude,
+    double? venueLongitude,
     String? description,
     int? maxParticipants,
     String? skillLevel,
     int? feeType,
     String? price,
+    int? priceMode,
+    // Nullable on purpose: passing an explicit null CLEARS the minimum
+    // (full house). A plain `??` would make "clear" impossible — the
+    // stepper's "+" at max-1 would silently stick (the min-players bug).
+    Object? minPlayers = _unset,
     int? durationMinutes,
     String? visibility,
     String? joinPolicy,
@@ -68,11 +103,18 @@ class ActivityFormData {
       coverImagePath: coverImagePath ?? this.coverImagePath,
       selectedDate: selectedDate ?? this.selectedDate,
       location: location ?? this.location,
+      venueAddress: venueAddress ?? this.venueAddress,
+      venueLatitude: venueLatitude ?? this.venueLatitude,
+      venueLongitude: venueLongitude ?? this.venueLongitude,
       description: description ?? this.description,
       maxParticipants: maxParticipants ?? this.maxParticipants,
       skillLevel: skillLevel ?? this.skillLevel,
       feeType: feeType ?? this.feeType,
       price: price ?? this.price,
+      priceMode: priceMode ?? this.priceMode,
+      minPlayers: identical(minPlayers, _unset)
+          ? this.minPlayers
+          : minPlayers as int?,
       durationMinutes: durationMinutes ?? this.durationMinutes,
       visibility: visibility ?? this.visibility,
       joinPolicy: joinPolicy ?? this.joinPolicy,
@@ -86,11 +128,16 @@ class ActivityFormData {
       'coverImagePath': coverImagePath,
       'selectedDate': selectedDate?.toIso8601String(),
       'location': location,
+      'venueAddress': venueAddress,
+      'venueLatitude': venueLatitude,
+      'venueLongitude': venueLongitude,
       'description': description,
       'maxParticipants': maxParticipants,
       'skillLevel': skillLevel,
       'feeType': feeType,
       'price': price,
+      'priceMode': priceMode,
+      'minPlayers': minPlayers,
       'durationMinutes': durationMinutes,
       'visibility': visibility,
       'joinPolicy': joinPolicy,
@@ -106,11 +153,16 @@ class ActivityFormData {
           ? DateTime.parse(json['selectedDate'] as String)
           : null,
       location: json['location'] as String? ?? '',
+      venueAddress: json['venueAddress'] as String? ?? '',
+      venueLatitude: (json['venueLatitude'] as num?)?.toDouble(),
+      venueLongitude: (json['venueLongitude'] as num?)?.toDouble(),
       description: json['description'] as String? ?? '',
       maxParticipants: (json['maxParticipants'] as int?) ?? 10,
       skillLevel: json['skillLevel'] as String? ?? 'Intermediate',
       feeType: json['feeType'] as int? ?? 0,
       price: json['price'] as String?,
+      priceMode: json['priceMode'] as int? ?? 0,
+      minPlayers: json['minPlayers'] as int?,
       durationMinutes: json['durationMinutes'] as int? ?? 120,
       visibility: json['visibility'] as String? ?? 'Public',
       joinPolicy: json['joinPolicy'] as String? ?? 'open',
@@ -147,12 +199,35 @@ class FormDataNotifier extends StateNotifier<ActivityFormData> {
     state = state.copyWith(location: location);
   }
 
+  /// Records a picked venue: display name goes to [location], the full
+  /// address and coordinates ride along for submit + draft restore.
+  void setVenue({
+    required String label,
+    required String address,
+    required double latitude,
+    required double longitude,
+  }) {
+    state = state.copyWith(
+      location: label,
+      venueAddress: address,
+      venueLatitude: latitude,
+      venueLongitude: longitude,
+    );
+  }
+
   void setDescription(String description) {
     state = state.copyWith(description: description);
   }
 
   void setMaxParticipants(int participants) {
-    state = state.copyWith(maxParticipants: participants);
+    final clamped = participants.clamp(2, 50);
+    final min = state.minPlayers;
+    // A minimum that no longer fits the new capacity collapses to
+    // full house instead of lingering as an invalid value.
+    state = state.copyWith(
+      maxParticipants: clamped,
+      minPlayers: (min != null && min >= clamped) ? null : min,
+    );
   }
 
   void setSkillLevel(String level) {
@@ -167,8 +242,15 @@ class FormDataNotifier extends StateNotifier<ActivityFormData> {
     state = state.copyWith(price: price);
   }
 
-  void setDurationMinutes(int minutes) {
-    state = state.copyWith(durationMinutes: minutes);
+  void setPriceMode(int mode) {
+    state = state.copyWith(priceMode: mode);
+  }
+
+  void setMinPlayers(int? min) {
+    state = state.copyWith(minPlayers: min);
+  }
+
+  void setDurationMinutes(int minutes) {    state = state.copyWith(durationMinutes: minutes);
   }
 
   void setVisibility(String visibility) {
@@ -274,6 +356,13 @@ Map<String, String> _validate(ActivityFormData data) {
 
   if (data.feeType == 1 && (data.price == null || data.price!.trim().isEmpty)) {
     errors['price'] = 'Please enter a price';
+  }
+
+  if (data.feeType == 1 && data.priceMode == 1) {
+    final min = data.minPlayers;
+    if (min != null && (min < 2 || min > data.maxParticipants)) {
+      errors['minPlayers'] = 'Min must be 2–${data.maxParticipants}';
+    }
   }
 
   return errors;

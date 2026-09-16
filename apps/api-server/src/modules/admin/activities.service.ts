@@ -14,6 +14,8 @@ export type AdminActivityView = {
     hostId: string;
     hostDisplayName: string;
     createdAt: string | null;
+    isPaid: boolean;
+    fee?: number;
 };
 
 /** Admin-triageable statuses. `removed` = hidden from every feed. */
@@ -99,6 +101,10 @@ export async function listAdminActivities(
                 typeof r.data.hostId === 'string' ? r.data.hostId : '',
             ),
             createdAt: toIso(r.data.createdAt),
+            isPaid: r.data.isPaid === true,
+            ...(typeof r.data.fee === 'number' && Number.isFinite(r.data.fee) && r.data.fee > 0
+                ? { fee: r.data.fee as number }
+                : {}),
         })),
     );
 }

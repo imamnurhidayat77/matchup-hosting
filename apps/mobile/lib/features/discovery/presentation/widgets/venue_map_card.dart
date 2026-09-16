@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/dark_colors.dart';
+import '../../../../core/widgets/app_snackbar.dart';
 import '../../../activities/domain/activity_model.dart';
 
 /// Google Maps directions URL targeting the venue coordinates.
@@ -30,8 +31,10 @@ Future<void> openVenueDirections(
     mode: LaunchMode.externalApplication,
   );
   if (!opened && context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Couldn't open Google Maps")),
+    AppSnackbar.show(
+      context,
+      message: "Couldn't open Google Maps",
+      variant: AppSnackbarVariant.error,
     );
   }
 }
@@ -78,10 +81,26 @@ class VenueMapCard extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
+                  // Fallback behind the tiles: while tiles load — or when
+                  // they fail (errorTileCallback below) — a muted map
+                  // icon shows instead of a blank grey box.
+                  Container(
+                    color: context.colors.surfaceSubtle,
+                    alignment: Alignment.center,
+                    child: Icon(
+                      Icons.map_outlined,
+                      size: 48,
+                      color: context.colors.textTertiary,
+                    ),
+                  ),
                   FlutterMap(
                     options: MapOptions(
                       initialCenter: point,
                       initialZoom: 15,
+                      // Transparent so the fallback icon behind shows
+                      // through while tiles load or when they fail —
+                      // the default opaque grey would cover it.
+                      backgroundColor: Colors.transparent,
                       interactionOptions: const InteractionOptions(
                         flags: InteractiveFlag.none,
                       ),
@@ -91,6 +110,9 @@ class VenueMapCard extends StatelessWidget {
                         urlTemplate:
                             'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                         userAgentPackageName: 'matchup-demo/1.0',
+                        // Tiles stay transparent on failure so the
+                        // fallback icon above shows through.
+                        errorTileCallback: (tile, error, stackTrace) {},
                       ),
                       MarkerLayer(
                         markers: [
@@ -103,6 +125,30 @@ class VenueMapCard extends StatelessWidget {
                         ],
                       ),
                     ],
+                  ),
+                  // OSM attribution for the preview (the fullscreen map
+                  // uses RichAttributionWidget; the static preview gets
+                  // the same credit as tiny text, top-right).
+                  Positioned(
+                    top: 6,
+                    right: 6,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.45),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text(
+                        '© OpenStreetMap',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                        ),
+                      ),
+                    ),
                   ),
                   // Bottom label strip — venue name + expand hint.
                   Positioned(

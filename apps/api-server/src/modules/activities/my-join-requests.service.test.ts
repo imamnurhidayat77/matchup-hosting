@@ -45,6 +45,7 @@ describe('listMyJoinRequests', () => {
             sportType: 'Running',
             locationName: 'Domain',
             startTime: '2026-09-10T08:00:00Z',
+            coverImageUrl: 'https://cdn.example/cover.jpg',
         });
 
         const rows = await listMyJoinRequests('me-1');
@@ -55,6 +56,7 @@ describe('listMyJoinRequests', () => {
             title: 'Sunday Run',
             sportType: 'Running',
             status: 'pending',
+            coverImageUrl: 'https://cdn.example/cover.jpg',
         });
         expect(firestore.collectionGroup).toHaveBeenCalledWith('joinRequests');
     });
@@ -71,5 +73,35 @@ describe('listMyJoinRequests', () => {
 
     it('rejects blank uid', async () => {
         await expect(listMyJoinRequests('   ')).rejects.toThrow('uid is required');
+    });
+
+    it('orders soonest event first, dateless rows last', async () => {
+        mockGroup([row('a-late', 'pending'), row('a-nodate', 'pending'), row('a-soon', 'pending')]);
+        const starts: Record<string, string | null> = {
+            'a-late': '2026-10-01T10:00:00Z',
+            'a-nodate': null,
+            'a-soon': '2026-09-20T10:00:00Z',
+        };
+        vi.mocked(firestore.doc).mockImplementation(
+            ((path: string) => ({
+                get: async () => {
+                    const id = path.split('/').pop() as string;
+                    const startTime = starts[id];
+                    return {
+                        exists: true,
+                        data: () => ({
+                            title: id,
+                            sportType: 'Running',
+                            locationName: 'Park',
+                            ...(startTime !== null ? { startTime } : {}),
+                        }),
+                    };
+                },
+            })) as never,
+        );
+
+        const rows = await listMyJoinRequests('me-1');
+
+        expect(rows.map((r) => r.activityId)).toEqual(['a-soon', 'a-late', 'a-nodate']);
     });
 });

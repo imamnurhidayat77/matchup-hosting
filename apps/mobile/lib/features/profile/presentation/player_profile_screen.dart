@@ -44,29 +44,86 @@ class PlayerProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final lookupKey =
         (userId != null && userId!.isNotEmpty) ? userId! : playerName;
-    final playerAsync = ref.watch(playerProfileProvider(lookupKey));
+    // Name-based lookup has no backend support (no name-search endpoint —
+    // it 404s by design), so a name key can never resolve. Show a proper
+    // empty state with a Back button instead of the raw "not found" line.
+    // (Route-removal recommendation: delete the legacy
+    // `/player-profile/:name` route in router.dart — owned by another
+    // agent — once all callers use `/uid/`.)
+    final isNameLookup = userId == null || userId!.isEmpty;
+    final playerAsync = isNameLookup
+        ? null
+        : ref.watch(playerProfileProvider(lookupKey));
 
     return AppScaffold(
       showHomeIndicator: false, // inside ShellRoute — AppShell draws its own.
-      body: playerAsync.when(
-        loading: () => const SkeletonList(count: 6),
-        error: (_, _) => ErrorRetry(
-          message: 'Could not load profile.',
-          onRetry: () => ref.invalidate(playerProfileProvider(lookupKey)),
-        ),
-        data: (user) {
-          if (user == null) {
-            return Center(
-              child: Text(
-                'Player not found.',
-                style: AppTypography.bodyReading(
-                  context,
-                ).copyWith(color: context.colors.textSecondary),
+      body: isNameLookup
+          ? _UnavailableProfile(onBack: () => context.pop())
+          : playerAsync!.when(
+              loading: () => const SkeletonList(count: 6),
+              error: (_, _) => ErrorRetry(
+                message: 'Could not load profile.',
+                onRetry: () =>
+                    ref.invalidate(playerProfileProvider(lookupKey)),
               ),
-            );
-          }
-          return _ProfileContent(user: user);
-        },
+              data: (user) {
+                if (user == null) {
+                  return Center(
+                    child: Text(
+                      'Player not found.',
+                      style: AppTypography.bodyReading(
+                        context,
+                      ).copyWith(color: context.colors.textSecondary),
+                    ),
+                  );
+                }
+                return _ProfileContent(user: user);
+              },
+            ),
+    );
+  }
+}
+
+/// Empty state for the legacy name-based route: the profile can't be
+/// resolved without a uid, so direct the user back to the roster.
+class _UnavailableProfile extends StatelessWidget {
+  const _UnavailableProfile({required this.onBack});
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.x6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.person_off_outlined,
+              size: 48,
+              color: context.colors.textTertiary,
+            ),
+            const SizedBox(height: AppSpacing.x4),
+            Text(
+              'Profile not available',
+              style: AppTypography.titleMedium(context),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: AppSpacing.x2),
+            Text(
+              'Open this profile from the roster to see details.',
+              style: AppTypography.bodyMedium(context).copyWith(
+                color: context.colors.textSecondary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: AppSpacing.x5),
+            AppButton(
+              label: 'Back',
+              onPressed: onBack,
+            ),
+          ],
+        ),
       ),
     );
   }

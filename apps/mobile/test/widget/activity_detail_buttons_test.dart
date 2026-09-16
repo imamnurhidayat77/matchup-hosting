@@ -25,7 +25,7 @@ ActivityModel _fixture() => ActivityModel(
   location: 'Central Park Court B',
   addressLine: 'Central Park, New York, NY',
   distanceKm: 2.4,
-  dateTime: DateTime(2026, 8, 20, 16),
+  dateTime: DateTime(2027, 8, 20, 16),
   skillLevel: 'Intermediate',
   capacity: 10,
   participantCount: 6,
@@ -39,7 +39,7 @@ ActivityModel _approvalFixture({String? joinRequestStatus}) => ActivityModel(
   description: 'Host-approved session.',
   location: 'Domain Courts',
   distanceKm: 1.2,
-  dateTime: DateTime(2026, 8, 23, 10),
+  dateTime: DateTime(2027, 8, 23, 10),
   skillLevel: 'Beginner',
   capacity: 4,
   participantCount: 1,
@@ -95,6 +95,20 @@ void main() {
           builder: (_, state) =>
               ActivityDetailScreen(activityId: state.pathParameters['id']!),
         ),
+        GoRoute(
+          path: '/discovery',
+          builder: (_, _) => const Scaffold(
+            body: Center(child: Text('Discovery')),
+          ),
+        ),
+        GoRoute(
+          path: '/player-profile/uid/:uid',
+          builder: (_, state) => Scaffold(
+            body: Center(
+              child: Text('Host profile ${state.pathParameters['uid']}'),
+            ),
+          ),
+        ),
       ],
     );
 
@@ -135,8 +149,8 @@ void main() {
     );
 
     testWidgets(
-      'back button is a dead tap when the screen was reached via go() '
-      '(this is the bug report: "tombol back gabisa dipencet")',
+      'back button falls back to discovery when reached via go() '
+      '(regression: "tombol back gabisa dipencet")',
       (tester) async {
         await pumpViaRealNavigation(
           tester,
@@ -147,10 +161,30 @@ void main() {
         await tester.tap(find.bySemanticsLabel('Back'));
         await tester.pumpAndSettle();
 
-        // go() wipes the stack, so maybePop() has nothing to pop to. The
-        // detail screen is expected to still be on screen — this documents
-        // the exact failure mode, not a desired outcome.
-        expect(find.byType(ActivityDetailScreen), findsOneWidget);
+        // go() wipes the stack, so there is nothing to pop — the button
+        // must fall back to Discover instead of dead-tapping.
+        expect(find.text('Discovery'), findsOneWidget);
+        expect(find.byType(ActivityDetailScreen), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'host card opens the host profile when tapped',
+      (tester) async {
+        when(() => repo.byId(any())).thenAnswer(
+          (_) async => _fixture().copyWith(hostId: 'host-1'),
+        );
+
+        await pumpViaRealNavigation(
+          tester,
+          repo: repo,
+          via: (context) => context.push('/activity/a-1'),
+        );
+
+        await tester.tap(find.text('James Wilson'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Host profile host-1'), findsOneWidget);
       },
     );
 
@@ -223,6 +257,54 @@ void main() {
 
         verify(() => repo.requestJoin('a-2')).called(1);
         expect(find.text('Request pending'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'started activity disables join with Already started label',
+      (tester) async {
+        // Backdate the fixture past its start time.
+        when(() => repo.byId(any())).thenAnswer(
+          (_) async => ActivityModel(
+            id: 'a-1',
+            title: 'Saturday Afternoon 5v5 Basketball',
+            sportType: 'Basketball',
+            description: 'Looking for intermediate players.',
+            location: 'Central Park Court B',
+            distanceKm: 2.4,
+            dateTime: DateTime.now().subtract(const Duration(hours: 1)),
+            skillLevel: 'Intermediate',
+            capacity: 10,
+            participantCount: 6,
+            hostName: 'James Wilson',
+          ),
+        );
+
+        await pumpViaRealNavigation(
+          tester,
+          repo: repo,
+          via: (context) => context.push('/activity/a-1'),
+        );
+
+        expect(find.text('Already started'), findsOneWidget);
+        verifyNever(() => repo.join(any()));
+      },
+    );
+
+    testWidgets(
+      'approval activity shows waiting count under participants',
+      (tester) async {
+        when(() => repo.byId(any())).thenAnswer(
+          (_) async => _approvalFixture().copyWith(pendingRequestCount: 3),
+        );
+
+        await pumpViaRealNavigation(
+          tester,
+          repo: repo,
+          via: (context) => context.push('/activity/a-2'),
+        );
+
+        expect(find.text('3 waiting for approval'), findsOneWidget);
       },
     );
 

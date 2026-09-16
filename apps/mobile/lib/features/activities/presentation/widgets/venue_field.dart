@@ -16,11 +16,17 @@ class VenueField extends StatelessWidget {
     required this.value,
     required this.onSuggestionSelected,
     this.countryCodes,
+    this.errorText,
   });
 
   final PlaceSuggestion? value;
   final ValueChanged<PlaceSuggestion> onSuggestionSelected;
   final String? countryCodes;
+
+  /// Inline validation message (red border + text). Shown after a
+  /// blocked Continue so the missing venue is visible on the field,
+  /// not just a transient snackbar.
+  final String? errorText;
 
   static const _icon = Icons.place_outlined;
 
@@ -28,22 +34,38 @@ class VenueField extends StatelessWidget {
   Widget build(BuildContext context) {
     final picked = value;
     final hasVenue = picked != null;
+    final hasAddress =
+        hasVenue && picked.secondary.trim().isNotEmpty;
 
-    final valueText = Text(
-      hasVenue ? picked.label : 'Pick a venue on the map',
-      style: AppTypography.bodyMedium(context).copyWith(
-        color: hasVenue
-            ? context.colors.textPrimary
-            : context.colors.textSecondary,
-      ),
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
+    final valueText = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          hasVenue ? picked.label : 'Pick a venue on the map',
+          style: AppTypography.bodyMedium(context).copyWith(
+            color: hasVenue
+                ? context.colors.textPrimary
+                : context.colors.textSecondary,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        if (hasAddress)
+          Text(
+            picked.secondary.trim(),
+            style: AppTypography.bodySmall(context),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+      ],
     );
 
     return _VenueCard(
       icon: _icon,
       label: 'Location',
       value: valueText,
+      errorText: errorText,
       onTap: () => _open(context),
     );
   }
@@ -67,12 +89,14 @@ class _VenueCard extends StatelessWidget {
     required this.label,
     required this.value,
     required this.onTap,
+    this.errorText,
   });
 
   final IconData icon;
   final String label;
   final Widget value;
   final VoidCallback onTap;
+  final String? errorText;
 
   @override
   Widget build(BuildContext context) {
@@ -91,7 +115,12 @@ class _VenueCard extends StatelessWidget {
             ),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(AppRadius.card),
-              border: Border.all(color: context.colors.border),
+              border: Border.all(
+                color: errorText != null
+                    ? context.colors.errorText
+                    : context.colors.border,
+                width: errorText != null ? 1.5 : 1,
+              ),
             ),
             child: Row(
               children: [
@@ -104,6 +133,16 @@ class _VenueCard extends StatelessWidget {
                       Text(label, style: AppTypography.metaSub(context)),
                       const SizedBox(height: 2),
                       value,
+                      if (errorText != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          errorText!,
+                          style: AppTypography.metaSub(context).copyWith(
+                            color: context.colors.errorText,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

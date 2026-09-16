@@ -19,6 +19,7 @@ import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../../discovery/domain/activity_model.dart';
+import 'my_activities_screen.dart';
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
@@ -95,12 +96,15 @@ _Gate _gateFor(ActivityModel activity, Position? position) {
   final lat = activity.latitude;
   final lng = activity.longitude;
   if (lat == null || lng == null) {
-    // No venue coordinates to verify against — time gate is enough.
+    // No venue coordinates to verify against — the proximity gate is
+    // intentionally skipped and the time gate alone decides. The body
+    // copy says so explicitly so the user knows no walk-up check ran.
     return const _Gate(
       canCheckIn: true,
       icon: Icons.check_circle_outline_rounded,
       title: 'Ready to check in',
-      body: 'Tap "Check In" below to confirm your attendance.',
+      body:
+          'Venue location not set — time check only. Tap "Check In" below to confirm your attendance.',
     );
   }
   final distanceM =
@@ -166,10 +170,15 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
   }
 
   /// Resolves the device position once (initial load + manual refresh).
-  /// Never throws — a null position simply closes the proximity gate
-  /// until the user retries.
+  /// Never throws — a null position (or a GPS timeout) simply closes
+  /// the proximity gate until the user retries.
   Future<void> _resolveLocation() async {
-    final pos = await LocationService.instance.getCurrentLocation();
+    Position? pos;
+    try {
+      pos = await LocationService.instance.getCurrentLocation();
+    } on LocationTimeoutException {
+      pos = null;
+    }
     if (!mounted) return;
     setState(() {
       _position = pos;
@@ -186,8 +195,21 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
         ref.read(_checkInActivityProvider(widget.activityId)).valueOrNull;
     if (activity == null || !mounted) return;
     setState(() => _status = _CheckInStatus.locating);
-    // Fresh fix at tap time — the cached one may be stale.
-    final pos = await LocationService.instance.getCurrentLocation();
+    // Fresh fix at tap time — the cached one may be stale. A GPS
+    // timeout is transient: offer a retry, not the permissions gate.
+    Position? pos;
+    try {
+      pos = await LocationService.instance.getCurrentLocation();
+    } on LocationTimeoutException {
+      if (!mounted) return;
+      setState(() => _status = _CheckInStatus.notCheckedIn);
+      AppSnackbar.show(
+        context,
+        message: "Couldn't get your location. Try again.",
+        variant: AppSnackbarVariant.error,
+      );
+      return;
+    }
     if (!mounted) return;
     final effective = pos ?? _position;
     final gate = _gateFor(activity, effective);
@@ -214,6 +236,7 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
             latitude: effective?.latitude,
             longitude: effective?.longitude,
           );
+      ref.invalidate(joinedGamesProvider);
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -235,7 +258,16 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
   }
 
   Future<void> _onRefresh() async {
-    if (_status == _CheckInStatus.checkedIn) return;
+    if (_status == _CheckInStatus.checkedIn) {
+      if (mounted) {
+        AppSnackbar.show(
+          context,
+          message: 'Already checked in',
+          variant: AppSnackbarVariant.info,
+        );
+      }
+      return;
+    }
     setState(() => _status = _CheckInStatus.locating);
     await _resolveLocation();
   }
@@ -289,6 +321,10 @@ class _Body extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Compute the gate once per build and pass it down — calling
+    // _gateFor at each use site would re-run DateTime.now() and risk
+    // inconsistent results within a single frame.
+    final gate = _gateFor(activity, position);
     return Column(
       children: [
         Expanded(
@@ -365,7 +401,7 @@ class _Body extends StatelessWidget {
                         // (time window + proximity), not just tap state.
                         _StatusPanel(
                           status: status,
-                          gate: _gateFor(activity, position),
+                          gate: gate,
                         ),
                         const SizedBox(height: AppSpacing.x4),
 
@@ -373,7 +409,7 @@ class _Body extends StatelessWidget {
                         // gate is green.
                         _CheckInButton(
                           status: status,
-                          enabled: _gateFor(activity, position).canCheckIn,
+                          enabled: gate.canCheckIn,
                           onCheckIn: onCheckIn,
                         ),
                         const SizedBox(height: AppSpacing.x3),
@@ -675,9 +711,16 @@ class _DetailsCard extends StatelessWidget {
             iconBg: context.colors.primarySoft,
             icon: Icons.attach_money_rounded,
             iconColor: context.colors.primaryOnSurface,
-            title: activity.isPaid ? 'Paid Activity' : 'Free Activity',
-            subtitle:
-                activity.isPaid ? 'Fee required to join' : 'No cost to join',
+            title: !activity.isPaid
+                ? 'Free Activity'
+                : activity.isSplitCost
+                    ? 'Split Cost'
+                    : 'Paid Activity',
+            subtitle: !activity.isPaid
+                ? 'No cost to join'
+                : activity.splitExplainer ??
+                    activity.feeLabel ??
+                    'Fee required to join',
             trailingChip: _FeeChip(isPaid: activity.isPaid),
           ),
         ],
@@ -808,7 +851,7 @@ class _StatusPanel extends StatelessWidget {
           context.colors.primarySoft,
           context.colors.primaryOnSurface,
           Icons.my_location_rounded,
-          'Detecting your location…',
+          'Locating…',
           'We are verifying that you are at the activity venue.',
         ),
       _CheckInStatus.checkedIn => (

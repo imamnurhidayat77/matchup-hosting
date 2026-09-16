@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:matchup_mobile/core/providers/repository_providers.dart';
+import 'package:matchup_mobile/core/utils/nav_guard.dart';
 import 'package:matchup_mobile/features/preferences/presentation/get_to_know_1_screen.dart';
 import 'package:matchup_mobile/features/preferences/presentation/get_to_know_2_screen.dart';
 import 'package:matchup_mobile/features/preferences/presentation/get_to_know_3_screen.dart';
@@ -48,7 +49,10 @@ class _FakeUserRepository implements UserRepository {
 void main() {
   late _FakeUserRepository userRepo;
 
-  setUp(() => userRepo = _FakeUserRepository());
+  setUp(() {
+    userRepo = _FakeUserRepository();
+    NavGuard.resetForTest();
+  });
 
   Future<void> pumpRouter(WidgetTester tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
@@ -97,6 +101,9 @@ void main() {
       tester,
     ) async {
       await pumpRouter(tester);
+      // GTK1 requires an explicit choice (no pre-selected default).
+      await tester.tap(find.text('Meet new sports partners'));
+      await tester.pump();
       await tester.tap(find.text('Next'));
       await tester.pumpAndSettle();
       expect(find.text('2/3'), findsOneWidget);
@@ -122,6 +129,8 @@ void main() {
       'should offer "Skip for now" until a sport is selected, then switch to Next',
       (tester) async {
         await pumpRouter(tester);
+        await tester.tap(find.text('Meet new sports partners'));
+        await tester.pump();
         await tester.tap(find.text('Next'));
         await tester.pumpAndSettle();
 
@@ -142,6 +151,8 @@ void main() {
       'should not add the sport when the skill-level sheet is dismissed',
       (tester) async {
         await pumpRouter(tester);
+        await tester.tap(find.text('Meet new sports partners'));
+        await tester.pump();
         await tester.tap(find.text('Next'));
         await tester.pumpAndSettle();
 
@@ -159,11 +170,13 @@ void main() {
     testWidgets('should navigate to step 3 when the CTA is tapped', (
       tester,
     ) async {
-      await pumpRouter(tester);
-      await tester.tap(find.text('Next'));
-      await tester.pumpAndSettle();
+        await pumpRouter(tester);
+        await tester.tap(find.text('Meet new sports partners'));
+        await tester.pump();
+        await tester.tap(find.text('Next'));
+        await tester.pumpAndSettle();
 
-      await tester.scrollUntilVisible(
+        await tester.scrollUntilVisible(
         find.text('Skip for now'),
         200,
         scrollable: find.byType(Scrollable).first,
@@ -179,13 +192,15 @@ void main() {
     testWidgets('should persist selected sports with levels to the backend', (
       tester,
     ) async {
-      await pumpRouter(tester);
-      await tester.tap(find.text('Next'));
-      await tester.pumpAndSettle();
+        await pumpRouter(tester);
+        await tester.tap(find.text('Meet new sports partners'));
+        await tester.pump();
+        await tester.tap(find.text('Next'));
+        await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Basketball'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Intermediate'));
+        await tester.tap(find.text('Basketball'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Intermediate'));
       await tester.pumpAndSettle();
 
       await tester.scrollUntilVisible(
@@ -207,31 +222,36 @@ void main() {
     testWidgets('should show height, weight and date-of-birth controls', (
       tester,
     ) async {
-      await pumpRouter(tester);
-      await tester.tap(find.text('Next'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Skip for now'));
-      await tester.pumpAndSettle();
+        await pumpRouter(tester);
+        await tester.tap(find.text('Meet new sports partners'));
+        await tester.pump();
+        await tester.tap(find.text('Next'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Skip for now'));
+        await tester.pumpAndSettle();
 
-      expect(find.text('Height'), findsOneWidget);
+        expect(find.text('Height'), findsOneWidget);
       expect(find.text('Select Weight'), findsOneWidget);
       expect(find.text('Date of Birth'), findsOneWidget);
       expect(find.text('3/3'), findsOneWidget);
     });
 
     testWidgets('should increment the weight when + is tapped', (tester) async {
-      await pumpRouter(tester);
-      await tester.tap(find.text('Next'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Skip for now'));
-      await tester.pumpAndSettle();
+        await pumpRouter(tester);
+        await tester.tap(find.text('Meet new sports partners'));
+        await tester.pump();
+        await tester.tap(find.text('Next'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Skip for now'));
+        await tester.pumpAndSettle();
 
-      expect(find.text('73'), findsOneWidget);
+        // Weight starts unset (no fabricated prefill); + sets the minimum.
+        expect(find.text('Not set yet — tap − or +'), findsOneWidget);
 
-      await tester.tap(find.bySemanticsLabel('Increase weight'));
-      await tester.pumpAndSettle();
+        await tester.tap(find.bySemanticsLabel('Increase weight'));
+        await tester.pumpAndSettle();
 
-      expect(find.text('74'), findsWidgets);
+        expect(find.text('30'), findsWidgets);
     });
   });
 }

@@ -18,6 +18,7 @@ import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../../discovery/domain/activity_model.dart';
+import 'my_activities_screen.dart';
 
 typedef _FullData = ({ActivityModel activity, List<ActivityModel> similar});
 
@@ -30,10 +31,16 @@ final _fullProvider = FutureProvider.autoDispose.family<_FullData, String>((
   if (activity == null) throw StateError('Activity not found');
   final matches = await repo.search(sport: activity.sportType);
   final similar = matches
-      .where((a) => a.id != activityId && !a.isFull)
-      .take(3)
-      .toList();
-  return (activity: activity, similar: similar);
+      .where(
+        (a) =>
+            a.id != activityId &&
+            !a.isFull &&
+            !a.isParticipant &&
+            !a.isHost,
+      )
+      .toList()
+    ..sort((a, b) => a.distanceKm.compareTo(b.distanceKm));
+  return (activity: activity, similar: similar.take(3).toList());
 });
 
 class ActivityFullScreen extends ConsumerWidget {
@@ -81,13 +88,15 @@ class _FullBody extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x6),
             child: Column(
               children: [
-                const _WaitingListNotice(),
-                const SizedBox(height: AppSpacing.x4),
+                if (activity.requiresApproval) ...[
+                  _WaitingListNotice(activity: activity),
+                  const SizedBox(height: AppSpacing.x4),
+                ],
                 if (similar.isNotEmpty) ...[
                   _SimilarActivities(activities: similar),
                   const SizedBox(height: AppSpacing.x4),
                 ],
-                _Actions(activityId: activity.id),
+                _Actions(activity: activity),
               ],
             ),
           ),
@@ -454,10 +463,12 @@ class _AvatarStack extends StatelessWidget {
 }
 
 class _WaitingListNotice extends StatelessWidget {
-  const _WaitingListNotice();
+  const _WaitingListNotice({required this.activity});
+  final ActivityModel activity;
 
   @override
   Widget build(BuildContext context) {
+    final waiting = activity.pendingRequestCount;
     return Container(
       padding: const EdgeInsets.all(AppSpacing.x3),
       decoration: BoxDecoration(
@@ -488,7 +499,9 @@ class _WaitingListNotice extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(left: AppSpacing.x6),
             child: Text(
-              "You'll be notified if a spot opens up.",
+              waiting > 0
+                  ? '$waiting ${waiting == 1 ? 'person' : 'people'} waiting for approval.'
+                  : 'Request to join — the host reviews each request.',
               style: AppTypography.bodySmall(context),
             ),
           ),
@@ -529,7 +542,7 @@ class _SimilarActivityRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final timeFmt = DateFormat('EEE, h:mm a');
     return PressableScale(
-      onTap: () => context.push('/activity/${activity.id}'),
+      onTap: () => context.pushReplacement('/activity/${activity.id}'),
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.x3),
         decoration: BoxDecoration(
@@ -576,26 +589,79 @@ class _SimilarActivityRow extends StatelessWidget {
   }
 }
 
-class _Actions extends StatelessWidget {
-  const _Actions({required this.activityId});
-  final String activityId;
+class _Actions extends ConsumerStatefulWidget {
+  const _Actions({required this.activity});
+  final ActivityModel activity;
+
+  @override
+  ConsumerState<_Actions> createState() => _ActionsState();
+}
+
+class _ActionsState extends ConsumerState<_Actions> {
+  bool _sending = false;
+
+  Future<void> _requestJoin() async {
+    if (_sending) return;
+    setState(() => _sending = true);
+    try {
+      await ref
+          .read(activityRepositoryProvider)
+          .requestJoin(widget.activity.id);
+      ref.invalidate(pendingGamesProvider);
+      if (!mounted) return;
+      AppSnackbar.show(
+        context,
+        message: 'Request sent! The host will review it soon.',
+        variant: AppSnackbarVariant.success,
+      );
+      Navigator.of(context).maybePop();
+    } catch (_) {
+      if (!mounted) return;
+      AppSnackbar.show(
+        context,
+        message: 'Could not send request. Please try again.',
+        variant: AppSnackbarVariant.error,
+      );
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final activity = widget.activity;
+    // Approval-gated games can still take requests while full (the
+    // host may approve when a spot frees up). Open games have no
+    // waiting list — the button stays disabled instead of faking it.
+    // Either way the game must not have started yet.
+    final canRequest = activity.requiresApproval &&
+        !activity.hasPendingRequest &&
+        !activity.hasStarted;
+    final isFullButton = !activity.requiresApproval;
     return Column(
       children: [
         AppButton(
-          label: 'Join Waiting List',
-          onPressed: () {
-            AppSnackbar.show(
-              context,
-              message: "You're on the waiting list.",
-              variant: AppSnackbarVariant.info,
-            );
-            Navigator.of(context).maybePop();
-          },
+          label: activity.hasPendingRequest
+              ? 'Request pending'
+              : activity.requiresApproval
+                  ? 'Request to Join'
+                  : 'Activity Full',
+          onPressed: canRequest ? _requestJoin : null,
+          loading: _sending,
           size: AppButtonSize.lg,
         ),
+        // Explainer under the disabled full-state button, pointing at
+        // the alternatives below.
+        if (isFullButton && !canRequest) ...[
+          const SizedBox(height: AppSpacing.x2),
+          Text(
+            'This game is full — check similar games below',
+            style: AppTypography.bodySmall(context).copyWith(
+              color: context.colors.textSecondary,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
         const SizedBox(height: AppSpacing.x3),
         PressableScale(
           onTap: () => Navigator.of(context).maybePop(),

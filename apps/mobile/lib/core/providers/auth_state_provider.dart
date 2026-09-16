@@ -7,10 +7,17 @@ import '../auth/session_events.dart';
 import '../network/api_client.dart';
 import '../services/rtdb_auth_service.dart';
 import '../storage/secure_token_store.dart';
+import '../../features/notifications/data/remote_presence_repository.dart';
 
 // ─── Domain ──────────────────────────────────────────────────────────────────
 
 enum AuthStatus { unknown, authenticated, unauthenticated, suspended }
+
+/// Outcome of a suspension re-check: [clear] means the account is active
+/// again, [suspended] means still suspended, [unknown] means the check
+/// could not reach the server (offline/timeout) — callers must not treat
+/// it as still-suspended.
+enum SuspensionCheck { clear, suspended, unknown }
 
 class AuthState {
   const AuthState({this.status = AuthStatus.unknown, this.userId});
@@ -45,11 +52,11 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
     });
     // Fired by the API layer on 403 ACCOUNT_SUSPENDED. Tokens are KEPT —
     // the user needs them to file and track an appeal — the router gates
-    // to the suspended interstitial instead.
+    // to the suspended interstitial instead. Set suspended regardless of
+    // current status: the interstitial re-checks anyway, and cold-start
+    // probes may fire while status is still unknown.
     _suspendedSub = SessionEvents.instance.onSuspended.listen((_) {
-      if (state.status == AuthStatus.authenticated) {
-        state = state.copyWith(status: AuthStatus.suspended);
-      }
+      state = state.copyWith(status: AuthStatus.suspended);
     });
   }
 
@@ -65,17 +72,62 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
   }
 
   /// Called at app start (splash screen). Reads secure storage to determine
-  /// if a valid session exists (stored Firebase ID token + userId).
+  /// if a valid session exists (stored Firebase ID token + userId), then
+  /// best-effort probes the server so suspended users don't flash app
+  /// content on cold start.
+  ///
+  /// Probe semantics (all fail-open except explicit signals):
+  /// - 200 → keep local authenticated status.
+  /// - 401/unauthorized → dead session → unauthenticated (storage cleared).
+  /// - 403 ACCOUNT_SUSPENDED → suspended.
+  /// - Anything else (offline, timeout, 5xx) → keep local status.
+  /// The probe has a 3s timeout; the happy path resolves fast so cold
+  /// start stays well under budget.
   Future<void> checkSession() async {
     final hasSession = await _store.hasValidSession;
-    if (hasSession) {
-      final userId = await _store.readUserId();
-      state = AuthState(status: AuthStatus.authenticated, userId: userId);
-      // Restore the SDK session too so realtime listeners (chat, typing,
-      // presence) run as the real user instead of anonymous.
-      unawaited(RtdbAuthService.instance.ensureSignedIn());
-    } else {
+    if (!hasSession) {
       state = AuthState.unauthenticated;
+      return;
+    }
+    final userId = await _store.readUserId();
+    state = AuthState(status: AuthStatus.authenticated, userId: userId);
+    // Restore the SDK session too so realtime listeners (chat, typing,
+    // presence) run as the real user instead of anonymous.
+    unawaited(RtdbAuthService.instance.ensureSignedIn());
+    try {
+      await ApiClient.instance.dio
+          .get('/users/me')
+          .timeout(const Duration(seconds: 3));
+    } on DioException catch (e) {
+      final code = e.response?.statusCode;
+      final errBody = e.response?.data;
+      final errMap = errBody is Map ? errBody['error'] : null;
+      final errCode = errMap is Map ? errMap['code'] : null;
+      if (code == 403 && errCode == 'ACCOUNT_SUSPENDED') {
+        state = state.copyWith(status: AuthStatus.suspended);
+        return;
+      }
+      if (code == 401) {
+        await _store.clearAll();
+        state = AuthState.unauthenticated;
+        return;
+      }
+      final wrapped = e.error;
+      if (wrapped is ApiException) {
+        if (wrapped.isAccountSuspended) {
+          state = state.copyWith(status: AuthStatus.suspended);
+          return;
+        }
+        if (wrapped.statusCode == 401) {
+          await _store.clearAll();
+          state = AuthState.unauthenticated;
+          return;
+        }
+      }
+      // Any other Dio error (offline/timeout/5xx) → fail open.
+    } catch (_) {
+      // TimeoutException, network errors, unexpected shapes → fail open,
+      // keep the local authenticated status.
     }
   }
 
@@ -99,6 +151,15 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
 
   /// Clears all stored tokens and sets state to unauthenticated.
   Future<void> signOut() async {
+    // Tell the backend we're going offline BEFORE the tokens are
+    // cleared (the write needs the session). Bounded: logout UX must
+    // never hang on a flaky presence write.
+    try {
+      await RemotePresenceRepository.markOfflineNow().timeout(
+        const Duration(seconds: 3),
+        onTimeout: () {},
+      );
+    } catch (_) {}
     await _store.clearAll();
     // Drop the SDK session too so the next account doesn't inherit it.
     unawaited(RtdbAuthService.instance.signOut());
@@ -107,13 +168,15 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
 
   /// Re-checks a suspension (the interstitial's "Check again" action).
   /// A 200 means the account was reactivated → back to authenticated.
-  /// 403-suspended, network errors, or anything else → stay suspended
-  /// (never log out on a transient failure).
-  Future<bool> refreshSuspension() async {
+  /// 403-suspended → stay suspended. Anything else (offline/timeout) →
+  /// [SuspensionCheck.unknown] so the UI can distinguish "still
+  /// suspended" from "couldn't reach the server" (never log out on a
+  /// transient failure).
+  Future<SuspensionCheck> refreshSuspension() async {
     try {
       await ApiClient.instance.dio.get('/users/me');
       state = state.copyWith(status: AuthStatus.authenticated);
-      return true;
+      return SuspensionCheck.clear;
     } on DioException catch (e) {
       final code = e.response?.statusCode;
       final errBody = e.response?.data;
@@ -121,10 +184,18 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
       final errCode = errMap is Map ? errMap['code'] : null;
       if (code == 403 && errCode == 'ACCOUNT_SUSPENDED') {
         state = state.copyWith(status: AuthStatus.suspended);
+        return SuspensionCheck.suspended;
       }
-      return false;
+      final wrapped = e.error;
+      if (wrapped is ApiException) {
+        if (wrapped.isAccountSuspended) {
+          state = state.copyWith(status: AuthStatus.suspended);
+          return SuspensionCheck.suspended;
+        }
+      }
+      return SuspensionCheck.unknown;
     } catch (_) {
-      return false;
+      return SuspensionCheck.unknown;
     }
   }
 }

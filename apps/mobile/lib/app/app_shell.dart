@@ -55,14 +55,25 @@ class AppShell extends StatelessWidget {
   ];
 
   int _indexFor(String location) {
-    if (location.startsWith('/discovery')) return 0;
-    if (location.startsWith('/activities')) return 1;
-    if (location.startsWith('/create')) return 2;
-    if (location.startsWith('/messages') || location.startsWith('/chat')) {
+    if (location == '/discovery' || location.startsWith('/discovery/')) {
+      return 0;
+    }
+    if (location == '/activities' || location.startsWith('/activities/')) {
+      return 1;
+    }
+    if (location == '/create' || location.startsWith('/create/')) return 2;
+    if (location == '/messages' ||
+        location.startsWith('/messages/') ||
+        location == '/chat' ||
+        location.startsWith('/chat/')) {
       return 3;
     }
-    if (location.startsWith('/profile')) return 4;
-    return 0;
+    if (location == '/profile' || location.startsWith('/profile/')) return 4;
+    // Non-tab locations (preferences, filter, calendar, edit-profile,
+    // player-profile, dm, notifications, activity detail, …) highlight
+    // nothing. _TabBar compares `i == currentIndex`, so -1 safely
+    // renders with no selected tab (no crash).
+    return -1;
   }
 
   @override

@@ -146,4 +146,76 @@ void main() {
       },
     );
   });
+
+  group('venue', () {
+    test('setVenue stores label, address and coordinates', () {
+      notifier().setVenue(
+        label: 'Eden Park',
+        address: 'Reimers Ave, Kingsland, Auckland',
+        latitude: -36.875,
+        longitude: 174.745,
+      );
+      final st = state();
+      expect(st.location, 'Eden Park');
+      expect(st.venueAddress, 'Reimers Ave, Kingsland, Auckland');
+      expect(st.venueLatitude, -36.875);
+      expect(st.venueLongitude, 174.745);
+    });
+
+    test('venue survives a toJson/fromJson round trip', () {
+      notifier().setVenue(
+        label: 'Eden Park',
+        address: 'Reimers Ave, Kingsland, Auckland',
+        latitude: -36.875,
+        longitude: 174.745,
+      );
+      final restored = ActivityFormData.fromJson(state().toJson());
+      expect(restored.location, 'Eden Park');
+      expect(restored.venueAddress, 'Reimers Ave, Kingsland, Auckland');
+      expect(restored.venueLatitude, -36.875);
+      expect(restored.venueLongitude, 174.745);
+    });
+
+    test('old drafts without venue keys parse to empty venue', () {
+      final restored = ActivityFormData.fromJson({'location': 'Park'});
+      expect(restored.venueAddress, '');
+      expect(restored.venueLatitude, isNull);
+      expect(restored.venueLongitude, isNull);
+    });
+  });
+
+  group('split-cost min players (regression: stepper stuck below max)', () {
+    test('setMinPlayers(null) clears a previously set minimum', () {
+      notifier().setMaxParticipants(10);
+      notifier().setMinPlayers(9);
+      expect(state().minPlayers, 9);
+      // "+" at 9 of 10 writes null (full house) — must clear, not stick.
+      notifier().setMinPlayers(null);
+      expect(state().minPlayers, isNull);
+    });
+
+    test('copyWith without minPlayers keeps the current value', () {
+      notifier().setMinPlayers(6);
+      notifier().setPrice('100');
+      expect(state().minPlayers, 6);
+      expect(state().price, '100');
+    });
+
+    test('shrinking capacity below the minimum resets to full house', () {
+      notifier().setMaxParticipants(10);
+      notifier().setMinPlayers(9);
+      notifier().setMaxParticipants(8);
+      expect(state().maxParticipants, 8);
+      expect(state().minPlayers, isNull);
+    });
+
+    test('min players survives a toJson/fromJson round trip', () {
+      notifier().setMaxParticipants(10);
+      notifier().setPriceMode(1);
+      notifier().setMinPlayers(8);
+      final restored = ActivityFormData.fromJson(state().toJson());
+      expect(restored.priceMode, 1);
+      expect(restored.minPlayers, 8);
+    });
+  });
 }

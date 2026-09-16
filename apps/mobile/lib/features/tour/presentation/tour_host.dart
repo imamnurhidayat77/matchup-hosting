@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/theme/dark_colors.dart';
 import '../domain/tour_state.dart';
 import '../domain/tour_step.dart';
 import 'tour_anchors.dart';
 import 'tour_controller.dart';
+import 'tour_steps.dart';
 import 'widgets/spotlight_overlay.dart';
 import 'widgets/tour_callout_card.dart';
 
@@ -35,6 +37,12 @@ class TourHost extends ConsumerStatefulWidget {
 class _TourHostState extends ConsumerState<TourHost> {
   OverlayEntry? _entry;
 
+  /// True once the deferred insert actually ran. Guards the instant-skip
+  /// race: `skip()` synchronously clears state while the insert is still
+  /// queued in a post-frame callback, so `_entry` may hold an entry that
+  /// was never inserted — calling `remove()` on it would throw.
+  bool _inserted = false;
+
   bool get _isOnTourScreen => widget.location.startsWith('/discovery');
 
   @override
@@ -46,7 +54,12 @@ class _TourHostState extends ConsumerState<TourHost> {
     // `build` only fires on *changes* after that point, so the
     // already-active case has to be picked up explicitly here.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _sync(ref.read(tourControllerProvider));
+      if (mounted) {
+        _sync(
+          ref.read(tourControllerProvider),
+          ref.read(discoveryContentReadyProvider),
+        );
+      }
     });
   }
 
@@ -54,7 +67,10 @@ class _TourHostState extends ConsumerState<TourHost> {
   void didUpdateWidget(TourHost oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.location != widget.location) {
-      _sync(ref.read(tourControllerProvider));
+      _sync(
+        ref.read(tourControllerProvider),
+        ref.read(discoveryContentReadyProvider),
+      );
     }
   }
 
@@ -66,10 +82,24 @@ class _TourHostState extends ConsumerState<TourHost> {
 
   /// Single decision point for whether the overlay should be mounted right
   /// now: the tour must be active AND the user must currently be on
-  /// Discovery. Safe to call redundantly — inserting/removing are both
+  /// Discovery AND Discovery's feed must have finished loading. The last
+  /// condition fixes "popup duluan, gambar belum": without it the Welcome
+  /// step appears over the skeleton while cards are still fetching.
+  /// Safe to call redundantly — inserting/removing are both
   /// no-ops if already in the target state.
-  void _sync(TourState state) {
-    final shouldShow = state.isActive && _isOnTourScreen;
+  void _sync(TourState state, bool contentReady) {
+    // First-run arm (set by get-to-know-3): start the tour the first
+    // time Discovery is actually showing with content ready. Consuming
+    // here — where the live location is known — keeps the onboarding
+    // screen free of navigator-key lookups.
+    if (_isOnTourScreen && contentReady && !state.isActive) {
+      final controller = ref.read(tourControllerProvider.notifier);
+      if (controller.consumeFirstRunArm()) {
+        controller.maybeStart(kFirstRunTourId, kFirstRunTour);
+      }
+    }
+    final shouldShow =
+        ref.read(tourControllerProvider).isActive && _isOnTourScreen && contentReady;
     if (shouldShow && _entry == null) {
       _insertEntry();
     } else if (!shouldShow && _entry != null) {
@@ -100,22 +130,32 @@ class _TourHostState extends ConsumerState<TourHost> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _entry != entry) return;
       Overlay.of(context).insert(entry);
+      _inserted = true;
     });
   }
 
   void _removeEntry() {
-    _entry?.remove();
+    final entry = _entry;
     _entry = null;
+    // Never inserted (instant skip before the deferred insert ran, or
+    // the post-frame guard already bailed) — nothing to remove.
+    if (entry == null || !_inserted) return;
+    _inserted = false;
+    entry.remove();
   }
 
   @override
   Widget build(BuildContext context) {
-    // A tour starting/ending, or the location changing, only ever flips
-    // whether the overlay should be mounted; individual step advances are
-    // handled entirely inside `_TourOverlayContent` via its own
-    // `ref.watch` — this listener's only job is mount/unmount timing.
+    // A tour starting/ending, content becoming ready, or the location
+    // changing only ever flips whether the overlay should be mounted;
+    // individual step advances are handled entirely inside
+    // `_TourOverlayContent` via its own `ref.watch` — these listeners'
+    // only job is mount/unmount timing.
     ref.listen<TourState>(tourControllerProvider, (previous, next) {
-      _sync(next);
+      _sync(next, ref.read(discoveryContentReadyProvider));
+    });
+    ref.listen<bool>(discoveryContentReadyProvider, (previous, next) {
+      _sync(ref.read(tourControllerProvider), next);
     });
 
     // Only rebuild this PopScope when isActive itself flips, not on every
@@ -124,6 +164,13 @@ class _TourHostState extends ConsumerState<TourHost> {
     final isActive = ref.watch(
       tourControllerProvider.select((s) => s.isActive),
     );
+    final contentReady = ref.watch(discoveryContentReadyProvider);
+
+    // Gate the back-button intercept on the overlay actually being
+    // visible — not merely on the tour being active. While the tour is
+    // armed but hidden (off Discovery, or feed still loading) there is
+    // no spotlight to protect, so back must behave normally.
+    final overlayVisible = isActive && _isOnTourScreen && contentReady;
 
     // PopScope must live in TourHost's own build() (part of the routed
     // ShellRoute subtree), not inside the OverlayEntry's content — an
@@ -133,7 +180,7 @@ class _TourHostState extends ConsumerState<TourHost> {
     // instead of letting it pop/exit the Discover tab out from under the
     // spotlight (plan §6 Phase 5, "Back button Android saat tour aktif").
     return PopScope(
-      canPop: !isActive,
+      canPop: !overlayVisible,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
         ref.read(tourControllerProvider.notifier).skip();
@@ -195,19 +242,27 @@ class _TourOverlayContent extends ConsumerWidget {
     // hole in that case would dim the whole screen for no visible reason,
     // so the step is skipped automatically instead. Deferred to a
     // post-frame callback because `next()` mutates provider state, which
-    // must not happen synchronously inside this build().
+    // must not happen synchronously inside this build(). Skipped titles
+    // are recorded on the controller and disclosed on the final card.
     if (step.anchor != TourAnchorId.none && holeRect == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        controller.next();
+        controller.skipUnavailableStep();
       });
       return const SizedBox.shrink();
     }
+
+    // Dark-mode scrim: the legacy light scrim reads as washed-out grey
+    // over a dark feed, so use the theme's (darker) scrim token there.
+    // Light mode keeps the exact legacy value for visual parity.
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final skipped = controller.skippedTitles;
 
     return SpotlightOverlay(
       holeRect: holeRect,
       shape: step.shape,
       holeRadius: AppRadius.card,
       onTapScrim: controller.skip,
+      scrimColor: isDark ? context.colors.scrim : null,
       child: Material(
         type: MaterialType.transparency,
         child: TourCalloutCard(
@@ -218,6 +273,11 @@ class _TourOverlayContent extends ConsumerWidget {
           isLastStep: tourState.isLast,
           onSkip: controller.skip,
           onNext: controller.next,
+          onBack: tourState.index > 0 ? controller.back : null,
+          footnote: tourState.isLast && skipped.isNotEmpty
+              ? 'Skipped ${skipped.length} unavailable '
+                  '${skipped.length == 1 ? 'tip' : 'tips'}'
+              : null,
         ),
       ),
     );

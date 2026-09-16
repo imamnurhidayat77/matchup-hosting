@@ -54,6 +54,12 @@ void main() {
             body: Text('Detail ${state.pathParameters['id']}'),
           ),
         ),
+        GoRoute(
+          path: '/pending-request/:id',
+          builder: (_, state) => Scaffold(
+            body: Text('Pending request ${state.pathParameters['id']}'),
+          ),
+        ),
       ],
     );
     await tester.pumpWidget(
@@ -87,7 +93,7 @@ void main() {
       expect(find.text('Discover'), findsOneWidget);
     });
 
-    testWidgets('should open activity details', (tester) async {
+    testWidgets('should open pending request details', (tester) async {
       await pumpScreen(tester);
 
       final details = find.text('View Activity Details');
@@ -96,7 +102,7 @@ void main() {
       await tester.tap(details);
       await tester.pumpAndSettle();
 
-      expect(find.text('Detail 7'), findsOneWidget);
+      expect(find.text('Pending request 7'), findsOneWidget);
     });
   });
 }

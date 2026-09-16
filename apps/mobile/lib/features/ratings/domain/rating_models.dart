@@ -28,6 +28,7 @@ class ActivityRatingSubmission {
     required this.activitySportType,
     required this.participants,
     this.comment,
+    this.activityStars,
   });
 
   /// Activity being rated. Must already be in the `past` state.
@@ -42,8 +43,13 @@ class ActivityRatingSubmission {
   /// early prototype; backend can ignore in that case.
   final List<ParticipantRatingSubmission> participants;
 
-  /// Optional one-liner (<=200 chars on UI side). Server trims longer input.
+  /// Optional one-liner (<=500 chars on UI side, backend contract).
+  /// Server trims longer input.
   final String? comment;
+
+  /// Optional activity-level 1-5 stars. Persisted end-to-end (backend
+  /// `activityStars`); null when the rater skips the activity rating.
+  final int? activityStars;
 }
 
 /// Outcome of a submit attempt.

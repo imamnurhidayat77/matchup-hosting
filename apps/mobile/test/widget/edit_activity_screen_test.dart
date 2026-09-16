@@ -94,7 +94,7 @@ void main() {
       expect(find.text('Save'), findsOneWidget);
     });
 
-    testWidgets('should submit edits with venue coordinates', (tester) async {
+    testWidgets('should submit only the changed fields', (tester) async {
       await pumpScreen(tester);
 
       await tester.enterText(find.byType(TextField).first, 'Sunday Sprint');
@@ -102,20 +102,22 @@ void main() {
       await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
 
+      // Diffed payload: only the title changed, everything else is null
+      // (the repository skips nulls server-side).
       verify(() => repo.updateActivity(
             activityId: '9',
             title: 'Sunday Sprint',
-            sportType: 'Running',
-            description: 'Easy laps.',
-            locationName: 'Auckland Domain',
-            latitude: -36.8558,
-            longitude: 174.7764,
-            geohash: any(named: 'geohash'),
-            startTime: any(named: 'startTime'),
-            endTime: any(named: 'endTime'),
-            skillLevel: 'Beginner',
-            capacity: 10,
-            joinPolicy: any(named: 'joinPolicy'),
+            sportType: null,
+            description: null,
+            locationName: null,
+            latitude: null,
+            longitude: null,
+            geohash: null,
+            startTime: null,
+            endTime: null,
+            skillLevel: null,
+            capacity: null,
+            joinPolicy: null,
           )).called(1);
       // Success pops back home (the manage screen confirms in prod).
       expect(find.text('Edit Activity'), findsNothing);

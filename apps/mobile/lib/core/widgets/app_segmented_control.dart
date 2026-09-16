@@ -7,12 +7,16 @@ import '../theme/dark_colors.dart';
 import 'pressable_scale.dart';
 
 /// Pill-style segmented control (like iOS UISegmentedControl) used for
-/// tabs that don't need full navigation (e.g. Upcoming/Hosting/Past,
-/// Unread/All).
+/// tabs that don't need full navigation (e.g. Fixed/Split pricing).
+///
+/// The selected thumb is a real sliding pill ([AnimatedPositioned] over
+/// a [LayoutBuilder] width) — not a per-segment colour fade — so the
+/// switch reads as movement, and labels cross-fade colour/weight via
+/// [AnimatedDefaultTextStyle].
 ///
 /// ```dart
 /// AppSegmentedControl(
-///   labels: const ['Upcoming', 'Hosting', 'Past'],
+///   labels: const ['Fixed · per person', 'Split · total'],
 ///   selectedIndex: _tab,
 ///   onChanged: (i) => setState(() => _tab = i),
 /// )
@@ -23,7 +27,7 @@ class AppSegmentedControl extends StatelessWidget {
     required this.labels,
     required this.selectedIndex,
     required this.onChanged,
-    this.height = 40,
+    this.height = 46,
     this.activeLabelColor,
   });
 
@@ -41,46 +45,72 @@ class AppSegmentedControl extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: height,
-      padding: const EdgeInsets.all(3),
+      padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: context.colors.surfaceSubtle,
         borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.all(color: context.colors.border),
       ),
-      child: Row(
-        children: List.generate(labels.length, (i) {
-          final selected = i == selectedIndex;
-          return Expanded(
-            child: PressableScale(
-              onTap: () {
-                if (i != selectedIndex) {
-                  HapticFeedback.selectionClick();
-                  onChanged(i);
-                }
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final segW = constraints.maxWidth / labels.length;
+          return Stack(
+            children: [
+              // Sliding thumb — glides between segments instead of
+              // snapping. Position is pure layout math, no controller.
+              AnimatedPositioned(
+                duration: AppDurations.base,
                 curve: Curves.easeOutCubic,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: selected ? context.colors.surface : Colors.transparent,
-                  borderRadius: BorderRadius.circular(AppRadius.sm),
-                  boxShadow: selected ? AppShadows.card : null,
-                ),
-                child: Text(
-                  labels[i],
-                  style: AppTypography.bodyMedium(context).copyWith(
-                    fontSize: 13,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    color: selected
-                        ? (activeLabelColor ?? context.colors.primaryOnSurface)
-                        : context.colors.textSecondary,
+                left: selectedIndex * segW,
+                top: 0,
+                bottom: 0,
+                width: segW,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: context.colors.surface,
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                    boxShadow: AppShadows.card,
                   ),
                 ),
               ),
-            ),
+              Row(
+                children: List.generate(labels.length, (i) {
+                  final selected = i == selectedIndex;
+                  return SizedBox(
+                    width: segW,
+                    height: double.infinity,
+                    child: PressableScale(
+                      onTap: () {
+                        if (i != selectedIndex) {
+                          HapticFeedback.selectionClick();
+                          onChanged(i);
+                        }
+                      },
+                      child: Center(
+                        child: AnimatedDefaultTextStyle(
+                          duration: AppDurations.fast,
+                          curve: Curves.easeOut,
+                          style: AppTypography.bodyMedium(context).copyWith(
+                            fontSize: 13,
+                            fontWeight:
+                                selected ? FontWeight.w700 : FontWeight.w500,
+                            color: selected
+                                ? (activeLabelColor ??
+                                    context.colors.primaryOnSurface)
+                                : context.colors.textSecondary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          child: Text(labels[i]),
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ],
           );
-        }),
+        },
       ),
     );
   }

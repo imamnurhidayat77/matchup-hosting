@@ -19,6 +19,7 @@ class DiscoveryEmptyDeck extends StatelessWidget {
     required this.onRestart,
     this.filterSummary,
     this.onClearFilters,
+    this.onShowUnseen,
   });
 
   final VoidCallback onRestart;
@@ -27,6 +28,11 @@ class DiscoveryEmptyDeck extends StatelessWidget {
   /// Null/empty means no filter is active.
   final String? filterSummary;
   final VoidCallback? onClearFilters;
+
+  /// Start-over latch release: when non-null (the deck is showing
+  /// swiped cards via "Start over"), a second "Unseen only" button
+  /// appears next to "Start over" to flip back to unseen cards.
+  final VoidCallback? onShowUnseen;
 
   @override
   Widget build(BuildContext context) {
@@ -61,6 +67,28 @@ class DiscoveryEmptyDeck extends StatelessWidget {
               ),
               child: Text(
                 'Clear filters',
+                style: AppTypography.labelField(context).copyWith(
+                  color: context.colors.primaryOnSurface,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+            ),
+          ),
+        ],
+        if (onShowUnseen != null) ...[
+          const SizedBox(height: AppSpacing.x2),
+          AppTappable(
+            semanticLabel: 'Unseen only',
+            onTap: onShowUnseen!,
+            feedback: AppTapFeedback.scale,
+            minSize: 0,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.x4,
+                vertical: AppSpacing.x2,
+              ),
+              child: Text(
+                'Unseen only',
                 style: AppTypography.labelField(context).copyWith(
                   color: context.colors.primaryOnSurface,
                   decoration: TextDecoration.underline,

@@ -131,6 +131,41 @@ void main() {
         final roundTripped = ActivityModel.fromJson(original.toJson());
         expect(roundTripped.durationMinutes, 180);
       });
+
+      group('isChatArchived', () {
+        ActivityModel archivedFixture({required DateTime start}) {
+          return ActivityModel.fromJson({
+            ...baseJson,
+            'status': 'past',
+            'date_time': start.toIso8601String(),
+            'duration_minutes': 120,
+          });
+        }
+
+        test('live game is writable', () {
+          final model = ActivityModel.fromJson({
+            ...baseJson,
+            'status': 'available',
+            'date_time':
+                DateTime.now().add(const Duration(days: 1)).toIso8601String(),
+          });
+          expect(model.isChatArchived, isFalse);
+        });
+
+        test('recently ended game stays writable inside grace', () {
+          final model = archivedFixture(
+            start: DateTime.now().subtract(const Duration(days: 3)),
+          );
+          expect(model.isChatArchived, isFalse);
+        });
+
+        test('old ended game is archived', () {
+          final model = archivedFixture(
+            start: DateTime.now().subtract(const Duration(days: 10)),
+          );
+          expect(model.isChatArchived, isTrue);
+        });
+      });
     });
   });
 }

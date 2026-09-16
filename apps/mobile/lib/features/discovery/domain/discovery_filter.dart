@@ -118,6 +118,11 @@ class DiscoveryFilter {
             .toUtc()
             .toIso8601String();
 
+    /// `copyWith` can't clear a nullable field with `null` (null means
+    /// "keep"), so [clearDates] resets `startAfter`/`startBefore` and
+    /// the preset back to [DiscoveryDatePreset.anyTime], and
+    /// [clearDistance] resets `maxDistanceKm` to null. Explicitly
+    /// passed values always win over either flag.
     DiscoveryFilter copyWith({
         List<DiscoverySportSkill>? sportSkills,
         DiscoveryDatePreset? datePreset,
@@ -125,13 +130,17 @@ class DiscoveryFilter {
         DateTime? startBefore,
         double? maxDistanceKm,
         bool? includeSwiped,
+        bool clearDates = false,
+        bool clearDistance = false,
     }) {
         return DiscoveryFilter(
             sportSkills: sportSkills ?? this.sportSkills,
-            datePreset: datePreset ?? this.datePreset,
-            startAfter: startAfter ?? this.startAfter,
-            startBefore: startBefore ?? this.startBefore,
-            maxDistanceKm: maxDistanceKm ?? this.maxDistanceKm,
+            datePreset: datePreset ??
+                (clearDates ? DiscoveryDatePreset.anyTime : this.datePreset),
+            startAfter: startAfter ?? (clearDates ? null : this.startAfter),
+            startBefore: startBefore ?? (clearDates ? null : this.startBefore),
+            maxDistanceKm:
+                maxDistanceKm ?? (clearDistance ? null : this.maxDistanceKm),
             includeSwiped: includeSwiped ?? this.includeSwiped,
         );
     }
@@ -178,6 +187,61 @@ class DiscoveryFilter {
             parts.add('Within ${maxDistanceKm!.round()} km');
         }
         return parts.join(' · ');
+    }
+
+    /// JSON round trip for persistence (SharedPreferences). `includeSwiped`
+    /// is deliberately EXCLUDED — it is session UI state ("Start over"),
+    /// not a user filter choice, and must not survive restart.
+    Map<String, dynamic> toJson() => {
+        'sportSkills': [
+            for (final s in sportSkills)
+                {'sport': s.sport, 'skill': s.skill.wireValue},
+        ],
+        'datePreset': datePreset.name,
+        if (startAfter != null)
+            'startAfter': startAfter!.toIso8601String(),
+        if (startBefore != null)
+            'startBefore': startBefore!.toIso8601String(),
+        if (maxDistanceKm != null) 'maxDistanceKm': maxDistanceKm,
+    };
+
+    factory DiscoveryFilter.fromJson(Map<String, dynamic> json) {
+        DiscoveryDatePreset preset = DiscoveryDatePreset.anyTime;
+        final rawPreset = json['datePreset'] as String?;
+        if (rawPreset != null) {
+            for (final p in DiscoveryDatePreset.values) {
+                if (p.name == rawPreset) {
+                    preset = p;
+                    break;
+                }
+            }
+        }
+        DateTime? parseDate(Object? v) =>
+            v is String ? DateTime.tryParse(v) : null;
+        DiscoverySkillLevel parseSkill(Object? v) {
+            for (final l in DiscoverySkillLevel.values) {
+                if (l.wireValue == v) return l;
+            }
+            return DiscoverySkillLevel.any;
+        }
+        final rawSports = json['sportSkills'];
+        return DiscoveryFilter(
+            sportSkills: [
+                if (rawSports is List)
+                    for (final e in rawSports)
+                        if (e is Map &&
+                            (e['sport'] is String) &&
+                            ((e['sport'] as String).isNotEmpty))
+                            DiscoverySportSkill(
+                                sport: e['sport'] as String,
+                                skill: parseSkill(e['skill']),
+                            ),
+            ],
+            datePreset: preset,
+            startAfter: parseDate(json['startAfter']),
+            startBefore: parseDate(json['startBefore']),
+            maxDistanceKm: (json['maxDistanceKm'] as num?)?.toDouble(),
+        );
     }
 }
 

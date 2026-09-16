@@ -160,7 +160,7 @@ class ProfileScreen extends ConsumerWidget {
 // ─── Unread count provider (reused from notifications) ────────────────────────
 
 final _unreadNotifCountProvider = FutureProvider.autoDispose<int>((ref) async {
-  final all = await ref.watch(notificationRepositoryProvider).all();
+  final all = await ref.read(notificationRepositoryProvider).all();
   return all.where((n) => n.unread).length;
 });
 
@@ -172,8 +172,13 @@ class _AvatarCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final username =
-        '@${user.displayName.toLowerCase().replaceAll(' ', '')}';
+    // No synthetic @handle: the backend has no username field. Show the
+    // real location when set, else a counts subtitle from the model.
+    final subtitle = (user.location?.trim().isNotEmpty ?? false)
+        ? user.location!.trim()
+        : '${user.sports.length} '
+            '${user.sports.length == 1 ? 'sport' : 'sports'} '
+            '• ${user.hostedCount} hosted';
 
     return Container(
       width: double.infinity,
@@ -251,10 +256,10 @@ class _AvatarCard extends StatelessWidget {
                         ),
                       ),
                       alignment: Alignment.center,
-                      child: const Icon(
+                      child: Icon(
                         Icons.edit_rounded,
                         size: 13,
-                        color: AppColors.textOnPrimary,
+                        color: context.colors.textOnPrimary,
                       ),
                     ),
                   ),
@@ -271,9 +276,9 @@ class _AvatarCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
 
-          // @username — theme-aware brand blue.
+          // Location / counts subtitle — theme-aware brand blue.
           Text(
-            username,
+            subtitle,
             style: AppTypography.bodyMedium(context).copyWith(
               color: context.colors.primaryOnSurface,
               fontWeight: FontWeight.w500,
@@ -923,7 +928,7 @@ class _LogoutSheet extends StatelessWidget {
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.dangerAccent,
-                foregroundColor: AppColors.textOnPrimary,
+                foregroundColor: context.colors.textOnPrimary,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(AppRadius.lg),
@@ -959,3 +964,9 @@ class _LogoutSheet extends StatelessWidget {
     );
   }
 }
+
+// NOTE (theme hardcodes kept deliberately): `AppColors.primary` (edit-photo
+// badge) and `AppColors.dangerAccent` (logout rows/sheet) are saturated
+// theme-invariant accents — `dark_colors.dart` mandates such colours stay
+// on the static `AppColors` class (no same-value `context.colors` token
+// exists for either in light mode, so swapping would break light parity).

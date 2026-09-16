@@ -1,13 +1,19 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/network/api_client.dart';
+import '../../../core/providers/auth_state_provider.dart';
 import '../../../core/providers/repository_providers.dart';
 import '../../../core/services/location_service.dart';
 import '../../../core/storage/secure_token_store.dart';
@@ -24,6 +30,8 @@ import '../../../core/widgets/skeleton.dart';
 import '../../activities/domain/activity_model.dart';
 import '../../activities/domain/activity_participant.dart';
 import '../../report/presentation/report_activity_sheet.dart';
+import '../../notifications/services/push_routing.dart' show mutedChatsKey;
+import '../data/chat_repository_impl.dart' show recordChatOpened;
 import '../data/typing_repository.dart';
 import '../domain/chat_message.dart';
 import '../domain/chat_poll.dart';
@@ -64,6 +72,7 @@ final _pollsStreamProvider = StreamProvider.autoDispose
 /// Toggles one emoji reaction, toast on transport failure. The chips
 /// update via [_reactionsStreamProvider] — no optimistic state needed
 /// because the RTDB stream pushes the change straight back.
+/// Backend `CHAT_ARCHIVED` rejections surface verbatim.
 Future<void> _toggleReaction(
   WidgetRef ref,
   BuildContext context, {
@@ -71,12 +80,31 @@ Future<void> _toggleReaction(
   required String messageId,
   required String emoji,
 }) async {
-  final reacted = await ref.read(chatRepositoryProvider).toggleReaction(
-        activityId: activityId,
-        messageId: messageId,
-        emoji: emoji,
+  try {
+    final reacted = await ref.read(chatRepositoryProvider).toggleReaction(
+          activityId: activityId,
+          messageId: messageId,
+          emoji: emoji,
+        );
+    if (reacted == null && context.mounted) {
+      AppSnackbar.show(
+        context,
+        message: 'Could not save your reaction. Please try again.',
+        variant: AppSnackbarVariant.error,
       );
-  if (reacted == null && context.mounted) {
+    }
+  } on DioException catch (e) {
+    if (!context.mounted) return;
+    final err = e.error;
+    AppSnackbar.show(
+      context,
+      message: err is ApiException
+          ? err.userMessage
+          : 'Could not save your reaction. Please try again.',
+      variant: AppSnackbarVariant.error,
+    );
+  } catch (_) {
+    if (!context.mounted) return;
     AppSnackbar.show(
       context,
       message: 'Could not save your reaction. Please try again.',
@@ -87,6 +115,8 @@ Future<void> _toggleReaction(
 
 /// Votes for one poll option, toast on transport failure. Results
 /// update via [_pollsStreamProvider] — no optimistic state needed.
+/// Backend `CHAT_ARCHIVED` rejections surface verbatim so an archived
+/// thread explains itself instead of a generic failure.
 Future<void> _votePoll(
   WidgetRef ref,
   BuildContext context, {
@@ -94,18 +124,68 @@ Future<void> _votePoll(
   required String pollId,
   required int optionIndex,
 }) async {
-  final voted = await ref.read(chatRepositoryProvider).votePoll(
-        activityId: activityId,
-        pollId: pollId,
-        optionIndex: optionIndex,
+  try {
+    final voted = await ref.read(chatRepositoryProvider).votePoll(
+          activityId: activityId,
+          pollId: pollId,
+          optionIndex: optionIndex,
+        );
+    if (voted == null && context.mounted) {
+      AppSnackbar.show(
+        context,
+        message: 'Could not save your vote. Please try again.',
+        variant: AppSnackbarVariant.error,
       );
-  if (voted == null && context.mounted) {
+    }
+  } on DioException catch (e) {
+    if (!context.mounted) return;
+    final err = e.error;
+    AppSnackbar.show(
+      context,
+      message: err is ApiException
+          ? err.userMessage
+          : 'Could not save your vote. Please try again.',
+      variant: AppSnackbarVariant.error,
+    );
+  } catch (_) {
+    if (!context.mounted) return;
     AppSnackbar.show(
       context,
       message: 'Could not save your vote. Please try again.',
       variant: AppSnackbarVariant.error,
     );
   }
+}
+
+/// Renders the repository's "uploads unavailable" signal verbatim;
+/// every other photo failure keeps the generic copy.
+String _photoErrorMessage(Object e) {
+  const unavailable = 'Photo uploads are unavailable right now';
+  if (e.toString().contains(unavailable)) return unavailable;
+  return 'Could not send photo.';
+}
+
+/// Local per-chat mute (no backend support — a string list of muted
+/// activity ids under [mutedChatsKey]). The foreground push banner
+/// skips muted chats.
+Future<bool> isChatMuted(String activityId) async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getStringList(mutedChatsKey)?.contains(activityId) ?? false;
+  } catch (_) {
+    return false;
+  }
+}
+
+/// Persists a mute toggle. Never throws (safe to call unawaited).
+Future<void> setChatMuted(String activityId, bool muted) async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final current = prefs.getStringList(mutedChatsKey) ?? const <String>[];
+    final next = current.where((id) => id != activityId).toList();
+    if (muted) next.add(activityId);
+    await prefs.setStringList(mutedChatsKey, next);
+  } catch (_) {}
 }
 
 /// Fetches the activity for the chat header. Returns the full
@@ -199,6 +279,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     // was disposed").
     _typingRepo = ref.read(typingRepositoryProvider);
     _msgController.addListener(_onInputChanged);
+    // Baseline for the inbox unread badge: opening the chat marks
+    // everything up to now as seen (best-effort, never throws).
+    unawaited(recordChatOpened(_id));
   }
 
   TypingRepository? _typingRepo;
@@ -282,6 +365,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Future<void> _send() async {
     final text = _msgController.text.trim();
     if (text.isEmpty) return;
+    // Local archive guard: the backend 403s anyway, but failing fast
+    // keeps the draft and explains itself without a round trip.
+    final activity =
+        ref.read(_activityProvider(widget.activityId)).valueOrNull;
+    if (activity?.isChatArchived ?? false) {
+      if (!mounted) return;
+      AppSnackbar.show(
+        context,
+        message: 'Chat is archived',
+        variant: AppSnackbarVariant.error,
+      );
+      return;
+    }
     HapticFeedback.lightImpact();
     _msgController.clear();
     // Stop the typing indicator immediately — the message itself
@@ -304,6 +400,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       // The new RTDB / polling listener will pick up the message
       // automatically — no invalidate needed.
       _scrollToBottom();
+    } on DioException catch (e) {
+      if (!mounted) return;
+      // Restore the draft so the user doesn't lose what they typed.
+      _msgController.text = text;
+      final err = e.error;
+      AppSnackbar.show(
+        context,
+        message: err is ApiException
+            ? err.userMessage
+            : 'Could not send message. Check your connection and try again.',
+        variant: AppSnackbarVariant.error,
+      );
     } catch (_) {
       if (!mounted) return;
       // Restore the draft so the user doesn't lose what they typed.
@@ -391,25 +499,49 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           .sendImage(activityId: _id, imagePath: picked.path);
       // New message will arrive via the RTDB / polling stream.
       _scrollToBottom();
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       AppSnackbar.show(
         context,
-        message: 'Could not send photo.',
+        // The "uploads unavailable" signal renders verbatim; every
+        // other failure keeps the generic copy.
+        message: _photoErrorMessage(e),
         variant: AppSnackbarVariant.error,
       );
     }
   }
 
   Future<void> _shareLocation() async {
-    final position = await LocationService.instance.getCurrentLocation();
-    if (!mounted) return;
-    if (position == null) {
+    late final Position? position;
+    try {
+      position = await LocationService.instance.getCurrentLocation();
+    } on LocationTimeoutException {
+      // A slow fix is transient — offer a retry, not a lecture about
+      // permissions.
+      if (!mounted) return;
       AppSnackbar.show(
         context,
-        message: 'Could not access your location. Check location '
-            'permissions and try again.',
+        message: "Couldn't get your location. Try again.",
         variant: AppSnackbarVariant.error,
+      );
+      return;
+    }
+    if (!mounted) return;
+    if (position == null) {
+      // Permanently denied ("don't ask again") can only be fixed in
+      // the OS settings — offer a shortcut there.
+      final permanentlyDenied = await LocationService.instance
+          .isPermissionPermanentlyDenied();
+      if (!mounted) return;
+      AppSnackbar.show(
+        context,
+        message: permanentlyDenied
+            ? 'Location permission is off. Enable it in Settings to share your location.'
+            : 'Could not access your location. Check location '
+                'permissions and try again.',
+        variant: AppSnackbarVariant.error,
+        actionLabel: permanentlyDenied ? 'Open Settings' : null,
+        onAction: permanentlyDenied ? () => Geolocator.openAppSettings() : null,
       );
       return;
     }
@@ -440,6 +572,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     // back to the chat.
     final activityAsync = ref.watch(_activityProvider(widget.activityId));
     final title = activityAsync.valueOrNull?.title ?? 'Chat';
+    // Archived threads are read-only: the backend 403s every write,
+    // so the composer/poll/vote affordances switch to an archived
+    // state instead of failing on tap. `false` while loading to avoid
+    // flashing the archived notice on a live thread.
+    final isArchived =
+        activityAsync.valueOrNull?.isChatArchived ?? false;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       // White status-bar icons on the navy header. AnnotatedRegion
@@ -468,11 +606,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 ),
               ),
             ),
-            _MatchBanner(activity: activityAsync.valueOrNull),
+            _MatchBanner(
+              activityAsync: activityAsync,
+              onRetry: () =>
+                  ref.invalidate(_activityProvider(widget.activityId)),
+            ),
             Expanded(
               child: _MessageList(
                 id: _id,
                 scrollController: _scrollController,
+                isArchived: isArchived,
               ),
             ),
             _InputBar(
@@ -480,7 +623,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               focusNode: _focusNode,
               hasText: _hasText,
               onSend: _send,
-              onAttach: _openAttachmentSheet,
+              onAttach: () {
+                if (isArchived) {
+                  AppSnackbar.show(
+                    context,
+                    message: 'Chat is archived',
+                    variant: AppSnackbarVariant.error,
+                  );
+                  return;
+                }
+                _openAttachmentSheet();
+              },
+              isArchived: isArchived,
             ),
           ],
         ),
@@ -733,8 +887,10 @@ class _HeaderButton extends StatelessWidget {
 
 /// Resolves the current user's Firebase auth uid from secure storage.
 /// Used to filter "self" out of the typing display so we don't show
-/// "You are typing…" to ourselves.
+/// "You are typing…" to ourselves. Watches the auth uid so an account
+/// switch re-reads storage instead of leaking the previous user's uid.
 final _myUidProvider = FutureProvider<String?>((ref) async {
+  ref.watch(authStateProvider.select((s) => s.userId));
   return SecureTokenStore.instance.readUserId();
 });
 
@@ -769,8 +925,9 @@ final _chatOtherUidsProvider = Provider.autoDispose
 /// [CheckInScreen]. A 30s ticker re-evaluates the window so the
 /// button materialises while the user sits in chat.
 class _MatchBanner extends StatefulWidget {
-  const _MatchBanner({required this.activity});
-  final ActivityModel? activity;
+  const _MatchBanner({required this.activityAsync, required this.onRetry});
+  final AsyncValue<ActivityModel?> activityAsync;
+  final VoidCallback onRetry;
 
   /// Check-in window shared with the check-in screen: opens 30
   /// minutes before start, closes at the activity end.
@@ -802,7 +959,8 @@ class _MatchBannerState extends State<_MatchBanner> {
 
   @override
   Widget build(BuildContext context) {
-    final activity = widget.activity;
+    final activity = widget.activityAsync.valueOrNull;
+    final hasError = widget.activityAsync.hasError;
     final inWindow = activity != null &&
         _MatchBanner.checkInOpen(
           DateTime.now(),
@@ -830,7 +988,8 @@ class _MatchBannerState extends State<_MatchBanner> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Day badge — TODAY when the game is today.
+                // Day badge — TODAY when the game is today. Neutral while
+                // the activity is loading so no fake date is shown.
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.x3,
@@ -841,7 +1000,7 @@ class _MatchBannerState extends State<_MatchBanner> {
                     borderRadius: BorderRadius.circular(AppRadius.pill),
                   ),
                   child: Text(
-                    _bannerDayLabel(activity?.dateTime),
+                    activity == null ? '···' : _bannerDayLabel(activity.dateTime),
                     style: AppTypography.badgeSport(context).copyWith(
                       color: AppColors.textOnPrimary,
                       letterSpacing: 0.5,
@@ -850,16 +1009,32 @@ class _MatchBannerState extends State<_MatchBanner> {
                 ),
                 const SizedBox(height: AppSpacing.x2),
                 Text(
-                  activity?.location ?? 'Prospect Park Courts',
+                  activity?.location ?? 'Chat',
                   style: AppTypography.titleMedium(context),
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  activity == null
-                      ? 'Kickoff at 5:30 PM'
-                      : _bannerKickoffLabel(activity.dateTime),
-                  style: AppTypography.metaSub(context),
-                ),
+                if (hasError && activity == null)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Could not load details',
+                          style: AppTypography.metaSub(context),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: widget.onRetry,
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  )
+                else
+                  Text(
+                    activity == null
+                        ? 'Loading details…'
+                        : _bannerKickoffLabel(activity.dateTime),
+                    style: AppTypography.metaSub(context),
+                  ),
               ],
             ),
           ),
@@ -898,7 +1073,6 @@ class _MatchBannerState extends State<_MatchBanner> {
 }
 
 /// 'TODAY' when [dateTime] is today, otherwise the 3-letter weekday.
-/// Null-safe: falls back to 'TODAY' to preserve the previous static UI.
 String _bannerDayLabel(DateTime? dateTime) {
   if (dateTime == null) return 'TODAY';
   final now = DateTime.now();
@@ -1044,9 +1218,17 @@ String _dayLabel(DateTime day) {
 }
 
 class _MessageList extends ConsumerWidget {
-  const _MessageList({required this.id, required this.scrollController});
+  const _MessageList({
+    required this.id,
+    required this.scrollController,
+    this.isArchived = false,
+  });
   final String id;
   final ScrollController scrollController;
+
+  /// Archived threads stay readable; voting is blocked with an
+  /// explanation instead of a silent no-op or a backend round trip.
+  final bool isArchived;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1095,13 +1277,23 @@ class _MessageList extends ConsumerWidget {
                   reactions:
                       reactions?[item.message.id] ?? const <String, List<String>>{},
                   myUid: myUid,
-                  onReact: (emoji) => _toggleReaction(
-                    ref,
-                    context,
-                    activityId: id,
-                    messageId: item.message.id,
-                    emoji: emoji,
-                  ),
+                  onReact: (emoji) {
+                    if (isArchived) {
+                      AppSnackbar.show(
+                        context,
+                        message: 'Chat is archived',
+                        variant: AppSnackbarVariant.error,
+                      );
+                      return;
+                    }
+                    _toggleReaction(
+                      ref,
+                      context,
+                      activityId: id,
+                      messageId: item.message.id,
+                      emoji: emoji,
+                    );
+                  },
                 ),
               _PollItem() => _PollCard(
                   item: item,
@@ -1111,13 +1303,23 @@ class _MessageList extends ConsumerWidget {
                           item.poll.createdBy),
                   isMine: item.poll.createdBy == myUid && myUid.isNotEmpty,
                   myUid: myUid,
-                  onVote: (optionIndex) => _votePoll(
-                    ref,
-                    context,
-                    activityId: id,
-                    pollId: item.poll.pollId,
-                    optionIndex: optionIndex,
-                  ),
+                  onVote: (optionIndex) {
+                    if (isArchived) {
+                      AppSnackbar.show(
+                        context,
+                        message: 'Chat is archived',
+                        variant: AppSnackbarVariant.error,
+                      );
+                      return;
+                    }
+                    _votePoll(
+                      ref,
+                      context,
+                      activityId: id,
+                      pollId: item.poll.pollId,
+                      optionIndex: optionIndex,
+                    );
+                  },
                 ),
             };
           },
@@ -1315,6 +1517,12 @@ class _BubbleContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (msg.isImage) {
+      // Defensive: isImage means an image source exists, but guard
+      // anyway — a null url with no local path renders the text
+      // instead of crashing on a force-unwrap.
+      if (msg.imageUrl == null && msg.imagePath == null) {
+        return _bubbleText(context);
+      }
       return PressableScale(
         onTap: () => _ChatImageViewer.show(context, msg),
         child: ClipRRect(
@@ -1332,6 +1540,10 @@ class _BubbleContent extends StatelessWidget {
       return _LocationBubble(msg: msg, isMine: isMine);
     }
 
+    return _bubbleText(context);
+  }
+
+  Widget _bubbleText(BuildContext context) {
     return Text(
       msg.text,
       style: AppTypography.bodyReading(context).copyWith(
@@ -1597,7 +1809,7 @@ class _PollCard extends StatelessWidget {
                         poll.totalVotes == 0
                             ? 'No votes yet · tap to vote'
                             : '${poll.totalVotes} vote${poll.totalVotes == 1 ? '' : 's'}'
-                                '${myVote == null ? ' · tap to vote' : ''}',
+                                '${myVote == null ? ' · tap to vote' : ' · tap again to remove vote'}',
                         style: AppTypography.metaSub(context).copyWith(
                           fontSize: 11,
                           color: context.colors.textTertiary,
@@ -1717,26 +1929,32 @@ class _ChatImage extends StatelessWidget {
         errorBuilder: (_, _, _) => _brokenImage(context),
       );
     }
-    return Image.network(
-      msg.imageUrl!,
+    final remoteUrl = msg.imageUrl;
+    if (remoteUrl == null) return _brokenImage(context);
+    return CachedNetworkImage(
+      imageUrl: remoteUrl,
       width: width,
       height: height,
       fit: fit,
-      loadingBuilder: (context, child, progress) {
-        if (progress == null) return child;
-        return Container(
-          width: width,
-          height: height,
-          color: context.colors.surfaceMuted,
-          alignment: Alignment.center,
-          child: const SizedBox(
-            width: 24,
-            height: 24,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-        );
+      memCacheWidth:
+          (width * MediaQuery.devicePixelRatioOf(context)).round().clamp(1, 1200),
+      fadeInDuration: const Duration(milliseconds: 150),
+      fadeOutDuration: Duration.zero,
+      progressIndicatorBuilder: (context, url, progress) => Container(
+        width: width,
+        height: height,
+        color: context.colors.surfaceMuted,
+        alignment: Alignment.center,
+        child: const SizedBox(
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      ),
+      errorWidget: (context, url, error) {
+        debugPrint('[ChatImage] failed: $url ($error)');
+        return _brokenImage(context);
       },
-      errorBuilder: (_, _, _) => _brokenImage(context),
     );
   }
 
@@ -1825,18 +2043,25 @@ class _LocationBubble extends StatelessWidget {
   final ChatMessage msg;
   final bool isMine;
 
-  Future<void> _open() async {
+  Future<void> _open(BuildContext context) async {
     final uri = Uri.parse(
       'https://www.google.com/maps/search/?api=1&query=${msg.latitude},${msg.longitude}',
     );
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened && context.mounted) {
+      AppSnackbar.show(
+        context,
+        message: 'Could not open Maps',
+        variant: AppSnackbarVariant.error,
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final fg = isMine ? AppColors.textOnPrimary : context.colors.textPrimary;
     return PressableScale(
-      onTap: _open,
+      onTap: () => _open(context),
       child: SizedBox(
         width: 180,
         child: Column(
@@ -1872,6 +2097,7 @@ class _InputBar extends StatelessWidget {
     required this.hasText,
     required this.onSend,
     required this.onAttach,
+    this.isArchived = false,
   });
   final TextEditingController controller;
   final FocusNode focusNode;
@@ -1879,8 +2105,58 @@ class _InputBar extends StatelessWidget {
   final VoidCallback onSend;
   final VoidCallback onAttach;
 
+  /// Archived threads render a read-only notice in place of the
+  /// composer — history stays visible above, writes are gone.
+  final bool isArchived;
+
   @override
   Widget build(BuildContext context) {
+    if (isArchived) {
+      return Container(
+        padding: EdgeInsets.only(
+          left: AppSpacing.x4,
+          right: AppSpacing.x4,
+          top: AppSpacing.x3,
+          bottom: AppSpacing.x3 + MediaQuery.of(context).viewPadding.bottom,
+        ),
+        decoration: BoxDecoration(
+          color: context.colors.surface,
+          border: Border(top: BorderSide(color: context.colors.border)),
+        ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.x4,
+            vertical: 12,
+          ),
+          decoration: BoxDecoration(
+            color: context.colors.surfaceMuted,
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+          ),
+          alignment: Alignment.center,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.archive_outlined,
+                size: 18,
+                color: context.colors.textSecondary,
+              ),
+              const SizedBox(width: AppSpacing.x2),
+              Flexible(
+                child: Text(
+                  'Chat archived · history is read-only',
+                  style: AppTypography.bodyMedium(context).copyWith(
+                    fontSize: 14,
+                    color: context.colors.textSecondary,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     return Container(
       padding: EdgeInsets.only(
         left: AppSpacing.x4,
@@ -1996,10 +2272,9 @@ class _InputBar extends StatelessWidget {
 
 // ─── Chat settings sheet ─────────────────────────────────────────────────────
 
-/// Bottom sheet behind the header settings button: view the activity
-/// or report it. Mute/notification toggles are out of scope (no
-/// backend support) and deliberately omitted.
-class _ChatSettingsSheet extends StatelessWidget {
+/// Bottom sheet behind the header settings button: view the activity,
+/// open its photo album, toggle the local mute, or report it.
+class _ChatSettingsSheet extends StatefulWidget {
   const _ChatSettingsSheet({
     required this.activityId,
     required this.activityTitle,
@@ -2024,7 +2299,31 @@ class _ChatSettingsSheet extends StatelessWidget {
   }
 
   @override
+  State<_ChatSettingsSheet> createState() => _ChatSettingsSheetState();
+}
+
+class _ChatSettingsSheetState extends State<_ChatSettingsSheet> {
+  /// Null while the persisted value loads — the row hides until then
+  /// so a stale default never flashes.
+  bool? _muted;
+
+  @override
+  void initState() {
+    super.initState();
+    isChatMuted(widget.activityId).then((muted) {
+      if (mounted) setState(() => _muted = muted);
+    });
+  }
+
+  Future<void> _toggleMute() async {
+    final next = !(_muted ?? false);
+    setState(() => _muted = next);
+    await setChatMuted(widget.activityId, next);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final muted = _muted ?? false;
     return Container(
       padding: EdgeInsets.fromLTRB(
         AppSpacing.x5,
@@ -2053,7 +2352,7 @@ class _ChatSettingsSheet extends StatelessWidget {
             label: 'View activity details',
             onTap: () {
               Navigator.of(context).pop();
-              context.push('/activity/$activityId');
+              context.push('/activity/${widget.activityId}');
             },
           ),
           _SettingsRow(
@@ -2061,9 +2360,17 @@ class _ChatSettingsSheet extends StatelessWidget {
             label: 'Photo moments',
             onTap: () {
               Navigator.of(context).pop();
-              context.push('/chat/$activityId/moments');
+              context.push('/chat/${widget.activityId}/moments');
             },
           ),
+          if (_muted != null)
+            _SettingsRow(
+              icon: muted
+                  ? Icons.notifications_off_outlined
+                  : Icons.notifications_outlined,
+              label: muted ? 'Unmute this chat' : 'Mute this chat',
+              onTap: _toggleMute,
+            ),
           _SettingsRow(
             icon: Icons.flag_outlined,
             label: 'Report activity',
@@ -2071,8 +2378,8 @@ class _ChatSettingsSheet extends StatelessWidget {
               Navigator.of(context).pop();
               ReportActivitySheet.show(
                 context,
-                activityId: activityId,
-                activityTitle: activityTitle,
+                activityId: widget.activityId,
+                activityTitle: widget.activityTitle,
               );
             },
           ),

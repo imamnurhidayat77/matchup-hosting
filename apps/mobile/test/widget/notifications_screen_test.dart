@@ -16,8 +16,8 @@ void main() {
 
   setUp(() {
     repo = _MockNotificationRepository();
-    when(() => repo.markRead(any())).thenAnswer((_) async {});
-    when(() => repo.markAllRead()).thenAnswer((_) async {});
+    when(() => repo.markRead(any())).thenAnswer((_) async => true);
+    when(() => repo.markAllRead()).thenAnswer((_) async => true);
   });
 
   Future<void> pumpScreen(WidgetTester tester) async {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import '../storage/local_storage.dart';
 
 const _kThemeModeKey = 'theme_mode';
 
@@ -14,8 +15,8 @@ class ThemeModeController extends StateNotifier<ThemeMode> {
   }
 
   Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final value = prefs.getString(_kThemeModeKey);
+    final storage = await LocalStorage.create();
+    final value = storage.getString(_kThemeModeKey);
     if (value != null) {
       state = ThemeMode.values.firstWhere(
         (m) => m.name == value,
@@ -26,7 +27,7 @@ class ThemeModeController extends StateNotifier<ThemeMode> {
 
   Future<void> set(ThemeMode mode) async {
     state = mode;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_kThemeModeKey, mode.name);
+    final storage = await LocalStorage.create();
+    await storage.setString(_kThemeModeKey, mode.name);
   }
 }

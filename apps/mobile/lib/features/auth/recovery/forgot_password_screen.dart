@@ -8,6 +8,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/dark_colors.dart';
+import '../../../core/utils/nav_guard.dart';
 import '../../../core/utils/secure_screen.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_snackbar.dart';
@@ -45,11 +46,17 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isSubmitting = true);
     try {
-      await ref.read(authRepositoryProvider).forgotPassword(
-        email: _emailController.text.trim(),
-      );
+      final email = _emailController.text.trim();
+      await ref.read(authRepositoryProvider).forgotPassword(email: email);
       if (!mounted) return;
-      context.push('/reset-link-sent', extra: _emailController.text.trim());
+      // Pass email via query parameters so it survives process death
+      // (GoRouter `extra` does not). ResetLinkSentScreen still falls
+      // back to `extra` for backward compat.
+      final encoded = Uri.encodeComponent(email);
+      NavGuard.onceFor(
+        'reset-link-sent',
+        () => context.push('/reset-link-sent?email=$encoded'),
+      );
     } catch (e) {
       if (!mounted) return;
       AppSnackbar.show(
@@ -99,7 +106,16 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
                         button: true,
                         label: 'Back',
                         child: PressableScale(
-                          onTap: () => Navigator.of(context).maybePop(),
+                          onTap: () async {
+                            // maybePop no-ops when this screen is the stack
+                            // root (e.g. deep link) — fall back to /login so
+                            // the button never silently does nothing.
+                            final popped = await Navigator.of(
+                              context,
+                            ).maybePop();
+                            if (!context.mounted) return;
+                            if (!popped) context.go('/login');
+                          },
                           child: Container(
                             width: 40,
                             height: 40,

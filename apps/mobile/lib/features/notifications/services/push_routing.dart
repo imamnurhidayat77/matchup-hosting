@@ -36,8 +36,17 @@ class PushPayload {
   }
 }
 
-/// Deep-link route for a parsed payload, or null when the app should
-/// just land on the notifications feed.
+/// SharedPreferences key for the locally muted group-chat ids
+/// (string list of activity ids). Mute is local-only (no backend
+/// support): the chat settings sheet toggles it, the foreground push
+/// banner skips muted chats.
+const mutedChatsKey = 'muted_chats';
+
+/// Deep-link route for a parsed payload, or null when the payload has
+/// no usable target (unknown type). Callers must no-op (or snackbar)
+/// on null instead of pushing the notifications feed — dropping the
+/// user on the feed for a tap they already sit on is a navigation
+/// surprise, not a recovery.
 String? routeForPush(PushPayload payload) {
   final id = payload.activityId;
   switch (payload.type) {
@@ -63,21 +72,21 @@ String? routeForPush(PushPayload payload) {
       if (id != null) return '/activity/$id';
       return '/notifications';
     default:
-      return '/notifications';
+      // Unknown type — no honest target. The caller no-ops.
+      return null;
   }
 }
 
 /// Deep-link route for a feed notification, reusing the push table so
-/// tray taps and feed taps always agree. Feed rows without a usable
-/// target fall back to the notifications screen itself (never null —
-/// the feed is already showing, so staying put is the honest default).
-String routeForNotification(AppNotification notif) {
+/// tray taps and feed taps always agree. Returns null when the row has
+/// no usable target (unknown backend type) — the feed stays put (it is
+/// already showing, so staying is the honest default).
+String? routeForNotification(AppNotification notif) {
   return routeForPush(
-        PushPayload(
-          type: notif.backendType,
-          activityId: notif.activityId,
-          senderUid: notif.senderUid,
-        ),
-      ) ??
-      '/notifications';
+    PushPayload(
+      type: notif.backendType,
+      activityId: notif.activityId,
+      senderUid: notif.senderUid,
+    ),
+  );
 }

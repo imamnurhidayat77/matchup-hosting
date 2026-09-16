@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/repository_providers.dart';
+import '../../../core/storage/secure_token_store.dart';
 import '../domain/presence_state.dart';
 
 /// Bridges Flutter's app-lifecycle events to the backend's presence
@@ -63,8 +64,13 @@ class _PresenceTrackerState extends ConsumerState<PresenceTracker>
   }
 
   Future<void> _set(PresenceState state) async {
-    final repo = ref.read(presenceRepositoryProvider);
     try {
+      // Auth guard: with no session (logged out, tokens cleared) there
+      // is no uid to mark — skip the write instead of posting an
+      // anonymous presence that the backend can't attribute.
+      final uid = await SecureTokenStore.instance.readUserId();
+      if (uid == null || uid.isEmpty) return;
+      final repo = ref.read(presenceRepositoryProvider);
       await repo.setMyState(state);
     } catch (e, st) {
       if (kDebugMode) {

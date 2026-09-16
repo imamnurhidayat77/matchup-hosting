@@ -1,5 +1,5 @@
 import { firestore } from '../../database/firebase.js';
-import { Timestamp } from 'firebase-admin/firestore';
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import {
     activityDocPath,
     activityJoinRequestDocPath,
@@ -30,6 +30,67 @@ export function isJoinPolicy(value: unknown): value is ActivityJoinPolicy {
     return value === 'open' || value === 'approval';
 }
 
+/**
+ * Normalises the paid/free inputs into the stored shape.
+ * Free activities never carry a `fee` (it is dropped); paid ones
+ * require a positive NZD amount. Throws on invalid input.
+ */
+export function resolvePaidFee(
+    isPaid: boolean | undefined,
+    fee: number | undefined,
+): { isPaid: boolean; fee?: number } {
+    const paid = isPaid ?? false;
+    if (typeof paid !== 'boolean') {
+        throw new Error('isPaid must be a boolean');
+    }
+    if (!paid) {
+        return { isPaid: false };
+    }
+    if (fee === undefined || typeof fee !== 'number' || !Number.isFinite(fee) || fee <= 0) {
+        throw new Error('fee must be a positive number for paid activities');
+    }
+    // Cap to cents to keep display + storage consistent.
+    return { isPaid: true, fee: Math.round(fee * 100) / 100 };
+}
+
+export type ActivityFeeMode = 'fixed' | 'split';
+
+export function isFeeMode(value: unknown): value is ActivityFeeMode {
+    return value === 'fixed' || value === 'split';
+}
+
+/**
+ * Normalises split-cost inputs. `totalCost` must be positive,
+ * `minPlayers` (when given) an integer >= 2. Returns the stored shape;
+ * both fields are omitted for `fixed` mode.
+ */
+export function resolveSplitCost(
+    feeMode: ActivityFeeMode | undefined,
+    totalCost: number | undefined,
+    minPlayers: number | undefined,
+    capacity: number,
+): { feeMode: ActivityFeeMode; totalCost?: number; minPlayers?: number } {
+    const mode = feeMode ?? 'fixed';
+    if (!isFeeMode(mode)) {
+        throw new Error('feeMode must be fixed or split');
+    }
+    if (mode === 'fixed') {
+        return { feeMode: mode };
+    }
+    if (totalCost === undefined || typeof totalCost !== 'number' || !Number.isFinite(totalCost) || totalCost <= 0) {
+        throw new Error('totalCost must be a positive number for split mode');
+    }
+    if (minPlayers !== undefined &&
+        (!Number.isInteger(minPlayers) || minPlayers < 2 || minPlayers > capacity)) {
+        throw new Error('minPlayers must be an integer between 2 and capacity');
+    }
+    return {
+        feeMode: mode,
+        totalCost: Math.round(totalCost * 100) / 100,
+        ...(minPlayers !== undefined ? { minPlayers } : {}),
+    };
+}
+
 export type CreateActivityInput = {
     hostId: string;
     title: string;
@@ -46,6 +107,19 @@ export type CreateActivityInput = {
     capacity: number;
     coverImageUrl?: string;
     joinPolicy?: ActivityJoinPolicy;
+    /**
+     * Whether joining costs money. Defaults to `false` (free). When
+     * `true`, `fee` must be a positive number (NZD per person).
+     */
+    isPaid?: boolean;
+    /** Entry fee in NZD. Only stored when `isPaid` is true. */
+    fee?: number;
+    /** Pricing mode: flat per person (`fixed`, default) or shared total (`split`). */
+    feeMode?: ActivityFeeMode;
+    /** Total cost to split (NZD). Required for `split` mode. */
+    totalCost?: number;
+    /** Minimum players for split mode. Defaults to full capacity. */
+    minPlayers?: number;
 };
 
 export type UpdateActivityStatusInput = {
@@ -78,6 +152,11 @@ export type UpdateActivityInput = {
     capacity?: number;
     coverImageUrl?: string;
     joinPolicy?: ActivityJoinPolicy;
+    isPaid?: boolean;
+    fee?: number;
+    feeMode?: ActivityFeeMode;
+    totalCost?: number;
+    minPlayers?: number;
 };
 
 export type ActivityRecord = {
@@ -95,10 +174,44 @@ export type ActivityRecord = {
     skillLevel: ActivitySkillLevel;
     capacity: number;
     participantCount: number;
+    /**
+     * Denormalized count of `pending` join requests (approval-gated
+     * activities). Maintained transactionally by the participants
+     * service so reads never fan out; legacy rows without the field
+     * read as 0.
+     */
+    pendingRequestCount: number;
     status: ActivityStatus;
     coverImagePath?: string;
     coverImageUrl?: string;
     joinPolicy?: ActivityJoinPolicy;
+    /**
+     * Whether joining costs money. Always present on records written
+     * after this field existed; legacy rows without it read as `false`
+     * (free) so old payloads keep rendering the Free chip.
+     */
+    isPaid: boolean;
+    /**
+     * Entry fee in NZD per person. Only present on paid activities;
+     * omitted for free ones. For `split` mode this is the worst-case
+     * per-person price (`totalCost / minPlayers`).
+     */
+    fee?: number;
+    /**
+     * Pricing mode for paid activities (`fixed` = flat per person,
+     * `split` = shared total). Present on records written after this
+     * field existed; legacy rows without it read as `fixed`.
+     */
+    feeMode?: ActivityFeeMode;
+    /**
+     * Total cost to split (NZD). Only present on `split`-mode paid
+     * activities.
+     */
+    totalCost?: number;
+    /**
+     * Minimum players for `split` mode. Absent means full capacity.
+     */
+    minPlayers?: number;
     cancelledAt?: FirebaseFirestore.Timestamp;
     cancelledBy?: string;
     createdAt: FirebaseFirestore.Timestamp;
@@ -230,6 +343,23 @@ export async function createActivity(input: CreateActivityInput): Promise<{ acti
         throw new Error('capacity must be a positive integer');
     }
 
+    const { isPaid, fee } = resolvePaidFee(input.isPaid, input.fee);
+    const split = resolveSplitCost(
+        input.feeMode,
+        input.totalCost,
+        input.minPlayers,
+        capacity,
+    );
+    // Split mode without an explicit per-person fee: derive the worst
+    // case so old clients (which only read `fee`) still render a price.
+    const effectiveFee =
+        fee ??
+        (isPaid && split.feeMode === 'split' && split.totalCost !== undefined
+            ? Math.round(
+                    (split.totalCost / (split.minPlayers ?? capacity)) * 100,
+                ) / 100
+            : undefined);
+
     const activitiesRef = firestore.collection('activities');
     const newActivityRef = activitiesRef.doc();
 
@@ -248,9 +378,15 @@ export async function createActivity(input: CreateActivityInput): Promise<{ acti
         skillLevel,
         capacity,
         participantCount: 0,
+        pendingRequestCount: 0,
         status: 'open',
         ...(coverImageUrl ? { coverImageUrl } : {}),
         joinPolicy,
+        isPaid,
+        ...(effectiveFee !== undefined ? { fee: effectiveFee } : {}),
+        feeMode: split.feeMode,
+        ...(split.totalCost !== undefined ? { totalCost: split.totalCost } : {}),
+        ...(split.minPlayers !== undefined ? { minPlayers: split.minPlayers } : {}),
         createdAt: now,
         updatedAt: now,
     });
@@ -310,6 +446,91 @@ export async function listActivities(
         .slice(0, filters.limit);
 
     return Promise.all(activities.map(enrichActivityWithHostProfile));
+}
+
+/**
+ * Paginated "My Games" reads — powers the mobile Hosting / Upcoming tabs
+ * without client-side filtering of a capped feed.
+ *
+ * - `hosted`: `where(hostId == viewer)` — single-field equality, automatic
+ *   index, no composite needed.
+ * - `joined`: collection-group `participants where uid == viewer` to resolve
+ *   activityIds, then fetch those docs (hosted rows excluded — they have
+ *   their own tab). Host check runs in memory since a user joins few games.
+ *
+ * Sorting + paging happen in memory (soonest `startTime` first,
+ * `slice(offset, offset+limit)`) for the same reason as {@link listActivities}:
+ * avoids the `where + orderBy` composite-index requirement. My Games tabs
+ * (Upcoming / Hosting) must read nearest-first so the featured card is the
+ * closest game. If My Games grows large, create the composite index and
+ * push sort/page into the query.
+ */
+export async function listMyActivities(
+    viewerUid: string,
+    kind: 'hosted' | 'joined',
+    limit: number,
+    offset = 0,
+): Promise<ActivityWithId[]> {
+    const uid = viewerUid.trim();
+    if (!uid) throw new Error('uid is required');
+    if (!Number.isInteger(limit) || limit <= 0 || limit > 50) {
+        throw new Error('limit must be an integer between 1 and 50');
+    }
+    if (!Number.isInteger(offset) || offset < 0) {
+        throw new Error('offset must be a non-negative integer');
+    }
+
+    if (kind === 'hosted') {
+        const snap = await firestore
+            .collection('activities')
+            .where('hostId', '==', uid)
+            .get();
+        const activities = snap.docs
+            .map(mapActivityDoc)
+            .sort(compareStartTimeAsc)
+            .slice(offset, offset + limit);
+        return Promise.all(activities.map(enrichActivityWithHostProfile));
+    }
+
+    const partSnap = await firestore
+        .collectionGroup('participants')
+        .where('uid', '==', uid)
+        .get();
+    const activityIds = [
+        ...new Set(
+            partSnap.docs
+                .map((d) => d.ref.parent.parent?.id)
+                .filter((id): id is string => typeof id === 'string' && id.length > 0),
+        ),
+    ];
+    if (activityIds.length === 0) return [];
+    const snaps = await Promise.all(
+        activityIds.map((id) => firestore.doc(activityDocPath(id)).get()),
+    );
+    const activities = snaps
+        .filter((s) => s.exists)
+        .map(mapActivityDoc)
+        .filter((a) => a.hostId !== uid)
+        .sort(compareStartTimeAsc)
+        .slice(offset, offset + limit);
+    return Promise.all(activities.map(enrichActivityWithHostProfile));
+}
+
+/**
+ * Soonest event first (rows without a parseable start go last).
+ * Shared by the My Games hosted/joined reads so Upcoming + Hosting
+ * always render nearest-first. Sorted in memory — a user joins/hosts
+ * few games, and a server-side orderBy would need a composite index.
+ */
+function compareStartTimeAsc(
+    a: { startTime: string },
+    b: { startTime: string },
+): number {
+    const aMs = Date.parse(a.startTime);
+    const bMs = Date.parse(b.startTime);
+    if (Number.isNaN(aMs)) return Number.isNaN(bMs) ? 0 : 1;
+    if (Number.isNaN(bMs)) return -1;
+    return aMs - bMs;
 }
 
 export async function listPublicActivityTeasers(
@@ -508,6 +729,27 @@ export async function updateActivity(input: UpdateActivityInput): Promise<void> 
         }
         updates.capacity = input.capacity;
     }
+
+    // Paid/free changes are resolved inside the transaction against the
+    // current doc: flipping to paid without a fee keeps the existing
+    // fee when there is one, otherwise it is a 400. Flipping to free
+    // clears any stored fee.
+    const wantsPaidChange = input.isPaid !== undefined || input.fee !== undefined;
+    if (input.isPaid !== undefined && typeof input.isPaid !== 'boolean') {
+        throw new Error('isPaid must be a boolean');
+    }
+    if (input.fee !== undefined && (typeof input.fee !== 'number' || !Number.isFinite(input.fee) || input.fee <= 0)) {
+        throw new Error('fee must be a positive number for paid activities');
+    }
+    if (input.feeMode !== undefined && !isFeeMode(input.feeMode)) {
+        throw new Error('feeMode must be fixed or split');
+    }
+    if (input.totalCost !== undefined && (typeof input.totalCost !== 'number' || !Number.isFinite(input.totalCost) || input.totalCost <= 0)) {
+        throw new Error('totalCost must be a positive number for split mode');
+    }
+    if (input.minPlayers !== undefined && (!Number.isInteger(input.minPlayers) || input.minPlayers < 2)) {
+        throw new Error('minPlayers must be an integer >= 2');
+    }
     const stringFields = [
         updates.title,
         updates.sportType,
@@ -534,6 +776,53 @@ export async function updateActivity(input: UpdateActivityInput): Promise<void> 
 
         if(data?.hostId !== hostId){
             throw new Error('Only the activity host can update this activity');
+        }
+
+        if (wantsPaidChange) {
+            const currentPaid = data?.isPaid === true;
+            const currentFee = typeof data?.fee === 'number' ? (data.fee as number) : undefined;
+            const nextPaid = input.isPaid ?? currentPaid;
+            const nextFee = input.fee ?? currentFee;
+            const resolved = resolvePaidFee(nextPaid, nextFee);
+            updates.isPaid = resolved.isPaid;
+            if (resolved.fee !== undefined) {
+                updates.fee = resolved.fee;
+            } else {
+                // Clear a stale fee when the activity goes free.
+                (updates as Record<string, unknown>).fee = FieldValue.delete();
+            }
+            // Split-cost fields ride along with paid changes; going free
+            // clears them too so stale split data never lingers.
+            const nextMode = input.feeMode ??
+                (isFeeMode(data?.feeMode) ? data.feeMode as ActivityFeeMode : 'fixed');
+            if (!resolved.isPaid) {
+                (updates as Record<string, unknown>).feeMode = FieldValue.delete();
+                (updates as Record<string, unknown>).totalCost = FieldValue.delete();
+                (updates as Record<string, unknown>).minPlayers = FieldValue.delete();
+            } else if (nextMode === 'split') {
+                const capacity = (updates.capacity as number | undefined) ??
+                    (typeof data?.capacity === 'number' ? data.capacity as number : 10);
+                const split = resolveSplitCost(
+                    nextMode,
+                    input.totalCost ?? (typeof data?.totalCost === 'number' ? data.totalCost as number : undefined),
+                    input.minPlayers ?? (Number.isInteger(data?.minPlayers) ? data.minPlayers as number : undefined),
+                    capacity,
+                );
+                (updates as Record<string, unknown>).feeMode = split.feeMode;
+                if (split.totalCost !== undefined) {
+                    (updates as Record<string, unknown>).totalCost = split.totalCost;
+                    // Keep `fee` as the worst-case per-person price for old clients.
+                    (updates as Record<string, unknown>).fee =
+                        Math.round((split.totalCost / (split.minPlayers ?? capacity)) * 100) / 100;
+                }
+                if (split.minPlayers !== undefined) {
+                    (updates as Record<string, unknown>).minPlayers = split.minPlayers;
+                }
+            } else {
+                (updates as Record<string, unknown>).feeMode = 'fixed';
+                (updates as Record<string, unknown>).totalCost = FieldValue.delete();
+                (updates as Record<string, unknown>).minPlayers = FieldValue.delete();
+            }
         }
 
         transaction.update(activityRef, updates);
@@ -671,10 +960,25 @@ function mapActivityDoc(activityDoc: FirebaseFirestore.DocumentSnapshot): Activi
         skillLevel: data.skillLevel as ActivitySkillLevel,
         capacity: data.capacity,
         participantCount: data.participantCount,
+        pendingRequestCount:
+            typeof data.pendingRequestCount === 'number'
+                ? data.pendingRequestCount
+                : 0,
         status: data.status as ActivityStatus,
         ...(typeof data.coverImagePath === 'string' ? { coverImagePath: data.coverImagePath } : {}),
         ...(typeof data.coverImageUrl === 'string' ? { coverImageUrl: data.coverImageUrl } : {}),
         joinPolicy: isJoinPolicy(data.joinPolicy) ? data.joinPolicy : 'open',
+        isPaid: data.isPaid === true,
+        ...(typeof data.fee === 'number' && Number.isFinite(data.fee) && data.fee > 0
+            ? { fee: data.fee }
+            : {}),
+        feeMode: isFeeMode(data.feeMode) ? data.feeMode : 'fixed',
+        ...(typeof data.totalCost === 'number' && Number.isFinite(data.totalCost) && data.totalCost > 0
+            ? { totalCost: data.totalCost }
+            : {}),
+        ...(Number.isInteger(data.minPlayers) && (data.minPlayers as number) >= 2
+            ? { minPlayers: data.minPlayers as number }
+            : {}),
         ...(data.cancelledAt !== undefined
             ? { cancelledAt: data.cancelledAt as FirebaseFirestore.Timestamp }
             : {}),

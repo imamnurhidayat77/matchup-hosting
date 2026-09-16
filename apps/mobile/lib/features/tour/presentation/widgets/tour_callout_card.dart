@@ -22,6 +22,8 @@ class TourCalloutCard extends StatelessWidget {
     required this.isLastStep,
     required this.onSkip,
     required this.onNext,
+    this.onBack,
+    this.footnote,
   });
 
   final String title;
@@ -33,6 +35,13 @@ class TourCalloutCard extends StatelessWidget {
   final bool isLastStep;
   final VoidCallback onSkip;
   final VoidCallback onNext;
+
+  /// Wired to `TourController.back`. Null on the first step (no Back
+  /// button rendered) — `back()` is a no-op at index 0 by design.
+  final VoidCallback? onBack;
+
+  /// Optional disclosure line under the body (e.g. auto-skipped tips).
+  final String? footnote;
 
   @override
   Widget build(BuildContext context) {
@@ -79,30 +88,66 @@ class TourCalloutCard extends StatelessWidget {
                 color: context.colors.textSecondary,
               ),
             ),
+            if (footnote case final note?) ...[
+              const SizedBox(height: AppSpacing.x2),
+              Text(
+                note,
+                style: AppTypography.metaSub(context).copyWith(
+                  color: context.colors.textTertiary,
+                ),
+              ),
+            ],
             const SizedBox(height: AppSpacing.x4),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Semantics(
-                  button: true,
-                  label: 'Skip tour',
-                  child: PressableScale(
-                    onTap: onSkip,
-                    child: Container(
-                      constraints: const BoxConstraints(minHeight: 44),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.x2,
-                      ),
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Skip',
-                        style: AppTypography.labelField(context).copyWith(
-                          color: context.colors.textSecondary,
-                          fontWeight: FontWeight.w600,
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Semantics(
+                      button: true,
+                      label: 'Skip tour',
+                      child: PressableScale(
+                        onTap: onSkip,
+                        child: Container(
+                          constraints: const BoxConstraints(minHeight: 44),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.x2,
+                          ),
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'Skip',
+                            style: AppTypography.labelField(context).copyWith(
+                              color: context.colors.textSecondary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
+                    if (onBack != null)
+                      Semantics(
+                        button: true,
+                        label: 'Back to previous tip',
+                        child: PressableScale(
+                          onTap: onBack,
+                          child: Container(
+                            constraints: const BoxConstraints(minHeight: 44),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.x2,
+                            ),
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'Back',
+                              style: AppTypography.labelField(context).copyWith(
+                                color: context.colors.textSecondary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
                 Semantics(
                   button: true,

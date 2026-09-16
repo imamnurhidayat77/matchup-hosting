@@ -3,26 +3,32 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/dark_colors.dart';
 
-/// Skill level for a single sport preference.
-enum SkillLevel { beginner, intermediate, advanced }
+/// Skill level for a single sport preference. `any` matches the backend
+/// wire value (`wireSkillLevel`/`labelSkillLevel` in `user_repository_impl`
+/// already round-trip it) so "no preference" survives a sync instead of
+/// being coerced to Intermediate.
+enum SkillLevel { beginner, intermediate, advanced, any }
 
 extension SkillLevelX on SkillLevel {
   String get label => switch (this) {
     SkillLevel.beginner => 'Beginner',
     SkillLevel.intermediate => 'Intermediate',
     SkillLevel.advanced => 'Advanced',
+    SkillLevel.any => 'Any',
   };
 
   String get short => switch (this) {
-    SkillLevel.beginner => 'Bgnr',
-    SkillLevel.intermediate => 'Intm',
+    SkillLevel.beginner => 'Beg',
+    SkillLevel.intermediate => 'Int',
     SkillLevel.advanced => 'Adv',
+    SkillLevel.any => 'Any',
   };
 
   Color color(BuildContext context) => switch (this) {
     SkillLevel.beginner => context.colors.successText,
     SkillLevel.intermediate => AppColors.primary,
     SkillLevel.advanced => context.colors.warningText,
+    SkillLevel.any => context.colors.textSecondary,
   };
 }
 

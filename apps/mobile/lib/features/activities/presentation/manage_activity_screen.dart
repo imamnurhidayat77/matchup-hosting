@@ -7,7 +7,6 @@ import 'package:intl/intl.dart';
 import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
-import '../../../core/utils/geohash.dart';
 import '../../../core/utils/geo.dart';
 import '../../../core/utils/share_helper.dart';
 import '../../../core/widgets/app_dialog.dart';
@@ -23,10 +22,8 @@ import '../../../core/widgets/label_badge.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../domain/activity_participant.dart';
-import '../domain/place_suggestion.dart';
 import '../../discovery/domain/activity_model.dart';
-import '../../sports/domain/sport_config.dart';
-import 'widgets/venue_field.dart';
+import 'my_activities_screen.dart';
 
 // ─── Data type ───────────────────────────────────────────────────────────────
 
@@ -52,18 +49,33 @@ final _manageProvider = FutureProvider.autoDispose
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
-class ManageActivityScreen extends ConsumerWidget {
+class ManageActivityScreen extends ConsumerStatefulWidget {
   const ManageActivityScreen({super.key, required this.activityId});
   final String activityId;
+
+  @override
+  ConsumerState<ManageActivityScreen> createState() =>
+      _ManageActivityScreenState();
+}
+
+class _ManageActivityScreenState extends ConsumerState<ManageActivityScreen> {
+  /// Uids with an approve/decline decision currently in flight. Both
+  /// buttons of a busy row are disabled until its uid is removed in
+  /// `finally`, so rapid double-taps can't fire duplicate decisions.
+  final Set<String> _deciding = {};
+
+  String get activityId => widget.activityId;
 
   /// Opens the edit screen; refreshes the detail provider and confirms
   /// when the host saved changes (the edit screen pops `true`, silent,
   /// because its own snackbar would die with its route).
-  Future<void> _openEdit(BuildContext context, WidgetRef ref) async {
+  Future<void> _openEdit(BuildContext context) async {
     final updated =
         await context.push<bool>('/edit-activity/$activityId');
     if (updated != true || !context.mounted) return;
     ref.invalidate(_manageProvider(activityId));
+    ref.invalidate(hostedGamesProvider);
+    ref.invalidate(joinedGamesProvider);
     AppSnackbar.show(
       context,
       message: 'Activity updated.',
@@ -71,7 +83,7 @@ class ManageActivityScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _confirmCancel(BuildContext context, WidgetRef ref) async {
+  Future<void> _confirmCancel(BuildContext context) async {
     final confirmed = await AppDialog.confirm(
       context,
       title: 'Cancel Activity?',
@@ -83,6 +95,9 @@ class ManageActivityScreen extends ConsumerWidget {
     if (confirmed != true) return;
     try {
       await ref.read(activityRepositoryProvider).cancel(activityId);
+      ref.invalidate(hostedGamesProvider);
+      ref.invalidate(joinedGamesProvider);
+      ref.invalidate(pastGamesProvider);
       if (!context.mounted) return;
       AppSnackbar.show(
         context,
@@ -102,11 +117,13 @@ class ManageActivityScreen extends ConsumerWidget {
 
   Future<void> _decideRequest(
     BuildContext context,
-    WidgetRef ref,
     String uid,
     String name, {
     required bool approve,
   }) async {
+    // Per-row guard: ignore taps while this row's decision is pending.
+    if (_deciding.contains(uid)) return;
+    setState(() => _deciding.add(uid));
     try {
       final repo = ref.read(activityRepositoryProvider);
       if (approve) {
@@ -115,6 +132,8 @@ class ManageActivityScreen extends ConsumerWidget {
         await repo.declineJoinRequest(activityId, uid);
       }
       ref.invalidate(_manageProvider(activityId));
+      ref.invalidate(pendingGamesProvider);
+      ref.invalidate(hostedGamesProvider);
       if (!context.mounted) return;
       AppSnackbar.show(
         context,
@@ -132,10 +151,12 @@ class ManageActivityScreen extends ConsumerWidget {
             : 'Could not decline. Please try again.',
         variant: AppSnackbarVariant.error,
       );
+    } finally {
+      if (mounted) setState(() => _deciding.remove(uid));
     }
   }
 
-  Future<void> _confirmComplete(BuildContext context, WidgetRef ref) async {
+  Future<void> _confirmComplete(BuildContext context) async {
     final confirmed = await AppDialog.confirm(
       context,
       title: 'Mark as Completed?',
@@ -148,6 +169,9 @@ class ManageActivityScreen extends ConsumerWidget {
       await ref
           .read(activityRepositoryProvider)
           .updateStatus(activityId, 'completed');
+      ref.invalidate(hostedGamesProvider);
+      ref.invalidate(joinedGamesProvider);
+      ref.invalidate(pastGamesProvider);
       if (!context.mounted) return;
       AppSnackbar.show(
         context,
@@ -166,7 +190,7 @@ class ManageActivityScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final async = ref.watch(_manageProvider(activityId));
 
     return AppScaffold(
@@ -184,13 +208,14 @@ class ManageActivityScreen extends ConsumerWidget {
           activity: data.activity,
           roster: data.roster,
           requests: data.requests,
-          onEdit: () => _openEdit(context, ref),
-          onCancel: () => _confirmCancel(context, ref),
-          onComplete: () => _confirmComplete(context, ref),
+          deciding: _deciding,
+          onEdit: () => _openEdit(context),
+          onCancel: () => _confirmCancel(context),
+          onComplete: () => _confirmComplete(context),
           onApprove: (uid, name) =>
-              _decideRequest(context, ref, uid, name, approve: true),
+              _decideRequest(context, uid, name, approve: true),
           onDecline: (uid, name) =>
-              _decideRequest(context, ref, uid, name, approve: false),
+              _decideRequest(context, uid, name, approve: false),
         ),
       ),
     );
@@ -205,6 +230,7 @@ class _ManageBody extends StatelessWidget {
     required this.activity,
     required this.roster,
     required this.requests,
+    required this.deciding,
     required this.onEdit,
     required this.onCancel,
     required this.onComplete,
@@ -218,6 +244,9 @@ class _ManageBody extends StatelessWidget {
 
   /// Pending join requests (approval-gated activities only, host view).
   final List<ActivityParticipant> requests;
+
+  /// Uids with a decision in flight — their rows render disabled.
+  final Set<String> deciding;
   final VoidCallback onEdit;
   final VoidCallback onCancel;
   final VoidCallback onComplete;
@@ -229,8 +258,52 @@ class _ManageBody extends StatelessWidget {
   static const double _heroHeight = 280;
   static const double _overlapAmount = 44;
 
+  /// True for terminal backend lifecycles — no further host transitions.
+  static bool _isTerminalLifecycle(String lc) =>
+      lc == 'cancelled' || lc == 'completed' || lc == 'removed';
+
   @override
   Widget build(BuildContext context) {
+    // Raw backend lifecycle (open/full/cancelled/completed/removed),
+    // preserved on ActivityModel.lifecycleStatus — status alone
+    // collapses cancelled/completed/removed all into `past`.
+    final lc = activity.lifecycleStatus.toLowerCase();
+    final String badgeLabel;
+    if (lc == 'cancelled' || lc == 'removed') {
+      badgeLabel = 'CANCELLED';
+    } else if (lc == 'completed') {
+      badgeLabel = 'COMPLETED';
+    } else if (lc == 'full') {
+      badgeLabel = 'FULL';
+    } else if (activity.status == ActivityStatus.past) {
+      // Payloads without a raw lifecycle (hand-built fixtures): a past
+      // game whose end already passed reads as completed, otherwise
+      // cancelled.
+      badgeLabel = activity.endTime.isBefore(DateTime.now())
+          ? 'COMPLETED'
+          : 'CANCELLED';
+    } else {
+      badgeLabel = 'ACTIVE';
+    }
+    final Color badgeBg = badgeLabel == 'CANCELLED'
+        ? context.colors.errorLight
+        : badgeLabel == 'COMPLETED'
+            ? context.colors.surfaceMuted
+            : badgeLabel == 'FULL'
+                ? context.colors.warningBg
+                : context.colors.statusSuccessBg;
+    final Color badgeFg = badgeLabel == 'CANCELLED'
+        ? context.colors.errorText
+        : badgeLabel == 'COMPLETED'
+            ? context.colors.textSecondary
+            : badgeLabel == 'FULL'
+                ? context.colors.warningText
+                : AppColors.avatarSecondary;
+    // "Mark as completed" is available once the game started and while
+    // its lifecycle is still open (not cancelled/completed/removed).
+    final bool showComplete =
+        !_isTerminalLifecycle(lc) && activity.hasStarted;
+
     return Stack(
       children: [
         // ── Hero ────────────────────────────────────────────────────────
@@ -279,22 +352,19 @@ class _ManageBody extends StatelessWidget {
                       ),
                       const SizedBox(width: AppSpacing.x3),
                       LabelBadge(
-                        label: activity.status == ActivityStatus.past
-                            ? 'CANCELLED'
-                            : 'ACTIVE',
-                        background: activity.status == ActivityStatus.past
-                            ? context.colors.errorLight
-                            : context.colors.statusSuccessBg,
-                        foreground: activity.status == ActivityStatus.past
-                            ? context.colors.errorText
-                            : AppColors.avatarSecondary,
+                        label: badgeLabel,
+                        background: badgeBg,
+                        foreground: badgeFg,
                       ),
                     ],
                   ),
                   const SizedBox(height: AppSpacing.x4),
 
-                  // Capacity progress card
-                  _CapacityCard(activity: activity, joined: roster.length),
+                  // Capacity progress card (server-truth count, not the
+                  // locally loaded roster slice).
+                  _CapacityCard(
+                      activity: activity,
+                      joined: activity.participantCount),
                   const SizedBox(height: AppSpacing.x3),
 
                   // Meta card — date + location
@@ -315,12 +385,20 @@ class _ManageBody extends StatelessWidget {
                   ),
                   const SizedBox(height: AppSpacing.x5),
 
-                  // Pending join requests (approval policy only)
+                  // Pending join requests (approval policy only). Always
+                  // rendered so an empty queue shows a hint instead of
+                  // vanishing.
                   if (requests.isNotEmpty) ...[
                     _JoinRequestsSection(
                       requests: requests,
+                      deciding: deciding,
                       onApprove: (p) => onApprove(p.userId, p.name),
                       onDecline: (p) => onDecline(p.userId, p.name),
+                    ),
+                    const SizedBox(height: AppSpacing.x5),
+                  ] else ...[
+                    _EmptyRequestsHint(
+                      isApproval: activity.requiresApproval,
                     ),
                     const SizedBox(height: AppSpacing.x5),
                   ],
@@ -329,10 +407,11 @@ class _ManageBody extends StatelessWidget {
                   _DetailsSection(activity: activity),
                   const SizedBox(height: AppSpacing.x5),
 
-                  // Mark as completed — only available once the activity
-                  // time has passed. Host-only; the backend rejects the
-                  // status update from non-hosts with FORBIDDEN.
-                  if (activity.dateTime.isBefore(DateTime.now())) ...[
+                  // Mark as completed — once the game started and while
+                  // its lifecycle is still open. Host-only; the backend
+                  // rejects the status update from non-hosts with
+                  // FORBIDDEN.
+                  if (showComplete) ...[
                     _CompleteButton(onTap: onComplete),
                     const SizedBox(height: AppSpacing.x3),
                   ],
@@ -693,7 +772,7 @@ class _QuickActions extends StatelessWidget {
                 label: 'Edit',
                 iconColor: context.colors.primaryOnSurface,
                 bgColor: context.colors.primarySoft,
-                onTap: () => _showEditSheet(context),
+                onTap: () => context.push('/edit-activity/$activityId'),
               ),
             ),
             Expanded(
@@ -723,18 +802,18 @@ class _QuickActions extends StatelessWidget {
                 onTap: () => context.push('/activity/$activityId/participants'),
               ),
             ),
+            Expanded(
+              child: _ActionBtn(
+                icon: Icons.forum_outlined,
+                label: 'Chat',
+                iconColor: context.colors.primaryOnSurface,
+                bgColor: context.colors.primarySoft,
+                onTap: () => context.push('/chat/$activityId'),
+              ),
+            ),
           ],
         ),
       ],
-    );
-  }
-
-  void _showEditSheet(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _EditSheet(activityId: activityId, activity: activity),
     );
   }
 
@@ -799,390 +878,6 @@ class _ActionBtn extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
-// ─── Edit sheet ───────────────────────────────────────────────────────────────
-
-class _EditSheet extends ConsumerStatefulWidget {
-  const _EditSheet({required this.activityId, required this.activity});
-  final String activityId;
-  final ActivityModel activity;
-
-  @override
-  ConsumerState<_EditSheet> createState() => _EditSheetState();
-}
-
-class _EditSheetState extends ConsumerState<_EditSheet> {
-  static const _sportOptions = [
-    'Basketball',
-    'Tennis',
-    'Running',
-    'Volleyball',
-    'Football',
-    'Soccer',
-    'Cycling',
-    'Hiking',
-    'Golf',
-    'Swimming',
-  ];
-  static const _skillOptions = [
-    'All Level',
-    'Beginner',
-    'Intermediate',
-    'Advanced',
-  ];
-
-  late final TextEditingController _titleCtrl;
-  late final TextEditingController _descCtrl;
-
-  late String _sport;
-  DateTime? _date;
-  int _durationMinutes = 120;
-  PlaceSuggestion? _venue;
-  late int _capacity;
-  late int _minCapacity;
-  late String _skill;
-  late String _joinPolicy;
-  bool _saving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    final a = widget.activity;
-    _titleCtrl = TextEditingController(text: a.title);
-    _descCtrl = TextEditingController(text: a.description);
-    _sport = _sportOptions.contains(a.sportType)
-        ? a.sportType
-        : _sportOptions.first;
-    _date = a.dateTime;
-    _durationMinutes = a.durationMinutes;
-    _capacity = a.capacity;
-    _minCapacity = a.participantCount.clamp(2, a.capacity);
-    if (_capacity < _minCapacity) _capacity = _minCapacity;
-    _skill = _skillOptions.contains(a.skillLevel)
-        ? a.skillLevel
-        : _skillOptions.first;
-    _joinPolicy = a.joinPolicy;
-    if (a.latitude != null && a.longitude != null) {
-      _venue = PlaceSuggestion(
-        placeId: 'existing',
-        label: a.location,
-        secondary: '',
-        latitude: a.latitude!,
-        longitude: a.longitude!,
-      );
-    }
-  }
-
-  @override
-  void dispose() {
-    _titleCtrl.dispose();
-    _descCtrl.dispose();
-    super.dispose();
-  }
-
-  String? _error() {
-    if (_titleCtrl.text.trim().isEmpty) {
-      return 'Please enter a title.';
-    }
-    if (_venue == null) return 'Please pick a venue on the map.';
-    if (_date == null) return 'Please pick a date and time.';
-    return null;
-  }
-
-  Future<void> _save() async {
-    if (_saving) return;
-    final err = _error();
-    if (err != null) {
-      AppSnackbar.show(
-        context,
-        message: err,
-        variant: AppSnackbarVariant.error,
-      );
-      return;
-    }
-    setState(() => _saving = true);
-    try {
-      final venue = _venue!;
-      final start = _date!;
-      await ref.read(activityRepositoryProvider).updateActivity(
-            activityId: widget.activityId,
-            title: _titleCtrl.text.trim(),
-            sportType: _sport,
-            description: _descCtrl.text.trim(),
-            locationName: venue.label,
-            latitude: venue.latitude,
-            longitude: venue.longitude,
-            geohash: geohashEncode(venue.latitude, venue.longitude),
-            startTime: start,
-            endTime: start.add(Duration(minutes: _durationMinutes)),
-            skillLevel: _skill,
-            capacity: _capacity,
-            joinPolicy: _joinPolicy,
-          );
-      ref.invalidate(_manageProvider(widget.activityId));
-      if (!mounted) return;
-      AppSnackbar.show(
-        context,
-        message: 'Activity updated.',
-        variant: AppSnackbarVariant.success,
-      );
-      Navigator.of(context).pop();
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _saving = false);
-      AppSnackbar.show(
-        context,
-        message: 'Could not save changes. Please try again.',
-        variant: AppSnackbarVariant.error,
-      );
-    }
-  }
-
-  Future<void> _pickDate() async {
-    final now = DateTime.now();
-    final date = await showDatePicker(
-      context: context,
-      initialDate: _date ?? now.add(const Duration(days: 1)),
-      firstDate: now,
-      lastDate: now.add(const Duration(days: 365)),
-    );
-    if (date == null || !mounted) return;
-    final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(_date ?? now),
-    );
-    if (time == null) return;
-    setState(() {
-      _date = DateTime(date.year, date.month, date.day, time.hour, time.minute);
-    });
-  }
-
-  Future<void> _pickOption({
-    required String title,
-    required List<String> options,
-    required String current,
-    required ValueChanged<String> onSelect,
-  }) async {
-    final selected = await showModalBottomSheet<String>(
-      context: context,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) => Container(
-        decoration: BoxDecoration(
-          color: context.colors.surface,
-          borderRadius:
-              const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: EdgeInsets.fromLTRB(
-          AppSpacing.x4,
-          AppSpacing.x3,
-          AppSpacing.x4,
-          AppSpacing.x5 + MediaQuery.of(sheetContext).viewPadding.bottom,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: context.colors.border,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.x3),
-            Text(title, style: AppTypography.titleMedium(context)),
-            const SizedBox(height: AppSpacing.x2),
-            Flexible(
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: options.length,
-                itemBuilder: (_, i) => ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(options[i]),
-                  trailing: options[i] == current
-                      ? Icon(Icons.check_rounded,
-                          color: context.colors.primaryOnSurface)
-                      : null,
-                  onTap: () => Navigator.of(sheetContext).pop(options[i]),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (selected != null) onSelect(selected);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final maxHeight = MediaQuery.of(context).size.height * 0.92;
-    return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-      ),
-      child: Container(
-        constraints: BoxConstraints(maxHeight: maxHeight),
-        decoration: BoxDecoration(
-          color: context.colors.surface,
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(AppRadius.xl),
-          ),
-        ),
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.x5,
-          AppSpacing.x3,
-          AppSpacing.x5,
-          AppSpacing.x6,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Handle
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: AppSpacing.x4),
-                decoration: BoxDecoration(
-                  color: context.colors.border,
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
-                ),
-              ),
-            ),
-            Text('Edit Activity', style: AppTypography.titleSheet(context)),
-            const SizedBox(height: AppSpacing.x4),
-            Flexible(
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _SheetField(label: 'TITLE', controller: _titleCtrl),
-                    const SizedBox(height: AppSpacing.x3),
-                    const _SheetLabel('SPORT'),
-                    _SheetOptionRow(
-                      value: _sport,
-                      onTap: () => _pickOption(
-                        title: 'Sport',
-                        options: pickSportNames(
-                          ref.watch(sportsConfigProvider).valueOrNull ??
-                              const [],
-                          (s) => s.canHost,
-                          _sportOptions,
-                        ),
-                        current: _sport,
-                        onSelect: (v) => setState(() => _sport = v),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.x3),
-                    const _SheetLabel('DATE & TIME'),
-                    _SheetOptionRow(
-                      value: _date == null
-                          ? 'Pick a date'
-                          : DateFormat('EEE, MMM d · h:mm a').format(_date!),
-                      onTap: _pickDate,
-                    ),
-                    const SizedBox(height: AppSpacing.x3),
-                    const _SheetLabel('DURATION'),
-                    _SheetStepper(
-                      value: _formatDuration(_durationMinutes),
-                      onMinus: _durationMinutes > 30
-                          ? () => setState(
-                              () => _durationMinutes -= 15)
-                          : null,
-                      onPlus: _durationMinutes < 480
-                          ? () => setState(
-                              () => _durationMinutes += 15)
-                          : null,
-                    ),
-                    const SizedBox(height: AppSpacing.x3),
-                    VenueField(
-                      value: _venue,
-                      onSuggestionSelected: (s) =>
-                          setState(() => _venue = s),
-                    ),
-                    const SizedBox(height: AppSpacing.x3),
-                    const _SheetLabel('MAX PARTICIPANTS'),
-                    _SheetStepper(
-                      value: '$_capacity players',
-                      onMinus: _capacity > _minCapacity
-                          ? () => setState(() => _capacity -= 1)
-                          : null,
-                      onPlus: _capacity < 50
-                          ? () => setState(() => _capacity += 1)
-                          : null,
-                    ),
-                    const SizedBox(height: AppSpacing.x3),
-                    const _SheetLabel('SKILL LEVEL'),
-                    _SheetOptionRow(
-                      value: _skill,
-                      onTap: () => _pickOption(
-                        title: 'Skill level',
-                        options: _skillOptions,
-                        current: _skill,
-                        onSelect: (v) => setState(() => _skill = v),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.x3),
-                    const _SheetLabel('WHO CAN JOIN'),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _SheetPolicyCard(
-                            title: 'Open',
-                            subtitle: 'Instant join',
-                            selected: _joinPolicy == 'open',
-                            onTap: () =>
-                                setState(() => _joinPolicy = 'open'),
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.x3),
-                        Expanded(
-                          child: _SheetPolicyCard(
-                            title: 'Approval',
-                            subtitle: 'Host approves',
-                            selected: _joinPolicy == 'approval',
-                            onTap: () => setState(
-                                () => _joinPolicy = 'approval'),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.x3),
-                    _SheetField(
-                      label: 'DESCRIPTION',
-                      controller: _descCtrl,
-                      maxLines: 4,
-                    ),
-                    const SizedBox(height: AppSpacing.x5),
-                  ],
-                ),
-              ),
-            ),
-            _SheetPrimaryBtn(
-              label: 'Save Changes',
-              loading: _saving,
-              onTap: _save,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  static String _formatDuration(int minutes) {
-    if (minutes < 60) return '$minutes min';
-    final h = minutes ~/ 60;
-    final m = minutes % 60;
-    if (m == 0) return h == 1 ? '1 hour' : '$h hours';
-    return '$h h $m min';
   }
 }
 
@@ -1380,22 +1075,73 @@ class _ShareOption extends StatelessWidget {
 
 // ─── Announce sheet ───────────────────────────────────────────────────────────
 
-class _AnnounceSheet extends StatefulWidget {
+class _AnnounceSheet extends ConsumerStatefulWidget {
   const _AnnounceSheet({required this.activityId});
   final String activityId;
 
   @override
-  State<_AnnounceSheet> createState() => _AnnounceSheetState();
+  ConsumerState<_AnnounceSheet> createState() => _AnnounceSheetState();
 }
 
-class _AnnounceSheetState extends State<_AnnounceSheet> {
+class _AnnounceSheetState extends ConsumerState<_AnnounceSheet> {
   final _msgCtrl = TextEditingController();
   bool _sending = false;
 
   @override
+  void initState() {
+    super.initState();
+    _msgCtrl.addListener(_onTextChanged);
+  }
+
+  void _onTextChanged() {
+    // Rebuild so Send disables while the field is empty.
+    if (mounted) setState(() {});
+  }
+
+  @override
   void dispose() {
+    _msgCtrl.removeListener(_onTextChanged);
     _msgCtrl.dispose();
     super.dispose();
+  }
+
+  bool get _canSend =>
+      !_sending && _msgCtrl.text.trim().isNotEmpty;
+
+  Future<void> _send() async {
+    final text = _msgCtrl.text.trim();
+    if (text.isEmpty || _sending) return;
+    final nav = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _sending = true);
+    try {
+      await ref
+          .read(chatRepositoryProvider)
+          .send(activityId: widget.activityId, text: text);
+      if (!mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Announcement sent to group chat.'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      nav.pop();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _sending = false);
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not send announcement. Please try again.',
+            ),
+            backgroundColor: AppColors.error,
+          ),
+        );
+    }
   }
 
   @override
@@ -1499,23 +1245,7 @@ class _AnnounceSheetState extends State<_AnnounceSheet> {
             _SheetPrimaryBtn(
               label: 'Send Announcement',
               loading: _sending,
-              onTap: () async {
-                if (_msgCtrl.text.trim().isEmpty) return;
-                final nav = Navigator.of(context);
-                final messenger = ScaffoldMessenger.of(context);
-                setState(() => _sending = true);
-                await Future.delayed(const Duration(milliseconds: 600));
-                if (!mounted) return;
-                messenger
-                  ..hideCurrentSnackBar()
-                  ..showSnackBar(
-                    const SnackBar(
-                      content: Text('Announcement sent to group chat.'),
-                      backgroundColor: AppColors.success,
-                    ),
-                  );
-                nav.pop();
-              },
+              onTap: _canSend ? _send : () {},
             ),
           ],
         ),
@@ -1524,246 +1254,7 @@ class _AnnounceSheetState extends State<_AnnounceSheet> {
   }
 }
 
-// ─── Shared sheet widgets ─────────────────────────────────────────────────────
-
-class _SheetField extends StatelessWidget {
-  const _SheetField({
-    required this.label,
-    required this.controller,
-    this.maxLines = 1,
-  });
-  final String label;
-  final TextEditingController controller;
-  final int maxLines;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: AppTypography.metaSub(context).copyWith(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.8,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Container(
-          decoration: BoxDecoration(
-            color: context.colors.surface,
-            borderRadius: BorderRadius.circular(AppRadius.input),
-            border: Border.all(color: context.colors.border),
-          ),
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.x4,
-            vertical: AppSpacing.x3,
-          ),
-          child: TextField(
-            controller: controller,
-            minLines: 1,
-            maxLines: maxLines,
-            cursorColor: AppColors.primary,
-            cursorWidth: 1.5,
-            style: AppTypography.bodyMedium(context).copyWith(
-              color: context.colors.textPrimary,
-              fontSize: 15,
-            ),
-            decoration: InputDecoration(
-              filled: true,
-              fillColor: Colors.transparent,
-              border: InputBorder.none,
-              enabledBorder: InputBorder.none,
-              focusedBorder: InputBorder.none,
-              isDense: true,
-              contentPadding: EdgeInsets.zero,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SheetLabel extends StatelessWidget {
-  const _SheetLabel(this.text);
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Text(
-        text,
-        style: AppTypography.metaSub(context).copyWith(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.8,
-        ),
-      ),
-    );
-  }
-}
-
-class _SheetOptionRow extends StatelessWidget {
-  const _SheetOptionRow({required this.value, required this.onTap});
-  final String value;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return PressableScale(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.x4,
-          vertical: AppSpacing.x3,
-        ),
-        decoration: BoxDecoration(
-          color: context.colors.surface,
-          borderRadius: BorderRadius.circular(AppRadius.input),
-          border: Border.all(color: context.colors.border),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                value,
-                style: AppTypography.bodyMedium(context).copyWith(
-                  color: context.colors.textPrimary,
-                  fontSize: 15,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            Icon(
-              Icons.chevron_right_rounded,
-              size: 18,
-              color: context.colors.textTertiary,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SheetStepper extends StatelessWidget {
-  const _SheetStepper({
-    required this.value,
-    required this.onMinus,
-    required this.onPlus,
-  });
-  final String value;
-  final VoidCallback? onMinus;
-  final VoidCallback? onPlus;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.x4,
-        vertical: AppSpacing.x2,
-      ),
-      decoration: BoxDecoration(
-        color: context.colors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.input),
-        border: Border.all(color: context.colors.border),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              value,
-              style: AppTypography.bodyMedium(context).copyWith(
-                color: context.colors.textPrimary,
-                fontSize: 15,
-              ),
-            ),
-          ),
-          GestureDetector(
-            onTap: onMinus,
-            child: Container(
-              width: 36,
-              height: 36,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: context.colors.border),
-              ),
-              child: Icon(Icons.remove_rounded,
-                  size: 18, color: context.colors.textPrimary),
-            ),
-          ),
-          const SizedBox(width: AppSpacing.x2),
-          GestureDetector(
-            onTap: onPlus,
-            child: Container(
-              width: 36,
-              height: 36,
-              alignment: Alignment.center,
-              decoration: const BoxDecoration(
-                color: AppColors.primary,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.add_rounded,
-                  size: 18, color: AppColors.textOnPrimary),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SheetPolicyCard extends StatelessWidget {
-  const _SheetPolicyCard({
-    required this.title,
-    required this.subtitle,
-    required this.selected,
-    required this.onTap,
-  });
-  final String title;
-  final String subtitle;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return PressableScale(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.x3),
-        decoration: BoxDecoration(
-          color:
-              selected ? context.colors.primarySoft : context.colors.surface,
-          borderRadius: BorderRadius.circular(AppRadius.input),
-          border: Border.all(
-            color: selected
-                ? context.colors.primaryOnSurface
-                : context.colors.border,
-            width: selected ? 1.5 : 1,
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: AppTypography.labelField(context).copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(subtitle, style: AppTypography.metaSub(context)),
-          ],
-        ),
-      ),
-    );
-  }
-}
+// ─── Announce sheet primary button ──────────────────────────────────────────
 
 class _SheetPrimaryBtn extends StatelessWidget {
   const _SheetPrimaryBtn({
@@ -1847,28 +1338,34 @@ class _ParticipantsSection extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.x3),
-        Container(
-          decoration: BoxDecoration(
-            color: context.colors.surface,
-            borderRadius: BorderRadius.circular(AppRadius.card),
-            border: Border.all(color: context.colors.border),
-            boxShadow: AppShadows.card,
-          ),
-          child: Column(
-            children: [
-              for (var i = 0; i < preview.length; i++) ...[
-                _ParticipantRow(item: preview[i]),
-                if (i < preview.length - 1)
-                  Divider(
-                    height: 1,
-                    color: context.colors.border,
-                    indent: AppSpacing.x4,
-                    endIndent: AppSpacing.x4,
-                  ),
+        if (roster.isEmpty)
+          Text(
+            'No participants yet',
+            style: AppTypography.metaSub(context),
+          )
+        else
+          Container(
+            decoration: BoxDecoration(
+              color: context.colors.surface,
+              borderRadius: BorderRadius.circular(AppRadius.card),
+              border: Border.all(color: context.colors.border),
+              boxShadow: AppShadows.card,
+            ),
+            child: Column(
+              children: [
+                for (var i = 0; i < preview.length; i++) ...[
+                  _ParticipantRow(item: preview[i]),
+                  if (i < preview.length - 1)
+                    Divider(
+                      height: 1,
+                      color: context.colors.border,
+                      indent: AppSpacing.x4,
+                      endIndent: AppSpacing.x4,
+                    ),
+                ],
               ],
-            ],
+            ),
           ),
-        ),
       ],
     );
   }
@@ -1908,7 +1405,11 @@ class _ParticipantRow extends StatelessWidget {
             ),
           ),
           StatusBadge(
-            label: item.isCheckedIn ? 'CHECKED IN' : 'PENDING',
+            // "PENDING" used to mean "not checked in", which reads as
+            // "waiting approval" — wrong for confirmed participants
+            // (worst case: the host themselves). Checked-in state is
+            // the only thing this badge may claim.
+            label: item.isCheckedIn ? 'CHECKED IN' : 'JOINED',
             tone: item.isCheckedIn
                 ? StatusTone.checkedIn
                 : StatusTone.pending,
@@ -1921,17 +1422,58 @@ class _ParticipantRow extends StatelessWidget {
 
 // ─── Join requests section ────────────────────────────────────────────────────
 
+/// Hint shown when the request queue is empty so the section doesn't
+/// vanish without explanation.
+class _EmptyRequestsHint extends StatelessWidget {
+  const _EmptyRequestsHint({required this.isApproval});
+  final bool isApproval;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Join requests', style: AppTypography.titleMedium(context)),
+        const SizedBox(height: AppSpacing.x3),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.x4,
+            vertical: AppSpacing.x3,
+          ),
+          decoration: BoxDecoration(
+            color: context.colors.surface,
+            borderRadius: BorderRadius.circular(AppRadius.card),
+            border: Border.all(color: context.colors.border),
+            boxShadow: AppShadows.card,
+          ),
+          child: Text(
+            isApproval
+                ? 'No pending requests'
+                : 'Open activity — new joins appear here',
+            style: AppTypography.metaSub(context),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// Pending join requests on approval-gated activities (host view).
 /// Each row shows the requester with Approve / Decline actions. Only
 /// rendered when [requests] is non-empty — the parent guards that.
 class _JoinRequestsSection extends StatelessWidget {
   const _JoinRequestsSection({
     required this.requests,
+    required this.deciding,
     required this.onApprove,
     required this.onDecline,
   });
 
   final List<ActivityParticipant> requests;
+
+  /// Uids with a decision in flight — their rows render disabled.
+  final Set<String> deciding;
   final ValueChanged<ActivityParticipant> onApprove;
   final ValueChanged<ActivityParticipant> onDecline;
 
@@ -1964,6 +1506,7 @@ class _JoinRequestsSection extends StatelessWidget {
               for (var i = 0; i < requests.length; i++) ...[
                 _JoinRequestRow(
                   item: requests[i],
+                  busy: deciding.contains(requests[i].userId),
                   onApprove: () => onApprove(requests[i]),
                   onDecline: () => onDecline(requests[i]),
                 ),
@@ -1988,11 +1531,16 @@ class _JoinRequestRow extends StatelessWidget {
     required this.item,
     required this.onApprove,
     required this.onDecline,
+    this.busy = false,
   });
 
   final ActivityParticipant item;
   final VoidCallback onApprove;
   final VoidCallback onDecline;
+
+  /// True while this row's approve/decline is in flight — both
+  /// buttons are disabled until the decision settles.
+  final bool busy;
 
   @override
   Widget build(BuildContext context) {
@@ -2007,7 +1555,11 @@ class _JoinRequestRow extends StatelessWidget {
             child: AppTappable(
               semanticLabel: 'View ${item.name} profile',
               feedback: AppTapFeedback.scale,
-              onTap: () => context.push('/player-profile/${item.name}'),
+              onTap: () => context.push(
+                item.userId.isNotEmpty
+                    ? '/player-profile/uid/${item.userId}'
+                    : '/player-profile/${item.name}',
+              ),
               child: Row(
                 children: [
                   AppAvatar(
@@ -2037,7 +1589,7 @@ class _JoinRequestRow extends StatelessWidget {
             semanticLabel: 'Decline ${item.name}',
             feedback: AppTapFeedback.scale,
             minSize: 0,
-            onTap: onDecline,
+            onTap: busy ? null : onDecline,
             child: Container(
               padding: const EdgeInsets.symmetric(
                 horizontal: AppSpacing.x3,
@@ -2060,22 +1612,30 @@ class _JoinRequestRow extends StatelessWidget {
             semanticLabel: 'Approve ${item.name}',
             feedback: AppTapFeedback.scale,
             minSize: 0,
-            onTap: onApprove,
+            onTap: busy ? null : onApprove,
             child: Container(
               padding: const EdgeInsets.symmetric(
                 horizontal: AppSpacing.x3,
                 vertical: AppSpacing.x2,
               ),
               decoration: BoxDecoration(
-                color: AppColors.primary,
+                color: busy
+                    ? context.colors.border
+                    : AppColors.primary,
                 borderRadius: BorderRadius.circular(AppRadius.pill),
               ),
-              child: Text(
-                'Approve',
-                style: AppTypography.chipLabel(context).copyWith(
-                  color: AppColors.textOnPrimary,
-                ),
-              ),
+              child: busy
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text(
+                      'Approve',
+                      style: AppTypography.chipLabel(context).copyWith(
+                        color: AppColors.textOnPrimary,
+                      ),
+                    ),
             ),
           ),
         ],

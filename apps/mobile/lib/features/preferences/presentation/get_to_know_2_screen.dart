@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +10,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/dark_colors.dart';
+import '../../../core/utils/nav_guard.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/pressable_scale.dart';
@@ -45,28 +48,44 @@ class _GetToKnow2ScreenState extends ConsumerState<GetToKnow2Screen> {
   double _distanceKm = 5;
   bool _saving = false;
 
-  /// Keeps the local filter providers in sync immediately, then persists
-  /// the sports + per-sport levels to the backend profile before
-  /// advancing — so the picks land in the DB even if the user never
-  /// reaches the final step. Distance stays device-local (SharedPrefs).
+  /// Keeps the local filter providers in sync only AFTER the backend
+  /// profile persist succeeds, then advances — so the picks land in the
+  /// DB even if the user never reaches the final step. Distance stays
+  /// device-local (SharedPrefs). Local writes happen post-success so a
+  /// failed save can't leave the device filters disagreeing with the
+  /// server profile.
   Future<void> _onNext() async {
     if (_saving) return;
-    ref.read(sportPreferencesProvider.notifier).setAll(_sports);
-    ref.read(distanceFilterProvider.notifier).set(_distanceKm);
     if (_sports.isEmpty) {
-      context.push('/get-to-know-3');
+      // Fire-and-forget: persistence must never block (or hang, when the
+      // prefs plugin is unavailable) the navigation path.
+      unawaited(ref.read(sportPreferencesProvider.notifier).setAll(_sports));
+      ref.read(distanceFilterProvider.notifier).set(_distanceKm);
+      if (!mounted) return;
+      NavGuard.onceFor('gtk-2-next', () => context.push('/get-to-know-3'));
       return;
     }
     setState(() => _saving = true);
     try {
+      // Sport names are free-form display strings (the server accepts any
+      // non-empty sport name — it only validates/normalises *levels* via
+      // `wireSkillLevel`); trim here so stray whitespace can't create
+      // near-duplicate entries server-side. The bundled 12-sport list is
+      // display-only fallback for when the admin config is empty/offline —
+      // it is never bulk-sent; only user-picked sports reach the backend.
       await ref.read(userRepositoryProvider).updateProfile(
             sports: [
               for (final e in _sports.entries)
-                (sport: e.key, level: e.value),
+                if (e.key.trim().isNotEmpty)
+                  (sport: e.key.trim(), level: e.value),
             ],
           );
+      // Same fire-and-forget rule as the skip path above: the backend
+      // write already succeeded, so disk persistence must not gate nav.
+      unawaited(ref.read(sportPreferencesProvider.notifier).setAll(_sports));
+      ref.read(distanceFilterProvider.notifier).set(_distanceKm);
       if (!mounted) return;
-      context.push('/get-to-know-3');
+      NavGuard.onceFor('gtk-2-next', () => context.push('/get-to-know-3'));
     } catch (_) {
       if (!mounted) return;
       AppSnackbar.show(
@@ -296,12 +315,13 @@ class _SportChip extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback? onLevelTap;
 
-  static const Color _unselectedFill = Color(0xFFF1F5F9);
-  static const Color _unselectedBorder = Color(0xFFE5E7EB);
-
   @override
   Widget build(BuildContext context) {
     final selected = level != null;
+    // Unselected fill/border resolve via theme tokens so dark mode gets
+    // the muted dark surface instead of a light hardcoded fill. Light
+    // values match the old literals exactly (surfaceMuted 0xFFF1F5F9,
+    // divider 0xFFE5E7EB).
 
     // PressableScale (not AppTappable) because AppTappable wraps its child in
     // a Stack, which lets the container shrink to its content instead of
@@ -315,13 +335,15 @@ class _SportChip extends StatelessWidget {
           duration: AppDurations.fast,
           curve: Curves.easeOut,
           decoration: BoxDecoration(
-            color: selected ? context.colors.primarySoft : _unselectedFill,
+            color: selected
+                ? context.colors.primarySoft
+                : context.colors.surfaceMuted,
             // Radius just under half the cell height reads as a soft oval.
             borderRadius: BorderRadius.circular(52),
             border: Border.all(
               color: selected
                   ? context.colors.primaryOnSurface
-                  : _unselectedBorder,
+                  : context.colors.divider,
               width: selected ? 2 : 1,
             ),
           ),
@@ -343,8 +365,16 @@ class _SportChip extends StatelessWidget {
               ),
               const SizedBox(height: 3),
               if (selected)
+                // Nested tap target: Flutter's gesture arena lets only one
+                // `onTap` win, so a tap on this pill fires `onLevelTap`
+                // WITHOUT bubbling to the outer chip's `onTap` (and taps
+                // elsewhere on the chip reach only the outer handler).
+                // `opaque` (PressableScale's default, stated explicitly)
+                // keeps the whole pill row hittable. No sibling-row
+                // restructure needed — visuals and hit areas unchanged.
                 PressableScale(
                   onTap: onLevelTap,
+                  behavior: HitTestBehavior.opaque,
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     mainAxisSize: MainAxisSize.min,

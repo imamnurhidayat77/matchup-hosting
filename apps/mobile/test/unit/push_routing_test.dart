@@ -76,7 +76,11 @@ void main() {
 
     test('missing activityId falls back to notifications feed', () {
       expect(routeForPush(const PushPayload(type: 'chat_message')), '/notifications');
-      expect(routeForPush(const PushPayload(type: 'system')), '/notifications');
+    });
+
+    test('unknown types have no route (callers no-op)', () {
+      expect(routeForPush(const PushPayload(type: 'system')), isNull);
+      expect(routeForPush(const PushPayload(type: 'totally_unknown')), isNull);
     });
   });
   group('dm_message routing', () {
@@ -132,8 +136,8 @@ void main() {
       );
     });
 
-    test('falls back to the feed without a target', () {
-      expect(routeForNotification(_notif()), '/notifications');
+    test('returns null without a usable target', () {
+      expect(routeForNotification(_notif()), isNull);
       expect(
         routeForNotification(_notif(backendType: 'chat_message')),
         '/notifications',

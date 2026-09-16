@@ -1,8 +1,10 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/services/rtdb_auth_service.dart';
@@ -121,6 +123,29 @@ class RemoteChatRepository implements ChatRepository {
   /// available — 3 seconds is the next best thing for chat-feel.
   static const Duration _pollingInterval = Duration(seconds: 3);
 
+  /// 429 circuit-breaker for the HTTP polling fallbacks (messages,
+  /// reactions, polls). While armed, ticks are skipped instead of
+  /// hammering a per-IP limiter window that is shared with every other
+  /// route (e.g. `GET /users/me`).
+  DateTime? _pollBlockedUntil;
+
+  bool get _pollBlocked =>
+      _pollBlockedUntil != null &&
+      DateTime.now().isBefore(_pollBlockedUntil!);
+
+  void _notePollRateLimit(Object e) {
+    if (e is! DioException || e.response?.statusCode != 429) return;
+    final raw = e.response?.headers.value('retry-after');
+    final secs = int.tryParse(raw?.trim() ?? '');
+    final wait = (secs != null && secs > 0 && secs <= 300)
+        ? Duration(seconds: secs)
+        : const Duration(seconds: 30);
+    _pollBlockedUntil = DateTime.now().add(wait);
+    debugPrint(
+      '[RemoteChatRepository] 429 — pausing polls until $_pollBlockedUntil',
+    );
+  }
+
   /// uid → sender profile cache per activity, so chat bubbles show names
   /// and avatars without an N+1 profile lookup on every poll tick.
   /// Refreshed at most once a minute per activity.
@@ -138,6 +163,7 @@ class RemoteChatRepository implements ChatRepository {
           .whereType<ChatMessage>()
           .toList();
     } catch (e, st) {
+      _notePollRateLimit(e);
       debugPrint('[RemoteChatRepository.messages] $e\n$st');
       return _fallback.messages(activityId);
     }
@@ -239,10 +265,12 @@ class RemoteChatRepository implements ChatRepository {
     Timer? timer;
 
     Future<void> tick() async {
+      if (_pollBlocked) return;
       try {
         final latest = await messages(activityId);
         if (!controller.isClosed) controller.add(latest);
       } catch (e) {
+        _notePollRateLimit(e);
         if (!controller.isClosed) controller.addError(e);
       }
     }
@@ -297,11 +325,13 @@ class RemoteChatRepository implements ChatRepository {
     Timer? timer;
 
     Future<void> tick() async {
+      if (_pollBlocked) return;
       try {
         final res = await _client.dio.get('/chat/$activityId/reactions');
         final latest = parseReactionMap(apiDataMap(res.data));
         if (!controller.isClosed) controller.add(latest);
       } catch (e) {
+        _notePollRateLimit(e);
         if (!controller.isClosed) controller.addError(e);
       }
     }
@@ -336,6 +366,9 @@ class RemoteChatRepository implements ChatRepository {
       return null;
     } catch (e, st) {
       debugPrint('[RemoteChatRepository.toggleReaction] $e\n$st');
+      if (e is DioException && (e.response?.statusCode ?? 0) ~/ 100 == 4) {
+        rethrow;
+      }
       return null;
     }
   }
@@ -375,11 +408,13 @@ class RemoteChatRepository implements ChatRepository {
     Timer? timer;
 
     Future<void> tick() async {
+      if (_pollBlocked) return;
       try {
         final res = await _client.dio.get('/chat/$activityId/polls');
         final latest = parsePollList(apiDataList(res.data));
         if (!controller.isClosed) controller.add(latest);
       } catch (e) {
+        _notePollRateLimit(e);
         if (!controller.isClosed) controller.addError(e);
       }
     }
@@ -435,6 +470,11 @@ class RemoteChatRepository implements ChatRepository {
       return null;
     } catch (e, st) {
       debugPrint('[RemoteChatRepository.votePoll] $e\n$st');
+      // Same as send(): a decided 4xx (e.g. CHAT_ARCHIVED) rethrows
+      // so the caller can show the backend's own message.
+      if (e is DioException && (e.response?.statusCode ?? 0) ~/ 100 == 4) {
+        rethrow;
+      }
       return null;
     }
   }
@@ -528,6 +568,12 @@ class RemoteChatRepository implements ChatRepository {
       );
     } catch (e, st) {
       debugPrint('[RemoteChatRepository.send] $e\n$st');
+      // Server rejections (4xx with a decision, e.g. CHAT_ARCHIVED)
+      // must surface verbatim — falling back would replace a precise
+      // refusal with a misleading offline error.
+      if (e is DioException && (e.response?.statusCode ?? 0) ~/ 100 == 4) {
+        rethrow;
+      }
       return _fallback.send(activityId: activityId, text: text);
     }
   }
@@ -547,10 +593,11 @@ class RemoteChatRepository implements ChatRepository {
         folder: 'chat-attachments/$activityId',
       );
       if (uploadedUrl == null) {
-        return await _fallback.sendImage(
-          activityId: activityId,
-          imagePath: imagePath,
-        );
+        // Storage returns null for every failure mode (unconfigured
+        // Firebase, missing file, failed upload — see StorageService):
+        // the photo literally cannot leave the device, so fail loudly
+        // with a specific message instead of the generic offline error.
+        throw Exception('Photo uploads are unavailable right now');
       }
       final sent = await send(activityId: activityId, text: uploadedUrl);
       return ChatMessage(
@@ -565,6 +612,10 @@ class RemoteChatRepository implements ChatRepository {
       );
     } catch (e, st) {
       debugPrint('[RemoteChatRepository.sendImage] $e\n$st');
+      // The upload-unavailable signal must reach the screen verbatim
+      // (it renders as its own snackbar copy) — never downgrade it to
+      // the generic offline fallback error.
+      if (e.toString().contains('Photo uploads are unavailable')) rethrow;
       return _fallback.sendImage(activityId: activityId, imagePath: imagePath);
     }
   }
@@ -606,16 +657,37 @@ class RemoteChatRepository implements ChatRepository {
   @override
   Future<List<ChatConversation>> conversations() async {
     // No dedicated backend route — the inbox is derived from the
-    // activities feed (viewer context flags mark what the user joined
-    // or hosts) plus the latest message of each, best-effort.
+    // viewer's own activities (hosted + joined, ALL statuses) plus the
+    // latest message of each, best-effort.
+    //
+    // Previously this filtered a capped `feed()` (status `open` only),
+    // so completed/full/cancelled games never got an inbox row — e.g.
+    // 14 hosted but only 7 groups. `hostedByUser`/`joinedByUser` hit
+    // the paginated `?mine=` endpoints (falling back to feed-derivation
+    // on old backends), covering every lifecycle status.
+    // The per-thread previews fan out via Future.wait (parallel, not
+    // sequential) and are capped at 20 activities so a heavy join
+    // list can't stall the inbox. One broken thread never sinks the
+    // whole inbox (per-thread try/catch), but a total feed failure
+    // rethrows so the inbox can show its ErrorRetry state.
     try {
-      final activities = await _activities.feed(limit: 50, filter: null);
-      final mine =
-          activities.where((a) => a.isParticipant || a.isHost).toList();
+      final results = await Future.wait([
+        _activities.hostedByUser('me', limit: 50),
+        _activities.joinedByUser('me', limit: 50),
+      ]);
+      final seen = <String>{};
+      final mine = [...results[0], ...results[1]]
+          .where((a) => seen.add(a.id))
+          .take(20)
+          .toList();
+      final lastOpened = await _lastOpenedAt({
+        for (final a in mine) a.id,
+      });
       final entries = await Future.wait(
         mine.map((activity) async {
           String lastMessage = '';
           String time = '';
+          int unreadCount = 0;
           try {
             final msgs = await messages(activity.id);
             if (msgs.isNotEmpty) {
@@ -629,6 +701,16 @@ class RemoteChatRepository implements ChatRepository {
                   lastMessage.length > 60 ? '${lastMessage.substring(0, 60)}…' : lastMessage;
               lastMessage = '$who: $lastMessage';
               time = _relativeTime(last.sentAt);
+              // No server-side read state exists on ChatMessage, so
+              // unread = others' messages newer than the last time this
+              // chat was opened (persisted by the chat screen). Chats
+              // never opened have no baseline → 0, not "everything".
+              final openedAt = lastOpened[activity.id];
+              if (openedAt != null) {
+                unreadCount = msgs
+                    .where((m) => !m.isMine && m.sentAt.isAfter(openedAt))
+                    .length;
+              }
             }
           } catch (e, st) {
             // One broken thread must not sink the whole inbox — but log
@@ -644,7 +726,7 @@ class RemoteChatRepository implements ChatRepository {
             name: activity.title,
             lastMessage: lastMessage,
             time: time,
-            unreadCount: 0,
+            unreadCount: unreadCount,
             isGroup: true,
           );
         }),
@@ -652,7 +734,26 @@ class RemoteChatRepository implements ChatRepository {
       return entries;
     } catch (e, st) {
       debugPrint('[RemoteChatRepository.conversations] $e\n$st');
-      return _fallback.conversations();
+      rethrow;
+    }
+  }
+
+  /// Last-opened timestamps per activity, backing the inbox unread
+  /// badges (see [recordChatOpened]). Missing entries mean "never
+  /// opened" — callers treat those as 0, not as everything-unread.
+  Future<Map<String, DateTime>> _lastOpenedAt(Set<String> ids) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final out = <String, DateTime>{};
+      for (final id in ids) {
+        final ms = prefs.getInt('$_lastOpenedPrefix$id');
+        if (ms != null) {
+          out[id] = DateTime.fromMillisecondsSinceEpoch(ms);
+        }
+      }
+      return out;
+    } catch (_) {
+      return const {};
     }
   }
 
@@ -690,6 +791,26 @@ class RemoteChatRepository implements ChatRepository {
       imageUrl: ChatMessage.imageUrlFromText(text),
     );
   }
+}
+
+/// SharedPreferences key prefix for per-activity last-opened
+/// timestamps (`<prefix><activityId>` → epoch millis). Written by the
+/// chat screen on open, read by [RemoteChatRepository.conversations]
+/// to compute inbox unread badges (no server-side read state exists
+/// on [ChatMessage]).
+const _lastOpenedPrefix = 'chat_last_opened_';
+
+/// Persists "this chat was opened now" for the inbox unread baseline.
+/// Best-effort and never throws (safe to call unawaited from a screen's
+/// `initState`, including under widget tests without plugin mocks).
+Future<void> recordChatOpened(String activityId) async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(
+      '$_lastOpenedPrefix$activityId',
+      DateTime.now().millisecondsSinceEpoch,
+    );
+  } catch (_) {}
 }
 
 /// uid → sender profile snapshot with its fetch time, backing the

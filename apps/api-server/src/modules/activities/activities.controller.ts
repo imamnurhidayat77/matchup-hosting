@@ -4,6 +4,7 @@ import {
     createActivity,
     enrichActivityWithHostProfile,
     getActivityById,
+    listMyActivities,
     listPublicActivityTeasers,
     listActivities,
     updateActivity,
@@ -49,6 +50,11 @@ export async function createActivityHandler(req: Request, res: Response) {
             capacity,
             coverImageUrl,
             joinPolicy,
+            isPaid,
+            fee,
+            feeMode,
+            totalCost,
+            minPlayers,
         } = req.body as {
             title?: unknown;
             sportType?: unknown;
@@ -64,6 +70,11 @@ export async function createActivityHandler(req: Request, res: Response) {
             capacity?: unknown;
             coverImageUrl?: unknown;
             joinPolicy?: unknown;
+            isPaid?: unknown;
+            fee?: unknown;
+            feeMode?: unknown;
+            totalCost?: unknown;
+            minPlayers?: unknown;
         };
 
         if (!hostId) {
@@ -125,6 +136,76 @@ export async function createActivityHandler(req: Request, res: Response) {
                 error: {
                     code: 'INVALID_INPUT',
                     message: 'joinPolicy must be open or approval',
+                },
+            });
+        }
+
+        if (isPaid !== undefined && typeof isPaid !== 'boolean') {
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message: 'isPaid must be a boolean',
+                },
+            });
+        }
+
+        if (fee !== undefined && (typeof fee !== 'number' || !Number.isFinite(fee) || fee <= 0)) {
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message: 'fee must be a positive number for paid activities',
+                },
+            });
+        }
+
+        if (isPaid === true && fee === undefined) {
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message: 'fee is required when isPaid is true',
+                },
+            });
+        }
+
+        if (feeMode !== undefined && feeMode !== 'fixed' && feeMode !== 'split') {
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message: 'feeMode must be fixed or split',
+                },
+            });
+        }
+
+        if (totalCost !== undefined && (typeof totalCost !== 'number' || !Number.isFinite(totalCost) || totalCost <= 0)) {
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message: 'totalCost must be a positive number for split mode',
+                },
+            });
+        }
+
+        if (minPlayers !== undefined && (typeof minPlayers !== 'number' || !Number.isInteger(minPlayers) || minPlayers < 2)) {
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message: 'minPlayers must be an integer >= 2',
+                },
+            });
+        }
+
+        if (feeMode === 'split' && totalCost === undefined) {
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message: 'totalCost is required when feeMode is split',
                 },
             });
         }
@@ -192,6 +273,11 @@ export async function createActivityHandler(req: Request, res: Response) {
             ...(typeof endTime === 'string' ? { endTime } : {}),
             ...(typeof coverImageUrl === 'string' ? { coverImageUrl } : {}),
             ...(joinPolicy === 'open' || joinPolicy === 'approval' ? { joinPolicy } : {}),
+            ...(typeof isPaid === 'boolean' ? { isPaid } : {}),
+            ...(typeof fee === 'number' ? { fee } : {}),
+            ...(feeMode === 'fixed' || feeMode === 'split' ? { feeMode } : {}),
+            ...(typeof totalCost === 'number' ? { totalCost } : {}),
+            ...(typeof minPlayers === 'number' ? { minPlayers } : {}),
         });
 
         return res.status(201).json({
@@ -202,6 +288,22 @@ export async function createActivityHandler(req: Request, res: Response) {
         });
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
+
+        if (
+            message === 'isPaid must be a boolean' ||
+            message === 'fee must be a positive number for paid activities' ||
+            message === 'feeMode must be fixed or split' ||
+            message === 'totalCost must be a positive number for split mode' ||
+            message === 'minPlayers must be an integer between 2 and capacity'
+        ) {
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message,
+                },
+            });
+        }
 
         return res.status(500).json({
             ok: false,
@@ -232,6 +334,11 @@ export async function updateActivityHandler(req: Request<UpdateActivityParams>, 
             capacity,
             coverImageUrl,
             joinPolicy,
+            isPaid,
+            fee,
+            feeMode,
+            totalCost,
+            minPlayers,
         } = req.body as {
             title?: unknown;
             sportType?: unknown;
@@ -247,6 +354,11 @@ export async function updateActivityHandler(req: Request<UpdateActivityParams>, 
             capacity?: unknown;
             coverImageUrl?: unknown;
             joinPolicy?: unknown;
+            isPaid?: unknown;
+            fee?: unknown;
+            feeMode?: unknown;
+            totalCost?: unknown;
+            minPlayers?: unknown;
         };
 
         if (!hostId) {
@@ -316,6 +428,56 @@ export async function updateActivityHandler(req: Request<UpdateActivityParams>, 
             });
         }
 
+        if (isPaid !== undefined && typeof isPaid !== 'boolean') {
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message: 'isPaid must be a boolean',
+                },
+            });
+        }
+
+        if (fee !== undefined && (typeof fee !== 'number' || !Number.isFinite(fee) || fee <= 0)) {
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message: 'fee must be a positive number for paid activities',
+                },
+            });
+        }
+
+        if (feeMode !== undefined && feeMode !== 'fixed' && feeMode !== 'split') {
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message: 'feeMode must be fixed or split',
+                },
+            });
+        }
+
+        if (totalCost !== undefined && (typeof totalCost !== 'number' || !Number.isFinite(totalCost) || totalCost <= 0)) {
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message: 'totalCost must be a positive number for split mode',
+                },
+            });
+        }
+
+        if (minPlayers !== undefined && (typeof minPlayers !== 'number' || !Number.isInteger(minPlayers) || minPlayers < 2)) {
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message: 'minPlayers must be an integer >= 2',
+                },
+            });
+        }
+
         if (capacity !== undefined && (typeof capacity !== 'number' || !Number.isInteger(capacity) || capacity <= 0)) {
             return res.status(400).json({
                 ok: false,
@@ -363,6 +525,11 @@ export async function updateActivityHandler(req: Request<UpdateActivityParams>, 
             ...(typeof capacity === 'number' ? { capacity } : {}),
             ...(typeof coverImageUrl === 'string' ? { coverImageUrl } : {}),
             ...(joinPolicy === 'open' || joinPolicy === 'approval' ? { joinPolicy } : {}),
+            ...(typeof isPaid === 'boolean' ? { isPaid } : {}),
+            ...(typeof fee === 'number' ? { fee } : {}),
+            ...(feeMode === 'fixed' || feeMode === 'split' ? { feeMode } : {}),
+            ...(typeof totalCost === 'number' ? { totalCost } : {}),
+            ...(typeof minPlayers === 'number' ? { minPlayers } : {}),
         });
 
         return res.status(200).json({
@@ -399,6 +566,23 @@ export async function updateActivityHandler(req: Request<UpdateActivityParams>, 
                 ok: false,
                 error: {
                     code: 'EMPTY_INPUT',
+                    message,
+                },
+            });
+        }
+
+        if (
+            message === 'isPaid must be a boolean' ||
+            message === 'fee must be a positive number for paid activities' ||
+            message === 'feeMode must be fixed or split' ||
+            message === 'totalCost must be a positive number for split mode' ||
+            message === 'minPlayers must be an integer >= 2' ||
+            message === 'minPlayers must be an integer between 2 and capacity'
+        ) {
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
                     message,
                 },
             });
@@ -622,7 +806,7 @@ export async function updateActivityCoverHandler(req: Request<UpdateActivityCove
 
 export async function listActivitiesHandler(req: Request, res: Response) {
     try {
-        const { status, sportType, skillLevel, limit } = req.query;
+        const { status, sportType, skillLevel, limit, mine, offset } = req.query;
 
         if (status !== undefined &&
             status !== 'open' &&
@@ -697,6 +881,27 @@ export async function listActivitiesHandler(req: Request, res: Response) {
             });
         }
 
+        if (mine !== undefined && mine !== 'hosted' && mine !== 'joined') {
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message: 'mine must be hosted or joined',
+                },
+            });
+        }
+
+        const parsedOffset = offset === undefined ? 0 : Number(offset);
+        if (!Number.isInteger(parsedOffset) || parsedOffset < 0) {
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message: 'offset must be a non-negative integer',
+                },
+            });
+        }
+
         const viewerUid = req.auth?.uid;
         if (!viewerUid) {
             return res.status(401).json({
@@ -706,6 +911,23 @@ export async function listActivitiesHandler(req: Request, res: Response) {
                     message: 'Authenticated user is required',
                 },
             });
+        }
+
+        // `?mine=hosted|joined` — paginated My Games reads. Dedicated path
+        // so mobile never filters a capped feed client-side.
+        if (mine === 'hosted' || mine === 'joined') {
+            const activities = await listMyActivities(
+                viewerUid,
+                mine,
+                parsedLimit,
+                parsedOffset,
+            );
+            const data = await Promise.all(
+                activities.map((activity) =>
+                    attachViewerActivityContext(activity, viewerUid),
+                ),
+            );
+            return res.status(200).json({ ok: true, data });
         }
 
         // `discover=1` opts the feed into the ranked discovery pipeline

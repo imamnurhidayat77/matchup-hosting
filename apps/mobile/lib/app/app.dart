@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/constants/app_constants.dart';
 import '../core/theme/app_colors.dart';
@@ -447,14 +448,20 @@ class _PushRouterState extends State<_PushRouter> {
       if (!mounted) return;
       final ctx = rootNavigatorKey.currentContext;
       if (ctx == null) return;
-      GoRouter.of(ctx).go(route);
+      // push (not go): the tap lands on top of the current stack so
+      // back returns to where the user was (e.g. the notifications
+      // feed), instead of replacing it.
+      GoRouter.of(ctx).push(route);
     });
   }
 
-  void _banner(PushPayload payload) {
+  void _banner(PushPayload payload) async {
     if (!mounted) return;
+    // Locally muted group chats never banner while foregrounded.
+    final muted = await _isMutedChat(payload);
+    if (muted || !mounted) return;
     final ctx = rootNavigatorKey.currentContext;
-    if (ctx == null) return;
+    if (ctx == null || !ctx.mounted) return;
     final route = routeForPush(payload);
     AppSnackbar.show(
       ctx,
@@ -465,9 +472,22 @@ class _PushRouterState extends State<_PushRouter> {
           ? null
           : () {
               final c = rootNavigatorKey.currentContext;
-              if (c != null) GoRouter.of(c).go(route);
+              if (c != null && c.mounted) GoRouter.of(c).go(route);
             },
     );
+  }
+
+  /// True when [payload] targets a locally muted group chat. Mute is
+  /// keyed by activity id — DMs and unknown payloads are never muted.
+  Future<bool> _isMutedChat(PushPayload payload) async {
+    final id = payload.activityId;
+    if (id == null || payload.type != 'chat_message') return false;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getStringList(mutedChatsKey)?.contains(id) ?? false;
+    } catch (_) {
+      return false;
+    }
   }
 
   @override

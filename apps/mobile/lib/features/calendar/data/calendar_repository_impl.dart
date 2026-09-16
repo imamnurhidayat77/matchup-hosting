@@ -3,11 +3,17 @@ import 'package:flutter/foundation.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/services/calendar_service.dart';
 import '../../../core/storage/secure_token_store.dart';
+import '../../activities/domain/activity_model.dart';
 import '../../discovery/data/activity_repository.dart';
 import '../domain/calendar_event.dart';
 import 'calendar_repository.dart';
 
-/// Offline-only calendar store. Reads return empty, writes no-op.
+/// Offline-only calendar store. Reads return empty, writes no-op —
+/// going offline never throws: [upcoming] resolves to an empty list and
+/// [addToDeviceCalendar] silently drops the event instead of touching
+/// the OS calendar. UID resolution is unchanged (both this repo and My
+/// Games read the signed-in uid from [SecureTokenStore] — My Games via
+/// `myGamesUidProvider`, this repo directly — so they always agree).
 class LocalCalendarRepository implements CalendarRepository {
   @override
   Future<List<CalendarEvent>> upcoming({int days = 30}) async {
@@ -68,7 +74,9 @@ class RemoteCalendarRepository implements CalendarRepository {
       final horizon = now.add(Duration(days: days));
       final seen = <String>{};
       final events = <CalendarEvent>[];
-      for (final activity in [...results[0], ...results[1]]) {
+      // Joined and hosted are added in separate loops so the hosted
+      // flag survives dedup (a game appearing in both reads as hosted).
+      for (final activity in results[1]) {
         if (!seen.add(activity.id)) continue;
         if (activity.endTime.isBefore(now)) continue;
         if (activity.dateTime.isAfter(horizon)) continue;
@@ -81,6 +89,25 @@ class RemoteCalendarRepository implements CalendarRepository {
             end: activity.endTime,
             location: activity.location,
             addedToDeviceCalendar: _syncedIds.contains(activity.id),
+            isHost: true,
+            isPast: activity.status == ActivityStatus.past,
+          ),
+        );
+      }
+      for (final activity in results[0]) {
+        if (!seen.add(activity.id)) continue;
+        if (activity.endTime.isBefore(now)) continue;
+        if (activity.dateTime.isAfter(horizon)) continue;
+        events.add(
+          CalendarEvent(
+            id: activity.id,
+            activityId: activity.id,
+            title: activity.title,
+            start: activity.dateTime,
+            end: activity.endTime,
+            location: activity.location,
+            addedToDeviceCalendar: _syncedIds.contains(activity.id),
+            isPast: activity.status == ActivityStatus.past,
           ),
         );
       }

@@ -36,6 +36,8 @@ class PollCreateSheet extends ConsumerStatefulWidget {
 
 class _PollCreateSheetState extends ConsumerState<PollCreateSheet> {
   static const _maxOptions = 6;
+  static const _maxQuestionLength = 200;
+  static const _maxOptionLength = 100;
 
   final _questionCtrl = TextEditingController();
   final _optionCtrls = [TextEditingController(), TextEditingController()];
@@ -59,6 +61,32 @@ class _PollCreateSheetState extends ConsumerState<PollCreateSheet> {
       AppSnackbar.show(
         context,
         message: 'Add a question and at least 2 options.',
+        variant: AppSnackbarVariant.error,
+      );
+      return;
+    }
+    if (question.length > _maxQuestionLength) {
+      AppSnackbar.show(
+        context,
+        message: 'Keep the question under $_maxQuestionLength characters.',
+        variant: AppSnackbarVariant.error,
+      );
+      return;
+    }
+    if (options.any((o) => o.length > _maxOptionLength)) {
+      AppSnackbar.show(
+        context,
+        message: 'Keep each option under $_maxOptionLength characters.',
+        variant: AppSnackbarVariant.error,
+      );
+      return;
+    }
+    final seen = <String>{};
+    final hasDuplicate = options.any((o) => !seen.add(o.toLowerCase()));
+    if (hasDuplicate) {
+      AppSnackbar.show(
+        context,
+        message: 'Options must be unique.',
         variant: AppSnackbarVariant.error,
       );
       return;
@@ -121,6 +149,7 @@ class _PollCreateSheetState extends ConsumerState<PollCreateSheet> {
               controller: _questionCtrl,
               hint: 'What time shall we play? ⚽',
               label: 'QUESTION',
+              maxLength: _maxQuestionLength,
             ),
             const SizedBox(height: AppSpacing.x3),
             Text(
@@ -145,6 +174,7 @@ class _PollCreateSheetState extends ConsumerState<PollCreateSheet> {
                               child: _SheetTextBox(
                                 controller: _optionCtrls[i],
                                 hint: 'Option ${i + 1}',
+                                maxLength: _maxOptionLength,
                               ),
                             ),
                             if (_optionCtrls.length > 2) ...[
@@ -232,10 +262,12 @@ class _SheetTextBox extends StatelessWidget {
     required this.controller,
     required this.hint,
     this.label,
+    this.maxLength,
   });
   final TextEditingController controller;
   final String hint;
   final String? label;
+  final int? maxLength;
 
   @override
   Widget build(BuildContext context) {
@@ -264,12 +296,14 @@ class _SheetTextBox extends StatelessWidget {
             controller: controller,
             style: AppTypography.bodyMedium(context),
             cursorColor: AppColors.primary,
+            maxLength: maxLength,
             decoration: InputDecoration(
               hintText: hint,
               hintStyle: AppTypography.bodyMedium(context).copyWith(
                 color: context.colors.textTertiary,
               ),
               border: InputBorder.none,
+              counterText: '',
             ),
           ),
         ),

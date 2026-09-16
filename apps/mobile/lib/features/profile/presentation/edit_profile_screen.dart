@@ -19,6 +19,7 @@ import '../../../core/widgets/asset_image.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../domain/user_model.dart';
+import '../data/user_repository.dart';
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
@@ -38,12 +39,19 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   final _heightController = TextEditingController();
   final _weightController = TextEditingController();
   final _goalController = TextEditingController();
+  final _dobController = TextEditingController();
 
   DateTime? _dob;
   bool _loading = false;
   bool _uploadingPhoto = false;
   bool _initialised = false;
   bool _dirty = false;
+
+  /// Id of the user the fields were last initialised from. The screen
+  /// stays mounted across `myProfileProvider` invalidations, so a plain
+  /// `_initialised` flag would never refresh — re-init when a DIFFERENT
+  /// user arrives (e.g. account switch), keep edits otherwise.
+  String? _loadedUserId;
 
   final List<_SportEntry> _sports = [];
 
@@ -68,6 +76,12 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     if (!_dirty) setState(() => _dirty = true);
   }
 
+  void _syncDobText() {
+    _dobController.text = _dob != null
+        ? DateFormat('d MMMM y').format(_dob!)
+        : '';
+  }
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -78,26 +92,31 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _heightController.dispose();
     _weightController.dispose();
     _goalController.dispose();
+    _dobController.dispose();
     super.dispose();
   }
 
   void _initFields(UserModel user) {
-    if (_initialised) return;
+    if (_initialised && _loadedUserId == user.id) return;
+    _loadedUserId = user.id;
     _nameController.text = user.displayName;
     _bioController.text = user.bio ?? '';
     _emailController.text = user.email ?? '';
     _phoneController.text = user.phone ?? '';
     _locationController.text = user.location ?? '';
     _dob = user.dateOfBirth;
+    _syncDobText();
     _heightController.text = user.heightCm?.toString() ?? '';
     _weightController.text = user.weightKg?.toString() ?? '';
     _goalController.text = user.goal ?? '';
+    _sports.clear();
     _sports.addAll(
       user.sports.map(
         (s) => _SportEntry(name: s.sport, level: _levelIndex(s.level)),
       ),
     );
     _initialised = true;
+    _dirty = false;
   }
 
   static int _levelIndex(String level) => switch (level) {
@@ -125,6 +144,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     if (picked != null) {
       setState(() {
         _dob = picked;
+        _syncDobText();
         _dirty = true;
       });
     }
@@ -176,7 +196,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       if (!mounted) return;
       AppSnackbar.show(
         context,
-        message: "Couldn't save your changes. Please try again.",
+        message: e is ProfileUpdateException
+            ? e.message
+            : "Couldn't save your changes. Please try again.",
         variant: AppSnackbarVariant.error,
       );
     } finally {
@@ -361,12 +383,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                 child: AbsorbPointer(
                                   child: AppTextField.form(
                                     label: 'DATE OF BIRTH',
-                                    controller: TextEditingController(
-                                      text: _dob != null
-                                          ? DateFormat('d MMMM y')
-                                              .format(_dob!)
-                                          : '',
-                                    ),
+                                    controller: _dobController,
                                     hint: 'Select date',
                                     trailing: Icon(
                                       Icons.calendar_month_outlined,
@@ -381,7 +398,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                         ),
                         const SizedBox(height: AppSpacing.x4),
 
-                        // Contact card
+                        // Contact card — PATCH /me persists none of these
+                        // yet (see RemoteUserRepository.updateProfile), so
+                        // the inputs are disabled with an honest caption
+                        // instead of faking a save.
                         _SectionCard(
                           title: 'Contact',
                           child: Column(
@@ -390,19 +410,25 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                 label: 'EMAIL',
                                 controller: _emailController,
                                 keyboardType: TextInputType.emailAddress,
+                                enabled: false,
                               ),
                               const SizedBox(height: AppSpacing.x4),
                               AppTextField.form(
                                 label: 'PHONE',
                                 controller: _phoneController,
                                 keyboardType: TextInputType.phone,
+                                enabled: false,
                               ),
+                              const SizedBox(height: AppSpacing.x3),
+                              const _NotSyncedCaption(),
                             ],
                           ),
                         ),
                         const SizedBox(height: AppSpacing.x4),
 
-                        // Physical card
+                        // Physical card — height/weight/goal are not part of
+                        // PATCH /me either; same disabled-with-caption
+                        // treatment as Contact.
                         _SectionCard(
                           title: 'Physical',
                           child: Column(
@@ -414,6 +440,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                       label: 'HEIGHT (CM)',
                                       controller: _heightController,
                                       keyboardType: TextInputType.number,
+                                      enabled: false,
                                     ),
                                   ),
                                   const SizedBox(width: AppSpacing.x3),
@@ -422,6 +449,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                       label: 'WEIGHT (KG)',
                                       controller: _weightController,
                                       keyboardType: TextInputType.number,
+                                      enabled: false,
                                     ),
                                   ),
                                 ],
@@ -430,7 +458,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                               AppTextField.form(
                                 label: 'PRIMARY GOAL',
                                 controller: _goalController,
+                                enabled: false,
                               ),
+                              const SizedBox(height: AppSpacing.x3),
+                              const _NotSyncedCaption(),
                             ],
                           ),
                         ),
@@ -622,6 +653,22 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 }
 
 // ─── Section card ─────────────────────────────────────────────────────────────
+
+/// Caption under fields the backend can't persist yet.
+class _NotSyncedCaption extends StatelessWidget {
+  const _NotSyncedCaption();
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Text(
+        'Not synced to your profile yet',
+        style: AppTypography.metaSub(context),
+      ),
+    );
+  }
+}
 
 class _SectionCard extends StatelessWidget {
   const _SectionCard({

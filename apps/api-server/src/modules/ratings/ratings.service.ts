@@ -17,6 +17,7 @@ export type SubmitActivityRatingInput = {
     raterUid: string;
     sportType?: string;
     comment?: string;
+    activityStars?: number;
     participantRatings: ParticipantRatingInput[];
 };
 
@@ -30,6 +31,7 @@ export type ActivityRatingRecord = {
     activityId: string;
     sportType: string;
     comment?: string;
+    activityStars?: number;
     ratings: RatedParticipant[];
     createdAt: FirebaseFirestore.Timestamp;
     updatedAt: FirebaseFirestore.Timestamp;
@@ -104,6 +106,12 @@ export async function submitActivityRating(
 
     const trimmedComment = comment ? comment.slice(0, MAX_COMMENT_LENGTH) : undefined;
 
+    let activityStars: number | undefined;
+    if (input.activityStars !== undefined) {
+        assertStars(input.activityStars, 'activity');
+        activityStars = input.activityStars;
+    }
+
     const ratings: RatedParticipant[] = input.participantRatings.map((entry) => {
         if (!entry || typeof entry.rateeUid !== 'string' || !entry.rateeUid.trim()) {
             throw new Error('Each participant rating must include a rateeUid');
@@ -168,6 +176,7 @@ export async function submitActivityRating(
             activityId,
             sportType,
             ...(trimmedComment ? { comment: trimmedComment } : {}),
+            ...(activityStars !== undefined ? { activityStars } : {}),
             ratings,
             createdAt: previous?.createdAt ?? now,
             updatedAt: now,
@@ -264,6 +273,7 @@ export async function getUserRating(
         activityId: data.activityId,
         sportType: data.sportType,
         ...(typeof data.comment === 'string' ? { comment: data.comment } : {}),
+        ...(typeof data.activityStars === 'number' ? { activityStars: data.activityStars } : {}),
         ratings: Array.isArray(data.ratings) ? data.ratings : [],
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,

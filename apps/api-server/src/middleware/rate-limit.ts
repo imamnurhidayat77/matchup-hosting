@@ -121,12 +121,20 @@ export function createRateLimiter(
 }
 
 /**
- * Global default: 300 req / 15 min per IP. Health checks are skipped so
- * load balancers / uptime probes are never throttled.
+ * Global default: 1200 req / 15 min per IP (avg ~80/min). Health checks
+ * are skipped so load balancers / uptime probes are never throttled.
+ *
+ * Budget math (per docs/architecture/scalability.md): an open group chat
+ * with the HTTP fallback costs ~20 req/min (messages every 3s) plus the
+ * typing poll at ~30 req/min per roster member, so a 5-member chat alone
+ * is ~170 req/min sustained. The old 300/15min budget (avg 20/min)
+ * 429'd normal single-chat usage — including unrelated routes like
+ * `GET /users/me` that share the per-IP window — which is why clients
+ * saw `RATE_LIMITED` on profile reads while a chat was open.
  */
 export const GLOBAL_RATE_LIMIT: RateLimitOptions = {
   windowMs: 15 * 60 * 1000,
-  max: 300,
+  max: 1200,
   skip: (req) => req.path === '/api/health',
 };
 

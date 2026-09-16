@@ -7,6 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/dark_colors.dart';
+import '../../../core/utils/nav_guard.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_tappable.dart';
@@ -21,7 +22,9 @@ class GetToKnow1Screen extends ConsumerStatefulWidget {
 }
 
 class _GetToKnow1ScreenState extends ConsumerState<GetToKnow1Screen> {
-  int _selected = 0;
+  /// Null until the user picks an option — nothing is pre-selected, so
+  /// Next stays disabled until a deliberate choice is made.
+  int? _selected;
   bool _saving = false;
 
   static const _options = [
@@ -36,14 +39,17 @@ class _GetToKnow1ScreenState extends ConsumerState<GetToKnow1Screen> {
   /// advancing — every onboarding answer must land in the DB even if
   /// the user never reaches the final step.
   Future<void> _onNext() async {
-    if (_saving) return;
+    final selected = _selected;
+    if (selected == null || _saving) return;
     setState(() => _saving = true);
     try {
       await ref.read(userRepositoryProvider).updateProfile(
-            joinReason: _options[_selected].$1,
+            joinReason: _options[selected].$1,
           );
       if (!mounted) return;
-      context.push('/get-to-know-2');
+      // Guarded: double-tap would push two /get-to-know-2 pages with the
+      // same Page key → '!keyReservation.contains(key)' crash.
+      NavGuard.onceFor('gtk-1-next', () => context.push('/get-to-know-2'));
     } catch (_) {
       if (!mounted) return;
       AppSnackbar.show(
@@ -63,7 +69,7 @@ class _GetToKnow1ScreenState extends ConsumerState<GetToKnow1Screen> {
       showHomeIndicator: true,
       body: Column(
         children: [
-          OnboardingProgressHeader(step: 1, total: 3),
+          OnboardingProgressHeader(step: 1, total: 3, showBack: false),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(
@@ -103,7 +109,7 @@ class _GetToKnow1ScreenState extends ConsumerState<GetToKnow1Screen> {
                   const SizedBox(height: AppSpacing.x4),
                   PrimaryPillButton(
                     label: 'Next',
-                    onPressed: _saving ? null : _onNext,
+                    onPressed: (_selected == null || _saving) ? null : _onNext,
                   ),
                   const SizedBox(height: AppSpacing.x5),
                 ],
@@ -125,10 +131,17 @@ class OnboardingProgressHeader extends StatelessWidget {
     super.key,
     required this.step,
     required this.total,
+    this.showBack = true,
   });
 
   final int step;
   final int total;
+
+  /// False on step 1: it is reached via go() (register / onboarding), so it
+  /// is the stack root and maybePop would silently no-op — hide the dead
+  /// back button instead of showing one. Later steps are pushed, so pop
+  /// works there.
+  final bool showBack;
 
   @override
   Widget build(BuildContext context) {
@@ -143,22 +156,25 @@ class OnboardingProgressHeader extends StatelessWidget {
         children: [
           Row(
             children: [
-              Semantics(
-                button: true,
-                label: 'Back',
-                child: PressableScale(
-                  onTap: () => Navigator.of(context).maybePop(),
-                  child: SizedBox(
-                    width: 40,
-                    height: 40,
-                    child: Icon(
-                      Icons.arrow_back_ios_new_rounded,
-                      size: 18,
-                      color: context.colors.textPrimary,
+              if (showBack)
+                Semantics(
+                  button: true,
+                  label: 'Back',
+                  child: PressableScale(
+                    onTap: () => Navigator.of(context).maybePop(),
+                    child: SizedBox(
+                      width: 40,
+                      height: 40,
+                      child: Icon(
+                        Icons.arrow_back_ios_new_rounded,
+                        size: 18,
+                        color: context.colors.textPrimary,
+                      ),
                     ),
                   ),
-                ),
-              ),
+                )
+              else
+                const SizedBox(width: 40, height: 40),
               Expanded(
                 child: Text(
                   "LET'S GET TO KNOW YOU",

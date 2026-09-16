@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/providers/auth_state_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
@@ -43,14 +46,14 @@ const _kPages = [
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
-class OnboardingScreen extends StatefulWidget {
+class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
 
   @override
-  State<OnboardingScreen> createState() => _OnboardingScreenState();
+  ConsumerState<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _OnboardingScreenState extends State<OnboardingScreen> {
+class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final _pageController = PageController();
   int _currentPage = 0;
 
@@ -72,6 +75,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     super.dispose();
   }
 
+  /// '/get-to-know-1' is a protected route — logged-out users who go there
+  /// bounce straight back to /welcome via the router guard. Route them to
+  /// /welcome directly instead of the dead-end round-trip.
+  void _exitToAppFlow() {
+    // Any Skip/Get Started tap counts as seen — persist best-effort.
+    SharedPreferences.getInstance().then(
+      (p) => p.setBool('hasSeenOnboarding', true),
+    );
+    final status = ref.read(authStatusProvider);
+    context.go(
+      status == AuthStatus.unauthenticated ? '/welcome' : '/get-to-know-1',
+    );
+  }
+
   void _next() {
     if (_currentPage < _kPages.length - 1) {
       _pageController.nextPage(
@@ -79,11 +96,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         curve: Curves.easeInOut,
       );
     } else {
-      context.go('/get-to-know-1');
+      _exitToAppFlow();
     }
   }
 
-  void _skip() => context.go('/get-to-know-1');
+  void _skip() => _exitToAppFlow();
 
   @override
   Widget build(BuildContext context) {
@@ -122,6 +139,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       'assets/images/splash/logo-badge.png',
                       width: 36,
                       height: 36,
+                      errorBuilder: (_, _, _) => const Icon(
+                        Icons.sports_soccer_rounded,
+                        size: 36,
+                        color: Colors.white,
+                      ),
                     ),
                     // SKIP badge
                     Semantics(

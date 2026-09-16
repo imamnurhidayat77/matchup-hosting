@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:mocktail/mocktail.dart';
 
 import 'package:matchup_mobile/core/providers/repository_providers.dart';
+import 'package:matchup_mobile/core/utils/nav_guard.dart';
 import 'package:matchup_mobile/features/auth/data/auth_repository.dart';
 import 'package:matchup_mobile/features/auth/recovery/forgot_password_screen.dart';
 import 'package:matchup_mobile/features/auth/recovery/reset_link_sent_screen.dart';
@@ -32,7 +33,10 @@ Future<void> _pumpRouter(
 }
 
 void main() {
-  setUp(() => reset(_mockAuth));
+  setUp(() {
+    reset(_mockAuth);
+    NavGuard.resetForTest();
+  });
 
   group('ForgotPasswordScreen', () {
     testWidgets('should show a validation error for an invalid email', (
@@ -78,8 +82,12 @@ void main() {
             ),
             GoRoute(
               path: '/reset-link-sent',
-              builder: (_, state) =>
-                  Scaffold(body: Text('Reset link for ${state.extra}')),
+              builder: (_, state) {
+                final email =
+                    state.uri.queryParameters['email'] ??
+                    (state.extra as String? ?? '');
+                return Scaffold(body: Text('Reset link for $email'));
+              },
             ),
           ],
         );
@@ -150,7 +158,28 @@ void main() {
       expect(find.text('Back to Sign In'), findsOneWidget);
     });
 
-    testWidgets('should resend the link and start the cooldown', (
+    testWidgets('should start the cooldown on open', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(600, 1000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await _pumpRouter(
+        tester,
+        initialLocation: '/reset-link-sent',
+        routes: [
+          GoRoute(
+            path: '/reset-link-sent',
+            builder: (_, _) =>
+                const ResetLinkSentScreen(email: 'jordan@example.com'),
+          ),
+        ],
+      );
+
+      // Cooldown starts on open: resend is replaced by a countdown.
+      expect(find.textContaining('Resend link in'), findsOneWidget);
+      expect(find.text('Resend'), findsNothing);
+    });
+
+    testWidgets('should resend the link and restart the cooldown', (
       tester,
     ) async {
       await tester.binding.setSurfaceSize(const Size(600, 1000));
@@ -171,6 +200,11 @@ void main() {
         ],
       );
 
+      // Wait out the open-cooldown so Resend becomes tappable.
+      await tester.pump(const Duration(seconds: 61));
+      await tester.pumpAndSettle();
+      expect(find.text('Resend'), findsOneWidget);
+
       await tester.tap(find.text('Resend'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
@@ -179,9 +213,33 @@ void main() {
       verify(
         () => _mockAuth.forgotPassword(email: 'jordan@example.com'),
       ).called(1);
-      // Cooldown replaces the resend affordance with a countdown.
+      // Cooldown restarts after resend.
       expect(find.textContaining('Resend link in'), findsOneWidget);
       expect(find.text('Resend'), findsNothing);
+    });
+
+    testWidgets('should disable resend when email is empty', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(600, 1000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await _pumpRouter(
+        tester,
+        initialLocation: '/reset-link-sent',
+        routes: [
+          GoRoute(
+            path: '/reset-link-sent',
+            builder: (_, _) => const ResetLinkSentScreen(email: ''),
+          ),
+        ],
+      );
+      await tester.pump(const Duration(seconds: 61));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Resend'), findsNothing);
+      expect(
+        find.text('Open this link from your email app.'),
+        findsOneWidget,
+      );
     });
   });
 }

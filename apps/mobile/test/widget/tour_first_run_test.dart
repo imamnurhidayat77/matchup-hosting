@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:matchup_mobile/app/app_shell.dart';
 import 'package:matchup_mobile/core/providers/repository_providers.dart';
+import 'package:matchup_mobile/core/utils/nav_guard.dart';
 import 'package:matchup_mobile/features/activities/domain/activity_model.dart';
 import 'package:matchup_mobile/features/discovery/data/activity_repository.dart';
 import 'package:matchup_mobile/features/discovery/presentation/discovery_screen.dart';
@@ -155,6 +156,9 @@ void main() {
   /// Walks get-to-know-1 → 2 → 3 → tap "Complete Profile", landing on
   /// Discovery exactly the way a real first-run user would.
   Future<void> completeOnboarding(WidgetTester tester) async {
+    // GTK1 requires an explicit reason choice (no pre-selected default).
+    await tester.tap(find.text('Meet new sports partners'));
+    await tester.pump();
     await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
@@ -164,6 +168,22 @@ void main() {
     );
     await tester.tap(find.text('Skip for now'));
     await tester.pumpAndSettle();
+    // GTK3 requires real input (no prefill): height, weight, and every
+    // DOB wheel. Wheels start at day 1 / January / maxYear, so nudge day
+    // and month up one notch and year down one notch to mark each as set.
+    await tester.enterText(find.byType(TextField), '180');
+    await tester.pump();
+    await tester.tap(find.bySemanticsLabel('Increase weight'));
+    await tester.pump();
+    for (final (label, dy) in [('Day', -40.0), ('Month', -40.0), ('Year', 40.0)]) {
+      await tester.scrollUntilVisible(
+        find.bySemanticsLabel(label),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.drag(find.bySemanticsLabel(label), Offset(0, dy));
+      await tester.pumpAndSettle();
+    }
     await tester.tap(find.text('Complete Profile'));
     // updateProfile() + the tour's SharedPreferences.hasSeen() check are
     // both async — settle covers both before asserting on Discovery.
@@ -181,6 +201,10 @@ void main() {
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+    // NavGuard debounce state is static: without a reset, taps in one
+    // test can swallow same-key pushes in the next (fake clocks restart
+    // at the same epoch every test).
+    NavGuard.resetForTest();
   });
 
   testWidgets(

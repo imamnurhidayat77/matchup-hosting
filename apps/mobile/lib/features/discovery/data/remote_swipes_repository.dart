@@ -43,7 +43,12 @@ class RemoteSwipesRepository implements SwipesRepository {
       );
     } catch (e, st) {
       debugPrint('[RemoteSwipesRepository.save] $e\n$st');
+      // Record locally so a retry stays idempotent, then rethrow: the
+      // discovery flow surfaces persist failures via `onPersistError`
+      // instead of silently dropping the decision. Only the discovery
+      // flow calls this method, so no other caller needs updating.
       await _fallback.save(activityId: activityId, decision: decision);
+      rethrow;
     }
   }
 

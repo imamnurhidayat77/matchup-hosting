@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:matchup_mobile/core/network/api_client.dart';
 import 'package:matchup_mobile/core/providers/repository_providers.dart';
@@ -60,6 +61,10 @@ void main() {
   late _MockSwipesRepository swipesRepo;
 
   setUpAll(() {
+    // DiscoveryScreen restores the persisted filter via SharedPreferences
+    // on mount — mock it so the store resolves immediately instead of
+    // hanging (which would stall the first deck load past pumpAndSettle).
+    SharedPreferences.setMockInitialValues({});
     // mocktail needs a fallback value for any non-primitive named
     // parameter — SwipeDecision is an enum, so a single enum value
     // works as a placeholder.
@@ -67,6 +72,10 @@ void main() {
   });
 
   setUp(() {
+    // Reset persisted prefs per test: filter writes persist via
+    // SharedPreferences, and without this a filter applied in one test
+    // would leak into the next test's seed-restore.
+    SharedPreferences.setMockInitialValues({});
     activityRepo = _MockActivityRepository();
     notifRepo = _MockNotificationRepository();
     swipesRepo = _MockSwipesRepository();
@@ -90,6 +99,10 @@ void main() {
         decision: any(named: 'decision'),
       ),
     ).thenAnswer((_) async {});
+    // Right-swipe on an open game joins for real (POST participants)
+    // before opening the match screen — stub it so the deck doesn't
+    // try to hit the network through RemoteActivityRepository.
+    when(() => activityRepo.join(any())).thenAnswer((_) async {});
   });
 
   GoRouter buildRouter() {

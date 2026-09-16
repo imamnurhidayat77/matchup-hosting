@@ -29,12 +29,15 @@ class RemoteSportsRepository implements SportsRepository {
 }
 
 /// No honest offline fallback exists for admin-curated config — callers
-/// catch and fall back to their bundled list instead.
+/// catch and fall back to their bundled list instead. Throws [ApiException]
+/// (not [UnimplementedError]) so offline callers get a catchable,
+/// user-message-carrying error instead of a crash.
 class UnavailableSportsRepository implements SportsRepository {
   @override
   Future<List<SportConfig>> configs() {
-    throw UnimplementedError(
-      'Sports config requires the live API (useRemoteApi must be true).',
+    throw const ApiException(
+      statusCode: null,
+      userMessage: 'Sports config is unavailable offline.',
     );
   }
 }

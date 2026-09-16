@@ -17,16 +17,19 @@ import '../../../core/widgets/skeleton.dart';
 import '../domain/chat_message.dart';
 
 // ─── Providers ───────────────────────────────────────────────────────────────
+// keepAlive (bukan autoDispose): pindah tab Group <-> DM tidak dispose +
+// fetch ulang. Pola yang sama dengan My Games.
 
 final _conversationsProvider =
-    FutureProvider.autoDispose<List<ChatConversation>>((ref) async {
+    FutureProvider<List<ChatConversation>>((ref) async {
       return ref.watch(chatRepositoryProvider).conversations();
     });
 
 /// 1-on-1 threads, re-emitted on every inbox change so unread badges
-/// update while the inbox sits open.
+/// update while the inbox sits open. Stream sudah live — keepAlive agar
+/// subscription tidak putus-nyambung tiap pindah tab.
 final _dmConversationsProvider =
-    StreamProvider.autoDispose<List<ChatConversation>>((ref) {
+    StreamProvider<List<ChatConversation>>((ref) {
       return ref.watch(dmRepositoryProvider).watchConversations();
     });
 
@@ -50,6 +53,17 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
 
   /// 0 = group (activity) chats, 1 = direct messages.
   int _tab = 0;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // The unread badge is one-shot: re-fetch whenever this screen is
+    // (re)shown so it reflects reads done on /notifications. The group
+    // inbox is one-shot too — refresh it for the same reason (reads
+    // done inside a thread update its unread badge + preview).
+    ref.invalidate(_unreadNotifCountProvider);
+    ref.invalidate(_conversationsProvider);
+  }
 
   @override
   void dispose() {
@@ -104,7 +118,13 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
                 ),
                 _BellButton(
                   unreadCount: unreadCount,
-                  onTap: () => context.push('/notifications'),
+                  onTap: () {
+                    // The notifications screen marks items read; refresh
+                    // the badge when coming back.
+                    context.push('/notifications').then(
+                      (_) => ref.invalidate(_unreadNotifCountProvider),
+                    );
+                  },
                 ),
               ],
             ),
@@ -139,10 +159,22 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
           const SizedBox(height: AppSpacing.x3),
 
           // ── Conversation list ────────────────────────────────────────
+          // IndexedStack: kedua tab tetap hidup (scroll position + data
+          // kesimpan), tidak rebuild + skeleton ulang tiap pindah tab.
           Expanded(
-            child: _tab == 0
-                ? _ConversationList(query: _query)
-                : _DmConversationList(query: _query),
+            child: IndexedStack(
+              index: _tab,
+              children: [
+                _ConversationList(
+                  query: _query,
+                  visible: _tab == 0,
+                ),
+                _DmConversationList(
+                  query: _query,
+                  visible: _tab == 1,
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -291,7 +323,11 @@ class _SearchBarState extends State<_SearchBar> {
                 fontSize: 15,
               ),
               decoration: InputDecoration(
-                hintText: 'Search chats, sports or matches...',
+                // Matches capability: the filter only matches chat names
+                // + last-message previews (ChatConversation carries no
+                // sport/activity field), so the hint must not promise
+                // sports search.
+                hintText: 'Search chats…',
                 hintStyle: AppTypography.bodyMedium(context).copyWith(
                   color: context.colors.textSecondary,
                   fontSize: 15,
@@ -478,12 +514,28 @@ class _InboxTab extends StatelessWidget {
 /// 1-on-1 threads reusing the group card (peer uid as id, `isGroup`
 /// false). Taps open `/dm/:uid`; the thread screen clears the badge
 /// on open and invalidates this provider on exit.
-class _DmConversationList extends ConsumerWidget {
-  const _DmConversationList({required this.query});
+class _DmConversationList extends ConsumerStatefulWidget {
+  const _DmConversationList({required this.query, this.visible = true});
   final String query;
 
+  /// Hanya tab aktif yang precache avatar — tab yang hidden tidak
+  /// rebutan bandwidth.
+  final bool visible;
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_DmConversationList> createState() =>
+      _DmConversationListState();
+}
+
+class _DmConversationListState extends ConsumerState<_DmConversationList>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    final query = widget.query;
     final async = ref.watch(_dmConversationsProvider);
     return async.when(
       loading: () => const SkeletonList(count: 3),
@@ -538,12 +590,27 @@ class _DmConversationList extends ConsumerWidget {
   }
 }
 
-class _ConversationList extends ConsumerWidget {
-  const _ConversationList({required this.query});
+class _ConversationList extends ConsumerStatefulWidget {
+  const _ConversationList({required this.query, this.visible = true});
   final String query;
 
+  /// Hanya tab aktif yang precache avatar — tab yang hidden tidak
+  /// rebutan bandwidth.
+  final bool visible;
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ConversationList> createState() => _ConversationListState();
+}
+
+class _ConversationListState extends ConsumerState<_ConversationList>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    final query = widget.query;
     final async = ref.watch(_conversationsProvider);
     return async.when(
       loading: () => const SkeletonList(count: 4),
@@ -574,21 +641,27 @@ class _ConversationList extends ConsumerWidget {
           );
         }
 
-        return ListView.builder(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.x5,
-            0,
-            AppSpacing.x5,
-            AppSpacing.x6,
-          ),
-          itemCount: filtered.length,
-          itemBuilder: (_, i) => Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.x2),
-            child: _ConversationCard(
-              conversation: filtered[i],
-              // `filtered[i].id` is the activity id (per the local
-              // seed and the backend contract for `/conversations`).
-              onTap: () => context.push('/chat/${filtered[i].id}'),
+        return RefreshIndicator(
+          onRefresh: () => ref.refresh(_conversationsProvider.future),
+          child: ListView.builder(
+            // Always scrollable so pull-to-refresh works even with a
+            // short inbox.
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.x5,
+              0,
+              AppSpacing.x5,
+              AppSpacing.x6,
+            ),
+            itemCount: filtered.length,
+            itemBuilder: (_, i) => Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.x2),
+              child: _ConversationCard(
+                conversation: filtered[i],
+                // `filtered[i].id` is the activity id (per the local
+                // seed and the backend contract for `/conversations`).
+                onTap: () => context.push('/chat/${filtered[i].id}'),
+              ),
             ),
           ),
         );
