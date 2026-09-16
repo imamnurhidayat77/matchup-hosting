@@ -183,4 +183,39 @@ void main() {
       expect(restored.venueLongitude, isNull);
     });
   });
+
+  group('split-cost min players (regression: stepper stuck below max)', () {
+    test('setMinPlayers(null) clears a previously set minimum', () {
+      notifier().setMaxParticipants(10);
+      notifier().setMinPlayers(9);
+      expect(state().minPlayers, 9);
+      // "+" at 9 of 10 writes null (full house) — must clear, not stick.
+      notifier().setMinPlayers(null);
+      expect(state().minPlayers, isNull);
+    });
+
+    test('copyWith without minPlayers keeps the current value', () {
+      notifier().setMinPlayers(6);
+      notifier().setPrice('100');
+      expect(state().minPlayers, 6);
+      expect(state().price, '100');
+    });
+
+    test('shrinking capacity below the minimum resets to full house', () {
+      notifier().setMaxParticipants(10);
+      notifier().setMinPlayers(9);
+      notifier().setMaxParticipants(8);
+      expect(state().maxParticipants, 8);
+      expect(state().minPlayers, isNull);
+    });
+
+    test('min players survives a toJson/fromJson round trip', () {
+      notifier().setMaxParticipants(10);
+      notifier().setPriceMode(1);
+      notifier().setMinPlayers(8);
+      final restored = ActivityFormData.fromJson(state().toJson());
+      expect(restored.priceMode, 1);
+      expect(restored.minPlayers, 8);
+    });
+  });
 }

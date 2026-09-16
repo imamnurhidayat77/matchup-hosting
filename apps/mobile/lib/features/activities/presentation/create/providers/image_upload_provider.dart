@@ -3,8 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// State of image upload process
 enum ImageUploadState {
   initial, // No image selected
-  selecting, // User is choosing image source
-  cropping, // User is adjusting crop
   uploading, // Image is being uploaded/compressed
   completed, // Image uploaded successfully
   failed, // Upload failed
@@ -52,14 +50,6 @@ final imageUploadProvider =
 
 class ImageUploadNotifier extends StateNotifier<ImageUploadInfo> {
   ImageUploadNotifier() : super(const ImageUploadInfo());
-
-  void setSelecting() {
-    state = state.copyWith(state: ImageUploadState.selecting);
-  }
-
-  void setCropping() {
-    state = state.copyWith(state: ImageUploadState.cropping);
-  }
 
   void setUploading(double progress) {
     state = state.copyWith(

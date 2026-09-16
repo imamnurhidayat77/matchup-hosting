@@ -34,6 +34,14 @@ Map<String, String> formValidator(ActivityFormData data) {
     errors['price'] = 'Please enter a price';
   }
 
+  // Split-mode min players validation
+  if (data.feeType == 1 && data.priceMode == 1) {
+    final min = data.minPlayers;
+    if (min != null && (min < 2 || min > data.maxParticipants)) {
+      errors['minPlayers'] = 'Min must be 2–${data.maxParticipants}';
+    }
+  }
+
   return errors;
 }
 

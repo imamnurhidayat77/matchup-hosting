@@ -657,6 +657,8 @@ class _MapState extends State<_Map> {
           _userLocation = LatLng(pos.latitude, pos.longitude);
         });
       }
+    } on LocationTimeoutException {
+      // Slow fix — keep the bundled fallback origin.
     } finally {
       if (mounted) setState(() => _locating = false);
     }

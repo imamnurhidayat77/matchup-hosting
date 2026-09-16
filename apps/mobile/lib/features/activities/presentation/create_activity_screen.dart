@@ -1,13 +1,18 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:dio/dio.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../core/network/api_client.dart';
+
 import '../../../core/providers/repository_providers.dart';
+import '../../../core/services/storage_service.dart';
 import '../../../core/storage/local_storage.dart';
 import '../../../core/utils/geohash.dart';
 import '../../../core/theme/app_colors.dart';
@@ -16,6 +21,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/app_segmented_control.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_tappable.dart';
 import '../../../core/widgets/date_picker_sheet.dart';
@@ -25,6 +31,7 @@ import '../../sports/domain/sport_config.dart';
 import '../domain/activity_model.dart';
 import 'create/components/image_picker_modal.dart';
 import 'create/providers/form_data_provider.dart';
+import 'create/services/form_validator.dart' show validateField;
 import '../domain/place_suggestion.dart';
 import 'widgets/venue_field.dart';
 import 'create/providers/image_upload_provider.dart';
@@ -56,14 +63,17 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
   static const _stepPreview = 2;
 
   final _titleController = TextEditingController();
-  final _locationController = TextEditingController();
   final _descriptionController = TextEditingController();
-  final _priceController = TextEditingController(text: '0.00');
+  final _priceController = TextEditingController();
   PlaceSuggestion? _venue;
   static final _picker = ImagePicker();
 
   int _step = _stepSetup;
   bool _submitting = false;
+
+  /// True after a blocked Continue attempt — reveals inline field
+  /// errors on the setup step. Reset once the step validates.
+  bool _setupAttempted = false;
 
   // Custom duration: stepped in 15-minute increments, 30m … 8h.
   static const _durationStep = 15;
@@ -165,6 +175,8 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
             ..setSkillLevel(data.skillLevel)
             ..setFeeType(data.feeType)
             ..setPrice(data.price)
+            ..setPriceMode(data.priceMode)
+            ..setMinPlayers(data.minPlayers)
             ..setDurationMinutes(data.durationMinutes)
             ..setJoinPolicy(data.joinPolicy);
           if (data.selectedDate != null &&
@@ -174,9 +186,8 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
             form.setSelectedDate(DateTime.now().add(const Duration(hours: 2)));
           }
           _titleController.text = data.title;
-          _locationController.text = data.location;
           _descriptionController.text = data.description;
-          _priceController.text = data.price ?? '0.00';
+          _priceController.text = data.price ?? '';
           // Rebuild the picked venue so the address + accurate pin
           // survive the restore (previously only the label text came
           // back and submit fell back to default coords).
@@ -208,9 +219,8 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
       ..setSelectedDate(DateTime.now().add(const Duration(hours: 2)));
     setState(() => _venue = null);
     _titleController.clear();
-    _locationController.clear();
     _descriptionController.clear();
-    _priceController.text = '0.00';
+    _priceController.clear();
   }
 
   Future<void> _saveDraft() async {
@@ -235,7 +245,6 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
   @override
   void dispose() {
     _titleController.dispose();
-    _locationController.dispose();
     _descriptionController.dispose();
     _priceController.dispose();
     super.dispose();
@@ -539,6 +548,9 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
     final data = ref.read(formDataProvider);
     final err = _setupError(data);
     if (err != null) {
+      // Reveal inline field errors in addition to the snackbar, so a
+      // missing venue can't be mistaken for "lanjut".
+      setState(() => _setupAttempted = true);
       AppSnackbar.show(
         context,
         message: err,
@@ -547,17 +559,23 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
       return;
     }
     FocusScope.of(context).unfocus();
-    setState(() => _step = _stepRules);
+    setState(() {
+      _setupAttempted = false;
+      _step = _stepRules;
+    });
     unawaited(_saveDraft());
   }
 
   void _goToPreview() {
-    if (ref.read(formDataProvider).feeType == 1) {
+    final data = ref.read(formDataProvider);
+    if (data.feeType == 1) {
       final price = double.tryParse(_priceController.text.trim());
       if (price == null || price <= 0) {
         AppSnackbar.show(
           context,
-          message: 'Please enter a valid price.',
+          message: data.priceMode == 1
+              ? 'Please enter a valid total cost.'
+              : 'Please enter a valid price.',
           variant: AppSnackbarVariant.error,
         );
         return;
@@ -571,7 +589,13 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
   /// First blocking issue on the setup step, or null when it's good to go.
   String? _setupError(ActivityFormData data) {
     if (data.title.trim().isEmpty) return 'Please enter an activity title.';
-    if (data.location.trim().isEmpty) return 'Please enter a location.';
+    // A venue pick carries coordinates — a bare location string without
+    // them (stale draft) must re-pick instead of silently submitting
+    // with fallback coordinates.
+    if (data.location.trim().isEmpty ||
+        (data.venueLatitude == null && _venue == null)) {
+      return 'Please pick a venue on the map.';
+    }
     final date = data.selectedDate;
     if (date == null || date.isBefore(DateTime.now())) {
       return 'Please pick a future date and time.';
@@ -580,9 +604,108 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
     return null;
   }
 
+  /// Uploads the selected cover image and returns its download URL, or
+  /// `null` when there is no image / the upload fails. Photo is optional
+  /// so failures never block activity creation.
+  ///
+  /// The draft stores the picked bytes as base64 via `setCoverImage`
+  /// (see [_pickImage]); [StorageService.uploadImage] needs a local file
+  /// path, so base64 payloads are decoded into a temp file first. A
+  /// value that already points at an existing file is uploaded directly.
+  Future<String?> _uploadCoverImage(String? stored) async {
+    if (stored == null || stored.isEmpty) return null;
+    try {
+      if (await File(stored).exists()) {
+        return await StorageService.instance.uploadImage(
+          localPath: stored,
+          folder: 'activity-covers',
+        );
+      }
+      final bytes = base64.decode(stored);
+      final dir = await Directory.systemTemp.createTemp('cover_');
+      final file = File(
+        '${dir.path}/cover_${DateTime.now().millisecondsSinceEpoch}.jpg',
+      );
+      await file.writeAsBytes(bytes, flush: true);
+      return await StorageService.instance.uploadImage(
+        localPath: file.path,
+        folder: 'activity-covers',
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> _submit() async {
     if (_submitting) return;
     final data = ref.read(formDataProvider);
+    // Never silently substitute a fallback date: re-validate the setup
+    // step and abort with the reason when it's not good to go.
+    final setupErr = _setupError(data);
+    if (setupErr != null) {
+      if (!mounted) return;
+      AppSnackbar.show(
+        context,
+        message: setupErr,
+        variant: AppSnackbarVariant.error,
+      );
+      return;
+    }
+    // Shared rules (same messages as the wizard validators): capacity
+    // cap and price format.
+    final capErr = validateField(
+      'maxParticipants',
+      '${data.maxParticipants}',
+      data,
+    );
+    if (capErr != null) {
+      if (!mounted) return;
+      AppSnackbar.show(
+        context,
+        message: capErr,
+        variant: AppSnackbarVariant.error,
+      );
+      return;
+    }
+    final paid = data.feeType == 1;
+    if (paid) {
+      final priceErr = validateField(
+        'price',
+        _priceController.text.trim(),
+        data,
+      );
+      if (priceErr != null) {
+        if (!mounted) return;
+        AppSnackbar.show(
+          context,
+          message: priceErr,
+          variant: AppSnackbarVariant.error,
+        );
+        return;
+      }
+    }
+    final split = paid && data.priceMode == 1;
+    final amount = double.tryParse(_priceController.text.trim());
+    if (paid && (amount == null || amount <= 0)) {
+      AppSnackbar.show(
+        context,
+        message: split
+            ? 'Please enter a valid total cost.'
+            : 'Please enter a valid price.',
+        variant: AppSnackbarVariant.error,
+      );
+      return;
+    }
+    // Split: clamp min into 2..capacity (null = full house). The stored
+    // `fee` is the worst-case per-person price so old clients still
+    // render a number.
+    final minPlayers = split
+        ? (data.minPlayers ?? data.maxParticipants)
+            .clamp(2, data.maxParticipants)
+        : null;
+    final perPerson = split && minPlayers != null
+        ? (amount! / minPlayers * 100).round() / 100
+        : amount;
 
     setState(() => _submitting = true);
     final pickedVenue = _venue;
@@ -599,6 +722,10 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
         : pickedVenue?.secondary.trim().isNotEmpty == true
             ? pickedVenue!.secondary.trim()
             : null;
+    // Cover photo is optional: upload the selected image (stored as
+    // base64 in the draft via setCoverImage) and pass the URL through.
+    // Any upload failure falls back to creating without a photo.
+    final String? coverImageUrl = await _uploadCoverImage(data.coverImagePath);
     try {
       await ref
           .read(activityRepositoryProvider)
@@ -608,16 +735,24 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
             sportType: data.sportType,
             location: data.location.trim(),
             address: pickedAddress,
-            dateTime:
-                data.selectedDate ??
-                DateTime.now().add(const Duration(hours: 2)),
+            // Validated at the top of [_submit] — never a silent
+            // now()+2h substitution.
+            dateTime: data.selectedDate!,
             maxParticipants: data.maxParticipants,
             skillLevel: data.skillLevel,
             latitude: pickedLat,
             longitude: pickedLng,
             geohash: pickedGeohash,
+            coverImageUrl: coverImageUrl,
             durationMinutes: data.durationMinutes,
             joinPolicy: data.joinPolicy,
+            isPaid: paid,
+            fee: paid ? perPerson : null,
+            feeMode: split ? 'split' : 'fixed',
+            totalCost: split ? amount : null,
+            minPlayers: split && minPlayers != null && minPlayers < data.maxParticipants
+                ? minPlayers
+                : null,
           );
       _form.reset();
       ref.read(imageUploadProvider.notifier).reset();
@@ -630,13 +765,19 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
         variant: AppSnackbarVariant.success,
       );
       context.go('/activities');
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
+      debugPrint('[CreateActivity] submit failed: $e');
+      // Prefer the backend's own message (validation, conflicts, …)
+      // over the generic fallback so failures explain themselves.
+      final message = e is DioException && e.error is ApiException
+          ? (e.error as ApiException).userMessage
+          : 'Could not create activity. Please try again.';
       // Retry path (spec Phase 4): the form is NOT reset on failure, so
       // tapping Retry reuses every field exactly as the user left it.
       AppSnackbar.show(
         context,
-        message: 'Could not create activity. Please try again.',
+        message: message,
         variant: AppSnackbarVariant.error,
         duration: const Duration(seconds: 5),
         actionLabel: 'Retry',
@@ -722,6 +863,20 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
   // ── Step 1 · Setup ──────────────────────────────────────────────────────────
 
   Widget _buildSetupStep(ActivityFormData data) {
+    // Inline errors appear only after a blocked Continue attempt —
+    // pristine fields stay clean.
+    final titleErr =
+        _setupAttempted && data.title.trim().isEmpty ? 'Please enter an activity title.' : null;
+    final venueErr = _setupAttempted &&
+            (data.location.trim().isEmpty ||
+                (data.venueLatitude == null && _venue == null))
+        ? 'Please pick a venue on the map.'
+        : null;
+    final dateErr = _setupAttempted &&
+            (data.selectedDate == null ||
+                data.selectedDate!.isBefore(DateTime.now()))
+        ? 'Please pick a future date and time.'
+        : null;
     return ListView(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.x5,
@@ -740,6 +895,7 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
         _SettingCard(
           icon: Icons.edit_outlined,
           label: 'Activity Title',
+          error: titleErr,
           trailing: Text(
             '${data.title.length}/40',
             style: AppTypography.metaSub(context),
@@ -780,6 +936,7 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
         _SettingCard(
           icon: Icons.calendar_month_outlined,
           label: 'Date & Time',
+          error: dateErr,
           onTap: _pickDate,
           value: Text(
             data.selectedDate == null
@@ -830,6 +987,7 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
         // setup step as complete).
         VenueField(
           value: _venue,
+          errorText: venueErr,
           onSuggestionSelected: (s) {
             setState(() => _venue = s);
             _form.setVenue(
@@ -957,44 +1115,50 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
             ),
           ],
         ),
-        if (data.feeType == 1) ...[
-          const SizedBox(height: AppSpacing.x3),
-          Container(
-            height: 48,
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x4),
-            alignment: Alignment.centerLeft,
-            decoration: BoxDecoration(
-              color: context.colors.surface,
-              borderRadius: BorderRadius.circular(AppRadius.input),
-              border: Border.all(color: context.colors.border),
-            ),
-            child: Row(
-              children: [
-                Text(
-                  '\$',
-                  style: _inputStyle(
-                    context,
-                  ).copyWith(color: context.colors.textSecondary),
-                ),
-                const SizedBox(width: AppSpacing.x1),
-                Expanded(
-                  child: TextField(
-                    controller: _priceController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    textInputAction: TextInputAction.done,
-                    cursorColor: AppColors.primary,
-                    style: _inputStyle(context),
-                    decoration: _dec(context, '0.00'),
-                    onChanged: _form.setPrice,
-                  ),
-                ),
-                Text('per person', style: AppTypography.metaSub(context)),
-              ],
-            ),
+        // Paid block: segmented mode + price card. Wrapped in
+        // AnimatedSize so Free↔Paid toggles and Fixed↔Split switches
+        // grow/collapse smoothly instead of pushing "Who Can Join"
+        // down in one jump.
+        ClipRect(
+          child: AnimatedSize(
+            duration: AppDurations.base,
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: data.feeType == 1
+                ? Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const SizedBox(height: AppSpacing.x3),
+                      // Pricing mode: Fixed = flat per person,
+                      // Split = shared total.
+                      AppSegmentedControl(
+                        labels: const [
+                          'Fixed · per person',
+                          'Split · total',
+                        ],
+                        selectedIndex: data.priceMode,
+                        onChanged: (i) => _form.setPriceMode(i),
+                      ),
+                      const SizedBox(height: AppSpacing.x3),
+                      // Amount, min stepper and live estimate in one card.
+                      _PriceCard(
+                        priceController: _priceController,
+                        onPriceChanged: _form.setPrice,
+                        isSplit: data.priceMode == 1,
+                        min: data.minPlayers ?? data.maxParticipants,
+                        max: data.maxParticipants,
+                        onMinChanged: (v) => _form.setMinPlayers(
+                          v >= data.maxParticipants ? null : v,
+                        ),
+                        total: double.tryParse(
+                          _priceController.text.trim(),
+                        ),
+                      ),
+                    ],
+                  )
+                : const SizedBox(width: double.infinity),
           ),
-        ],
+        ),
         const SizedBox(height: AppSpacing.x4),
 
         // Join Policy — same choice-card language as Entry above.
@@ -1096,6 +1260,13 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
   // ── Preview ─────────────────────────────────────────────────────────────
 
   Widget _buildPreviewStep(ActivityFormData data) {
+    final paid = data.feeType == 1;
+    final split = paid && data.priceMode == 1;
+    final amount = double.tryParse(_priceController.text.trim());
+    final min = split
+        ? (data.minPlayers ?? data.maxParticipants)
+            .clamp(2, data.maxParticipants)
+        : null;
     final preview = ActivityModel(
       id: 'preview',
       title: data.title.trim().isEmpty ? 'Your activity' : data.title.trim(),
@@ -1112,7 +1283,17 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
       participantCount: 1,
       hostName: 'You',
       durationMinutes: data.durationMinutes,
-      isPaid: data.feeType == 1,
+      isPaid: paid,
+      fee: paid
+          ? (split && min != null && amount != null && amount > 0
+              ? (amount / min * 100).round() / 100
+              : amount)
+          : null,
+      feeMode: split ? 'split' : 'fixed',
+      totalCost: split ? amount : null,
+      minPlayers: split && min != null && min < data.maxParticipants
+          ? min
+          : null,
     );
 
     return ListView(
@@ -1128,7 +1309,14 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
           subtitle: 'This is how others will see your activity',
         ),
         const SizedBox(height: AppSpacing.x4),
-        SizedBox(height: 540, child: DiscoveryCard(activity: preview)),
+        // Card height follows the screen (62%) within sane bounds so
+        // the preview fills small phones without overflowing tablets.
+        SizedBox(
+          height: (MediaQuery.of(context).size.height * 0.62)
+              .clamp(420.0, 640.0)
+              .toDouble(),
+          child: DiscoveryCard(activity: preview),
+        ),
         const SizedBox(height: AppSpacing.x5),
         const _CheckRow('Your activity looks great.'),
         const SizedBox(height: AppSpacing.x2),
@@ -1165,7 +1353,8 @@ class _StepProgressBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fraction = switch (step) {
-      0 => 0.5,
+      0 => 1 / 3,
+      1 => 2 / 3,
       _ => 1.0,
     };
     return Padding(
@@ -1310,6 +1499,7 @@ class _SettingCard extends StatelessWidget {
     this.value,
     this.trailing,
     this.onTap,
+    this.error,
   });
 
   final IconData icon;
@@ -1317,6 +1507,11 @@ class _SettingCard extends StatelessWidget {
   final Widget? value;
   final Widget? trailing;
   final VoidCallback? onTap;
+
+  /// Inline validation message. Renders a red border + message row so a
+  /// blocked Continue is visible on the field itself, not just a
+  /// transient snackbar.
+  final String? error;
 
   @override
   Widget build(BuildContext context) {
@@ -1329,7 +1524,10 @@ class _SettingCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.colors.surface,
         borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: context.colors.border),
+        border: Border.all(
+          color: error != null ? context.colors.errorText : context.colors.border,
+          width: error != null ? 1.5 : 1,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1353,6 +1551,16 @@ class _SettingCard extends StatelessWidget {
               ],
             ],
           ),
+          if (error != null) ...[
+            const SizedBox(height: AppSpacing.x2),
+            Text(
+              error!,
+              style: AppTypography.metaSub(context).copyWith(
+                color: context.colors.errorText,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -1651,6 +1859,277 @@ class _CounterBtn extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Whole price block in one clean card: amount field on top, min
+/// stepper below the divider (split mode only), and a tinted live
+/// estimate footer. Replaces the old three-stacked-boxes layout.
+/// Price block: big payment-style amount + min stepper + live estimate.
+///
+/// The amount reads like a payment app (32 px ExtraBold, primary `$`)
+/// instead of a plain small text row; the mode suffix is an uppercase
+/// pill chip in the same language as the join-policy pills, and the
+/// card border lights up primary while the field is focused — same
+/// interaction as the date-of-birth field on get-to-know-3.
+class _PriceCard extends StatefulWidget {
+  const _PriceCard({
+    required this.priceController,
+    required this.onPriceChanged,
+    required this.isSplit,
+    required this.min,
+    required this.max,
+    required this.onMinChanged,
+    required this.total,
+  });
+
+  final TextEditingController priceController;
+  final ValueChanged<String> onPriceChanged;
+  final bool isSplit;
+  final int min;
+  final int max;
+  final ValueChanged<int> onMinChanged;
+  final double? total;
+
+  @override
+  State<_PriceCard> createState() => _PriceCardState();
+}
+
+class _PriceCardState extends State<_PriceCard> {
+  final _focus = FocusNode();
+  bool _focused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(() {
+      if (mounted) setState(() => _focused = _focus.hasFocus);
+    });
+  }
+
+  @override
+  void dispose() {
+    _focus.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final amountStyle = AppTypography.headlineLarge(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(AppRadius.input),
+        border: Border.all(
+          color: _focused ? AppColors.primary : c.border,
+          width: _focused ? 1.5 : 1,
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Amount row.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.x4,
+              AppSpacing.x4,
+              AppSpacing.x4,
+              AppSpacing.x4,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text(
+                  '\$',
+                  style: amountStyle.copyWith(color: c.primaryOnSurface),
+                ),
+                const SizedBox(width: AppSpacing.x1),
+                Expanded(
+                  child: TextField(
+                    controller: widget.priceController,
+                    focusNode: _focus,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    textInputAction: TextInputAction.done,
+                    cursorColor: AppColors.primary,
+                    style: amountStyle,
+                    decoration: InputDecoration(
+                      hintText: '0.00',
+                      hintStyle: amountStyle.copyWith(
+                        color: c.textTertiary,
+                      ),
+                      filled: false,
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    onChanged: widget.onPriceChanged,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.x2),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: c.primarySoft,
+                    borderRadius: AppRadius.pillR,
+                  ),
+                  child: AnimatedSwitcher(
+                    duration: AppDurations.fast,
+                    child: Text(
+                      widget.isSplit ? 'TOTAL' : 'PER PERSON',
+                      // Keyed so mode switches cross-fade the pill text
+                      // instead of swapping it in one frame.
+                      key: ValueKey(widget.isSplit),
+                      style: AppTypography.badgeSport(context).copyWith(
+                        color: c.primaryOnSurface,
+                        fontSize: 10,
+                        letterSpacing: 0.8,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (widget.isSplit) ...[
+            Divider(height: 1, color: c.border),
+            // Min stepper row — value inline between the buttons.
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.x4,
+                vertical: AppSpacing.x3,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Minimum to run',
+                          style: _inputStyle(context).copyWith(fontSize: 14),
+                        ),
+                        Text(
+                          widget.min >= widget.max
+                              ? 'Full house · ${widget.max} players'
+                              : '${widget.min} of ${widget.max} players',
+                          style: AppTypography.metaSub(context),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _CounterBtn(
+                    icon: Icons.remove_rounded,
+                    enabled: widget.min > 2,
+                    emphasised: false,
+                    semanticLabel: 'Decrease minimum players',
+                    onTap: () => widget.onMinChanged(widget.min - 1),
+                  ),
+                  SizedBox(
+                    width: 36,
+                    child: Text(
+                      '${widget.min}',
+                      textAlign: TextAlign.center,
+                      style: _inputStyle(
+                        context,
+                      ).copyWith(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  _CounterBtn(
+                    icon: Icons.add_rounded,
+                    enabled: widget.min < widget.max,
+                    emphasised: true,
+                    semanticLabel: 'Increase minimum players',
+                    onTap: () => widget.onMinChanged(widget.min + 1),
+                  ),
+                ],
+              ),
+            ),
+            // Live worst-case estimate footer.
+            _SplitEstimateFooter(
+              total: widget.total,
+              min: widget.min,
+              capacity: widget.max,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Tinted live-estimate footer inside [_PriceCard]: total ÷ min.
+/// Hidden until a valid total is typed. Division is guarded —
+/// a zero min would render Infinity instead of a price.
+class _SplitEstimateFooter extends StatelessWidget {
+  const _SplitEstimateFooter({
+    required this.total,
+    required this.min,
+    required this.capacity,
+  });
+
+  final double? total;
+  final int min;
+  final int capacity;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    if (total == null || total! <= 0 || min < 1 || capacity < 1) {
+      return const SizedBox.shrink();
+    }
+    final worst = total! / min;
+    final full = total! / capacity;
+    // Full house splits exact — no "≈". Otherwise the worst case is
+    // approximate (only gets cheaper as more join).
+    final text = min >= capacity
+        ? '\$${full.toStringAsFixed(2)} each — split evenly'
+        : '≈\$${worst.toStringAsFixed(2)} each worst case · \$${full.toStringAsFixed(2)} when full';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.x4,
+        vertical: AppSpacing.x2 + 2,
+      ),
+      decoration: BoxDecoration(
+        color: c.statusSuccessBg,
+        // Inset bottom radius: the footer sits flush against the card's
+        // bottom edge, so square corners would paint over the card's
+        // own bottom border (the "cut line" bug).
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(AppRadius.input - 1),
+          bottomRight: Radius.circular(AppRadius.input - 1),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.check_circle_outline_rounded,
+            size: 14,
+            color: c.successText,
+          ),
+          const SizedBox(width: AppSpacing.x2),
+          Expanded(
+            child: Text(
+              text,
+              style: AppTypography.metaSub(context).copyWith(
+                color: c.successText,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
