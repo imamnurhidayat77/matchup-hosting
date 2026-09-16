@@ -81,10 +81,24 @@ class RemoteDmRepository implements DmRepository {
     } catch (e, st) {
       debugPrint('[RemoteDmRepository.watchMessages] RTDB failed, polling: $e\n$st');
     }
-    // Polling fallback.
+    // Polling fallback with error backoff: consecutive failures
+    // stretch the delay (2s × failures, capped at 5) instead of
+    // hammering a struggling backend at a fixed cadence. Resets on
+    // the first success. Cancelling the subscription drops the loop
+    // at the next suspension point (no further yields are delivered).
+    var failures = 0;
     while (true) {
-      yield await messages(otherUid);
-      await Future<void>.delayed(const Duration(seconds: 3));
+      try {
+        yield await messages(otherUid);
+        failures = 0;
+      } catch (_) {
+        if (failures < 5) failures++;
+      }
+      await Future<void>.delayed(
+        failures == 0
+            ? const Duration(seconds: 3)
+            : Duration(seconds: 2 * failures),
+      );
     }
   }
 
@@ -137,9 +151,22 @@ class RemoteDmRepository implements DmRepository {
     } catch (e, st) {
       debugPrint('[RemoteDmRepository.watchConversations] RTDB failed: $e\n$st');
     }
+    // Same error-backoff shape as [watchMessages]: healthy ticks stay
+    // at 10s; consecutive failures back off instead of holding the
+    // fixed cadence. Cancellable via the subscription (see above).
+    var failures = 0;
     while (true) {
-      yield await conversations();
-      await Future<void>.delayed(const Duration(seconds: 10));
+      try {
+        yield await conversations();
+        failures = 0;
+      } catch (_) {
+        if (failures < 5) failures++;
+      }
+      await Future<void>.delayed(
+        failures == 0
+            ? const Duration(seconds: 10)
+            : Duration(seconds: 2 * failures),
+      );
     }
   }
 
@@ -218,7 +245,12 @@ class RemoteDmRepository implements DmRepository {
       localPath: imagePath,
       folder: 'chat-attachments/dm_${dmThreadId(myUid, otherUid)}',
     );
-    if (uploadedUrl == null) throw Exception('upload failed');
+    if (uploadedUrl == null) {
+      // Same contract as the group chat path: the photo cannot leave
+      // the device, so surface the specific message the screens render
+      // verbatim instead of a generic failure.
+      throw Exception('Photo uploads are unavailable right now');
+    }
     final sent = await send(otherUid: otherUid, text: uploadedUrl);
     return ChatMessage(
       id: sent.id,

@@ -8,6 +8,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/app_tappable.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/error_retry.dart';
@@ -64,23 +65,52 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   int _tab = 0;
 
   Future<void> _markAllRead() async {
-    await ref.read(notificationRepositoryProvider).markAllRead();
+    final ok = await ref.read(notificationRepositoryProvider).markAllRead();
+    // Resync either way — a failure may be partial (some rows read,
+    // some not) and the feed must reflect the server truth.
     ref.invalidate(_notifProvider);
+    if (!ok && mounted) {
+      AppSnackbar.show(
+        context,
+        message: 'Could not mark all as read. Please try again.',
+        variant: AppSnackbarVariant.error,
+      );
+    }
   }
 
-  Future<void> _markRead(String id) async {
-    await ref.read(notificationRepositoryProvider).markRead(id);
+  /// Marks one row read. Returns the transport result so dismissals
+  /// can be gated on it — a failed row stays put instead of snapping
+  /// back on the resync.
+  Future<bool> _markRead(String id) async {
+    final ok = await ref.read(notificationRepositoryProvider).markRead(id);
+    // Resync either way so the badge/read state matches the server.
     ref.invalidate(_notifProvider);
+    if (!mounted) return ok;
+    if (ok) {
+      AppSnackbar.show(
+        context,
+        message: 'Marked as read',
+        variant: AppSnackbarVariant.success,
+      );
+    } else {
+      AppSnackbar.show(
+        context,
+        message: 'Could not mark as read. Please try again.',
+        variant: AppSnackbarVariant.error,
+      );
+    }
+    return ok;
   }
 
   /// Marks the notification read, then deep-links to its screen.
   /// `push` (not `go`) keeps the feed underneath so back returns here.
-  /// Taps without a usable target stay on the feed — still marked read.
+  /// Taps without a usable target (null route) stay on the feed —
+  /// still marked read.
   Future<void> _openNotif(AppNotification notif) async {
     await _markRead(notif.id);
     if (!mounted) return;
     final route = routeForNotification(notif);
-    if (route == '/notifications') return;
+    if (route == null || route == '/notifications') return;
     context.push(route);
   }
 
@@ -160,7 +190,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                       padding: const EdgeInsets.only(bottom: AppSpacing.x2),
                       child: _SwipeToRead(
                         key: ValueKey(notif.id),
-                        onDismiss: () => _markRead(notif.id),
+                        onConfirm: () => _markRead(notif.id),
                         child: _NotifCard(
                           item: notif,
                           onTap: () => _openNotif(notif),
@@ -453,17 +483,20 @@ class _SwipeToRead extends StatelessWidget {
   const _SwipeToRead({
     super.key,
     required this.child,
-    required this.onDismiss,
+    required this.onConfirm,
   });
   final Widget child;
-  final VoidCallback onDismiss;
+
+  /// Awaited before the row is dismissed: returning `false` (transport
+  /// failure) keeps the row instead of a snap-back refetch surprise.
+  final Future<bool> Function() onConfirm;
 
   @override
   Widget build(BuildContext context) {
     return Dismissible(
       key: key!,
       direction: DismissDirection.endToStart,
-      onDismissed: (_) => onDismiss(),
+      confirmDismiss: (_) => onConfirm(),
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: AppSpacing.x5),

@@ -1,8 +1,10 @@
 import 'dart:io';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -16,6 +18,7 @@ import '../../../core/theme/dark_colors.dart';
 import '../../../core/widgets/app_avatar.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_snackbar.dart';
+import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../profile/domain/user_model.dart';
 import '../../report/presentation/report_user_sheet.dart';
@@ -108,6 +111,9 @@ class _DmScreenState extends ConsumerState<DmScreen> {
     } catch (e) {
       debugPrint('[DmScreen] send failed: $e');
       if (!mounted) return;
+      // Restore the draft so the user doesn't lose what they typed
+      // (mirrors the group chat send path).
+      _controller.text = text;
       setState(() {
         _errorText = 'Could not send. Tap send to retry.';
       });
@@ -184,25 +190,50 @@ class _DmScreenState extends ConsumerState<DmScreen> {
           .sendImage(otherUid: widget.otherUid, imagePath: picked.path);
       if (!mounted) return;
       _scrollToLatest();
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       AppSnackbar.show(
         context,
-        message: 'Could not send photo.',
+        // The "uploads unavailable" signal renders verbatim; every
+        // other failure keeps the generic copy.
+        message: _photoErrorMessage(e),
         variant: AppSnackbarVariant.error,
       );
     }
   }
 
   Future<void> _shareLocation() async {
-    final position = await LocationService.instance.getCurrentLocation();
-    if (!mounted) return;
-    if (position == null) {
+    late final Position? position;
+    try {
+      position =
+          await LocationService.instance.getCurrentLocation();
+    } on LocationTimeoutException {
+      // A slow fix is transient — offer a retry, not a lecture about
+      // permissions.
+      if (!mounted) return;
       AppSnackbar.show(
         context,
-        message: 'Could not access your location. Check location '
-            'permissions and try again.',
+        message: "Couldn't get your location. Try again.",
         variant: AppSnackbarVariant.error,
+      );
+      return;
+    }
+    if (!mounted) return;
+    if (position == null) {
+      // Permanently denied ("don't ask again") can only be fixed in
+      // the OS settings — offer a shortcut there.
+      final permanentlyDenied = await LocationService.instance
+          .isPermissionPermanentlyDenied();
+      if (!mounted) return;
+      AppSnackbar.show(
+        context,
+        message: permanentlyDenied
+            ? 'Location permission is off. Enable it in Settings to share your location.'
+            : 'Could not access your location. Check location '
+                'permissions and try again.',
+        variant: AppSnackbarVariant.error,
+        actionLabel: permanentlyDenied ? 'Open Settings' : null,
+        onAction: permanentlyDenied ? () => Geolocator.openAppSettings() : null,
       );
       return;
     }
@@ -267,6 +298,18 @@ class _DmScreenState extends ConsumerState<DmScreen> {
             child: StreamBuilder<List<ChatMessage>>(
               stream: stream,
               builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return ErrorRetry(
+                    message: 'Could not load messages.',
+                    // The stream is recreated on rebuild, so a plain
+                    // setState retries the subscription.
+                    onRetry: () => setState(() {}),
+                  );
+                }
+                if (snapshot.connectionState == ConnectionState.waiting &&
+                    !snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
                 final messages = snapshot.data ?? const <ChatMessage>[];
                 if (messages.isEmpty) {
                   return Center(
@@ -394,7 +437,15 @@ class _DmHeader extends StatelessWidget {
                   button: true,
                   label: 'Back',
                   child: PressableScale(
-                    onTap: () => Navigator.of(context).maybePop(),
+                    onTap: () async {
+                      // Cold-start deep links (push taps) have no route
+                      // to pop back to — fall back to the inbox instead
+                      // of stranding the user on a dead back button.
+                      final popped = await Navigator.of(context).maybePop();
+                      if (!popped && context.mounted) {
+                        context.go('/messages');
+                      }
+                    },
                     child: Container(
                       width: 38,
                       height: 38,
@@ -684,16 +735,29 @@ class _DmBubbleContent extends StatelessWidget {
   final ChatMessage message;
   final bool isMine;
 
-  Future<void> _openLocation() async {
+  Future<void> _openLocation(BuildContext context) async {
     final uri = Uri.parse(
       'https://www.google.com/maps/search/?api=1&query=${message.latitude},${message.longitude}',
     );
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened && context.mounted) {
+      AppSnackbar.show(
+        context,
+        message: 'Could not open Maps',
+        variant: AppSnackbarVariant.error,
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     if (message.isImage) {
+      // Defensive: isImage means an image source exists, but guard
+      // anyway — a null url with no local path renders the text
+      // instead of crashing on a force-unwrap.
+      if (message.imageUrl == null && message.imagePath == null) {
+        return _DmText(message: message, isMine: isMine);
+      }
       return PressableScale(
         onTap: () => _DmImageViewer.show(context, message),
         child: ClipRRect(
@@ -707,7 +771,7 @@ class _DmBubbleContent extends StatelessWidget {
       final fg =
           isMine ? AppColors.textOnPrimary : context.colors.textPrimary;
       return PressableScale(
-        onTap: _openLocation,
+        onTap: () => _openLocation(context),
         child: SizedBox(
           width: 180,
           child: Column(
@@ -733,6 +797,19 @@ class _DmBubbleContent extends StatelessWidget {
       );
     }
 
+    return _DmText(message: message, isMine: isMine);
+  }
+}
+
+/// Plain-text DM bubble, also the fallback when an image message
+/// carries no usable image source.
+class _DmText extends StatelessWidget {
+  const _DmText({required this.message, required this.isMine});
+  final ChatMessage message;
+  final bool isMine;
+
+  @override
+  Widget build(BuildContext context) {
     return Text(
       message.text,
       style: AppTypography.bodyMedium(context).copyWith(
@@ -766,26 +843,32 @@ class _DmImage extends StatelessWidget {
         errorBuilder: (_, _, _) => _brokenDmImage(context),
       );
     }
-    return Image.network(
-      message.imageUrl!,
+    final remoteUrl = message.imageUrl;
+    if (remoteUrl == null) return _brokenDmImage(context);
+    return CachedNetworkImage(
+      imageUrl: remoteUrl,
       width: width,
       height: height,
       fit: BoxFit.cover,
-      loadingBuilder: (context, child, progress) {
-        if (progress == null) return child;
-        return Container(
-          width: width,
-          height: height,
-          color: context.colors.surfaceMuted,
-          alignment: Alignment.center,
-          child: const SizedBox(
-            width: 24,
-            height: 24,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-        );
+      memCacheWidth:
+          (width * MediaQuery.devicePixelRatioOf(context)).round().clamp(1, 1200),
+      fadeInDuration: const Duration(milliseconds: 150),
+      fadeOutDuration: Duration.zero,
+      progressIndicatorBuilder: (context, url, progress) => Container(
+        width: width,
+        height: height,
+        color: context.colors.surfaceMuted,
+        alignment: Alignment.center,
+        child: const SizedBox(
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      ),
+      errorWidget: (context, url, error) {
+        debugPrint('[DmImage] failed: $url ($error)');
+        return _brokenDmImage(context);
       },
-      errorBuilder: (_, _, _) => _brokenDmImage(context),
     );
   }
 
@@ -865,8 +948,17 @@ class _DmImageViewer extends StatelessWidget {
   }
 }
 
+/// Renders the repository's "uploads unavailable" signal verbatim;
+/// every other photo failure keeps the generic copy.
+String _photoErrorMessage(Object e) {
+  const unavailable = 'Photo uploads are unavailable right now';
+  if (e.toString().contains(unavailable)) return unavailable;
+  return 'Could not send photo.';
+}
+
 /// 'h:mm a' without pulling intl in for one label.
-String _dmTime(DateTime dt) {  final h24 = dt.hour;
+String _dmTime(DateTime dt) {
+  final h24 = dt.hour;
   final h = h24 % 12 == 0 ? 12 : h24 % 12;
   final m = dt.minute.toString().padLeft(2, '0');
   return '$h:$m ${h24 < 12 ? 'AM' : 'PM'}';

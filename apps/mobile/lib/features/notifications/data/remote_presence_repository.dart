@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
@@ -39,9 +40,29 @@ class RemotePresenceRepository implements PresenceRepository {
   /// need to know within 100ms that someone went offline.
   static const Duration _onlinePollInterval = Duration(seconds: 30);
 
+  /// Same 429 circuit-breaker as the typing poll: while armed, watch
+  /// ticks are skipped so background polling doesn't prolong a
+  /// rate-limit window shared by every route on the IP.
+  DateTime? _blockedUntil;
+
+  bool get _isBlocked =>
+      _blockedUntil != null && DateTime.now().isBefore(_blockedUntil!);
+
+  void _noteRateLimit(DioException e) {
+    if (e.response?.statusCode != 429) return;
+    final raw = e.response?.headers.value('retry-after');
+    final secs = int.tryParse(raw?.trim() ?? '');
+    final wait = (secs != null && secs > 0 && secs <= 300)
+        ? Duration(seconds: secs)
+        : const Duration(seconds: 30);
+    _blockedUntil = DateTime.now().add(wait);
+    debugPrint(
+      '[RemotePresenceRepository] 429 — pausing polls until $_blockedUntil',
+    );
+  }
+
   @override
-  Future<void> setMyState(PresenceState state) async {
-    try {
+  Future<void> setMyState(PresenceState state) async {    try {
       await _client.dio.post(
         '/presence',
         data: {'state': state.wireValue},
@@ -63,11 +84,28 @@ class RemotePresenceRepository implements PresenceRepository {
     }
   }
 
+  /// Explicit best-effort `offline` write for the logout path.
+  /// Called from the auth sign-out BEFORE the tokens are cleared (the
+  /// write needs the session). Skips silently when there is no session
+  /// left to mark. Never throws.
+  ///
+  /// Lives here (not on the tracker widget) so the auth layer can call
+  /// it without importing presentation code — that direction would be
+  /// an import cycle via the repository providers.
+  static Future<void> markOfflineNow() async {
+    try {
+      final uid = await SecureTokenStore.instance.readUserId();
+      if (uid == null || uid.isEmpty) return;
+      await RemotePresenceRepository().setMyState(PresenceState.offline);
+    } catch (e) {
+      debugPrint('[RemotePresenceRepository.markOfflineNow] $e');
+    }
+  }
+
   /// Registers a server-side trigger that writes this user `offline`
   /// the moment their RTDB connection drops. Must be re-armed on every
   /// foreground transition because Firebase fires (and clears) it once.
-  Future<void> _armOfflineOnDisconnect() async {
-    try {
+  Future<void> _armOfflineOnDisconnect() async {    try {
       if (Firebase.apps.isEmpty) return;
       // The RTDB rule only allows an authenticated user to write their
       // own `presence/$uid` node (`auth.uid == $uid`). The app signs
@@ -94,12 +132,22 @@ class RemotePresenceRepository implements PresenceRepository {
       final data = apiDataMap(res.data);
       if (data == null) return null;
       return PresenceState.fromWire(data['state'] as String?);
-    } on Exception catch (e) {
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 429) _noteRateLimit(e);
       // 404 = user has never reported a state. Treat as offline and
-      // suppress the log line so it doesn't drown the console.
-      if (!e.toString().contains('404')) {
+      // suppress the log line so it doesn't drown the console. Status
+      // code (plus the normalised ApiException), never a toString sniff.
+      final isNotFound = e.response?.statusCode == 404 ||
+          (e.error is ApiException &&
+              (e.error as ApiException).statusCode == 404);
+      if (!isNotFound) {
         debugPrint('[RemotePresenceRepository.getState] $e');
       }
+      return _fallback.getState(uid);
+    } on Exception catch (e) {
+      // Non-Dio failure (no status code to inspect) — always logged,
+      // then treated as offline like every other error here.
+      debugPrint('[RemotePresenceRepository.getState] $e');
       return _fallback.getState(uid);
     }
   }
@@ -115,6 +163,7 @@ class RemotePresenceRepository implements PresenceRepository {
     Timer? timer;
 
     Future<void> tick() async {
+      if (_isBlocked) return;
       // Fan out a presence request per uid and collect the ones that
       // report `online`. Failures for any individual uid are
       // swallowed (the user is treated as offline); we still want

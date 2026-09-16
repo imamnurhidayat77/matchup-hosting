@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -228,14 +229,13 @@ void main() {
     );
     await _pump(tester, _FakeDmRepo(seed: [photo, location]));
 
-    // Photo bubble shows the network image; location bubble shows the
-    // map card instead of the raw link.
+    // Photo bubble shows the network image (_DmImage now uses
+    // CachedNetworkImage instead of Image.network); location bubble shows
+    // the map card instead of the raw link.
     final photoImage = find.byWidgetPredicate(
       (w) =>
-          w is Image &&
-          w.image is NetworkImage &&
-          (w.image as NetworkImage).url ==
-              'https://example.com/uploads/photo.jpg',
+          w is CachedNetworkImage &&
+          w.imageUrl == 'https://example.com/uploads/photo.jpg',
     );
     expect(photoImage, findsOneWidget);
     expect(find.text('My Location'), findsOneWidget);

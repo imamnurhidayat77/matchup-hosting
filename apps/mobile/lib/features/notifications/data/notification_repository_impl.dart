@@ -18,81 +18,85 @@ class LocalNotificationRepository implements NotificationRepository {
   }
 
   @override
-  Future<void> markRead(String id) async {}
+  Future<bool> markRead(String id) async {
+    return true;
+  }
 
   @override
-  Future<void> markAllRead() async {}
+  Future<bool> markAllRead() async {
+    return true;
+  }
 }
 
 class RemoteNotificationRepository implements NotificationRepository {
-  RemoteNotificationRepository({
-    ApiClient? client,
-    NotificationRepository? fallback,
-  }) : _client = client ?? ApiClient.instance,
-       _fallback = fallback ?? LocalNotificationRepository();
+  RemoteNotificationRepository({ApiClient? client})
+      : _client = client ?? ApiClient.instance;
 
   final ApiClient _client;
-  final NotificationRepository _fallback;
 
   @override
   Future<List<AppNotification>> all() async {
-    try {
-      // Canonical route is `GET /api/notifications/me` (no `/unread`
-      // variant exists on the backend).
-      final res = await _client.dio.get('/notifications/me');
-      return apiDataList(res.data).map(_parse).toList();
-    } catch (e, st) {
-      debugPrint('[RemoteNotificationRepository.all] $e\n$st');
-      return _fallback.all();
-    }
+    // Canonical route is `GET /api/notifications/me` (no `/unread`
+    // variant exists on the backend). Transport failures rethrow so
+    // the feed can show its ErrorRetry state instead of a misleading
+    // "no notifications" empty screen.
+    final res = await _client.dio.get('/notifications/me');
+    return apiDataList(res.data).map(_parse).whereType<AppNotification>().toList();
   }
 
   @override
   Future<List<AppNotification>> unread() async {
-    try {
-      final items = await all();
-      return items.where((n) => n.unread).toList();
-    } catch (e, st) {
-      debugPrint('[RemoteNotificationRepository.unread] $e\n$st');
-      return _fallback.unread();
-    }
+    final items = await all();
+    return items.where((n) => n.unread).toList();
   }
 
   @override
-  Future<void> markRead(String id) async {
+  Future<bool> markRead(String id) async {
     try {
       // Canonical route is `PATCH /api/notifications/me/:id/read`.
       await _client.dio.patch('/notifications/me/$id/read');
+      return true;
     } catch (e, st) {
       debugPrint('[RemoteNotificationRepository.markRead] $e\n$st');
-      await _fallback.markRead(id);
+      return false;
     }
   }
 
   @override
-  Future<void> markAllRead() async {
+  Future<bool> markAllRead() async {
     // No bulk endpoint on the backend — fan out per-notification.
     // Individual failures are swallowed so one bad id can't block
-    // the rest.
+    // the rest, but the overall result reports them.
     try {
       final pending = await unread();
+      var ok = true;
       await Future.wait(
         pending.map((n) async {
           try {
             await _client.dio.patch('/notifications/me/${n.id}/read');
-          } catch (_) {}
+          } catch (_) {
+            ok = false;
+          }
         }),
       );
+      return ok;
     } catch (e, st) {
       debugPrint('[RemoteNotificationRepository.markAllRead] $e\n$st');
-      await _fallback.markAllRead();
+      return false;
     }
   }
 
-  AppNotification _parse(dynamic raw) {
-    // Backend shape: `{notificationId, title, body, type, isRead,
-    // createdAt: {_seconds,…}, activityId?, senderUid?}`.
-    final json = raw as Map<String, dynamic>;
+  /// Parses one backend row, or `null` when the row is malformed (the
+  /// caller skips those so one bad row never sinks the whole feed).
+  /// Backend shape: `{notificationId, title, body, type, isRead,
+  /// createdAt: {_seconds,…}, activityId?, senderUid?}`.
+  AppNotification? _parse(dynamic raw) {
+    final json = raw is Map<String, dynamic>
+        ? raw
+        : raw is Map
+            ? Map<String, dynamic>.from(raw)
+            : null;
+    if (json == null) return null;
     String? clean(Object? v) {
       final s = v?.toString().trim() ?? '';
       return s.isEmpty ? null : s;
@@ -116,6 +120,13 @@ class RemoteNotificationRepository implements NotificationRepository {
   DateTime? _parseTimestamp(dynamic raw) {
     if (raw == null) return null;
     if (raw is String) return DateTime.tryParse(raw);
+    if (raw is num) {
+      // Epoch numbers arrive in both precisions: millis (13 digits)
+      // and seconds (10 digits). Heuristic shared with the chat
+      // parsers: anything above 1e11 is millis, else seconds.
+      final ms = raw.toInt() > 100000000000 ? raw.toInt() : raw.toInt() * 1000;
+      return DateTime.fromMillisecondsSinceEpoch(ms);
+    }
     if (raw is Map) {
       final seconds = raw['seconds'] ?? raw['_seconds'];
       if (seconds is num) {
@@ -127,7 +138,7 @@ class RemoteNotificationRepository implements NotificationRepository {
 
   NotificationType _typeFromString(String s) {
     switch (s) {
-      case 'chat' || 'chat_message':
+      case 'chat' || 'chat_message' || 'dm_message':
         return NotificationType.chat;
       case 'activity' ||
             'activity_reminder' ||

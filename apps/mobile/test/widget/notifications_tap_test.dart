@@ -34,7 +34,7 @@ Future<void> _pump(
   List<AppNotification> notifs,
 ) async {
   when(() => repo.all()).thenAnswer((_) async => notifs);
-  when(() => repo.markRead(any())).thenAnswer((_) async {});
+  when(() => repo.markRead(any())).thenAnswer((_) async => true);
   final router = GoRouter(
     initialLocation: '/notifications',
     routes: [

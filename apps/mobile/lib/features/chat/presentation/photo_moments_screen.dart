@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -133,20 +134,46 @@ class _MomentImage extends StatelessWidget {
   Widget build(BuildContext context) {
     final path = msg.imagePath;
     if (path != null) {
-      return Image.file(File(path), fit: fit);
+      return Image.file(
+        File(path),
+        fit: fit,
+        errorBuilder: (_, _, _) => _brokenTile(context),
+      );
     }
-    return Image.network(
-      msg.imageUrl!,
+    final remoteUrl = msg.imageUrl;
+    // Unreachable through the provider filter (it requires an image
+    // source), but guard anyway — a force-unwrap here would crash the
+    // whole grid on one malformed message.
+    if (remoteUrl == null) return _brokenTile(context);
+    // Grid thumbnail — sel grid ~1/3 layar, decode 2x untuk retina.
+    // Placeholder kotak abu STATIS (bukan shimmer): grid bisa puluhan
+    // sel, satu shimmer per sel = puluhan controller + kedip massal.
+    return CachedNetworkImage(
+      imageUrl: remoteUrl,
       fit: fit,
-      loadingBuilder: (_, child, progress) =>
-          progress == null ? child : const SkeletonBox(),
-      errorBuilder: (_, _, _) => Container(
+      memCacheWidth: (MediaQuery.sizeOf(context).width *
+              MediaQuery.devicePixelRatioOf(context) ~/
+          3)
+          .clamp(1, 600),
+      fadeInDuration: const Duration(milliseconds: 150),
+      fadeOutDuration: Duration.zero,
+      placeholder: (context, url) => Container(
         color: context.colors.surfaceMuted,
-        alignment: Alignment.center,
-        child: Icon(
-          Icons.broken_image_outlined,
-          color: context.colors.textTertiary,
-        ),
+      ),
+      errorWidget: (context, url, error) {
+        debugPrint('[MomentImage] failed: $url ($error)');
+        return _brokenTile(context);
+      },
+    );
+  }
+
+  Widget _brokenTile(BuildContext context) {
+    return Container(
+      color: context.colors.surfaceMuted,
+      alignment: Alignment.center,
+      child: Icon(
+        Icons.broken_image_outlined,
+        color: context.colors.textTertiary,
       ),
     );
   }
@@ -199,7 +226,11 @@ class _MomentViewerState extends State<_MomentViewer> {
     final h = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
     final m = time.minute.toString().padLeft(2, '0');
     final period = time.period == DayPeriod.am ? 'AM' : 'PM';
-    return '${msg.senderName} · $h:$m $period';
+    // Sender names fall back to raw uids upstream — never leak those
+    // into the caption; "Unknown" is the honest label.
+    final name =
+        msg.senderName.trim().isEmpty ? 'Unknown' : msg.senderName.trim();
+    return '$name · $h:$m $period';
   }
 
   @override

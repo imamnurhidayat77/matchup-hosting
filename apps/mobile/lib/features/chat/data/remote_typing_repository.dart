@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_client.dart';
@@ -32,6 +33,32 @@ class RemoteTypingRepository implements TypingRepository {
   /// traffic.
   static const Duration _typingPollInterval = Duration(seconds: 2);
 
+  /// Circuit-breaker armed by any 429: while set, [watchTyping] ticks
+  /// are skipped instead of hammering a limiter that already said
+  /// "slow down" (every poll shares the server's per-IP budget, so
+  /// polling through a 429 only prolongs it for every route).
+  DateTime? _blockedUntil;
+
+  bool get _isBlocked =>
+      _blockedUntil != null && DateTime.now().isBefore(_blockedUntil!);
+
+  void _noteRateLimit(DioException e) {
+    if (e.response?.statusCode != 429) return;
+    _blockedUntil = DateTime.now().add(_retryAfterOf(e));
+    debugPrint(
+      '[RemoteTypingRepository] 429 — pausing polls until $_blockedUntil',
+    );
+  }
+
+  static Duration _retryAfterOf(DioException e) {
+    final raw = e.response?.headers.value('retry-after');
+    final secs = int.tryParse(raw?.trim() ?? '');
+    if (secs != null && secs > 0 && secs <= 300) {
+      return Duration(seconds: secs);
+    }
+    return const Duration(seconds: 30);
+  }
+
   @override
   Future<void> setTyping({
     required String activityId,
@@ -45,6 +72,10 @@ class RemoteTypingRepository implements TypingRepository {
           'isTyping': isTyping,
         },
       );
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 429) _noteRateLimit(e);
+      debugPrint('[RemoteTypingRepository.setTyping] $e');
+      await _fallback.setTyping(activityId: activityId, isTyping: isTyping);
     } catch (e, st) {
       debugPrint('[RemoteTypingRepository.setTyping] $e\n$st');
       await _fallback.setTyping(activityId: activityId, isTyping: isTyping);
@@ -62,12 +93,23 @@ class RemoteTypingRepository implements TypingRepository {
       final data = apiDataMap(res.data);
       if (data == null) return null;
       return data['isTyping'] as bool?;
-    } on Exception catch (e) {
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 429) _noteRateLimit(e);
       // 404 = user hasn't typed since the activity started. Treat as
-      // "not typing" so the chat header doesn't flash an error.
-      if (!e.toString().contains('404')) {
+      // "not typing" so the chat header doesn't flash an error. The
+      // check is on the status code (and the normalised ApiException
+      // the error interceptor attaches) — never a `toString` sniff.
+      final isNotFound = e.response?.statusCode == 404 ||
+          (e.error is ApiException &&
+              (e.error as ApiException).statusCode == 404);
+      if (!isNotFound) {
         debugPrint('[RemoteTypingRepository.isTyping] $e');
       }
+      return _fallback.isTyping(activityId: activityId, uid: uid);
+    } on Exception catch (e) {
+      // Non-Dio failure (no status code to inspect) — always logged,
+      // then treated as "not typing" like every other error here.
+      debugPrint('[RemoteTypingRepository.isTyping] $e');
       return _fallback.isTyping(activityId: activityId, uid: uid);
     }
   }
@@ -85,31 +127,48 @@ class RemoteTypingRepository implements TypingRepository {
     final controller = StreamController<Set<String>>();
     Timer? timer;
 
+    // Error backoff for the per-member fan-out: a failed tick pushes
+    // the next attempt out (2s × consecutive failures, capped at 5)
+    // instead of holding the fixed 2s cadence against a struggling
+    // backend. Resets on the first clean tick.
+    var failures = 0;
+    DateTime? backoffUntil;
+
     Future<void> tick() async {
-      // Fan out a typing-status request per uid. Individual failures
-      // are swallowed (treat as "not typing") so one slow network
-      // call doesn't block the rest of the roster.
-      final results = await Future.wait(
-        uids.map((uid) async {
-          try {
-            // Use the same backing call as the public isTyping() but
-            // route through a local alias to avoid the name clash
-            // with the `isTyping` field below.
-            final status = await _isTypingOnce(
-              activityId: activityId,
-              uid: uid,
-            );
-            return MapEntry(uid, status == true);
-          } catch (_) {
-            return MapEntry(uid, false);
-          }
-        }),
-      );
-      final typing = <String>{
-        for (final entry in results)
-          if (entry.value) entry.key,
-      };
-      if (!controller.isClosed) controller.add(typing);
+      if (_isBlocked) return;
+      final blocked = backoffUntil;
+      if (blocked != null && DateTime.now().isBefore(blocked)) return;
+      try {
+        // Fan out a typing-status request per uid. Individual failures
+        // are swallowed (treat as "not typing") so one slow network
+        // call doesn't block the rest of the roster.
+        final results = await Future.wait(
+          uids.map((uid) async {
+            try {
+              // Use the same backing call as the public isTyping() but
+              // route through a local alias to avoid the name clash
+              // with the `isTyping` field below.
+              final status = await _isTypingOnce(
+                activityId: activityId,
+                uid: uid,
+              );
+              return MapEntry(uid, status == true);
+            } catch (_) {
+              return MapEntry(uid, false);
+            }
+          }),
+        );
+        final typing = <String>{
+          for (final entry in results)
+            if (entry.value) entry.key,
+        };
+        failures = 0;
+        backoffUntil = null;
+        if (!controller.isClosed) controller.add(typing);
+      } catch (_) {
+        if (failures < 5) failures++;
+        backoffUntil = DateTime.now().add(Duration(seconds: 2 * failures));
+      }
     }
 
     // Emit immediately, then on every interval tick.

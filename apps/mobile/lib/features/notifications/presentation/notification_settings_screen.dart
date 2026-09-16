@@ -23,17 +23,8 @@ class _NotifSettingsNotifier extends StateNotifier<Map<String, bool>> {
   }
 
   static const _defaults = <String, bool>{
-    'new_game_nearby': true,
-    'game_reminders': true,
     'game_cancellations': true,
     'new_messages': true,
-    'friend_requests': false,
-    'game_invitations': true,
-    'weekly_summary': true,
-    'rating_received': true,
-    'milestone_achievements': false,
-    'promotions': false,
-    'app_updates': true,
   };
 
   Future<void> _load() async {
@@ -81,23 +72,21 @@ class NotificationSettingsScreen extends ConsumerWidget {
               color: context.colors.textSecondary,
             ),
           ),
+          const SizedBox(height: AppSpacing.x2),
+          Text(
+            "These preferences are saved on this device only and don't change push delivery yet.",
+            style: AppTypography.metaSub(context),
+          ),
           const SizedBox(height: AppSpacing.x6),
 
+          // Only categories the backend actually sends today:
+          // activity_cancelled + dm_message. Toggles for friend
+          // requests, invitations, summaries, ratings, milestones,
+          // promos, updates, nearby and reminders were removed — no
+          // sender or feature exists for them yet.
           _Section(
             label: 'GAME UPDATES',
             children: [
-              _ToggleRow(
-                title: 'New Game Nearby',
-                subtitle: 'Alert me when a sport I play is hosted nearby',
-                value: settings['new_game_nearby'] ?? true,
-                onChanged: () => notifier.toggle('new_game_nearby'),
-              ),
-              _ToggleRow(
-                title: 'Game Reminders',
-                subtitle: 'Remind me of upcoming matches I joined',
-                value: settings['game_reminders'] ?? true,
-                onChanged: () => notifier.toggle('game_reminders'),
-              ),
               _ToggleRow(
                 title: 'Game Cancellations',
                 subtitle: 'Notify instantly if a game gets cancelled',
@@ -114,70 +103,9 @@ class NotificationSettingsScreen extends ConsumerWidget {
             children: [
               _ToggleRow(
                 title: 'New Messages',
-                subtitle: 'When players chat in active game threads',
+                subtitle: 'Direct messages from other players',
                 value: settings['new_messages'] ?? true,
                 onChanged: () => notifier.toggle('new_messages'),
-              ),
-              _ToggleRow(
-                title: 'Friend Requests',
-                subtitle: 'Alert me when someone wants to connect',
-                value: settings['friend_requests'] ?? false,
-                onChanged: () => notifier.toggle('friend_requests'),
-              ),
-              _ToggleRow(
-                title: 'Game Invitations',
-                subtitle: 'When hosts invite me to play in their match',
-                value: settings['game_invitations'] ?? true,
-                onChanged: () => notifier.toggle('game_invitations'),
-                last: true,
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.x5),
-
-          _Section(
-            label: 'MY ACTIVITY',
-            children: [
-              _ToggleRow(
-                title: 'Weekly Summary',
-                subtitle:
-                    'A roundup of games played, stats and rating highlights',
-                value: settings['weekly_summary'] ?? true,
-                onChanged: () => notifier.toggle('weekly_summary'),
-              ),
-              _ToggleRow(
-                title: 'Rating Received',
-                subtitle: 'Alert me when other players rate my play',
-                value: settings['rating_received'] ?? true,
-                onChanged: () => notifier.toggle('rating_received'),
-              ),
-              _ToggleRow(
-                title: 'Milestone Achievements',
-                subtitle: 'Get notified when unlocking medals & streaks',
-                value: settings['milestone_achievements'] ?? false,
-                onChanged: () => notifier.toggle('milestone_achievements'),
-                last: true,
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.x5),
-
-          _Section(
-            label: 'PRODUCT & NEWS',
-            children: [
-              _ToggleRow(
-                title: 'Promotions & Offers',
-                subtitle:
-                    'Special offers, partnership events, and gear discounts',
-                value: settings['promotions'] ?? false,
-                onChanged: () => notifier.toggle('promotions'),
-              ),
-              _ToggleRow(
-                title: 'App Updates',
-                subtitle:
-                    'Be the first to know about new sports and feature additions',
-                value: settings['app_updates'] ?? true,
-                onChanged: () => notifier.toggle('app_updates'),
                 last: true,
               ),
             ],
