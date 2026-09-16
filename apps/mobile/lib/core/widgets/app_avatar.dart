@@ -1,10 +1,10 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
-import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import '../theme/dark_colors.dart';
+import '../utils/logger.dart';
 import 'pressable_scale.dart';
-import 'skeleton.dart';
 
 /// Sizes for [AppAvatar].
 enum AppAvatarSize { xs, sm, md, lg, xl }
@@ -124,27 +124,27 @@ class AppAvatar extends StatelessWidget {
       );
     }
 
-    // Network image — branded shimmer sweep while bytes arrive, then
-    // a soft cross-fade. Matches the cover loader in
-    // AssetImageWithFallback so avatars and photos feel like one system.
+    // Network image — disk + memory cache. Placeholder + error state
+    // keduanya inisial STATIS (bukan shimmer): avatar kecil (24-80px)
+    // dan puluhan instance per layar — satu shimmer per avatar berarti
+    // puluhan AnimationController jalan bareng + kedip satu-satu.
     if (imageUrl != null && imageUrl!.isNotEmpty) {
+      final dpr = MediaQuery.devicePixelRatioOf(context);
+      final cacheSize = (d * dpr).round().clamp(1, 400);
       return ClipOval(
-        child: Image.network(
-          imageUrl!,
+        child: CachedNetworkImage(
+          imageUrl: imageUrl!,
           width: d,
           height: d,
           fit: BoxFit.cover,
-          errorBuilder: (_, _, _) => _fallback(context, d),
-          loadingBuilder: (_, child, progress) => progress == null
-              ? child
-              : SkeletonBox(width: d, height: d, radius: d / 2),
-          frameBuilder: (_, child, frame, sync) {
-            if (sync) return child;
-            return AnimatedOpacity(
-              opacity: frame == null ? 0 : 1,
-              duration: AppDurations.base,
-              child: child,
-            );
+          memCacheWidth: cacheSize,
+          memCacheHeight: cacheSize,
+          fadeInDuration: const Duration(milliseconds: 150),
+          fadeOutDuration: Duration.zero,
+          placeholder: (context, url) => _fallback(context, d),
+          errorWidget: (context, url, error) {
+            logWarning('[AppAvatar] failed: $url ($error)');
+            return _fallback(context, d);
           },
         ),
       );
@@ -159,80 +159,4 @@ class AppAvatar extends StatelessWidget {
       context,
     ).copyWith(fontSize: size.fontSize, color: context.colors.primaryOnSurface),
   );
-}
-
-/// Overlapping avatar stack — shows the first [maxVisible] avatars
-/// and a "+N" overflow pill.
-///
-/// ```dart
-/// AppAvatarStack(
-///   avatars: ['assets/...', 'assets/...'],
-///   count: 12,
-///   size: AppAvatarSize.sm,
-/// )
-/// ```
-class AppAvatarStack extends StatelessWidget {
-  const AppAvatarStack({
-    super.key,
-    required this.avatars,
-    this.count,
-    this.size = AppAvatarSize.sm,
-    this.maxVisible = 3,
-    this.overlap = 10.0,
-  });
-
-  /// Asset paths or network URLs.
-  final List<String> avatars;
-
-  /// Total participant count (used to compute overflow label).
-  final int? count;
-
-  final AppAvatarSize size;
-  final int maxVisible;
-  final double overlap;
-
-  @override
-  Widget build(BuildContext context) {
-    final d = size.diameter;
-    final visible = avatars.take(maxVisible).toList();
-    final overflow = (count ?? avatars.length) - visible.length;
-    final totalWidth =
-        d + (visible.length - 1) * (d - overlap) + (overflow > 0 ? d : 0);
-
-    return SizedBox(
-      width: totalWidth,
-      height: d,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          for (var i = 0; i < visible.length; i++)
-            Positioned(
-              left: i * (d - overlap),
-              child: AppAvatar(
-                assetPath: visible[i].startsWith('assets/') ? visible[i] : null,
-                imageUrl: visible[i].startsWith('assets/') ? null : visible[i],
-                size: size,
-                borderColor: context.colors.surface,
-                borderWidth: 2,
-              ),
-            ),
-          if (overflow > 0)
-            Positioned(
-              left: visible.length * (d - overlap),
-              child: CircleAvatar(
-                radius: d / 2,
-                backgroundColor: context.colors.surfaceSubtle,
-                child: Text(
-                  '+$overflow',
-                  style: AppTypography.chipLabel(context).copyWith(
-                    fontSize: size.fontSize - 1,
-                    color: context.colors.textSecondary,
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
 }

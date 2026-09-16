@@ -79,9 +79,15 @@ class UserModel {
   });
 
   UserModel copyWith({
+    String? id,
     String? displayName,
+    String? avatarAsset,
+    String? avatarUrl,
+    double? rating,
     String? bio,
     String? location,
+    int? activitiesCount,
+    int? hostedCount,
     String? email,
     String? phone,
     DateTime? dateOfBirth,
@@ -94,15 +100,15 @@ class UserModel {
     int? totalRatingCount,
   }) {
     return UserModel(
-      id: id,
+      id: id ?? this.id,
       displayName: displayName ?? this.displayName,
-      avatarAsset: avatarAsset,
-      avatarUrl: avatarUrl,
-      rating: rating,
+      avatarAsset: avatarAsset ?? this.avatarAsset,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
+      rating: rating ?? this.rating,
       bio: bio ?? this.bio,
       location: location ?? this.location,
-      activitiesCount: activitiesCount,
-      hostedCount: hostedCount,
+      activitiesCount: activitiesCount ?? this.activitiesCount,
+      hostedCount: hostedCount ?? this.hostedCount,
       sports: sports ?? this.sports,
       skillLevel: skillLevel ?? this.skillLevel,
       ratingBySport: ratingBySport ?? this.ratingBySport,

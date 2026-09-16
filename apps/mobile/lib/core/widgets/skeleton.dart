@@ -194,45 +194,6 @@ class ActivityListCardSkeleton extends StatelessWidget {
   }
 }
 
-/// Skeleton for a profile header — avatar + name + stats row. Mirrors
-/// Profile / Player Profile.
-class ProfileHeaderSkeleton extends StatelessWidget {
-  const ProfileHeaderSkeleton({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.x6,
-        vertical: AppSpacing.x5,
-      ),
-      child: Column(
-        children: [
-          const SkeletonBox(width: 96, height: 96, radius: 48),
-          const SizedBox(height: AppSpacing.x3),
-          const SkeletonBox(width: 140, height: 18),
-          const SizedBox(height: AppSpacing.x2),
-          const SkeletonBox(width: 100, height: 12),
-          const SizedBox(height: AppSpacing.x5),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: List.generate(
-              3,
-              (_) => const Column(
-                children: [
-                  SkeletonBox(width: 36, height: 20),
-                  SizedBox(height: 6),
-                  SkeletonBox(width: 50, height: 10),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 /// Renders [count] [ListRowSkeleton] items as a loading placeholder for
 /// any screen that shows a scrollable list of simple rows.
 class SkeletonList extends StatelessWidget {

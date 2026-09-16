@@ -1,9 +1,9 @@
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../core/storage/secure_token_store.dart';
+import '../../../core/utils/logger.dart';
 import '../../ratings/domain/rating_models.dart';
 import '../domain/user_model.dart';
 import 'user_repository.dart';
@@ -114,22 +114,59 @@ class RemoteUserRepository implements UserRepository {
   final ApiClient _client;
   final UserRepository _fallback;
 
+  /// Short-TTL cache for the current-user profile. Profile + Discover
+  /// mount together on cold start and both call `me()` (see
+  /// `myProfileProvider` + `DiscoveryScreen._seedDefaultFilter`), and tab
+  /// switches dispose/recreate those states — without this every return
+  /// trip costs a `GET /users/me` against the shared per-IP rate budget.
+  UserModel? _meCache;
+  DateTime? _meCachedAt;
+  static const _meTtl = Duration(seconds: 30);
+
+  /// Coalesces concurrent `me()` calls into one network request so a
+  /// cold start with N listeners costs 1 GET instead of N.
+  Future<UserModel>? _meInFlight;
+
   @override
-  Future<UserModel> me() async {
+  Future<UserModel> me() {
+    final cachedAt = _meCachedAt;
+    final cached = _meCache;
+    if (cached != null &&
+        cachedAt != null &&
+        DateTime.now().difference(cachedAt) < _meTtl) {
+      return Future.value(cached);
+    }
+    return _meInFlight ??= _fetchMe().whenComplete(() => _meInFlight = null);
+  }
+
+  Future<UserModel> _fetchMe() async {
     try {
       // `/users/me` is the canonical "current authenticated user" endpoint.
       // The auth middleware resolves the uid from the Bearer token, so we
       // don't need to pass an id — passing the auth uid would have hit the
       // public-profile route instead and returned a smaller payload.
       final res = await _client.dio.get('/users/me');
-      return _parse(apiDataMap(res.data)) ?? await _fallback.me();
+      final parsed = _parse(apiDataMap(res.data));
+      if (parsed != null) {
+        _meCache = parsed;
+        _meCachedAt = DateTime.now();
+        return parsed;
+      }
+      return await _fallback.me();
     } on DioException catch (e) {
-      debugPrint('[RemoteUserRepository.me] DioException ${e.response?.statusCode}: ${e.message}');
+      logError(
+        '[RemoteUserRepository.me] DioException ${e.response?.statusCode}',
+      );
       return _fallback.me();
     } catch (e) {
-      debugPrint('[RemoteUserRepository.me] unexpected: $e');
+      logError('[RemoteUserRepository.me] unexpected', e);
       return _fallback.me();
     }
+  }
+
+  void _invalidateMeCache() {
+    _meCache = null;
+    _meCachedAt = null;
   }
 
   @override
@@ -201,7 +238,38 @@ class RemoteUserRepository implements UserRepository {
             'joinReason': joinReason.trim(),
         },
       );
-      return _parse(apiDataMap(res.data)) ?? await _fallback.me();
+      final parsed = _parse(apiDataMap(res.data));
+      if (parsed != null) {
+        _meCache = parsed;
+        _meCachedAt = DateTime.now();
+        return parsed;
+      }
+      _invalidateMeCache();
+      return await _fallback.me();
+    } on DioException catch (e) {
+      // A 4xx means the backend explicitly rejected the payload (e.g.
+      // an uneditable field slipped through) — surface the server's
+      // message via ProfileUpdateException instead of silently falling
+      // back and pretending the save worked.
+      final status = e.response?.statusCode;
+      if (status != null && status >= 400 && status < 500) {
+        throw ProfileUpdateException(
+          ApiException.fromDio(e).userMessage,
+        );
+      }
+      return _fallback.updateProfile(
+        displayName: displayName,
+        bio: bio,
+        location: location,
+        email: email,
+        phone: phone,
+        dateOfBirth: dateOfBirth,
+        heightCm: heightCm,
+        weightKg: weightKg,
+        goal: goal,
+        sports: sports,
+        joinReason: joinReason,
+      );
     } catch (_) {
       return _fallback.updateProfile(
         displayName: displayName,
@@ -242,8 +310,11 @@ class RemoteUserRepository implements UserRepository {
     );
     final updated = _parse(apiDataMap(res.data));
     if (updated == null) {
+      _invalidateMeCache();
       throw StateError('Profile photo update was not acknowledged.');
     }
+    _meCache = updated;
+    _meCachedAt = DateTime.now();
     return updated;
   }
 

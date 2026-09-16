@@ -449,31 +449,49 @@ class _ErrorInterceptor extends Interceptor {
   }
 }
 
-/// Debug-only structured logger. Redacts Authorization header value.
+/// Debug-only structured logger. Redacts the Authorization header value
+/// and logs the URI path only (never query parameters — tokens and PII
+/// travel there) so logs stay safe to paste into tickets.
 class _LoggingInterceptor extends Interceptor {
+  static const _startKey = 'log_start_ms';
+
+  static String _safePath(RequestOptions options) => options.uri.path;
+
+  static String _latency(RequestOptions options) {
+    final start = options.extra[_startKey] as int?;
+    if (start == null) return '';
+    return ' ${DateTime.now().millisecondsSinceEpoch - start}ms';
+  }
+
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
+    options.extra[_startKey] = DateTime.now().millisecondsSinceEpoch;
     final headers = Map<String, dynamic>.from(options.headers);
     if (headers.containsKey('Authorization')) {
       headers['Authorization'] = 'Bearer [REDACTED]';
     }
-    debugPrint('[API] --> ${options.method} ${options.path}  headers:$headers');
+    debugPrint(
+      '[API] --> ${options.method} ${_safePath(options)}  headers:$headers',
+    );
     handler.next(options);
   }
 
   @override
   void onResponse(Response response, ResponseInterceptorHandler handler) {
+    final options = response.requestOptions;
     debugPrint(
-      '[API] <-- ${response.statusCode} ${response.requestOptions.path}',
+      '[API] <-- ${response.statusCode} ${options.method} '
+      '${_safePath(options)}${_latency(options)}',
     );
     handler.next(response);
   }
 
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
+    final options = err.requestOptions;
     debugPrint(
-      '[API] ERR ${err.response?.statusCode} ${err.requestOptions.path}: '
-      '${err.message}',
+      '[API] ERR ${err.response?.statusCode} ${options.method} '
+      '${_safePath(options)}${_latency(options)}: ${err.message}',
     );
     handler.next(err);
   }

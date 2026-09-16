@@ -50,18 +50,22 @@ class RemoteAppealRepository implements AppealRepository {
 
 /// Appeals require a live backend — there is no honest offline fallback
 /// (a "submitted" appeal that never reaches triage would be a lie).
+/// Throws [ApiException] (not [UnimplementedError]) so the suspended
+/// interstitial surfaces a friendly message instead of crashing.
 class UnavailableAppealRepository implements AppealRepository {
   @override
   Future<AppealModel> submitSuspensionAppeal({required String statement}) {
-    throw UnimplementedError(
-      'Appeals require the live API (useRemoteApi must be true).',
+    throw const ApiException(
+      statusCode: null,
+      userMessage: 'Appeals need an internet connection. Please try again.',
     );
   }
 
   @override
   Future<List<AppealModel>> myAppeals() {
-    throw UnimplementedError(
-      'Appeals require the live API (useRemoteApi must be true).',
+    throw const ApiException(
+      statusCode: null,
+      userMessage: 'Could not load your appeals. Check your connection.',
     );
   }
 }

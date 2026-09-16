@@ -27,5 +27,8 @@ void logError(String message, [Object? error, StackTrace? stackTrace]) {
     debugPrint('[ERROR] $message${error != null ? ': $error' : ''}');
     if (stackTrace != null) debugPrintStack(stackTrace: stackTrace);
   }
-  // TODO: forward to Sentry / Crashlytics in non-debug builds once integrated.
+  // Release builds are intentionally silent (no-op): user-visible errors
+  // surface via snackbars/dialogs at the call site. When a crash-reporting
+  // SDK (Sentry/Crashlytics) is integrated, forward here instead of
+  // printing — never log PII, passwords, or auth tokens.
 }

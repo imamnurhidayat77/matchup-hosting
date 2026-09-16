@@ -1,4 +1,4 @@
-import 'package:shared_preferences/shared_preferences.dart';
+import 'local_storage.dart';
 
 /// Persists the last visited route so the app can resume from where the user
 /// left off after being minimized or killed by the OS.
@@ -18,27 +18,52 @@ class RouteStore {
   /// Paths that must never be stored as a resume point.
   static const _excluded = {
     '/splash',
+    '/suspended',
     '/onboarding',
     '/welcome',
     '/login',
     '/register',
     '/forgot-password',
     '/reset-link-sent',
+    '/get-to-know-1',
+    '/get-to-know-2',
+    '/get-to-know-3',
   };
 
+  /// Tab roots that are safe to resume into.
+  static const _tabRoots = {
+    '/discovery',
+    '/activities',
+    '/create',
+    '/messages',
+    '/profile',
+  };
+
+  static bool _isAllowed(String location) {
+    if (_tabRoots.contains(location)) return true;
+    // Activity detail family: /activity/:id and its sub-routes.
+    if (location == '/activity' || location.startsWith('/activity/')) {
+      return true;
+    }
+    return false;
+  }
+
   Future<void> save(String location) async {
-    if (_excluded.any((p) => location.startsWith(p))) return;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_key, location);
+    if (_excluded.any((p) => location == p || location.startsWith('$p/'))) {
+      return;
+    }
+    if (!_isAllowed(location)) return;
+    final storage = await LocalStorage.create();
+    await storage.setString(_key, location);
   }
 
   Future<String?> read() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_key);
+    final storage = await LocalStorage.create();
+    return storage.getString(_key);
   }
 
   Future<void> clear() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_key);
+    final storage = await LocalStorage.create();
+    await storage.remove(_key);
   }
 }

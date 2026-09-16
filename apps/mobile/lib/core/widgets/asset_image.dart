@@ -1,8 +1,8 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
-import '../theme/app_spacing.dart';
 import '../theme/dark_colors.dart';
-import 'skeleton.dart';
+import '../utils/logger.dart';
 
 /// True when [path] points at a remote resource rather than a bundled
 /// asset. Shared by widgets that accept "asset path or URL" image
@@ -31,6 +31,7 @@ class AssetImageWithFallback extends StatelessWidget {
     this.placeholderColor,
     this.placeholderIcon = Icons.image_outlined,
     this.isAvatar = false,
+    this.decodeWidth,
   });
 
   /// Bundled asset path (e.g. `assets/images/discovery/covers/foo.png`)
@@ -50,6 +51,13 @@ class AssetImageWithFallback extends StatelessWidget {
   /// which is the right default for avatar tiles.
   final bool isAvatar;
 
+  /// Explicit decode width (logical px) for images WITHOUT a fixed layout
+  /// size — e.g. a hero that fills via `StackFit.expand`. Used ONLY for
+  /// the `memCacheWidth` calculation, never constrains layout. Without
+  /// this (and without [width]), remote images decode at full
+  /// resolution: a 2000px photo decoded for a ~350px slot.
+  final double? decodeWidth;
+
   @override
   Widget build(BuildContext context) {
     final resolvedPlaceholderColor = placeholderColor ?? context.colors.divider;
@@ -65,47 +73,68 @@ class AssetImageWithFallback extends StatelessWidget {
             icon: placeholderIcon,
           );
 
-    // Remote images stream in over the network: show the branded shimmer
-    // sweep while bytes arrive, then cross-fade the photo in. Bundled
-    // assets resolve synchronously, so they render directly with no
-    // loader (and no animation that could perturb golden tests).
-    final image = isRemoteImage(imagePath)
-        ? Image.network(
-            imagePath,
-            width: width,
-            height: height,
-            fit: fit,
-            semanticLabel: semanticLabel,
-            loadingBuilder: (context, child, progress) => progress == null
-                ? child
-                : SkeletonBox(
-                    width: width,
-                    height: height ?? 200,
-                    radius: isAvatar ? (width ?? height ?? 44) / 2 : 0,
-                  ),
-            frameBuilder: (context, child, frame, sync) {
-              if (sync) return child;
-              return AnimatedOpacity(
-                opacity: frame == null ? 0 : 1,
-                duration: AppDurations.base,
-                child: child,
-              );
-            },
-            errorBuilder: (context, error, stackTrace) => placeholder,
-          )
-        : Image.asset(
-            imagePath,
-            width: width,
-            height: height,
-            fit: fit,
-            semanticLabel: semanticLabel,
-            errorBuilder: (context, error, stackTrace) => placeholder,
-          );
+    if (!isRemoteImage(imagePath)) {
+      // Bundled assets resolve synchronously — render directly with no
+      // loader (and no animation that could perturb golden tests).
+      final image = Image.asset(
+        imagePath,
+        width: width,
+        height: height,
+        fit: fit,
+        semanticLabel: semanticLabel,
+        gaplessPlayback: true,
+        errorBuilder: (context, error, stackTrace) => placeholder,
+      );
+      if (borderRadius != null) {
+        return ClipRRect(borderRadius: borderRadius!, child: image);
+      }
+      return image;
+    }
+
+    // Remote: disk + memory cache, decode kecil sesuai ukuran tampil,
+    // placeholder STATIS (bukan shimmer) agar 6 thumbnail tidak kedip
+    // satu-satu. Shimmer hanya untuk skeleton list awal.
+    //
+    // memCacheWidth/Height = 2x ukuran tampil untuk retina
+    // (thumbnail 72 -> 144). Jangan decode gambar 2000px untuk slot 72px.
+    // [decodeWidth] covers fill-layout images (hero) yang tidak punya
+    // [width] eksplisit.
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final cacheW = width != null
+        ? (width! * dpr).round().clamp(1, 800)
+        : decodeWidth != null
+            ? (decodeWidth! * dpr).round().clamp(1, 1000)
+            : null;
+    final cacheH =
+        height != null ? (height! * dpr).round().clamp(1, 800) : null;
+
+    final image = CachedNetworkImage(
+      imageUrl: imagePath,
+      width: width,
+      height: height,
+      fit: fit,
+      memCacheWidth: cacheW,
+      memCacheHeight: cacheH,
+      fadeInDuration: const Duration(milliseconds: 150),
+      fadeOutDuration: Duration.zero,
+      // Loading pakai placeholder ber-icon yang SAMA dengan error state —
+      // jangan kotak kosong. Kalau network lambat, user tetap lihat icon
+      // sport yang rapi, bukan kotak abu-abu yang dikira rusak.
+      placeholder: (context, url) => placeholder,
+      errorWidget: (context, url, error) {
+        logWarning('[AssetImageWithFallback] failed: $url ($error)');
+        return placeholder;
+      },
+    );
+
+    final withSemantics = semanticLabel != null
+        ? Semantics(label: semanticLabel, image: true, child: image)
+        : image;
 
     if (borderRadius != null) {
-      return ClipRRect(borderRadius: borderRadius!, child: image);
+      return ClipRRect(borderRadius: borderRadius!, child: withSemantics);
     }
-    return image;
+    return withSemantics;
   }
 }
 

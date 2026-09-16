@@ -13,6 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:matchup_mobile/core/providers/repository_providers.dart';
 import 'package:matchup_mobile/core/theme/app_colors.dart';
@@ -78,6 +79,11 @@ ActivityModel _activityFixture() => ActivityModel(
 );
 
 void main() {
+  setUpAll(() {
+    // DiscoveryScreen restores the persisted filter via SharedPreferences
+    // on mount — mock it so the store resolves immediately.
+    SharedPreferences.setMockInitialValues({});
+  });
   // Fails the test if *any* widget throws during build/layout/paint, not
   // just the ones an explicit `expect` happens to touch — the whole point
   // of this smoke test.
@@ -180,6 +186,10 @@ void main() {
             overrides: [
               activityRepositoryProvider.overrideWithValue(activityRepo),
               notificationRepositoryProvider.overrideWithValue(notifRepo),
+              // Bypass real SecureTokenStore (no platform channel in tests).
+              myGamesUidProvider.overrideWith(
+                (ref) => Future.value('test-uid'),
+              ),
             ],
             child: MaterialApp.router(
               theme: _darkThemeForTest(),

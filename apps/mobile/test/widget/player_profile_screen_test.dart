@@ -20,12 +20,13 @@ void main() {
 
   Future<void> pumpScreen(WidgetTester tester) async {
     final router = GoRouter(
-      initialLocation: '/player-profile/James',
+      initialLocation: '/player-profile/uid/james',
       routes: [
         GoRoute(
-          path: '/player-profile/:name',
-          builder: (_, state) =>
-              PlayerProfileScreen(playerName: state.pathParameters['name']!),
+          path: '/player-profile/uid/:uid',
+          builder: (_, state) => PlayerProfileScreen.byUid(
+            userId: state.pathParameters['uid']!,
+          ),
         ),
         GoRoute(
           path: '/chat/:title',
@@ -54,7 +55,7 @@ void main() {
 
   group('PlayerProfileScreen', () {
     testWidgets('should render user details and stats', (tester) async {
-      when(() => userRepo.byId('James')).thenAnswer(
+      when(() => userRepo.byId('james')).thenAnswer(
         (_) async => const UserModel(
           id: 'james',
           displayName: 'James Wilson',
@@ -78,15 +79,47 @@ void main() {
     testWidgets('should show a not-found message when the player is null', (
       tester,
     ) async {
-      when(() => userRepo.byId('James')).thenAnswer((_) async => null);
+      when(() => userRepo.byId('james')).thenAnswer((_) async => null);
       await pumpScreen(tester);
       expect(find.text('Player not found.'), findsOneWidget);
+    });
+
+    testWidgets('name constructor shows the unavailable empty state', (
+      tester,
+    ) async {
+      final router = GoRouter(
+        initialLocation: '/player-profile/James',
+        routes: [
+          GoRoute(
+            path: '/player-profile/:name',
+            builder: (_, state) =>
+                PlayerProfileScreen(playerName: state.pathParameters['name']!),
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [userRepositoryProvider.overrideWithValue(userRepo)],
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // No backend name search exists — byId must never be attempted.
+      verifyNever(() => userRepo.byId(any()));
+      expect(find.text('Profile not available'), findsOneWidget);
+      expect(
+        find.text('Open this profile from the roster to see details.'),
+        findsOneWidget,
+      );
+      expect(find.text('Back'), findsWidgets);
     });
 
     testWidgets(
       'should open the DM thread when Send Message is tapped',
       (tester) async {
-        when(() => userRepo.byId('James')).thenAnswer(
+        when(() => userRepo.byId('james')).thenAnswer(
           (_) async =>
               const UserModel(id: 'james', displayName: 'James Wilson'),
         );
@@ -102,7 +135,7 @@ void main() {
     testWidgets('should show sport with fallback skill level', (
       tester,
     ) async {
-      when(() => userRepo.byId('James')).thenAnswer(
+      when(() => userRepo.byId('james')).thenAnswer(
         (_) async => const UserModel(
           id: 'james',
           displayName: 'James Wilson',
@@ -120,7 +153,7 @@ void main() {
     testWidgets('should hide the level badge when unknown', (
       tester,
     ) async {
-      when(() => userRepo.byId('James')).thenAnswer(
+      when(() => userRepo.byId('james')).thenAnswer(
         (_) async => const UserModel(
           id: 'james',
           displayName: 'James Wilson',
@@ -136,7 +169,7 @@ void main() {
     testWidgets('should open the options sheet from More options', (
       tester,
     ) async {
-      when(() => userRepo.byId('James')).thenAnswer(
+      when(() => userRepo.byId('james')).thenAnswer(
         (_) async =>
             const UserModel(id: 'james', displayName: 'James Wilson'),
       );

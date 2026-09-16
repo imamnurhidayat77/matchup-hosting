@@ -1,4 +1,4 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -118,8 +118,27 @@ GoRouter buildRouter(Ref ref) {
     navigatorKey: rootNavigatorKey,
     initialLocation: '/splash',
     refreshListenable: _AuthListenable(ref),
+    errorBuilder: (context, state) => Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Page not found'),
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: () => context.go('/discovery'),
+                child: const Text('Back to Discovery'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
     redirect: (context, state) {
-      // Persist every navigation so we can resume after minimize/kill.
+      // Persist allow-listed locations only (tab roots + /activity*
+      // detail). RouteStore.save enforces the allow-list; splash,
+      // suspended, auth, and GTK routes are never stored.
       RouteStore.instance.save(state.matchedLocation);
 
       final authStatus = ref.read(authStatusProvider);
@@ -138,7 +157,9 @@ GoRouter buildRouter(Ref ref) {
         return location == '/suspended' ? null : '/suspended';
       }
 
-      final isPublic = _publicPaths.any((p) => location.startsWith(p));
+      final isPublic = _publicPaths.any(
+        (p) => location == p || location.startsWith('$p/'),
+      );
 
       if (authStatus == AuthStatus.unauthenticated && !isPublic) {
         // Protected route hit without a session → gate to welcome.
@@ -172,7 +193,9 @@ GoRouter buildRouter(Ref ref) {
       GoRoute(
         path: '/reset-link-sent',
         pageBuilder: (_, state) {
-          final email = state.extra as String? ?? '';
+          final email =
+              state.uri.queryParameters['email'] ??
+              (state.extra is String ? state.extra as String : '');
           return appPage(
             state,
             ResetLinkSentScreen(email: email),
