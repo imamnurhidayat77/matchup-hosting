@@ -5,16 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/dark_colors.dart';
-import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/pressable_scale.dart';
-
-void _showComingSoon(BuildContext context) {
-  AppSnackbar.show(
-    context,
-    message: 'Social sign-in coming soon.',
-    variant: AppSnackbarVariant.info,
-  );
-}
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
@@ -73,24 +64,33 @@ class WelcomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.x3),
 
-            // ── Sign up with Apple ─────────────────────────────
+            // ── Sign up with Apple (disabled — social sign-in not available yet)
             _PillButton(
               label: 'Sign up with Apple',
-              onTap: () => _showComingSoon(context),
+              onTap: null,
               bgColor: const Color(0xFF000000),
               textColor: AppColors.textOnPrimary,
               icon: Icons.apple_rounded,
+              comingSoon: true,
             ),
             const SizedBox(height: AppSpacing.x3),
 
-            // ── Sign up with Google ────────────────────────────
+            // ── Sign up with Google (disabled — social sign-in not available yet)
             _PillButton(
               label: 'Sign up with Google',
-              onTap: () => _showComingSoon(context),
+              onTap: null,
               bgColor: context.colors.surface,
               textColor: context.colors.textPrimary,
-              icon: Icons.circle_outlined,
+              leading: Text(
+                'G',
+                style: AppTypography.buttonPrimary.copyWith(
+                  color: context.colors.textPrimary,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
               outlined: true,
+              comingSoon: true,
             ),
             const SizedBox(height: AppSpacing.x5),
 
@@ -247,7 +247,15 @@ class _Tile extends StatelessWidget {
           path,
           fit: BoxFit.cover,
           semanticLabel: 'MatchUp sport photo',
-          errorBuilder: (_, _, _) => Container(color: const Color(0xFFF1F5F9)),
+          errorBuilder: (_, _, _) => Container(
+            color: const Color(0xFFF1F5F9),
+            alignment: Alignment.center,
+            child: const Icon(
+              Icons.broken_image_outlined,
+              size: 32,
+              color: Color(0xFF94A3B8),
+            ),
+          ),
         ),
       ),
     );
@@ -263,49 +271,87 @@ class _PillButton extends StatelessWidget {
     required this.bgColor,
     required this.textColor,
     this.icon,
+    this.leading,
     this.outlined = false,
+    this.comingSoon = false,
   });
 
   final String label;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final Color bgColor;
   final Color textColor;
   final IconData? icon;
+
+  /// Custom leading widget (e.g. the 'G' glyph). Takes precedence over [icon].
+  final Widget? leading;
   final bool outlined;
+
+  /// True while the action is unavailable (e.g. social sign-in) — the
+  /// button renders visibly disabled with a caption instead of looking
+  /// tappable and going nowhere.
+  final bool comingSoon;
 
   @override
   Widget build(BuildContext context) {
+    final button = PressableScale(
+      onTap: onTap,
+      child: Container(
+        height: 56,
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          border: outlined
+              ? Border.all(color: context.colors.border, width: 1.5)
+              : null,
+        ),
+        alignment: Alignment.center,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (leading != null) ...[
+              leading!,
+              const SizedBox(width: AppSpacing.x2),
+            ] else if (icon != null) ...[
+              Icon(icon, size: 20, color: textColor),
+              const SizedBox(width: AppSpacing.x2),
+            ],
+            Text(
+              label,
+              style: AppTypography.buttonPrimary.copyWith(
+                color: textColor,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!comingSoon) {
+      return Semantics(
+        button: true,
+        label: label,
+        child: button,
+      );
+    }
     return Semantics(
       button: true,
-      label: label,
-      child: PressableScale(
-        onTap: onTap,
-        child: Container(
-          height: 56,
-          decoration: BoxDecoration(
-            color: bgColor,
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-            border: outlined
-                ? Border.all(color: context.colors.border, width: 1.5)
-                : null,
+      label: '$label (coming soon)',
+      enabled: false,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Opacity(
+            opacity: 0.5,
+            child: IgnorePointer(child: button),
           ),
-          alignment: Alignment.center,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (icon != null) ...[
-                Icon(icon, size: 20, color: textColor),
-                const SizedBox(width: AppSpacing.x2),
-              ],
-              Text(
-                label,
-                style: AppTypography.buttonPrimary.copyWith(
-                  color: textColor,
-                ),
-              ),
-            ],
+          const SizedBox(height: AppSpacing.x1),
+          Text(
+            'Coming soon',
+            style: AppTypography.caption(context).copyWith(
+              color: context.colors.textSecondary,
+              fontSize: 12,
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

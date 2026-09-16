@@ -21,7 +21,9 @@ import '../../../core/widgets/pressable_scale.dart';
 /// Firebase email/password recovery is link-based (not OTP): the email
 /// contains a link to a Firebase-hosted page where the user sets a new
 /// password. This screen tells the user to open that link, and offers a
-/// resend with a 60s cooldown. Receives the address via GoRouter `extra`.
+/// resend with a 60s cooldown. Receives the address via query parameter
+/// `?email=` (survives process death); falls back to GoRouter `extra`
+/// for backward compat (see router.dart).
 class ResetLinkSentScreen extends ConsumerStatefulWidget {
   const ResetLinkSentScreen({super.key, this.email = ''});
   final String email;
@@ -36,6 +38,20 @@ class _ResetLinkSentScreenState extends ConsumerState<ResetLinkSentScreen>
   Timer? _timer;
   int _secondsRemaining = 0;
   bool _isResending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Start the 60s cooldown on open (not only after resend) so the
+    // just-sent link can't be spammed immediately.
+    _secondsRemaining = 60;
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() {
+        if (_secondsRemaining > 0) _secondsRemaining--;
+      });
+    });
+  }
 
   @override
   void dispose() {
@@ -90,7 +106,8 @@ class _ResetLinkSentScreenState extends ConsumerState<ResetLinkSentScreen>
 
   @override
   Widget build(BuildContext context) {
-    final email = widget.email.isNotEmpty ? widget.email : 'your email';
+    final hasEmail = widget.email.isNotEmpty;
+    final email = hasEmail ? widget.email : 'your email';
     final screenHeight = MediaQuery.of(context).size.height;
     final safeTop = MediaQuery.of(context).padding.top;
     final safeBottom = MediaQuery.of(context).padding.bottom;
@@ -124,7 +141,14 @@ class _ResetLinkSentScreenState extends ConsumerState<ResetLinkSentScreen>
                       button: true,
                       label: 'Back',
                       child: PressableScale(
-                        onTap: () => Navigator.of(context).maybePop(),
+                        onTap: () async {
+                          // maybePop no-ops when this screen is the stack
+                          // root (e.g. deep link) — fall back to /login so
+                          // the button never silently does nothing.
+                          final popped = await Navigator.of(context).maybePop();
+                          if (!context.mounted) return;
+                          if (!popped) context.go('/login');
+                        },
                         child: Container(
                           width: 40,
                           height: 40,
@@ -207,48 +231,59 @@ class _ResetLinkSentScreenState extends ConsumerState<ResetLinkSentScreen>
                   ),
                   const SizedBox(height: AppSpacing.x4),
 
-                  // Resend link
-                  Center(
-                    child: Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: 4,
-                      children: [
-                        Text(
-                          _secondsRemaining > 0
-                              ? 'Resend link in $_timerText'
-                              : "Didn't receive the email?",
-                          style: AppTypography.bodyFormSecondary(context),
-                        ),
-                        if (_secondsRemaining == 0)
-                          Semantics(
-                            button: true,
-                            label: 'Resend reset link',
-                            child: PressableScale(
-                              onTap: _isResending ? null : _resend,
-                              child: _isResending
-                                  ? const SizedBox(
-                                      width: 14,
-                                      height: 14,
-                                      child: CircularProgressIndicator(
-                                          strokeWidth: 2),
-                                    )
-                                  : Text(
-                                      'Resend',
-                                      style:
-                                          AppTypography.bodyFormSecondary(
-                                                  context)
-                                              .copyWith(
-                                        color: AppColors.primary,
-                                        fontWeight: FontWeight.w700,
-                                        decoration: TextDecoration.underline,
-                                        decorationColor: AppColors.primary,
-                                      ),
-                                    ),
-                            ),
+                  // Resend link — disabled when email is empty (deep link
+                  // without an address): a Resend there would silently
+                  // no-op, so hide the affordance and explain instead.
+                  if (!hasEmail)
+                    Center(
+                      child: Text(
+                        'Open this link from your email app.',
+                        style: AppTypography.bodyFormSecondary(context),
+                        textAlign: TextAlign.center,
+                      ),
+                    )
+                  else
+                    Center(
+                      child: Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 4,
+                        children: [
+                          Text(
+                            _secondsRemaining > 0
+                                ? 'Resend link in $_timerText'
+                                : "Didn't receive the email?",
+                            style: AppTypography.bodyFormSecondary(context),
                           ),
-                      ],
+                          if (_secondsRemaining == 0)
+                            Semantics(
+                              button: true,
+                              label: 'Resend reset link',
+                              child: PressableScale(
+                                onTap: _isResending ? null : _resend,
+                                child: _isResending
+                                    ? const SizedBox(
+                                        width: 14,
+                                        height: 14,
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2),
+                                      )
+                                    : Text(
+                                        'Resend',
+                                        style:
+                                            AppTypography.bodyFormSecondary(
+                                                    context)
+                                                .copyWith(
+                                          color: AppColors.primary,
+                                          fontWeight: FontWeight.w700,
+                                          decoration: TextDecoration.underline,
+                                          decorationColor: AppColors.primary,
+                                        ),
+                                      ),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),

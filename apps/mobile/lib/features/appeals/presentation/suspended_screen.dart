@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/providers/auth_state_provider.dart';
@@ -38,14 +39,49 @@ class _SuspendedScreenState extends ConsumerState<SuspendedScreen> {
   bool _checking = false;
   List<AppealModel> _appeals = [];
 
+  static const _draftKey = 'appeal_draft';
+
   @override
   void initState() {
     super.initState();
+    _statementController.addListener(_persistDraft);
+    _loadDraft();
     _reload();
+  }
+
+  Future<void> _loadDraft() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final draft = prefs.getString(_draftKey);
+      if (draft != null && draft.isNotEmpty && mounted) {
+        _statementController.text = draft;
+      }
+    } catch (_) {
+      // Fail-open: draft restore is best-effort.
+    }
+  }
+
+  Future<void> _persistDraft() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_draftKey, _statementController.text);
+    } catch (_) {
+      // Best-effort only.
+    }
+  }
+
+  Future<void> _clearDraft() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_draftKey);
+    } catch (_) {
+      // Best-effort only.
+    }
   }
 
   @override
   void dispose() {
+    _statementController.removeListener(_persistDraft);
     _statementController.dispose();
     super.dispose();
   }
@@ -106,6 +142,14 @@ class _SuspendedScreenState extends ConsumerState<SuspendedScreen> {
       );
       return;
     }
+    if (statement.length < 20) {
+      AppSnackbar.show(
+        context,
+        message: 'Please write at least 20 characters so we can review.',
+        variant: AppSnackbarVariant.error,
+      );
+      return;
+    }
     setState(() => _submitting = true);
     HapticFeedback.mediumImpact();
     try {
@@ -113,6 +157,7 @@ class _SuspendedScreenState extends ConsumerState<SuspendedScreen> {
           .read(appealRepositoryProvider)
           .submitSuspensionAppeal(statement: statement);
       _statementController.clear();
+      await _clearDraft();
       if (!mounted) return;
       setState(() => _appeals = [created, ..._appeals]);
       AppSnackbar.show(
@@ -153,18 +198,34 @@ class _SuspendedScreenState extends ConsumerState<SuspendedScreen> {
   Future<void> _checkAgain() async {
     setState(() => _checking = true);
     try {
-      final ok = await ref.read(authStateProvider.notifier).refreshSuspension();
+      final result = await ref
+          .read(authStateProvider.notifier)
+          .refreshSuspension();
       if (!mounted) return;
-      if (ok) {
-        // Router redirect (suspended → authenticated) moves us along.
-        AppSnackbar.show(
-          context,
-          message: 'Welcome back! Your account is active again.',
-          variant: AppSnackbarVariant.success,
-        );
-      } else {
-        await _reload();
+      switch (result) {
+        case SuspensionCheck.clear:
+          // Router redirect (suspended → authenticated) moves us along.
+          AppSnackbar.show(
+            context,
+            message: 'Welcome back! Your account is active again.',
+            variant: AppSnackbarVariant.success,
+          );
+        case SuspensionCheck.suspended:
+          await _reload();
+        case SuspensionCheck.unknown:
+          AppSnackbar.show(
+            context,
+            message: "Couldn't reach the server. Check your connection.",
+            variant: AppSnackbarVariant.error,
+          );
       }
+    } catch (_) {
+      if (!mounted) return;
+      AppSnackbar.show(
+        context,
+        message: "Couldn't reach the server. Check your connection.",
+        variant: AppSnackbarVariant.error,
+      );
     } finally {
       if (mounted) setState(() => _checking = false);
     }
@@ -176,7 +237,26 @@ class _SuspendedScreenState extends ConsumerState<SuspendedScreen> {
       showHomeIndicator: false,
       body: SafeArea(
         child: _loading
-            ? const Center(child: CircularProgressIndicator())
+            ? Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: AppSpacing.x4),
+                    Text(
+                      'Checking your account…',
+                      style: AppTypography.bodyMedium(context).copyWith(
+                        color: context.colors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.x3),
+                    TextButton(
+                      onPressed: _reload,
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              )
             : ListView(
                 padding: const EdgeInsets.fromLTRB(
                   AppSpacing.x5,
@@ -210,11 +290,12 @@ class _SuspendedScreenState extends ConsumerState<SuspendedScreen> {
                     onPressed: _checking ? null : _checkAgain,
                     loading: _checking,
                   ),
-                  const SizedBox(height: AppSpacing.x2),
-                  AppButton.ghost(
-                    label: 'Sign out',
-                    onPressed: () =>
-                        ref.read(authStateProvider.notifier).signOut(),
+                  const SizedBox(height: AppSpacing.x3),
+                  Text(
+                    'Stay signed in to appeal. '
+                    'Your session is required to submit an appeal.',
+                    style: AppTypography.metaSub(context),
+                    textAlign: TextAlign.center,
                   ),
                 ],
               ),
@@ -231,6 +312,7 @@ class _SuspendedScreenState extends ConsumerState<SuspendedScreen> {
       return [
         _DecisionCard(appeal: decided),
         const SizedBox(height: AppSpacing.x4),
+        ..._appealForm(context, heading: 'Submit a new appeal'),
       ];
     }
     if (decided != null && decided.status == AppealStatus.approved) {
@@ -240,11 +322,17 @@ class _SuspendedScreenState extends ConsumerState<SuspendedScreen> {
       ];
     }
 
-    // No appeals yet (or only decided ones cleared) — the form.
+    // No appeals yet — the form.
     return [
       _GuidelinesCard(),
       const SizedBox(height: AppSpacing.x4),
-      Text('Your appeal', style: AppTypography.labelField(context)),
+      ..._appealForm(context, heading: 'Your appeal'),
+    ];
+  }
+
+  List<Widget> _appealForm(BuildContext context, {required String heading}) {
+    return [
+      Text(heading, style: AppTypography.labelField(context)),
       const SizedBox(height: 6),
       Container(
         padding: const EdgeInsets.symmetric(

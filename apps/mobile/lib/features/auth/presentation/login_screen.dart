@@ -11,17 +11,10 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/utils/secure_screen.dart';
+import '../../../core/widgets/app_dialog.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/pressable_scale.dart';
-
-void _showSocialComingSoon(BuildContext context) {
-  AppSnackbar.show(
-    context,
-    message: 'Social sign-in coming soon.',
-    variant: AppSnackbarVariant.info,
-  );
-}
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -59,28 +52,54 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   }
 
   Future<void> _onBiometricLogin() async {
-    final ok = await BiometricService.instance.authenticate(
+    final result = await BiometricService.instance.authenticateDetailed(
       reason: 'Authenticate to sign in to MatchUp',
     );
     if (!mounted) return;
-    if (ok) {
-      await ref.read(authStateProvider.notifier).checkSession();
-      if (!mounted) return;
-      final status = ref.read(authStatusProvider);
-      if (status != AuthStatus.authenticated) {
+    switch (result) {
+      case BiometricResult.cancelled:
+        // User dismissed the prompt — silently return, no snackbar.
+        return;
+      case BiometricResult.failed:
         AppSnackbar.show(
           context,
-          message: 'No saved session. Please sign in with your password.',
-          variant: AppSnackbarVariant.info,
+          message: 'Biometric authentication failed.',
+          variant: AppSnackbarVariant.error,
         );
-      }
-    } else {
+        return;
+      case BiometricResult.success:
+        break;
+    }
+    await ref.read(authStateProvider.notifier).checkSession();
+    if (!mounted) return;
+    final status = ref.read(authStatusProvider);
+    if (status != AuthStatus.authenticated) {
       AppSnackbar.show(
         context,
-        message: 'Biometric authentication failed.',
-        variant: AppSnackbarVariant.error,
+        message: 'No saved session. Please sign in with your password.',
+        variant: AppSnackbarVariant.info,
       );
+      return;
     }
+    // Mirror the password path: navigate explicitly instead of relying
+    // on the async router redirect.
+    context.go('/discovery');
+  }
+
+  Future<void> _onClose() async {
+    final dirty = _emailController.text.isNotEmpty ||
+        _passwordController.text.isNotEmpty;
+    if (!dirty) {
+      context.go('/welcome');
+      return;
+    }
+    final discard = await AppDialog.confirm(
+      context,
+      title: 'Discard sign in?',
+      body: 'You have unsaved changes. Discard them and go back?',
+      confirmLabel: 'Discard',
+    );
+    if (discard == true && mounted) context.go('/welcome');
   }
 
   Future<void> _onLogin() async {
@@ -166,7 +185,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                         button: true,
                         label: 'Close',
                         child: PressableScale(
-                          onTap: () => context.go('/welcome'),
+                          onTap: _onClose,
                           child: Container(
                             width: 40,
                             height: 40,
@@ -194,15 +213,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                     ),
                     const SizedBox(height: AppSpacing.x4),
 
-                    // Social buttons — side by side
+                    // Social buttons — disabled until social sign-in ships
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
                           child: _SocialButton(
                             label: 'Google',
                             icon: Icons.circle_outlined,
-                            onTap: () => _showSocialComingSoon(context),
+                            onTap: null,
                             isOutline: true,
+                            comingSoon: true,
                           ),
                         ),
                         const SizedBox(width: AppSpacing.x3),
@@ -210,8 +231,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                           child: _SocialButton(
                             label: 'Apple',
                             icon: Icons.apple_rounded,
-                            onTap: () => _showSocialComingSoon(context),
+                            onTap: null,
                             isOutline: false,
+                            comingSoon: true,
                           ),
                         ),
                       ],
@@ -434,55 +456,85 @@ class _SocialButton extends StatelessWidget {
     required this.icon,
     required this.onTap,
     required this.isOutline,
+    this.comingSoon = false,
   });
   final String label;
   final IconData icon;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final bool isOutline;
+
+  /// True while social sign-in is unavailable — renders the button visibly
+  /// disabled with a caption instead of looking tappable and going nowhere.
+  final bool comingSoon;
 
   @override
   Widget build(BuildContext context) {
+    final button = PressableScale(
+      onTap: onTap,
+      child: Container(
+        height: 52,
+        decoration: BoxDecoration(
+          color: isOutline
+              ? context.colors.surface
+              : const Color(0xFF000000),
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: isOutline
+              ? Border.all(color: context.colors.border, width: 1)
+              : null,
+        ),
+        alignment: Alignment.center,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 18,
+              color: isOutline
+                  ? context.colors.textSecondary
+                  : AppColors.textOnPrimary,
+            ),
+            const SizedBox(width: AppSpacing.x2),
+            Text(
+              label,
+              style: AppTypography.labelField(context).copyWith(
+                color: isOutline
+                    ? context.colors.textPrimary
+                    : AppColors.textOnPrimary,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!comingSoon) {
+      return Semantics(
+        button: true,
+        label: label,
+        child: button,
+      );
+    }
     return Semantics(
       button: true,
-      label: label,
-      child: PressableScale(
-        onTap: onTap,
-        child: Container(
-          height: 52,
-          decoration: BoxDecoration(
-            color: isOutline
-                ? context.colors.surface
-                : const Color(0xFF000000),
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-            border: isOutline
-                ? Border.all(color: context.colors.border, width: 1)
-                : null,
+      label: '$label (coming soon)',
+      enabled: false,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Opacity(
+            opacity: 0.5,
+            child: IgnorePointer(child: button),
           ),
-          alignment: Alignment.center,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 18,
-                color: isOutline
-                    ? context.colors.textSecondary
-                    : AppColors.textOnPrimary,
-              ),
-              const SizedBox(width: AppSpacing.x2),
-              Text(
-                label,
-                style: AppTypography.labelField(context).copyWith(
-                  color: isOutline
-                      ? context.colors.textPrimary
-                      : AppColors.textOnPrimary,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
+          const SizedBox(height: AppSpacing.x1),
+          Text(
+            'Coming soon',
+            style: AppTypography.caption(context).copyWith(
+              color: context.colors.textSecondary,
+              fontSize: 12,
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

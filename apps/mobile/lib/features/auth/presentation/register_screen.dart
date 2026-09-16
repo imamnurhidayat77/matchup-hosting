@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/providers/auth_state_provider.dart';
 import '../../../core/providers/repository_providers.dart';
@@ -10,17 +11,10 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/utils/secure_screen.dart';
+import '../../../core/widgets/app_dialog.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/pressable_scale.dart';
-
-void _showSocialComingSoon(BuildContext context) {
-  AppSnackbar.show(
-    context,
-    message: 'Social sign-in coming soon.',
-    variant: AppSnackbarVariant.info,
-  );
-}
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -51,14 +45,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
 
   Future<void> _onRegister() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_passwordController.text != _confirmController.text) {
-      AppSnackbar.show(
-        context,
-        message: 'Passwords do not match.',
-        variant: AppSnackbarVariant.error,
-      );
-      return;
-    }
     setState(() => _isLoading = true);
     try {
       final result = await ref.read(authRepositoryProvider).register(
@@ -72,6 +58,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
         refreshToken: result.refreshToken,
         userId: result.userId,
       );
+      // New account: onboarding not yet done. Splash resumes GTK while
+      // this flag is false (missing/null = old account, treated as done).
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('gtk_done', false);
+      } catch (_) {
+        // Fail-open: onboarding resume is best-effort.
+      }
       if (!mounted) return;
       context.go('/get-to-know-1');
     } catch (e) {
@@ -86,9 +80,29 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
     }
   }
 
+  Future<void> _onClose() async {
+    final dirty = _nameController.text.isNotEmpty ||
+        _emailController.text.isNotEmpty ||
+        _passwordController.text.isNotEmpty ||
+        _confirmController.text.isNotEmpty;
+    if (!dirty) {
+      context.go('/welcome');
+      return;
+    }
+    final discard = await AppDialog.confirm(
+      context,
+      title: 'Discard sign up?',
+      body: 'You have unsaved changes. Discard them and go back?',
+      confirmLabel: 'Discard',
+    );
+    if (discard == true && mounted) context.go('/welcome');
+  }
+
   String? _validateName(String? value) {
     final v = value?.trim() ?? '';
     if (v.isEmpty) return 'Name is required';
+    if (v.length < 2) return 'Name must be at least 2 characters';
+    if (v.length > 50) return 'Name must be at most 50 characters';
     return null;
   }
 
@@ -103,7 +117,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
 
   String? _validatePassword(String? value) {
     if (value == null || value.isEmpty) return 'Password is required';
-    if (value.length < 6) return 'Password must be at least 6 characters';
+    if (value.length < 8) return 'Password must be at least 8 characters';
+    if (!RegExp(r'[A-Za-z]').hasMatch(value) ||
+        !RegExp(r'[0-9]').hasMatch(value)) {
+      return 'Password must include a letter and a number';
+    }
     return null;
   }
 
@@ -150,7 +168,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                         button: true,
                         label: 'Close',
                         child: PressableScale(
-                          onTap: () => context.go('/welcome'),
+                          onTap: _onClose,
                           child: Container(
                             width: 40,
                             height: 40,
@@ -178,15 +196,17 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                     ),
                     const SizedBox(height: AppSpacing.x4),
 
-                    // Social buttons — side by side
+                    // Social buttons — disabled until social sign-in ships
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
                           child: _SocialButton(
                             label: 'Google',
                             icon: Icons.circle_outlined,
-                            onTap: () => _showSocialComingSoon(context),
+                            onTap: null,
                             isOutline: true,
+                            comingSoon: true,
                           ),
                         ),
                         const SizedBox(width: AppSpacing.x3),
@@ -194,8 +214,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                           child: _SocialButton(
                             label: 'Apple',
                             icon: Icons.apple_rounded,
-                            onTap: () => _showSocialComingSoon(context),
+                            onTap: null,
                             isOutline: false,
+                            comingSoon: true,
                           ),
                         ),
                       ],
@@ -394,55 +415,85 @@ class _SocialButton extends StatelessWidget {
     required this.icon,
     required this.onTap,
     required this.isOutline,
+    this.comingSoon = false,
   });
   final String label;
   final IconData icon;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final bool isOutline;
+
+  /// True while social sign-in is unavailable — renders the button visibly
+  /// disabled with a caption instead of looking tappable and going nowhere.
+  final bool comingSoon;
 
   @override
   Widget build(BuildContext context) {
+    final button = PressableScale(
+      onTap: onTap,
+      child: Container(
+        height: 52,
+        decoration: BoxDecoration(
+          color: isOutline
+              ? context.colors.surface
+              : const Color(0xFF000000),
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: isOutline
+              ? Border.all(color: context.colors.border, width: 1)
+              : null,
+        ),
+        alignment: Alignment.center,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 18,
+              color: isOutline
+                  ? context.colors.textSecondary
+                  : AppColors.textOnPrimary,
+            ),
+            const SizedBox(width: AppSpacing.x2),
+            Text(
+              label,
+              style: AppTypography.labelField(context).copyWith(
+                color: isOutline
+                    ? context.colors.textPrimary
+                    : AppColors.textOnPrimary,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!comingSoon) {
+      return Semantics(
+        button: true,
+        label: label,
+        child: button,
+      );
+    }
     return Semantics(
       button: true,
-      label: label,
-      child: PressableScale(
-        onTap: onTap,
-        child: Container(
-          height: 52,
-          decoration: BoxDecoration(
-            color: isOutline
-                ? context.colors.surface
-                : const Color(0xFF000000),
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-            border: isOutline
-                ? Border.all(color: context.colors.border, width: 1)
-                : null,
+      label: '$label (coming soon)',
+      enabled: false,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Opacity(
+            opacity: 0.5,
+            child: IgnorePointer(child: button),
           ),
-          alignment: Alignment.center,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 18,
-                color: isOutline
-                    ? context.colors.textSecondary
-                    : AppColors.textOnPrimary,
-              ),
-              const SizedBox(width: AppSpacing.x2),
-              Text(
-                label,
-                style: AppTypography.labelField(context).copyWith(
-                  color: isOutline
-                      ? context.colors.textPrimary
-                      : AppColors.textOnPrimary,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
+          const SizedBox(height: AppSpacing.x1),
+          Text(
+            'Coming soon',
+            style: AppTypography.caption(context).copyWith(
+              color: context.colors.textSecondary,
+              fontSize: 12,
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

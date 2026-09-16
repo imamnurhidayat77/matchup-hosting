@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/providers/auth_state_provider.dart';
 import '../../../core/storage/route_store.dart';
@@ -52,13 +53,38 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     Future.wait([
       ref.read(authStateProvider.notifier).checkSession(),
       Future.delayed(const Duration(milliseconds: 800)),
-    ]).then((_) => _routeBySession());
+    ]).then((_) {
+      if (!mounted) return;
+      _routeBySession();
+    }).catchError((_) {
+      // Session check failed — fall back to onboarding instead of
+      // hanging on the splash screen forever. (No wall-clock timeout:
+      // a pending Timer would break widget-test pumpAndSettle, and
+      // checkSession is only two local storage reads.)
+      if (!mounted) return;
+      context.go('/onboarding');
+    });
   }
 
   Future<void> _routeBySession() async {
     if (!mounted) return;
     final status = ref.read(authStatusProvider);
     if (status == AuthStatus.authenticated) {
+      // New accounts must finish onboarding: gtk_done==false resumes GTK.
+      // Missing/null = old account (flag never written) → treat as done,
+      // fail-open so existing users aren't trapped in onboarding.
+      bool? gtkDone;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        gtkDone = prefs.getBool('gtk_done');
+      } catch (_) {
+        gtkDone = null;
+      }
+      if (!mounted) return;
+      if (gtkDone == false) {
+        context.go('/get-to-know-1');
+        return;
+      }
       // Restore the last visited route so the user continues where they
       // left off after minimize or OS kill. Falls back to /discovery if
       // nothing was saved (first install) or the stored path is no longer
@@ -83,8 +109,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    // Deliberate deviation from AuthShell (PRD 2.1 principle 1): the splash
-    // screen is a full-bleed gradient with no scroll body or header — the
+    // Deliberate deviation from the shared auth-shell pattern (PRD 2.1
+    // principle 1): the splash screen is a full-bleed gradient with no
     // one screen in the auth flow with nothing to scroll.
     return Scaffold(
       body: Container(
@@ -135,12 +161,17 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                             borderRadius: BorderRadius.circular(AppRadius.xl),
                             boxShadow: AppShadows.floating,
                           ),
-                          child: ClipRRect(
+                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(AppRadius.xl),
                             child: Image.asset(
                               'assets/images/splash/logo-badge.png',
                               fit: BoxFit.cover,
                               semanticLabel: 'MatchUp logo',
+                              errorBuilder: (_, _, _) => const Icon(
+                                Icons.sports_soccer_rounded,
+                                size: 48,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
                         ),
@@ -209,7 +240,13 @@ class _DecorationSvg extends StatelessWidget {
     return SizedBox(
       width: size,
       height: size,
-      child: SvgPicture.asset(path, fit: BoxFit.contain),
+      // flutter_svg 2.x has no errorBuilder — placeholderBuilder covers
+      // decode failures with an empty box instead of crashing.
+      child: SvgPicture.asset(
+        path,
+        fit: BoxFit.contain,
+        placeholderBuilder: (_) => const SizedBox.shrink(),
+      ),
     );
   }
 }

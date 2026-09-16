@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 /// Keys for secure token storage.
@@ -47,7 +49,35 @@ class SecureTokenStore {
 
   Future<bool> get hasValidSession async {
     final token = await readAccessToken();
-    return token != null && token.isNotEmpty;
+    if (token == null || token.isEmpty) return false;
+    // Client-side convenience check only (no signature verification —
+    // trust stays server-side): treat an expired Firebase JWT as no
+    // session so the app routes to login instead of 401-looping.
+    // Malformed/non-JWT tokens (e.g. test fakes) fail OPEN (valid) so
+    // tests and edge payloads aren't locked out by this hint.
+    final expMs = _jwtExpiryMs(token);
+    if (expMs == null) return true;
+    const leewayMs = 60 * 1000;
+    return DateTime.now().millisecondsSinceEpoch + leewayMs < expMs;
+  }
+
+  /// Epoch-millis `exp` of a JWT payload without verifying its signature.
+  /// Null when the token isn't a parseable JWT or carries no numeric exp.
+  static int? _jwtExpiryMs(String token) {
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return null;
+      var payload = parts[1].replaceAll('-', '+').replaceAll('_', '/');
+      payload += '=' * ((4 - payload.length % 4) % 4);
+      final json =
+          jsonDecode(utf8.decode(base64.decode(payload)))
+              as Map<String, dynamic>;
+      final exp = json['exp'];
+      if (exp is num) return exp.toInt() * 1000;
+      return null;
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Call on logout. Deletes ALL stored tokens.
