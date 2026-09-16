@@ -289,7 +289,9 @@ class MatchUpApp extends ConsumerWidget {
       ),
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
         backgroundColor: DarkPalette.surface,
-        selectedItemColor: AppColors.primary,
+        // primaryOnDark, not brand primary: #0B1F8A on a dark surface is
+        // 1.3:1 (invisible). #7BAEF7 clears AA on surface/muted.
+        selectedItemColor: DarkPalette.primaryOnDark,
         unselectedItemColor: DarkPalette.textSecondary,
         type: BottomNavigationBarType.fixed,
         elevation: 8,
@@ -299,13 +301,13 @@ class MatchUpApp extends ConsumerWidget {
         indicatorColor: DarkPalette.primaryContainer,
         iconTheme: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return const IconThemeData(color: AppColors.primary);
+            return const IconThemeData(color: DarkPalette.primaryOnDark);
           }
           return const IconThemeData(color: DarkPalette.textSecondary);
         }),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return _captionStyle.copyWith(color: AppColors.primary);
+            return _captionStyle.copyWith(color: DarkPalette.primaryOnDark);
           }
           return _captionStyle.copyWith(color: DarkPalette.textSecondary);
         }),
@@ -374,7 +376,9 @@ class MatchUpApp extends ConsumerWidget {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: AppColors.primary,
+          // Lightened brand blue: raw primary (#0B1F8A) as text on a
+          // dark background is 1.4:1.
+          foregroundColor: DarkPalette.primaryOnDark,
           textStyle: AppTypography.button.copyWith(fontSize: 14),
         ),
       ),

@@ -15,6 +15,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/dark_colors.dart';
+import '../../../core/utils/nav_guard.dart';
 import '../../../core/widgets/app_avatar.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_snackbar.dart';
@@ -584,8 +585,13 @@ class _DmSettingsSheet extends StatelessWidget {
             onTap: () {
               Navigator.of(context).pop();
               // Uid route: exact match, safe for any display name
-              // (spaces, slashes, duplicates).
-              context.push('/player-profile/uid/$peerUid');
+              // (spaces, slashes, duplicates). Guarded: a second tap
+              // before the push registers duplicates the page key and
+              // red-screens ('!keyReservation.contains(key)').
+              NavGuard.onceFor(
+                'profile-$peerUid',
+                () => context.push('/player-profile/uid/$peerUid'),
+              );
             },
           ),
           _DmSettingsRow(
@@ -802,7 +808,7 @@ class _DmBubbleContent extends StatelessWidget {
 }
 
 /// Plain-text DM bubble, also the fallback when an image message
-/// carries no usable image source.
+/// carries no usable image source. Selectable for native copy.
 class _DmText extends StatelessWidget {
   const _DmText({required this.message, required this.isMine});
   final ChatMessage message;
@@ -810,7 +816,7 @@ class _DmText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
+    return SelectableText(
       message.text,
       style: AppTypography.bodyMedium(context).copyWith(
         color: isMine ? AppColors.textOnPrimary : context.colors.textPrimary,

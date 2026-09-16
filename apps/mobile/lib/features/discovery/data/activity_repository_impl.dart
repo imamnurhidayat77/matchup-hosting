@@ -174,6 +174,18 @@ class LocalActivityRepository implements ActivityRepository {
   }
 
   @override
+  Future<void> updateCover({
+    required String activityId,
+    required String coverImagePath,
+    required String coverImageUrl,
+  }) async {
+    throw StateError(
+      'ActivityRepository.updateCover() requires a live backend — no offline '
+      'fallback is provided.',
+    );
+  }
+
+  @override
   Future<List<ActivityModel>> pastByUser(
     String userId, {
     int limit = 20,

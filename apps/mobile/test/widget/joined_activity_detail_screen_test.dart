@@ -295,5 +295,33 @@ void main() {
         );
       },
     );
+
+    testWidgets('should show the cancelled badge and banner when called off', (
+      tester,
+    ) async {
+      when(() => activityRepo.byId('9')).thenAnswer(
+        (_) async => ActivityModel(
+          id: '9',
+          title: 'Tuesday Night Volleyball',
+          sportType: 'Volleyball',
+          description: '',
+          location: 'Eastside Rec Centre',
+          distanceKm: 3.1,
+          dateTime: DateTime(2026, 8, 25, 19),
+          skillLevel: 'Beginner',
+          capacity: 12,
+          participantCount: 7,
+          hostName: 'Wren Oduya',
+          lifecycleStatus: 'cancelled',
+        ),
+      );
+      when(() => chatRepo.messages('9')).thenAnswer((_) async => []);
+
+      await pumpScreen(tester);
+
+      expect(find.text('CANCELLED'), findsWidgets);
+      expect(find.text('This game was cancelled'), findsOneWidget);
+      expect(find.text("You're in!"), findsNothing);
+    });
   });
 }

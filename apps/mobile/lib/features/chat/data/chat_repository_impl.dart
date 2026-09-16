@@ -15,6 +15,7 @@ import '../domain/chat_message.dart';
 import '../domain/chat_poll.dart';
 import '../domain/chat_reaction.dart';
 import 'chat_repository.dart';
+import 'dm_repository.dart' show parseSharedLocation;
 
 class LocalChatRepository implements ChatRepository {
   /// Offline-only chat store. Reads return empty results, writes
@@ -496,6 +497,10 @@ class RemoteChatRepository implements ChatRepository {
     if (senderId.isEmpty || text.isEmpty) return null;
     final isMine = myUid.isNotEmpty && senderId == myUid;
     final sender = senders[senderId];
+    // Location shares travel as text (`'📍 Shared location: <maps link>'`)
+    // on the wire — extract coords so received shares render the tappable
+    // Maps card instead of a raw link (same helper the DM repo uses).
+    final coords = parseSharedLocation(text);
     return ChatMessage(
       id: id,
       senderId: senderId,
@@ -505,6 +510,8 @@ class RemoteChatRepository implements ChatRepository {
       sentAt: _parseTimestamp(json['timestamp']) ?? DateTime.now(),
       isMine: isMine,
       imageUrl: ChatMessage.imageUrlFromText(text),
+      latitude: coords?.latitude,
+      longitude: coords?.longitude,
     );
   }
 
@@ -780,6 +787,9 @@ class RemoteChatRepository implements ChatRepository {
     if (senderId.isEmpty || text.isEmpty) return null;
     final isMine = myUid.isNotEmpty && senderId == myUid;
     final sender = senders[senderId];
+    // Same wire-format handling as the RTDB path above: a location share
+    // arrives as text, so pull the coords out for the tappable card.
+    final coords = parseSharedLocation(text);
     return ChatMessage(
       id: json['messageId']?.toString() ?? json['id']?.toString() ?? '',
       senderId: senderId,
@@ -789,6 +799,8 @@ class RemoteChatRepository implements ChatRepository {
       sentAt: _parseTimestamp(json['timestamp']) ?? DateTime.now(),
       isMine: isMine,
       imageUrl: ChatMessage.imageUrlFromText(text),
+      latitude: coords?.latitude,
+      longitude: coords?.longitude,
     );
   }
 }

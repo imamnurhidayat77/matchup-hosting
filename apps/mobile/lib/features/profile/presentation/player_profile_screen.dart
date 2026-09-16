@@ -250,6 +250,32 @@ class _ProfileContent extends StatelessWidget {
                 ],
                 const SizedBox(height: AppSpacing.x5),
 
+                // ── Physical chips (age + height, when shared) ──────────
+                // Age derives from dateOfBirth — the raw birthdate is
+                // never shown. Weight stays private by design.
+                if (user.age != null || user.heightCm != null) ...[
+                  Center(
+                    child: Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: AppSpacing.x2,
+                      runSpacing: AppSpacing.x2,
+                      children: [
+                        if (user.age != null)
+                          _InfoChip(
+                            icon: Icons.cake_outlined,
+                            label: '${user.age} yrs',
+                          ),
+                        if (user.heightCm != null)
+                          _InfoChip(
+                            icon: Icons.straighten_outlined,
+                            label: '${user.heightCm} cm',
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.x5),
+                ],
+
                 // ── Stat cards ────────────────────────────────────────────
                 Padding(
                   padding: const EdgeInsets.symmetric(
@@ -568,8 +594,40 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-class _SportChip extends StatelessWidget {
-  const _SportChip({
+/// Small icon + label pill for the physical chips (age, height).
+class _InfoChip extends StatelessWidget {
+  const _InfoChip({required this.icon, required this.label});
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: context.colors.surfaceMuted,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        border: Border.all(color: context.colors.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: context.colors.textSecondary),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: AppTypography.metaSub(context).copyWith(
+              fontWeight: FontWeight.w600,
+              color: context.colors.textPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SportChip extends StatelessWidget {  const _SportChip({
     required this.sport,
     required this.level,
     required this.isPrimary,

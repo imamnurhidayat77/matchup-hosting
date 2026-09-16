@@ -16,9 +16,14 @@ import 'package:flutter/foundation.dart';
 ///     (e.g. create an activity with no cover)
 ///   * surface a user-facing "image upload unavailable" error
 ///
-/// Files are uploaded to a deterministic, user-scoped path so the
-/// same image can be re-uploaded without leaving orphan blobs:
-///   `uploads/{folder}/{uid}/{timestamp}-{basename}`
+/// Files are uploaded to the caller-provided [storagePath]. Two flows:
+///   * chat attachments → `uploads/chat-attachments/…` (any signed-in
+///     uploader; membership enforced at the API layer).
+///   * activity covers → `activities/{id}/cover/…` via [uploadToPath]
+///     (host-only per Storage rules). NOTE: plain [uploadImage] to
+///     `uploads/activity-covers/…` is NOT allow-listed by storage.rules
+///     and will be denied — covers must use the two-phase
+///     create-then-[uploadToPath]+`PATCH cover` flow.
 class StorageService {
   StorageService._();
 

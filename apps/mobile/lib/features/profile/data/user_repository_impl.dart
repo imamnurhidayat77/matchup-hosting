@@ -197,10 +197,11 @@ class RemoteUserRepository implements UserRepository {
     try {
       // The backend's `editableProfileFields` is strict — any other key
       // returns INVALID_INPUT. The mobile model has more fields than the
-      // backend currently persists (`email`, `phone`, `heightCm`,
-      // `weightKg`, `goal`); we intentionally omit them from the PATCH
-      // body until backend support lands. The local fallback still records
-      // them in memory so the Edit Profile screen keeps working offline.
+      // backend persists (`email`, `phone`, `weightKg`, `goal`); we
+      // intentionally omit them from the PATCH body. `heightCm` IS
+      // persisted (and shown publicly), so it rides along. The local
+      // fallback still records everything in memory so the Edit Profile
+      // screen keeps working offline.
       //
       // Mapping:
       //   - `location`  → `preferredLocations[0]` (backend stores an array)
@@ -229,6 +230,8 @@ class RemoteUserRepository implements UserRepository {
             'preferredLocations': [location],
           if (dateOfBirth != null)
             'dateOfBirth': dateOfBirth.toIso8601String().split('T').first,
+          if (heightCm != null && heightCm >= 50 && heightCm <= 300)
+            'heightCm': heightCm,
           if (sports != null && sports.isNotEmpty)
             'preferredSports': sports.map((s) => s.sport).toList(),
           if (levelEntries.isNotEmpty)
@@ -394,8 +397,10 @@ class RemoteUserRepository implements UserRepository {
           : json['date_of_birth'] != null
           ? DateTime.tryParse(json['date_of_birth'] as String)
           : null,
-      heightCm: json['height_cm'] as int?,
-      weightKg: json['weight_kg'] as int?,
+      heightCm: (json['heightCm'] as num?)?.toInt() ??
+          (json['height_cm'] as num?)?.toInt(),
+      weightKg: (json['weightKg'] as num?)?.toInt() ??
+          (json['weight_kg'] as num?)?.toInt(),
       goal: json['goal'] as String?,
     );
   }

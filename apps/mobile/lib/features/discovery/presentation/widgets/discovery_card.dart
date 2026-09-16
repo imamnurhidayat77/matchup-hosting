@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -20,9 +22,13 @@ import '../../domain/activity_model.dart';
 /// [ActivityModel]. The action buttons live OUTSIDE the card (in the
 /// discovery screen) so this widget is purely the swipeable surface.
 class DiscoveryCard extends StatelessWidget {
-  const DiscoveryCard({super.key, required this.activity});
+  const DiscoveryCard({super.key, required this.activity, this.coverImageBytes});
 
   final ActivityModel activity;
+
+  /// In-memory hero override (e.g. create-flow preview of a just-picked
+  /// photo that has no URL yet). Null everywhere else.
+  final Uint8List? coverImageBytes;
 
   @override
   Widget build(BuildContext context) {
@@ -52,7 +58,12 @@ class DiscoveryCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(child: _HeroImage(activity: activity)),
+          Expanded(
+            child: _HeroImage(
+              activity: activity,
+              coverImageBytes: coverImageBytes,
+            ),
+          ),
           _CardInfo(activity: activity),
         ],
       ),
@@ -63,8 +74,9 @@ class DiscoveryCard extends StatelessWidget {
 // ─── Hero image + overlays ────────────────────────────────────────────────
 
 class _HeroImage extends StatelessWidget {
-  const _HeroImage({required this.activity});
+  const _HeroImage({required this.activity, this.coverImageBytes});
   final ActivityModel activity;
+  final Uint8List? coverImageBytes;
 
   @override
   Widget build(BuildContext context) {
@@ -75,7 +87,13 @@ class _HeroImage extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (activity.coverImageUrl != null)
+          if (coverImageBytes != null)
+            AssetImageWithFallback(
+              memoryBytes: coverImageBytes,
+              fit: BoxFit.cover,
+              decodeWidth: 400,
+            )
+          else if (activity.coverImageUrl != null)
             AssetImageWithFallback(
               imagePath: activity.coverImageUrl!,
               fit: BoxFit.cover,

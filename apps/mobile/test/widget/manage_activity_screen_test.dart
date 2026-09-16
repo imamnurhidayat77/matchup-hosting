@@ -43,6 +43,7 @@ void main() {
   ActivityModel activity({
     ActivityStatus status = ActivityStatus.available,
     String joinPolicy = 'open',
+    String lifecycleStatus = '',
   }) {
     return ActivityModel(
       id: '5',
@@ -58,6 +59,7 @@ void main() {
       hostName: 'Noor Haddad',
       status: status,
       joinPolicy: joinPolicy,
+      lifecycleStatus: lifecycleStatus,
       latitude: -36.8485,
       longitude: 174.7633,
     );
@@ -346,6 +348,21 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Chat 5'), findsOneWidget);
+    });
+
+    testWidgets('should hide the Cancel button on a cancelled activity', (
+      tester,
+    ) async {
+      when(
+        () => repo.byId('5'),
+      ).thenAnswer((_) async => activity(lifecycleStatus: 'cancelled'));
+      when(() => repo.participants('5')).thenAnswer((_) async => []);
+      when(() => repo.joinRequests('5')).thenAnswer((_) async => []);
+
+      await pumpScreen(tester);
+
+      expect(find.text('CANCELLED'), findsOneWidget);
+      expect(find.text('Cancel Activity'), findsNothing);
     });
   });
 }

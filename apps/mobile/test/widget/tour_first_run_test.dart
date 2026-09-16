@@ -168,22 +168,13 @@ void main() {
     );
     await tester.tap(find.text('Skip for now'));
     await tester.pumpAndSettle();
-    // GTK3 requires real input (no prefill): height, weight, and every
-    // DOB wheel. Wheels start at day 1 / January / maxYear, so nudge day
-    // and month up one notch and year down one notch to mark each as set.
-    await tester.enterText(find.byType(TextField), '180');
-    await tester.pump();
-    await tester.tap(find.bySemanticsLabel('Increase weight'));
-    await tester.pump();
-    for (final (label, dy) in [('Day', -40.0), ('Month', -40.0), ('Year', 40.0)]) {
-      await tester.scrollUntilVisible(
-        find.bySemanticsLabel(label),
-        200,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.drag(find.bySemanticsLabel(label), Offset(0, dy));
-      await tester.pumpAndSettle();
-    }
+    // GTK3 ships with valid defaults (175 cm / 70 kg / 25 yrs ago),
+    // so completing is one tap — no input needed.
+    await tester.scrollUntilVisible(
+      find.text('Complete Profile'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.text('Complete Profile'));
     // updateProfile() + the tour's SharedPreferences.hasSeen() check are
     // both async — settle covers both before asserting on Discovery.

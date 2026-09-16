@@ -418,7 +418,8 @@ class _DayCell extends StatelessWidget {
               // Event dot always renders when the day has events —
               // including on highlighted days (today / selected),
               // where it uses a contrasting tone so it still reads on
-              // the filled circle behind it.
+              // the filled circle behind it. primaryOnSurface (not raw
+              // primary, which is 1.3:1 on dark surfaces) both themes.
               if (hasActivity)
                 Positioned(
                   bottom: 4,
@@ -428,9 +429,7 @@ class _DayCell extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: isToday
                           ? AppColors.textOnPrimary
-                          : isSelected
-                              ? context.colors.primaryOnSurface
-                              : AppColors.primary,
+                          : context.colors.primaryOnSurface,
                       shape: BoxShape.circle,
                     ),
                   ),

@@ -160,6 +160,18 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       );
       return;
     }
+    // Height now persists (PATCH /me accepts 50–300); reject garbage
+    // locally so the backend 400 never fires for a typo.
+    final heightRaw = _heightController.text.trim();
+    final height = heightRaw.isEmpty ? null : int.tryParse(heightRaw);
+    if (heightRaw.isNotEmpty && (height == null || height < 50 || height > 300)) {
+      AppSnackbar.show(
+        context,
+        message: 'Height must be between 50 and 300 cm.',
+        variant: AppSnackbarVariant.error,
+      );
+      return;
+    }
     setState(() => _loading = true);
     try {
       await ref.read(userRepositoryProvider).updateProfile(
@@ -169,7 +181,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         email: _emailController.text.trim(),
         phone: _phoneController.text.trim(),
         dateOfBirth: _dob,
-        heightCm: int.tryParse(_heightController.text.trim()),
+        heightCm: height,
         weightKg: int.tryParse(_weightController.text.trim()),
         goal: _goalController.text.trim(),
         sports: _sports
@@ -426,9 +438,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                         ),
                         const SizedBox(height: AppSpacing.x4),
 
-                        // Physical card — height/weight/goal are not part of
-                        // PATCH /me either; same disabled-with-caption
-                        // treatment as Contact.
+                        // Physical card — height persists via PATCH /me
+                        // (and shows publicly); weight/goal are not part
+                        // of PATCH /me, so they keep the
+                        // disabled-with-caption treatment.
                         _SectionCard(
                           title: 'Physical',
                           child: Column(
@@ -440,7 +453,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                       label: 'HEIGHT (CM)',
                                       controller: _heightController,
                                       keyboardType: TextInputType.number,
-                                      enabled: false,
                                     ),
                                   ),
                                   const SizedBox(width: AppSpacing.x3),

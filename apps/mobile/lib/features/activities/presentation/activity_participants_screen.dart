@@ -7,6 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/utils/nav_guard.dart';
 import '../../../core/widgets/app_avatar.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/empty_state.dart';
@@ -277,10 +278,14 @@ class _ParticipantCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return PressableScale(
-      onTap: () => context.push(
-        item.userId.isNotEmpty
-            ? '/player-profile/uid/${item.userId}'
-            : '/player-profile/${item.name}',
+      // Double-tap guard (duplicate page keys red-screen).
+      onTap: () => NavGuard.onceFor(
+        'profile-${item.userId.isNotEmpty ? item.userId : item.name}',
+        () => context.push(
+          item.userId.isNotEmpty
+              ? '/player-profile/uid/${item.userId}'
+              : '/player-profile/${item.name}',
+        ),
       ),
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.x3),

@@ -286,12 +286,22 @@ class RemoteActivityRepository implements ActivityRepository {
     // client-side filtering of a capped feed. Falls back to the legacy
     // feed-derivation when the backend predates `mine` support.
     // Both paths return soonest-first so Upcoming renders nearest-first.
+    //
+    // The viewer-flag filter below runs on the DEDICATED path too, not
+    // just the fallback: a stale backend that doesn't understand `mine`
+    // answers 200 with the full public feed (it happened — every fresh
+    // account saw everyone else's games). Re-filtering by the viewer
+    // context the server attaches per row is a no-op on a correct
+    // backend and a lifesaver on an old one.
     try {
       final res = await _client.dio.get(
         _base,
         queryParameters: {'mine': 'joined', 'limit': limit, 'offset': offset},
       );
-      return _sortSoonestFirst(_parseList(apiDataList(res.data)));
+      final joined = _parseList(
+        apiDataList(res.data),
+      ).where((a) => a.isParticipant && !a.isHost).toList();
+      return _sortSoonestFirst(joined);
     } catch (_) {
       // No dedicated backend route (legacy) — the feed already carries
       // viewer context (`isParticipant` / `isHost` per activity, resolved
@@ -316,13 +326,16 @@ class RemoteActivityRepository implements ActivityRepository {
     int offset = 0,
   }) async {
     // Same soonest-first contract as [joinedByUser] — the Hosting tab
-    // must read nearest-first.
+    // must read nearest-first. Viewer-flag filter applies on the
+    // dedicated path too (see above: stale backends ignore `mine`).
     try {
       final res = await _client.dio.get(
         _base,
         queryParameters: {'mine': 'hosted', 'limit': limit, 'offset': offset},
       );
-      return _sortSoonestFirst(_parseList(apiDataList(res.data)));
+      final hosted =
+          _parseList(apiDataList(res.data)).where((a) => a.isHost).toList();
+      return _sortSoonestFirst(hosted);
     } catch (_) {
       try {
         final all = await feed(limit: 50);
@@ -636,22 +649,57 @@ class RemoteActivityRepository implements ActivityRepository {
   }
 
   @override
+  Future<void> updateCover({
+    required String activityId,
+    required String coverImagePath,
+    required String coverImageUrl,
+  }) async {
+    // No local fallback and no silent swallow: the activity already
+    // exists at this point, so a throw lets the caller warn while
+    // keeping the created game.
+    _invalidateDetails();
+    invalidateFeed();
+    try {
+      await _client.dio.patch(
+        '$_base/$activityId/cover',
+        data: {
+          'coverImagePath': coverImagePath,
+          'coverImageUrl': coverImageUrl,
+        },
+      );
+    } catch (e, st) {
+      debugPrint('[RemoteActivityRepository.updateCover] $e\n$st');
+      rethrow;
+    }
+  }
+
+  @override
   Future<List<ActivityModel>> pastByUser(
     String userId, {
     int limit = 20,
     int offset = 0,
   }) async {
     try {
-      // No dedicated backend route — "past" means lifecycle `completed`,
-      // filtered to activities the viewer hosted or joined. Most-recent
-      // first so history reads backwards from today.
-      final res = await _client.dio.get(
-        _base,
-        queryParameters: {'status': 'completed', 'limit': 50},
-      );
-      final past = _parseList(
-        apiDataList(res.data),
-      ).where((a) => a.isParticipant || a.isHost).toList();
+      // No dedicated backend route — "past" means terminal lifecycles
+      // (`completed` AND `cancelled`) filtered to activities the viewer
+      // hosted or joined. Cancelled must be included: otherwise a
+      // called-off game vanishes from every My Games tab (Upcoming only
+      // lists open games). Most-recent first so history reads backwards
+      // from today.
+      final responses = await Future.wait([
+        _client.dio.get(
+          _base,
+          queryParameters: {'status': 'completed', 'limit': 50},
+        ),
+        _client.dio.get(
+          _base,
+          queryParameters: {'status': 'cancelled', 'limit': 50},
+        ),
+      ]);
+      final past = responses
+          .expand((res) => _parseList(apiDataList(res.data)))
+          .where((a) => a.isParticipant || a.isHost)
+          .toList();
       _sortRecentFirst(past);
       return past.skip(offset).take(limit).toList();
     } catch (e, st) {

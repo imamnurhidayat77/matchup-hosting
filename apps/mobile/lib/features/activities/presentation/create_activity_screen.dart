@@ -12,6 +12,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/network/api_client.dart';
 
 import '../../../core/providers/repository_providers.dart';
+import 'my_activities_screen.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../core/storage/local_storage.dart';
 import '../../../core/utils/geohash.dart';
@@ -612,27 +613,33 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
   /// (see [_pickImage]); [StorageService.uploadImage] needs a local file
   /// path, so base64 payloads are decoded into a temp file first. A
   /// value that already points at an existing file is uploaded directly.
-  Future<String?> _uploadCoverImage(String? stored) async {
-    if (stored == null || stored.isEmpty) return null;
+  /// Phase two of the cover flow: writes [bytes] to a temp file,
+  /// uploads it to the host-only `activities/{id}/cover/` Storage path,
+  /// and points the activity at the download URL via `PATCH cover`.
+  /// Returns false (never throws) when anything fails — the activity
+  /// already exists, so the caller only loses the photo.
+  Future<bool> _attachCover(String activityId, Uint8List bytes) async {
     try {
-      if (await File(stored).exists()) {
-        return await StorageService.instance.uploadImage(
-          localPath: stored,
-          folder: 'activity-covers',
-        );
-      }
-      final bytes = base64.decode(stored);
       final dir = await Directory.systemTemp.createTemp('cover_');
       final file = File(
         '${dir.path}/cover_${DateTime.now().millisecondsSinceEpoch}.jpg',
       );
       await file.writeAsBytes(bytes, flush: true);
-      return await StorageService.instance.uploadImage(
+      final storagePath = 'activities/$activityId/cover/cover.jpg';
+      final uploaded = await StorageService.instance.uploadToPath(
         localPath: file.path,
-        folder: 'activity-covers',
+        storagePath: storagePath,
       );
-    } catch (_) {
-      return null;
+      if (uploaded == null) return false;
+      await ref.read(activityRepositoryProvider).updateCover(
+            activityId: activityId,
+            coverImagePath: uploaded.path,
+            coverImageUrl: uploaded.downloadUrl,
+          );
+      return true;
+    } catch (e) {
+      debugPrint('[CreateActivity] cover attach failed: $e');
+      return false;
     }
   }
 
@@ -722,12 +729,14 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
         : pickedVenue?.secondary.trim().isNotEmpty == true
             ? pickedVenue!.secondary.trim()
             : null;
-    // Cover photo is optional: upload the selected image (stored as
-    // base64 in the draft via setCoverImage) and pass the URL through.
-    // Any upload failure falls back to creating without a photo.
-    final String? coverImageUrl = await _uploadCoverImage(data.coverImagePath);
+    // Cover photo is optional and uploaded AFTER the create, because
+    // Storage rules only allow `activities/{id}/cover/…` — the id
+    // doesn't exist until the activity is created. Uploading anywhere
+    // else (e.g. `uploads/activity-covers/…`) is denied and used to
+    // fail silently, leaving every game photoless.
+    final coverBytes = _decodeCoverBytes(data.coverImagePath);
     try {
-      await ref
+      final created = await ref
           .read(activityRepositoryProvider)
           .create(
             title: data.title.trim(),
@@ -743,7 +752,6 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
             latitude: pickedLat,
             longitude: pickedLng,
             geohash: pickedGeohash,
-            coverImageUrl: coverImageUrl,
             durationMinutes: data.durationMinutes,
             joinPolicy: data.joinPolicy,
             isPaid: paid,
@@ -754,15 +762,29 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
                 ? minPlayers
                 : null,
           );
+      // Phase two (best-effort): store the bytes, upload to the
+      // host-only cover path, and point the activity at the URL. The
+      // game already exists, so a cover failure only costs the photo —
+      // never the activity.
+      var coverOk = coverBytes == null;
+      if (coverBytes != null) {
+        coverOk = await _attachCover(created.id, coverBytes);
+      }
       _form.reset();
       ref.read(imageUploadProvider.notifier).reset();
       await _clearDraft();
       if (!mounted) return;
+      // The new game lives under Hosting — refresh that tab now so it
+      // appears without a manual pull-to-refresh.
+      ref.invalidate(hostedGamesProvider);
       HapticFeedback.heavyImpact();
       AppSnackbar.show(
         context,
-        message: 'Activity created! 🎉',
-        variant: AppSnackbarVariant.success,
+        message: coverOk
+            ? 'Activity created! 🎉'
+            : 'Activity created, but the cover photo could not be uploaded.',
+        variant:
+            coverOk ? AppSnackbarVariant.success : AppSnackbarVariant.warning,
       );
       context.go('/activities');
     } catch (e) {
@@ -1246,6 +1268,9 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
         const SizedBox(height: _kLabelGap),
         _CoverPhoto(
           uploadInfo: uploadInfo,
+          // Draft-restored cover survives process death while the
+          // in-memory upload provider does not.
+          fallbackBytes: _decodeCoverBytes(data.coverImagePath),
           onTap: _pickImage,
           onRemove: () {
             ref.read(imageUploadProvider.notifier).reset();
@@ -1259,8 +1284,19 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
 
   // ── Preview ─────────────────────────────────────────────────────────────
 
-  Widget _buildPreviewStep(ActivityFormData data) {
-    final paid = data.feeType == 1;
+  /// Decodes the draft's stored cover (base64 from [_pickImage]) for
+  /// immediate display. Null when absent or corrupt — callers fall back
+  /// to the placeholder.
+  Uint8List? _decodeCoverBytes(String? stored) {
+    if (stored == null || stored.isEmpty) return null;
+    try {
+      return base64.decode(stored);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Widget _buildPreviewStep(ActivityFormData data) {    final paid = data.feeType == 1;
     final split = paid && data.priceMode == 1;
     final amount = double.tryParse(_priceController.text.trim());
     final min = split
@@ -1315,7 +1351,12 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
           height: (MediaQuery.of(context).size.height * 0.62)
               .clamp(420.0, 640.0)
               .toDouble(),
-          child: DiscoveryCard(activity: preview),
+          // The picked photo has no URL yet (upload happens on submit),
+          // so hand the raw bytes to the hero directly.
+          child: DiscoveryCard(
+            activity: preview,
+            coverImageBytes: _decodeCoverBytes(data.coverImagePath),
+          ),
         ),
         const SizedBox(height: AppSpacing.x5),
         const _CheckRow('Your activity looks great.'),
@@ -1599,6 +1640,7 @@ class _CoverPhoto extends StatelessWidget {
     required this.onTap,
     required this.onRemove,
     required this.onReplace,
+    this.fallbackBytes,
   });
 
   final ImageUploadInfo uploadInfo;
@@ -1606,11 +1648,24 @@ class _CoverPhoto extends StatelessWidget {
   final VoidCallback onRemove;
   final VoidCallback onReplace;
 
+  /// Draft-restored photo (decoded from the persisted draft) shown when
+  /// the in-memory upload provider has no image — e.g. the screen was
+  /// reopened after the process died. The provider wins when present.
+  final Uint8List? fallbackBytes;
+
   @override
   Widget build(BuildContext context) {
-    final done =
-        uploadInfo.state == ImageUploadState.completed &&
-        uploadInfo.imageUrl != null;
+    Uint8List? bytes;
+    if (uploadInfo.state == ImageUploadState.completed &&
+        uploadInfo.imageUrl != null) {
+      try {
+        bytes = base64.decode(uploadInfo.imageUrl!);
+      } catch (_) {
+        bytes = null;
+      }
+    }
+    bytes ??= fallbackBytes;
+    final done = bytes != null;
     final loading = uploadInfo.state == ImageUploadState.uploading;
 
     return Semantics(
@@ -1628,9 +1683,9 @@ class _CoverPhoto extends StatelessWidget {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(AppRadius.lg),
               color: context.colors.surfaceInverse,
-              image: done
+              image: bytes != null
                   ? DecorationImage(
-                      image: MemoryImage(base64.decode(uploadInfo.imageUrl!)),
+                      image: MemoryImage(bytes),
                       fit: BoxFit.cover,
                     )
                   : null,
