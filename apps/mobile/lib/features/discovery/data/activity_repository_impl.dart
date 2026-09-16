@@ -22,6 +22,9 @@ class LocalActivityRepository implements ActivityRepository {
     int offset = 0,
     DiscoveryFilter? filter,
     bool forceRefresh = false,
+    // No network here, so nothing can fail — accepted for interface
+    // compatibility with the `strict` contract only.
+    bool strict = false,
   }) async {
     await _delay();
     return const <ActivityModel>[];
@@ -34,7 +37,11 @@ class LocalActivityRepository implements ActivityRepository {
   }
 
   @override
-  Future<List<ActivityModel>> joinedByUser(String userId) async {
+  Future<List<ActivityModel>> joinedByUser(
+    String userId, {
+    int limit = 20,
+    int offset = 0,
+  }) async {
     await _delay();
     final ids = _joinedByUser[userId] ?? const <String>[];
     if (ids.isEmpty) return const <ActivityModel>[];
@@ -45,7 +52,11 @@ class LocalActivityRepository implements ActivityRepository {
   }
 
   @override
-  Future<List<ActivityModel>> hostedByUser(String userId) async {
+  Future<List<ActivityModel>> hostedByUser(
+    String userId, {
+    int limit = 20,
+    int offset = 0,
+  }) async {
     await _delay();
     final ids = _hostedByUser[userId] ?? const <String>[];
     if (ids.isEmpty) return const <ActivityModel>[];
@@ -78,6 +89,11 @@ class LocalActivityRepository implements ActivityRepository {
     String? coverImageUrl,
     String joinPolicy = 'open',
     String? address,
+    bool isPaid = false,
+    double? fee,
+    String feeMode = 'fixed',
+    double? totalCost,
+    int? minPlayers,
   }) async {
     // Writes only succeed against the backend. The fallback here is
     // a no-op: we don't fabricate a fake activity just because the
@@ -158,13 +174,17 @@ class LocalActivityRepository implements ActivityRepository {
   }
 
   @override
-  Future<List<ActivityModel>> pastByUser(String userId) async {
+  Future<List<ActivityModel>> pastByUser(
+    String userId, {
+    int limit = 20,
+    int offset = 0,
+  }) async {
     await _delay();
     return const <ActivityModel>[];
   }
 
   @override
-  Future<List<ActivityModel>> pendingRequests() async {
+  Future<List<ActivityModel>> pendingRequests({int limit = 20, int offset = 0}) async {
     await _delay();
     return const <ActivityModel>[];
   }

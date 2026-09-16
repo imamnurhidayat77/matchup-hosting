@@ -14,11 +14,16 @@ abstract class ActivityRepository {
   ///
   /// Implementations may serve a short-TTL in-memory cache; pass
   /// [forceRefresh] to skip it (filter changes, manual refresh).
+  ///
+  /// When [strict] is true, failures rethrow the original error instead
+  /// of falling back to the offline store, so the UI can render an
+  /// error state. Defaults to false (legacy fail-soft behavior).
   Future<List<ActivityModel>> feed({
     int limit = 20,
     int offset = 0,
     DiscoveryFilter? filter,
     bool forceRefresh = false,
+    bool strict = false,
   });
 
   Future<ActivityModel?> byId(String id);
@@ -26,9 +31,17 @@ abstract class ActivityRepository {
   /// Roster for a single activity, used by the Activity Participants screen.
   Future<List<ActivityParticipant>> participants(String activityId);
 
-  Future<List<ActivityModel>> joinedByUser(String userId);
+  Future<List<ActivityModel>> joinedByUser(
+    String userId, {
+    int limit = 20,
+    int offset = 0,
+  });
 
-  Future<List<ActivityModel>> hostedByUser(String userId);
+  Future<List<ActivityModel>> hostedByUser(
+    String userId, {
+    int limit = 20,
+    int offset = 0,
+  });
 
   Future<List<ActivityModel>> search({
     String? sport,
@@ -51,6 +64,11 @@ abstract class ActivityRepository {
     String? coverImageUrl,
     String joinPolicy = 'open',
     String? address,
+    bool isPaid = false,
+    double? fee,
+    String feeMode = 'fixed',
+    double? totalCost,
+    int? minPlayers,
   });
 
   Future<void> join(String activityId);
@@ -102,12 +120,16 @@ abstract class ActivityRepository {
   /// [cancel] stays as a convenience wrapper for `'cancelled'`.
   Future<void> updateStatus(String activityId, String status);
 
-  Future<List<ActivityModel>> pastByUser(String userId);
+  Future<List<ActivityModel>> pastByUser(
+    String userId, {
+    int limit = 20,
+    int offset = 0,
+  });
 
   /// Outgoing pending join requests (`GET /api/activities/join-requests/me`),
   /// mapped to lightweight [ActivityModel]s with `joinRequestStatus:
   /// 'pending' for the My Games "Pending" tab.
-  Future<List<ActivityModel>> pendingRequests();
+  Future<List<ActivityModel>> pendingRequests({int limit = 20, int offset = 0});
 
   /// Persists a check-in (`POST /api/activities/:id/check-in`).
   /// Throws on failure so the check-in screen can show an error and

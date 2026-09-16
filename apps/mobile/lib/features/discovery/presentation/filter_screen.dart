@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -92,12 +93,18 @@ class _FilterScreenState extends ConsumerState<FilterScreen> {
 
   void _reset() {
     setState(() {
-      _draft = const DiscoveryFilter();
+      _draft = _draft.copyWith(
+        sportSkills: const [],
+        clearDates: true,
+        clearDistance: true,
+      );
     });
   }
 
-  void _toggleSport(int i) {
-    final sport = _sports[i];
+  /// Toggles are keyed by sport NAME, not list index: the server list
+  /// can churn between build and tap, so a stale index could toggle
+  /// the wrong sport.
+  void _toggleSport(String sport) {
     setState(() {
       final existing = _draft.sportSkills
           .indexWhere((s) => s.sport == sport);
@@ -119,8 +126,7 @@ class _FilterScreenState extends ConsumerState<FilterScreen> {
     });
   }
 
-  void _setSkill(int i, DiscoverySkillLevel level) {
-    final sport = _sports[i];
+  void _setSkill(String sport, DiscoverySkillLevel level) {
     setState(() {
       final updated = _draft.sportSkills
           .map((s) => s.sport == sport ? s.copyWithSkill(level) : s)
@@ -151,7 +157,10 @@ class _FilterScreenState extends ConsumerState<FilterScreen> {
     );
     if (range != null) {
       setState(() {
+        // A custom range wins over any preset highlight: reset the
+        // preset to anyTime while keeping the explicit dates.
         _draft = _draft.copyWith(
+          datePreset: DiscoveryDatePreset.anyTime,
           startAfter: DateTime(
               range.start.year, range.start.month, range.start.day),
           startBefore: DateTime(range.end.year, range.end.month,
@@ -176,6 +185,12 @@ class _FilterScreenState extends ConsumerState<FilterScreen> {
   String get _distanceLabel =>
       _draft.maxDistanceKm == null ? 'Any' : 'Within ${_draft.maxDistanceKm!.round()} km';
 
+  String get _sportsLabel => _draft.sportSkills.isEmpty
+      ? 'All sports'
+      : _draft.sportSkills.length == 1
+          ? _draft.sportSkills.first.sport
+          : '${_draft.sportSkills.length} sports';
+
   void _onDatePresetSelected(_DatePreset preset) {
     if (preset == _DatePreset.custom) {
       _pickCustomRange();
@@ -186,17 +201,18 @@ class _FilterScreenState extends ConsumerState<FilterScreen> {
     // byName is non-null for any string the local enum can produce.
     final wirePreset = DiscoveryDatePreset.values.byName(preset.name);
     setState(() {
+      // Selecting a preset drops any custom range: `clearDates` is the
+      // only way to clear dates through copyWith (null means "keep").
       _draft = _draft.copyWith(
         datePreset: _draft.datePreset == wirePreset
             ? DiscoveryDatePreset.anyTime
             : wirePreset,
-        startAfter: null,
-        startBefore: null,
+        clearDates: true,
       );
     });
   }
 
-  void _apply() {
+  Future<void> _apply() async {
     debugPrint(
       '[FilterScreen._apply] draft.sportSkills=${_draft.sportSkills.length} '
       'datePreset=${_draft.datePreset} '
@@ -209,7 +225,11 @@ class _FilterScreenState extends ConsumerState<FilterScreen> {
     // legacy (non-discover) feed path. Skipping the write on empty
     // would leave a stale filter active and confuse the user.
     ref.read(discoveryFilterProvider.notifier).state = _draft;
-    Navigator.of(context).maybePop();
+    // On a deep link there may be nothing to pop — fall back to the
+    // discovery tab instead of stranding the user on the sheet.
+    if (await Navigator.of(context).maybePop() == false && mounted) {
+      context.go('/discovery');
+    }
   }
 
   @override
@@ -220,6 +240,18 @@ class _FilterScreenState extends ConsumerState<FilterScreen> {
       (s) => s.showInFilter,
       _fallbackSports,
     );
+    // Drop skill selections whose sport vanished from the server list
+    // (silent prune — no snackbar). Assigned directly (same pattern as
+    // `_sportsLive` above): we're still inside build, so the current
+    // frame renders the pruned draft with no extra setState.
+    if (_draft.sportSkills.any((s) => !_sportsLive.contains(s.sport))) {
+      _draft = _draft.copyWith(
+        sportSkills: [
+          for (final s in _draft.sportSkills)
+            if (_sportsLive.contains(s.sport)) s,
+        ],
+      );
+    }
     return AppScaffold.sheet(
       title: 'Filters',
       trailingAction: 'Reset',
@@ -271,9 +303,17 @@ class _FilterScreenState extends ConsumerState<FilterScreen> {
                   _SectionCard(
                     header: const _SectionHeader(title: 'When'),
                     child: _DatePresetGrid(
-                      selected: _draft.datePreset == DiscoveryDatePreset.anyTime
-                          ? null
-                          : _DatePreset.values.byName(_draft.datePreset.name),
+                      // A custom range clears the preset highlight, so it
+                      // selects the "Pick dates" pill instead.
+                      selected:
+                          _draft.startAfter != null ||
+                                  _draft.startBefore != null
+                              ? _DatePreset.custom
+                              : _draft.datePreset ==
+                                      DiscoveryDatePreset.anyTime
+                                  ? null
+                                  : _DatePreset.values
+                                      .byName(_draft.datePreset.name),
                       hasCustomRange: _draft.startAfter != null ||
                           _draft.startBefore != null,
                       onSelect: _onDatePresetSelected,
@@ -289,11 +329,72 @@ class _FilterScreenState extends ConsumerState<FilterScreen> {
                         km: _draft.maxDistanceKm?.round(),
                       ),
                     ),
-                    child: _DistanceSlider(
-                      distanceKm: _draft.maxDistanceKm ?? 10,
-                      onChanged: (v) => setState(() {
-                        _draft = _draft.copyWith(maxDistanceKm: v);
-                      }),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _draft.maxDistanceKm == null
+                                    ? 'Any distance'
+                                    : 'Within ${_draft.maxDistanceKm!.round()} km',
+                                style: AppTypography.metaSub(context),
+                              ),
+                            ),
+                            AppTappable(
+                              semanticLabel: 'Any distance',
+                              feedback: AppTapFeedback.scale,
+                              minSize: 0,
+                              onTap: _draft.maxDistanceKm == null
+                                  ? null
+                                  : () => setState(() {
+                                        _draft = _draft.copyWith(
+                                          clearDistance: true,
+                                        );
+                                      }),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: AppSpacing.x3,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _draft.maxDistanceKm == null
+                                      ? AppColors.primary
+                                      : context.colors.surfaceMuted,
+                                  borderRadius:
+                                      BorderRadius.circular(AppRadius.pill),
+                                  border: Border.all(
+                                    color: _draft.maxDistanceKm == null
+                                        ? AppColors.primary
+                                        : context.colors.border,
+                                  ),
+                                ),
+                                child: Text(
+                                  'Any',
+                                  style:
+                                      AppTypography.chipLabel(context).copyWith(
+                                    fontSize: 12,
+                                    color: _draft.maxDistanceKm == null
+                                        ? AppColors.textOnPrimary
+                                        : context.colors.textSecondary,
+                                    fontWeight:
+                                        _draft.maxDistanceKm == null
+                                            ? FontWeight.w700
+                                            : FontWeight.w400,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        _DistanceSlider(
+                          distanceKm: _draft.maxDistanceKm ?? 10,
+                          onChanged: (v) => setState(() {
+                            _draft = _draft.copyWith(maxDistanceKm: v);
+                          }),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -303,6 +404,7 @@ class _FilterScreenState extends ConsumerState<FilterScreen> {
 
           // Pinned CTA
           _ApplyBar(
+            sportsLabel: _sportsLabel,
             distanceLabel: _distanceLabel,
             dateLabel: _dateLabel,
             onApply: _apply,
@@ -329,8 +431,8 @@ class _SportsWithSkills extends StatelessWidget {
   /// order they were added (so the per-sport skill rows render in
   /// the order the user picked them).
   final List<DiscoverySportSkill> selected;
-  final ValueChanged<int> onToggleSport;
-  final void Function(int sportIndex, DiscoverySkillLevel level) onSetSkill;
+  final ValueChanged<String> onToggleSport;
+  final void Function(String sport, DiscoverySkillLevel level) onSetSkill;
 
   @override
   Widget build(BuildContext context) {
@@ -349,7 +451,7 @@ class _SportsWithSkills extends StatelessWidget {
               return _SportPill(
                 label: sport,
                 selected: isSelected,
-                onTap: () => onToggleSport(i),
+                onTap: () => onToggleSport(sport),
               );
             },
           ),
@@ -361,14 +463,17 @@ class _SportsWithSkills extends StatelessWidget {
           const _SkillDivider(),
           const SizedBox(height: AppSpacing.x3),
           ...selected.map((entry) {
-            final i = sports.indexOf(entry.sport);
-            if (i < 0) return const SizedBox.shrink();
+            // Keyed by name (not index): entries pruned from the
+            // server list never reach here, and indices can't go stale.
+            if (!sports.contains(entry.sport)) {
+              return const SizedBox.shrink();
+            }
             return Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.x3),
               child: _SportSkillRow(
                 sportName: entry.sport,
                 current: entry.skill,
-                onChanged: (level) => onSetSkill(i, level),
+                onChanged: (level) => onSetSkill(entry.sport, level),
               ),
             );
           }),
@@ -433,47 +538,67 @@ class _SkillSegment extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 38,
-      decoration: BoxDecoration(
-        color: context.colors.surfaceMuted,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-      ),
-      child: Row(
-        children: _levels.map((level) {
-          final isSelected = level == current;
-          return Expanded(
-            child: AppTappable(
-              semanticLabel: level.label,
-              onTap: () => onChanged(level),
-              feedback: AppTapFeedback.scale,
-              minSize: 0,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                margin: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  color: isSelected ? AppColors.primary : Colors.transparent,
-                  borderRadius: BorderRadius.circular(AppRadius.sm),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  level.label,
-                  style: AppTypography.metaSub(context).copyWith(
-                    fontSize: 11,
-                    color: isSelected
-                        ? AppColors.textOnPrimary
-                        : context.colors.textSecondary,
-                    fontWeight:
-                        isSelected ? FontWeight.w700 : FontWeight.w400,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
+    // Four segments ("Intermediate" is long) overflow narrow screens,
+    // so the row scrolls horizontally. Segments keep an equal share
+    // of the full width when it fits, with a minimum width forcing
+    // the scroll when it doesn't.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const minSeg = 108.0;
+        final full =
+            constraints.maxWidth.isFinite ? constraints.maxWidth : minSeg * 4;
+        final segW = (full / 4).clamp(minSeg, 220.0);
+        final innerW = segW * 4;
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Container(
+            height: 38,
+            width: innerW > full ? innerW : full,
+            decoration: BoxDecoration(
+              color: context.colors.surfaceMuted,
+              borderRadius: BorderRadius.circular(AppRadius.lg),
             ),
-          );
-        }).toList(),
-      ),
+            child: Row(
+              children: _levels.map((level) {
+                final isSelected = level == current;
+                return SizedBox(
+                  width: segW,
+                  child: AppTappable(
+                    semanticLabel: level.label,
+                    onTap: () => onChanged(level),
+                    feedback: AppTapFeedback.scale,
+                    minSize: 0,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      margin: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        color:
+                            isSelected ? AppColors.primary : Colors.transparent,
+                        borderRadius: BorderRadius.circular(AppRadius.sm),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        level.label,
+                        style: AppTypography.metaSub(context).copyWith(
+                          fontSize: 11,
+                          color: isSelected
+                              ? AppColors.textOnPrimary
+                              : context.colors.textSecondary,
+                          fontWeight: isSelected
+                              ? FontWeight.w700
+                              : FontWeight.w400,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -759,8 +884,8 @@ class _DistanceSlider extends StatelessWidget {
   final ValueChanged<double> onChanged;
 
   static const double _min = 1;
-  static const double _max = 30;
-  static const _ticks = ['1 km', '10 km', '20 km', '30 km'];
+  static const double _max = 50;
+  static const _ticks = ['1 km', '10 km', '30 km', '50 km'];
 
   @override
   Widget build(BuildContext context) {
@@ -804,10 +929,12 @@ class _DistanceSlider extends StatelessWidget {
 
 class _ApplyBar extends StatelessWidget {
   const _ApplyBar({
+    required this.sportsLabel,
     required this.distanceLabel,
     required this.dateLabel,
     required this.onApply,
   });
+  final String sportsLabel;
   final String distanceLabel;
   final String dateLabel;
   final VoidCallback onApply;
@@ -844,7 +971,7 @@ class _ApplyBar extends StatelessWidget {
               Text('Show all activities', style: AppTypography.buttonPrimary),
               const SizedBox(height: 2),
               Text(
-                '$dateLabel · $distanceLabel',
+                '$sportsLabel · $dateLabel · $distanceLabel',
                 style: AppTypography.metaSub(context).copyWith(
                   color: AppColors.textOnPrimary.withValues(alpha: 0.75),
                   fontSize: 11,

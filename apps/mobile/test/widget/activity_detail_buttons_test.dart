@@ -95,6 +95,20 @@ void main() {
           builder: (_, state) =>
               ActivityDetailScreen(activityId: state.pathParameters['id']!),
         ),
+        GoRoute(
+          path: '/discovery',
+          builder: (_, _) => const Scaffold(
+            body: Center(child: Text('Discovery')),
+          ),
+        ),
+        GoRoute(
+          path: '/player-profile/uid/:uid',
+          builder: (_, state) => Scaffold(
+            body: Center(
+              child: Text('Host profile ${state.pathParameters['uid']}'),
+            ),
+          ),
+        ),
       ],
     );
 
@@ -135,8 +149,8 @@ void main() {
     );
 
     testWidgets(
-      'back button is a dead tap when the screen was reached via go() '
-      '(this is the bug report: "tombol back gabisa dipencet")',
+      'back button falls back to discovery when reached via go() '
+      '(regression: "tombol back gabisa dipencet")',
       (tester) async {
         await pumpViaRealNavigation(
           tester,
@@ -147,10 +161,30 @@ void main() {
         await tester.tap(find.bySemanticsLabel('Back'));
         await tester.pumpAndSettle();
 
-        // go() wipes the stack, so maybePop() has nothing to pop to. The
-        // detail screen is expected to still be on screen — this documents
-        // the exact failure mode, not a desired outcome.
-        expect(find.byType(ActivityDetailScreen), findsOneWidget);
+        // go() wipes the stack, so there is nothing to pop — the button
+        // must fall back to Discover instead of dead-tapping.
+        expect(find.text('Discovery'), findsOneWidget);
+        expect(find.byType(ActivityDetailScreen), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'host card opens the host profile when tapped',
+      (tester) async {
+        when(() => repo.byId(any())).thenAnswer(
+          (_) async => _fixture().copyWith(hostId: 'host-1'),
+        );
+
+        await pumpViaRealNavigation(
+          tester,
+          repo: repo,
+          via: (context) => context.push('/activity/a-1'),
+        );
+
+        await tester.tap(find.text('James Wilson'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Host profile host-1'), findsOneWidget);
       },
     );
 
