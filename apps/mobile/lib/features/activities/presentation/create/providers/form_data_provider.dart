@@ -13,6 +13,16 @@ class ActivityFormData {
   final String? coverImagePath;
   final DateTime? selectedDate;
   final String location;
+
+  /// Full address of the picked venue (`PlaceSuggestion.secondary`).
+  /// Empty when the user typed a custom location or nothing was picked
+  /// — the backend then stores no `address`.
+  final String venueAddress;
+
+  /// Picked venue coordinates. Persisted so a restored draft keeps the
+  /// accurate pin instead of falling back to the default on submit.
+  final double? venueLatitude;
+  final double? venueLongitude;
   final String description;
   final int maxParticipants;
   final String skillLevel;
@@ -37,6 +47,9 @@ class ActivityFormData {
     this.coverImagePath,
     this.selectedDate,
     this.location = '',
+    this.venueAddress = '',
+    this.venueLatitude,
+    this.venueLongitude,
     this.description = '',
     this.maxParticipants = 10,
     this.skillLevel = 'Intermediate',
@@ -53,6 +66,9 @@ class ActivityFormData {
     String? coverImagePath,
     DateTime? selectedDate,
     String? location,
+    String? venueAddress,
+    double? venueLatitude,
+    double? venueLongitude,
     String? description,
     int? maxParticipants,
     String? skillLevel,
@@ -68,6 +84,9 @@ class ActivityFormData {
       coverImagePath: coverImagePath ?? this.coverImagePath,
       selectedDate: selectedDate ?? this.selectedDate,
       location: location ?? this.location,
+      venueAddress: venueAddress ?? this.venueAddress,
+      venueLatitude: venueLatitude ?? this.venueLatitude,
+      venueLongitude: venueLongitude ?? this.venueLongitude,
       description: description ?? this.description,
       maxParticipants: maxParticipants ?? this.maxParticipants,
       skillLevel: skillLevel ?? this.skillLevel,
@@ -86,6 +105,9 @@ class ActivityFormData {
       'coverImagePath': coverImagePath,
       'selectedDate': selectedDate?.toIso8601String(),
       'location': location,
+      'venueAddress': venueAddress,
+      'venueLatitude': venueLatitude,
+      'venueLongitude': venueLongitude,
       'description': description,
       'maxParticipants': maxParticipants,
       'skillLevel': skillLevel,
@@ -106,6 +128,9 @@ class ActivityFormData {
           ? DateTime.parse(json['selectedDate'] as String)
           : null,
       location: json['location'] as String? ?? '',
+      venueAddress: json['venueAddress'] as String? ?? '',
+      venueLatitude: (json['venueLatitude'] as num?)?.toDouble(),
+      venueLongitude: (json['venueLongitude'] as num?)?.toDouble(),
       description: json['description'] as String? ?? '',
       maxParticipants: (json['maxParticipants'] as int?) ?? 10,
       skillLevel: json['skillLevel'] as String? ?? 'Intermediate',
@@ -145,6 +170,22 @@ class FormDataNotifier extends StateNotifier<ActivityFormData> {
 
   void setLocation(String location) {
     state = state.copyWith(location: location);
+  }
+
+  /// Records a picked venue: display name goes to [location], the full
+  /// address and coordinates ride along for submit + draft restore.
+  void setVenue({
+    required String label,
+    required String address,
+    required double latitude,
+    required double longitude,
+  }) {
+    state = state.copyWith(
+      location: label,
+      venueAddress: address,
+      venueLatitude: latitude,
+      venueLongitude: longitude,
+    );
   }
 
   void setDescription(String description) {

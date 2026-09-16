@@ -50,6 +50,7 @@ abstract class ActivityRepository {
     int durationMinutes = 120,
     String? coverImageUrl,
     String joinPolicy = 'open',
+    String? address,
   });
 
   Future<void> join(String activityId);

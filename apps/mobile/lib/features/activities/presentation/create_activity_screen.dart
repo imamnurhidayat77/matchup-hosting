@@ -136,8 +136,9 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
   /// Draft persistence (spec Phase 5, MVP scope): the form is JSON-
   /// serialisable via [ActivityFormData.toJson], so a draft survives app
   /// restarts and is restored on reopen. Cleared on successful submit.
-  /// Cover image bytes are NOT persisted (too large for prefs); the venue
-  /// picker's lat/lng falls back to the default when restored from text.
+  /// Cover image bytes are NOT persisted (too large for prefs); the
+  /// picked venue (label, address, lat/lng) IS persisted and rebuilt
+  /// into `_venue` on restore.
   /// Crop tool intentionally skipped: `image_picker` maxWidth/maxHeight/
   /// imageQuality already constrains uploads (see audit A-plan §3).
   static const _draftKey = 'create_activity_draft_v1';
@@ -176,6 +177,23 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
           _locationController.text = data.location;
           _descriptionController.text = data.description;
           _priceController.text = data.price ?? '0.00';
+          // Rebuild the picked venue so the address + accurate pin
+          // survive the restore (previously only the label text came
+          // back and submit fell back to default coords).
+          setState(() {
+            final lat = data.venueLatitude;
+            final lng = data.venueLongitude;
+            _venue = (lat != null && lng != null &&
+                    data.location.trim().isNotEmpty)
+                ? PlaceSuggestion(
+                    placeId: '',
+                    label: data.location,
+                    secondary: data.venueAddress,
+                    latitude: lat,
+                    longitude: lng,
+                  )
+                : null;
+          });
           return;
         }
       }
@@ -188,6 +206,7 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
     ref.read(formDataProvider.notifier)
       ..reset()
       ..setSelectedDate(DateTime.now().add(const Duration(hours: 2)));
+    setState(() => _venue = null);
     _titleController.clear();
     _locationController.clear();
     _descriptionController.clear();
@@ -566,14 +585,20 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
     final data = ref.read(formDataProvider);
 
     setState(() => _submitting = true);
-    // Pick a venue's coords if the user selected one, else default to
-    // central Auckland (the seed-data centre). Computed inside the
-    // try block so the variables are in scope for the create() call
-    // further down.
     final pickedVenue = _venue;
-    final double pickedLat = pickedVenue?.latitude ?? -36.8485;
-    final double pickedLng = pickedVenue?.longitude ?? 174.7633;
+    // Venue coords: the form's persisted pick wins (survives draft
+    // restore); the in-memory `_venue` covers picks made this session.
+    // Falls back to central Auckland (the seed-data centre).
+    final double pickedLat =
+        data.venueLatitude ?? pickedVenue?.latitude ?? -36.8485;
+    final double pickedLng =
+        data.venueLongitude ?? pickedVenue?.longitude ?? 174.7633;
     final String pickedGeohash = geohashEncode(pickedLat, pickedLng);
+    final String? pickedAddress = data.venueAddress.trim().isNotEmpty
+        ? data.venueAddress.trim()
+        : pickedVenue?.secondary.trim().isNotEmpty == true
+            ? pickedVenue!.secondary.trim()
+            : null;
     try {
       await ref
           .read(activityRepositoryProvider)
@@ -582,6 +607,7 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
             description: data.description.trim(),
             sportType: data.sportType,
             location: data.location.trim(),
+            address: pickedAddress,
             dateTime:
                 data.selectedDate ??
                 DateTime.now().add(const Duration(hours: 2)),
@@ -806,7 +832,12 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
           value: _venue,
           onSuggestionSelected: (s) {
             setState(() => _venue = s);
-            _form.setLocation(s.label);
+            _form.setVenue(
+              label: s.label,
+              address: s.secondary,
+              latitude: s.latitude,
+              longitude: s.longitude,
+            );
           },
         ),
 

@@ -28,16 +28,31 @@ class VenueField extends StatelessWidget {
   Widget build(BuildContext context) {
     final picked = value;
     final hasVenue = picked != null;
+    final hasAddress =
+        hasVenue && picked.secondary.trim().isNotEmpty;
 
-    final valueText = Text(
-      hasVenue ? picked.label : 'Pick a venue on the map',
-      style: AppTypography.bodyMedium(context).copyWith(
-        color: hasVenue
-            ? context.colors.textPrimary
-            : context.colors.textSecondary,
-      ),
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
+    final valueText = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          hasVenue ? picked.label : 'Pick a venue on the map',
+          style: AppTypography.bodyMedium(context).copyWith(
+            color: hasVenue
+                ? context.colors.textPrimary
+                : context.colors.textSecondary,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        if (hasAddress)
+          Text(
+            picked.secondary.trim(),
+            style: AppTypography.bodySmall(context),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+      ],
     );
 
     return _VenueCard(

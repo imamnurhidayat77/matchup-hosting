@@ -146,4 +146,41 @@ void main() {
       },
     );
   });
+
+  group('venue', () {
+    test('setVenue stores label, address and coordinates', () {
+      notifier().setVenue(
+        label: 'Eden Park',
+        address: 'Reimers Ave, Kingsland, Auckland',
+        latitude: -36.875,
+        longitude: 174.745,
+      );
+      final st = state();
+      expect(st.location, 'Eden Park');
+      expect(st.venueAddress, 'Reimers Ave, Kingsland, Auckland');
+      expect(st.venueLatitude, -36.875);
+      expect(st.venueLongitude, 174.745);
+    });
+
+    test('venue survives a toJson/fromJson round trip', () {
+      notifier().setVenue(
+        label: 'Eden Park',
+        address: 'Reimers Ave, Kingsland, Auckland',
+        latitude: -36.875,
+        longitude: 174.745,
+      );
+      final restored = ActivityFormData.fromJson(state().toJson());
+      expect(restored.location, 'Eden Park');
+      expect(restored.venueAddress, 'Reimers Ave, Kingsland, Auckland');
+      expect(restored.venueLatitude, -36.875);
+      expect(restored.venueLongitude, 174.745);
+    });
+
+    test('old drafts without venue keys parse to empty venue', () {
+      final restored = ActivityFormData.fromJson({'location': 'Park'});
+      expect(restored.venueAddress, '');
+      expect(restored.venueLatitude, isNull);
+      expect(restored.venueLongitude, isNull);
+    });
+  });
 }

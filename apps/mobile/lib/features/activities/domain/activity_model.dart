@@ -32,6 +32,10 @@ class ActivityModel {
   /// card. Defaults to false (Free) since most pickup games are.
   final bool isPaid;
 
+  /// Joining fee amount, set only when [isPaid] is true. Null for free
+  /// games and for payloads written before the field existed.
+  final double? fee;
+
   /// Host's average rating (0–5) and the number of games they've hosted —
   /// shown as "★ 4.8 (32 games)" on the discovery card's social row.
   final double hostRating;
@@ -88,6 +92,7 @@ class ActivityModel {
     this.status = ActivityStatus.available,
     this.durationMinutes = 120,
     this.isPaid = false,
+    this.fee,
     this.hostRating = 4.8,
     this.hostGamesCount = 32,
     this.vibeTags = const ['Friendly people', 'Great vibes'],
@@ -126,6 +131,7 @@ class ActivityModel {
     double? longitude,
     String? joinPolicy,
     String? joinRequestStatus,
+    double? fee,
   }) {
     return ActivityModel(
       id: id,
@@ -144,6 +150,7 @@ class ActivityModel {
       status: status ?? this.status,
       durationMinutes: durationMinutes,
       isPaid: isPaid,
+      fee: fee ?? this.fee,
       hostRating: hostRating,
       hostGamesCount: hostGamesCount,
       vibeTags: vibeTags,
@@ -192,6 +199,7 @@ class ActivityModel {
       'status': status.name,
       'duration_minutes': durationMinutes,
       'is_paid': isPaid,
+      'fee': fee,
       'host_rating': hostRating,
       'host_games_count': hostGamesCount,
       'vibe_tags': vibeTags,
@@ -292,7 +300,8 @@ class ActivityModel {
           json['cover_image_url'] as String?,
       status: status,
       durationMinutes: resolvedDuration,
-      isPaid: json['is_paid'] as bool? ?? false,
+      isPaid: json['is_paid'] as bool? ?? json['isPaid'] as bool? ?? false,
+      fee: (json['fee'] as num?)?.toDouble(),
       hostRating: (json['host_rating'] as num?)?.toDouble() ?? 4.8,
       hostGamesCount: (json['host_games_count'] as num?)?.toInt() ?? 0,
       vibeTags:

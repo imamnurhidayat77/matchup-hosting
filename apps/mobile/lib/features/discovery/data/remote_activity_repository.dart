@@ -312,9 +312,11 @@ class RemoteActivityRepository implements ActivityRepository {
     int durationMinutes = 120,
     String? coverImageUrl,
     String joinPolicy = 'open',
+    String? address,
   }) async {
     _invalidateDetails();
     try {
+      final trimmedAddress = address?.trim();
       final res = await _client.dio.post(
         _base,
         data: {
@@ -322,6 +324,8 @@ class RemoteActivityRepository implements ActivityRepository {
           'sportType': sportType,
           'description': description,
           'locationName': location,
+          if (trimmedAddress != null && trimmedAddress.isNotEmpty)
+            'address': trimmedAddress,
           'latitude': latitude,
           'longitude': longitude,
           'geohash': geohash,
@@ -355,6 +359,7 @@ class RemoteActivityRepository implements ActivityRepository {
         sportType: sportType,
         description: description,
         location: location,
+        addressLine: trimmedAddress?.isNotEmpty == true ? trimmedAddress : null,
         distanceKm: 0,
         dateTime: dateTime,
         skillLevel: skillLevel,
@@ -383,6 +388,7 @@ class RemoteActivityRepository implements ActivityRepository {
         durationMinutes: durationMinutes,
         coverImageUrl: coverImageUrl,
         joinPolicy: joinPolicy,
+        address: address,
       );
     }
   }

@@ -77,6 +77,7 @@ class LocalActivityRepository implements ActivityRepository {
     int durationMinutes = 120,
     String? coverImageUrl,
     String joinPolicy = 'open',
+    String? address,
   }) async {
     // Writes only succeed against the backend. The fallback here is
     // a no-op: we don't fabricate a fake activity just because the
