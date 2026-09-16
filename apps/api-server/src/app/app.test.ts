@@ -82,7 +82,7 @@ describe('unknown /api/* routes', () => {
     const response = await request(app).get('/api/no-such-route');
 
     expect(response.status).toBe(404);
-    expect(response.headers['ratelimit-limit']).toBe('300');
+    expect(response.headers['ratelimit-limit']).toBe('1200');
   });
 });
 
