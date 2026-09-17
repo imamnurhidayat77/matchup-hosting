@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:clock/clock.dart';
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
@@ -81,26 +82,70 @@ class NavGuard {
   static void resetForTest() {
     _busy = false;
     _lastRun.clear();
-    _inFlight.clear();
+    _inFlightSince.clear();
+  }
+
+  /// Safety-net window for [push]/[pushT]/[pushOnce]: a key older than
+  /// this is treated as stale and released on the next check, even if
+  /// `context.push()`'s Future never resolved.
+  ///
+  /// That Future only resolves on a genuine pop — go_router's
+  /// `ImperativeRouteMatch` completer is only completed from the pop
+  /// path (`_completeRouteMatch` in its delegate). A `context.go(...)`
+  /// elsewhere (e.g. tapping a bottom-nav tab while this push is still
+  /// on the stack) replaces the whole route match list from scratch and
+  /// discards that completer without ever resolving it, permanently
+  /// stranding the key — every future tap to the same location silently
+  /// no-ops until the app is restarted (observed: the Notifications
+  /// bell going dead after switching tabs instead of using the
+  /// in-screen back arrow). Far longer than any real transition, so it
+  /// never reintroduces the double-push race this guard exists to
+  /// prevent.
+  ///
+  /// Checked lazily on the next [_isStuck] call rather than via a
+  /// scheduled `Timer` — a live Timer left running past a normal pop
+  /// (cancelled) is fine, but one left running because the test/screen
+  /// never popped at all trips flutter_test's "Timer still pending
+  /// after dispose" assertion; plain timestamps avoid that entirely.
+  static const Duration _pushSafetyNet = Duration(seconds: 5);
+
+  /// In-flight pushes by key, timestamped when reserved. A key stays
+  /// reserved from `push` until the pushed route is popped
+  /// (`context.push` completes on pop) or [_pushSafetyNet] elapses —
+  /// whichever comes first — so a repeat tap can never create a
+  /// duplicate page, and a key can never be stuck forever either.
+  /// Prefer this over [onceFor] for every `push` whose page key derives
+  /// from an id.
+  static final Map<String, DateTime> _inFlightSince = {};
+
+  static bool _isStuck(String key) {
+    final since = _inFlightSince[key];
+    if (since == null) return false;
+    if (clock.now().difference(since) > _pushSafetyNet) {
+      _inFlightSince.remove(key);
+      return false;
+    }
+    return true;
   }
 
   /// Pushes [location] once per location: repeat taps for the same
   /// destination while its page is still on the stack are ignored, so
   /// duplicate page keys (`'!keyReservation.contains(key)'` red screen)
-  /// are impossible app-wide no matter how slow the transition is.
-  /// The key releases when the pushed route pops (or is replaced), so
+  /// are impossible app-wide no matter how slow the transition is. The
+  /// key releases on a normal pop, or after [_pushSafetyNet] if the
+  /// route instead leaves the stack via `context.go(...)` — either way
   /// legitimate re-entry always works. Fire-and-forget safe.
   static Future<void> push(
     BuildContext context,
     String location, {
     Object? extra,
   }) async {
-    if (_inFlight.contains(location)) return;
-    _inFlight.add(location);
+    if (_isStuck(location)) return;
+    _inFlightSince[location] = clock.now();
     try {
       await context.push(location, extra: extra);
     } finally {
-      _inFlight.remove(location);
+      _inFlightSince.remove(location);
     }
   }
 
@@ -112,21 +157,14 @@ class NavGuard {
     String location, {
     Object? extra,
   }) async {
-    if (_inFlight.contains(location)) return null;
-    _inFlight.add(location);
+    if (_isStuck(location)) return null;
+    _inFlightSince[location] = clock.now();
     try {
       return await context.push<T>(location, extra: extra);
     } finally {
-      _inFlight.remove(location);
+      _inFlightSince.remove(location);
     }
   }
-
-  /// In-flight pushes by key. A key stays reserved from `push` until
-  /// the pushed route is popped (`context.push` completes on pop), so
-  /// a repeat tap can never create a duplicate page — no matter how
-  /// slow the transition or how impatient the tapper. Prefer this over
-  /// [onceFor] for every `push` whose page key derives from an id.
-  static final Set<String> _inFlight = {};
 
   /// Pushes [location] once: repeat taps while the route is still on
   /// the stack are ignored. Fire-and-forget safe (`onTap: () =>
@@ -139,12 +177,12 @@ class NavGuard {
     String location, {
     Object? extra,
   }) async {
-    if (_inFlight.contains(key)) return;
-    _inFlight.add(key);
+    if (_isStuck(key)) return;
+    _inFlightSince[key] = clock.now();
     try {
       await context.push(location, extra: extra);
     } finally {
-      _inFlight.remove(key);
+      _inFlightSince.remove(key);
     }
   }
 }
