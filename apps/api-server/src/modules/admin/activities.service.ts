@@ -1,6 +1,7 @@
 import { Timestamp } from 'firebase-admin/firestore';
 import { firestore } from '../../database/firebase.js';
 import type { ActivityStatus } from '../activities/activities.service.js';
+import { logAdminAction } from './audit.service.js';
 
 export type AdminActivityView = {
     id: string;
@@ -116,6 +117,8 @@ export async function listAdminActivities(
 export async function setAdminActivityStatus(
     activityId: string,
     status: unknown,
+    adminUid: string,
+    adminEmail: string | null = null,
 ): Promise<void> {
     const normalizedId = activityId.trim();
     if (!normalizedId) {
@@ -129,13 +132,29 @@ export async function setAdminActivityStatus(
     if (!snap.exists) {
         throw new Error('Activity not found');
     }
+    const before = snap.data();
     await ref.update({ status, updatedAt: Timestamp.now() });
+    await logAdminAction({
+        category: 'Activities',
+        action: 'activity.status_change',
+        adminUid,
+        adminEmail,
+        description: `Set activity status to ${status}`,
+        targetId: normalizedId,
+        targetLabel: typeof before?.title === 'string' ? before.title : normalizedId,
+        before: { status: before?.status ?? null },
+        after: { status },
+    });
 }
 
 /** Removes the activity doc. Participant/join-request subcollections are
  * left orphaned (Firestore has no cascade) and no longer resolve to a
  * parent, so they stay invisible to every feed. */
-export async function deleteAdminActivity(activityId: string): Promise<void> {
+export async function deleteAdminActivity(
+    activityId: string,
+    adminUid: string,
+    adminEmail: string | null = null,
+): Promise<void> {
     const normalizedId = activityId.trim();
     if (!normalizedId) {
         throw new Error('activityId is required');
@@ -145,5 +164,16 @@ export async function deleteAdminActivity(activityId: string): Promise<void> {
     if (!snap.exists) {
         throw new Error('Activity not found');
     }
+    const before = snap.data();
     await ref.delete();
+    await logAdminAction({
+        category: 'Activities',
+        action: 'activity.delete',
+        adminUid,
+        adminEmail,
+        description: 'Deleted activity',
+        targetId: normalizedId,
+        targetLabel: typeof before?.title === 'string' ? before.title : normalizedId,
+        before: { title: before?.title ?? null, status: before?.status ?? null },
+    });
 }

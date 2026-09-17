@@ -69,7 +69,10 @@ export async function setMemberStatusHandler(
 ) {
     try {
         const body = req.body as { status?: unknown };
-        const row = await setMemberStatus(req.params.uid, body?.status);
+        const adminUid = req.auth?.uid ?? '';
+        const adminEmail =
+            typeof req.auth?.token.email === 'string' ? req.auth.token.email : null;
+        const row = await setMemberStatus(req.params.uid, body?.status, adminUid, adminEmail);
         // Status-change notice (best-effort, never fails the write). A
         // newly-suspended user is locked out of the API, so push may be
         // their only channel informing them — and how to appeal.
@@ -126,7 +129,10 @@ export async function deleteMemberHandler(
     res: Response,
 ) {
     try {
-        await deleteMember(req.params.uid);
+        const adminUid = req.auth?.uid ?? '';
+        const adminEmail =
+            typeof req.auth?.token.email === 'string' ? req.auth.token.email : null;
+        await deleteMember(req.params.uid, adminUid, adminEmail);
         return res.status(200).json({ ok: true, data: { uid: req.params.uid } });
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';

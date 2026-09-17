@@ -5,6 +5,7 @@ import {
     isUserStatus,
     type UserStatus,
 } from '../users/users.service.js';
+import { logAdminAction } from './audit.service.js';
 
 export type AdminMemberView = {
     uid: string;
@@ -90,6 +91,8 @@ export async function getMemberDetail(uid: string): Promise<AdminMemberView> {
 export async function setMemberStatus(
     uid: string,
     status: unknown,
+    adminUid: string,
+    adminEmail: string | null = null,
 ): Promise<AdminMemberView> {
     const normalizedUid = uid.trim();
     if (!normalizedUid) {
@@ -103,8 +106,21 @@ export async function setMemberStatus(
     if (!snap.exists) {
         throw new Error('User not found');
     }
+    const before = snap.data();
     await ref.update({ status, updatedAt: Timestamp.now() });
-    return getMemberDetail(normalizedUid);
+    const view = await getMemberDetail(normalizedUid);
+    await logAdminAction({
+        category: 'Members',
+        action: 'member.status_change',
+        adminUid,
+        adminEmail,
+        description: `Set member status to ${status}`,
+        targetId: normalizedUid,
+        targetLabel: view.email,
+        before: { status: before?.status ?? null },
+        after: { status },
+    });
+    return view;
 }
 
 /**
@@ -112,7 +128,11 @@ export async function setMemberStatus(
  * + email index. Auth deletion runs first so a failure leaves nothing
  * half-deleted.
  */
-export async function deleteMember(uid: string): Promise<void> {
+export async function deleteMember(
+    uid: string,
+    adminUid: string,
+    adminEmail: string | null = null,
+): Promise<void> {
     const normalizedUid = uid.trim();
     if (!normalizedUid) {
         throw new Error('uid is required');
@@ -122,7 +142,8 @@ export async function deleteMember(uid: string): Promise<void> {
     if (!snap.exists) {
         throw new Error('User not found');
     }
-    const email = snap.data()?.email;
+    const before = snap.data();
+    const email = before?.email;
     try {
         await auth.deleteUser(normalizedUid);
     } catch (error) {
@@ -139,4 +160,18 @@ export async function deleteMember(uid: string): Promise<void> {
             .delete()
             .catch(() => undefined);
     }
+    await logAdminAction({
+        category: 'Members',
+        action: 'member.delete',
+        adminUid,
+        adminEmail,
+        description: 'Deleted member account',
+        targetId: normalizedUid,
+        targetLabel: typeof email === 'string' ? email : normalizedUid,
+        before: {
+            email: before?.email ?? null,
+            displayName: before?.displayName ?? null,
+            status: before?.status ?? null,
+        },
+    });
 }

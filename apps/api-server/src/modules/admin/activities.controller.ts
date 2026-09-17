@@ -36,7 +36,10 @@ export async function setAdminActivityStatusHandler(
 ) {
     try {
         const body = req.body as { status?: unknown };
-        await setAdminActivityStatus(req.params.id, body?.status);
+        const adminUid = req.auth?.uid ?? '';
+        const adminEmail =
+            typeof req.auth?.token.email === 'string' ? req.auth.token.email : null;
+        await setAdminActivityStatus(req.params.id, body?.status, adminUid, adminEmail);
         return res.status(200).json({
             ok: true,
             data: { id: req.params.id, status: body?.status },
@@ -73,7 +76,10 @@ export async function deleteAdminActivityHandler(
     res: Response,
 ) {
     try {
-        await deleteAdminActivity(req.params.id);
+        const adminUid = req.auth?.uid ?? '';
+        const adminEmail =
+            typeof req.auth?.token.email === 'string' ? req.auth.token.email : null;
+        await deleteAdminActivity(req.params.id, adminUid, adminEmail);
         return res.status(200).json({ ok: true, data: { id: req.params.id } });
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';

@@ -6,7 +6,12 @@ vi.mock('../../database/firebase.js', () => ({
     rtdb: {},
 }));
 
+vi.mock('./audit.service.js', () => ({
+    logAdminAction: vi.fn(),
+}));
+
 import { firestore } from '../../database/firebase.js';
+import { logAdminAction } from './audit.service.js';
 import {
     deleteAdminActivity,
     listAdminActivities,
@@ -96,21 +101,38 @@ describe('listAdminActivities', () => {
 describe('setAdminActivityStatus', () => {
     it('writes removed without host check', async () => {
         const store = mockActivities([{ id: 'a-1', data: activityRow() }]);
-        await setAdminActivityStatus('a-1', 'removed');
+        await setAdminActivityStatus('a-1', 'removed', 'admin-1');
         expect(store.get('a-1')!.status).toBe('removed');
     });
 
     it('rejects non-allowlisted status', async () => {
         mockActivities([{ id: 'a-1', data: activityRow() }]);
-        await expect(setAdminActivityStatus('a-1', 'hidden')).rejects.toThrow(
+        await expect(setAdminActivityStatus('a-1', 'hidden', 'admin-1')).rejects.toThrow(
             'status must be open, cancelled, completed, or removed',
         );
     });
 
     it('throws for missing activity', async () => {
         mockActivities([]);
-        await expect(setAdminActivityStatus('ghost', 'removed')).rejects.toThrow(
+        await expect(setAdminActivityStatus('ghost', 'removed', 'admin-1')).rejects.toThrow(
             'Activity not found',
+        );
+    });
+
+    it('logs the status change with before/after state', async () => {
+        mockActivities([{ id: 'a-1', data: activityRow({ status: 'open', title: 'Sunday Run' }) }]);
+        await setAdminActivityStatus('a-1', 'removed', 'admin-1', 'admin@x.com');
+        expect(logAdminAction).toHaveBeenCalledWith(
+            expect.objectContaining({
+                category: 'Activities',
+                action: 'activity.status_change',
+                adminUid: 'admin-1',
+                adminEmail: 'admin@x.com',
+                targetId: 'a-1',
+                targetLabel: 'Sunday Run',
+                before: { status: 'open' },
+                after: { status: 'removed' },
+            }),
         );
     });
 });
@@ -118,14 +140,29 @@ describe('setAdminActivityStatus', () => {
 describe('deleteAdminActivity', () => {
     it('deletes the doc', async () => {
         const store = mockActivities([{ id: 'a-1', data: activityRow() }]);
-        await deleteAdminActivity('a-1');
+        await deleteAdminActivity('a-1', 'admin-1');
         expect(store.has('a-1')).toBe(false);
     });
 
     it('throws for missing activity', async () => {
         mockActivities([]);
-        await expect(deleteAdminActivity('ghost')).rejects.toThrow(
+        await expect(deleteAdminActivity('ghost', 'admin-1')).rejects.toThrow(
             'Activity not found',
+        );
+    });
+
+    it('logs the deletion with a before snapshot', async () => {
+        mockActivities([{ id: 'a-1', data: activityRow({ title: 'Sunday Run' }) }]);
+        await deleteAdminActivity('a-1', 'admin-1', 'admin@x.com');
+        expect(logAdminAction).toHaveBeenCalledWith(
+            expect.objectContaining({
+                category: 'Activities',
+                action: 'activity.delete',
+                adminUid: 'admin-1',
+                adminEmail: 'admin@x.com',
+                targetId: 'a-1',
+                targetLabel: 'Sunday Run',
+            }),
         );
     });
 });
