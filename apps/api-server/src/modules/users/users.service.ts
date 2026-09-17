@@ -36,6 +36,10 @@ export type UserRecord = {
   dateOfBirth?: string;
   /** Height in centimetres. Optional; shown publicly on the profile. */
   heightCm?: number;
+  /** Weight in kilograms. Optional; private (own profile only). */
+  weightKg?: number;
+  /** Free-text primary goal. Optional; private (own profile only). */
+  goal?: string;
   skillLevel?: SkillLevel;
   preferredSports?: string[];
   /** Per-sport skill levels, e.g. `{ Tennis: 'intermediate' }`. */
@@ -66,6 +70,10 @@ export type UpdateUserProfileInput = {
   dateOfBirth?: string;
   /** Height in centimetres (integer 50–300). */
   heightCm?: number;
+  /** Weight in kilograms (integer 30–300). */
+  weightKg?: number;
+  /** Free-text primary goal. */
+  goal?: string;
   skillLevel?: SkillLevel;
   preferredSports?: string[];
   sportSkillLevels?: Record<string, SkillLevel>;
@@ -215,6 +223,8 @@ function mapUserDoc(userDoc: FirebaseFirestore.DocumentSnapshot): UserRecord | n
     ...(typeof data.gender === 'string' ? { gender: data.gender } : {}),
     ...(typeof data.dateOfBirth === 'string' ? { dateOfBirth: data.dateOfBirth } : {}),
     ...(Number.isInteger(data.heightCm) ? { heightCm: data.heightCm as number } : {}),
+    ...(Number.isInteger(data.weightKg) ? { weightKg: data.weightKg as number } : {}),
+    ...(typeof data.goal === 'string' ? { goal: data.goal } : {}),
     ...(isSkillLevel(data.skillLevel) ? { skillLevel: data.skillLevel } : {}),
     ...(data.preferredSports !== undefined
       ? { preferredSports: assertStringArray(data.preferredSports, 'preferredSports') }

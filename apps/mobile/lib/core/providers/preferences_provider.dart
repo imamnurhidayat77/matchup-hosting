@@ -4,12 +4,23 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../storage/local_storage.dart';
 import '../utils/logger.dart';
+import 'auth_state_provider.dart';
 
 // ─── Keys ─────────────────────────────────────────────────────────────────────
 
 const _kSportPrefs = 'pref_sport_skills_v1';
 const _kDistance = 'pref_distance_km_v1';
 const _kPrice = 'pref_price_mode_v1';
+
+// ─── User scoping ─────────────────────────────────────────────────────────────
+//
+// Filter prefs must not leak across accounts (logout Benjamin → login
+// Lisa showed Benjamin's sports filter — same leak class as the repo
+// caches fixed via `_scopeToUser`). Every provider below rebuilds when
+// the auth uid changes, and persists under a per-user key, so each
+// account gets isolated prefs that survive logout/login cycles instead
+// of being reset or shared.
+String _keyFor(String base, String? uid) => '${base}_${uid ?? 'anon'}';
 
 // ─── Sport preferences ────────────────────────────────────────────────────────
 
@@ -23,31 +34,41 @@ const _kPrice = 'pref_price_mode_v1';
 /// [_kSportPrefs] so they survive app restarts and OS kills.
 final sportPreferencesProvider =
     StateNotifierProvider<SportPreferencesNotifier, Map<String, String>>(
-      (ref) => SportPreferencesNotifier(),
+      (ref) {
+        final uid = ref.watch(authStateProvider.select((s) => s.userId));
+        return SportPreferencesNotifier(uid: uid);
+      },
     );
 
 class SportPreferencesNotifier extends StateNotifier<Map<String, String>> {
-  SportPreferencesNotifier() : super(const {}) {
+  SportPreferencesNotifier({this._uid}) : super(const {}) {
     _load();
   }
 
+  final String? _uid;
+
+  String get _key => _keyFor(_kSportPrefs, _uid);
+
   Future<void> _load() async {
     final storage = await LocalStorage.create();
-    final raw = storage.getString(_kSportPrefs);
+    if (!mounted) return;
+    final raw = storage.getString(_key);
     if (raw == null) return;
     try {
       final decoded = json.decode(raw) as Map<String, dynamic>;
+      if (!mounted) return;
       state = decoded.map((k, v) => MapEntry(k, v as String));
     } catch (_) {
       // Corrupt data — start fresh.
-      await storage.remove(_kSportPrefs);
+      if (!mounted) return;
+      await storage.remove(_key);
     }
   }
 
   Future<void> _persist() async {
     try {
       final storage = await LocalStorage.create();
-      await storage.setString(_kSportPrefs, json.encode(state));
+      await storage.setString(_key, json.encode(state));
     } catch (e) {
       logError('SportPreferences persist failed', e);
     }
@@ -80,9 +101,10 @@ class SportPreferencesNotifier extends StateNotifier<Map<String, String>> {
 /// Discovery distance in km — shared between preferences and filter screens.
 /// Persisted to [SharedPreferences] so the last chosen radius survives restart.
 final distanceFilterProvider =
-    StateNotifierProvider<_DoubleNotifier, double>(
-      (ref) => _DoubleNotifier(_kDistance, 5),
-    );
+    StateNotifierProvider<_DoubleNotifier, double>((ref) {
+      final uid = ref.watch(authStateProvider.select((s) => s.userId));
+      return _DoubleNotifier(_keyFor(_kDistance, uid), 5);
+    });
 
 class _DoubleNotifier extends StateNotifier<double> {
   _DoubleNotifier(this._key, double defaultValue) : super(defaultValue) {
@@ -93,6 +115,7 @@ class _DoubleNotifier extends StateNotifier<double> {
 
   Future<void> _load(double fallback) async {
     final storage = await LocalStorage.create();
+    if (!mounted) return;
     final v = storage.getDouble(_key);
     if (v != null) state = v;
   }
@@ -117,9 +140,10 @@ class _DoubleNotifier extends StateNotifier<double> {
 /// Price preference: 'free' | 'paid' | 'both'.
 /// Persisted to [SharedPreferences].
 final priceFilterProvider =
-    StateNotifierProvider<_StringNotifier, String>(
-      (ref) => _StringNotifier(_kPrice, 'both'),
-    );
+    StateNotifierProvider<_StringNotifier, String>((ref) {
+      final uid = ref.watch(authStateProvider.select((s) => s.userId));
+      return _StringNotifier(_keyFor(_kPrice, uid), 'both');
+    });
 
 class _StringNotifier extends StateNotifier<String> {
   _StringNotifier(this._key, String defaultValue) : super(defaultValue) {
@@ -130,6 +154,7 @@ class _StringNotifier extends StateNotifier<String> {
 
   Future<void> _load(String fallback) async {
     final storage = await LocalStorage.create();
+    if (!mounted) return;
     final v = storage.getString(_key);
     if (v != null) state = v;
   }

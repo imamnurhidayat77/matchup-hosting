@@ -56,12 +56,7 @@ describe('swipes routes', () => {
       vi.clearAllMocks();
     });
 
-    it('when request body is valid and decision is join => expected 200', async () => {
-      vi.mocked(activitiesService.getActivityById).mockResolvedValueOnce({
-        activityId: 'activity-1',
-        hostId: 'host-uid-1',
-      } as never);
-
+    it('when request body is valid and decision is join => expected 200 without notification', async () => {
       const app = createApp();
 
       const response = await request(app).post('/api/swipes').send({
@@ -78,14 +73,10 @@ describe('swipes routes', () => {
           decision: 'join',
         },
       });
-      expect(notificationsService.createNotification).toHaveBeenCalledWith({
-        recipientUid: 'host-uid-1',
-        type: 'activity_interest',
-        title: 'New activity interest',
-        body: 'Someone is interested in your activity',
-        activityId: 'activity-1',
-        senderUid: 'test-uid-1',
-      });
+      // A right-swipe is always followed by join/requestJoin, which notify
+      // the host themselves (`activity_joined` / `join_request`) — the
+      // swipe endpoint stays silent so one gesture never double-notifies.
+      expect(notificationsService.createNotification).not.toHaveBeenCalled();
     });
 
     it('when decision is pass => expected 200 without notification', async () => {
@@ -109,12 +100,7 @@ describe('swipes routes', () => {
       expect(notificationsService.createNotification).not.toHaveBeenCalled();
     });
 
-    it('when authenticated user is activity host => expected 200 without notification', async () => {
-      vi.mocked(activitiesService.getActivityById).mockResolvedValueOnce({
-        activityId: 'activity-1',
-        hostId: 'test-uid-1',
-      } as never);
-
+    it('when authenticated user swipes own activity => expected 200 without notification', async () => {
       const app = createApp();
 
       const response = await request(app).post('/api/swipes').send({

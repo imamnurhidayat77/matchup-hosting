@@ -357,24 +357,32 @@ class _HostRow extends StatelessWidget {
                   ],
                 ),
               ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.star_rounded,
-                    size: 16,
-                    color: context.colors.successText,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    activity.hostRating.toStringAsFixed(1),
-                    style: AppTypography.labelField(context).copyWith(
+              if (activity.hostRating != null)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.star_rounded,
+                      size: 16,
                       color: context.colors.successText,
-                      fontWeight: FontWeight.w700,
                     ),
+                    const SizedBox(width: 4),
+                    Text(
+                      activity.hostRating!.toStringAsFixed(1),
+                      style: AppTypography.labelField(context).copyWith(
+                        color: context.colors.successText,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                )
+              else
+                Text(
+                  'New host',
+                  style: AppTypography.metaSub(context).copyWith(
+                    fontWeight: FontWeight.w600,
                   ),
-                ],
-              ),
+                ),
               if (canOpen) ...[
                 const SizedBox(width: AppSpacing.x1),
                 Icon(

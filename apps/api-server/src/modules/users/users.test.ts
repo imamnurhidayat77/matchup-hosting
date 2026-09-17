@@ -411,6 +411,95 @@ describe('users routes', () => {
       },
     );
 
+    it('when weightKg is valid => forwards it to the service', async () => {
+      vi.mocked(usersService.updateUserProfile).mockResolvedValueOnce({
+        authUid: 'test-uid-1',
+        email: 'user@example.com',
+        weightKg: 73,
+        createdAt: {
+          toDate: () => new Date('2026-08-18T00:00:00Z'),
+        } as never,
+        updatedAt: {
+          toDate: () => new Date('2026-09-06T00:00:00Z'),
+        } as never,
+      });
+
+      const app = createApp();
+
+      const response = await request(app)
+        .patch('/api/users/me')
+        .send({ weightKg: 73 });
+
+      expect(response.status).toBe(200);
+      expect(usersService.updateUserProfile).toHaveBeenCalledWith(
+        'test-uid-1',
+        { weightKg: 73 },
+      );
+    });
+
+    it.each([72.5, 10, 400, 'heavy', true])(
+      'when weightKg is %p => expected 400 w/ INVALID_INPUT',
+      async (weightKg) => {
+        const app = createApp();
+
+        const response = await request(app)
+          .patch('/api/users/me')
+          .send({ weightKg });
+
+        expect(response.status).toBe(400);
+        expect(response.body).toEqual({
+          ok: false,
+          error: {
+            code: 'INVALID_INPUT',
+            message: 'weightKg must be an integer between 30 and 300',
+          },
+        });
+      },
+    );
+
+    it('when goal is valid => trims and forwards it to the service', async () => {
+      vi.mocked(usersService.updateUserProfile).mockResolvedValueOnce({
+        authUid: 'test-uid-1',
+        email: 'user@example.com',
+        goal: 'Run a half marathon',
+        createdAt: {
+          toDate: () => new Date('2026-08-18T00:00:00Z'),
+        } as never,
+        updatedAt: {
+          toDate: () => new Date('2026-09-06T00:00:00Z'),
+        } as never,
+      });
+
+      const app = createApp();
+
+      const response = await request(app)
+        .patch('/api/users/me')
+        .send({ goal: '  Run a half marathon  ' });
+
+      expect(response.status).toBe(200);
+      expect(usersService.updateUserProfile).toHaveBeenCalledWith(
+        'test-uid-1',
+        { goal: 'Run a half marathon' },
+      );
+    });
+
+    it('when goal is not a string => expected 400 w/ INVALID_INPUT', async () => {
+      const app = createApp();
+
+      const response = await request(app)
+        .patch('/api/users/me')
+        .send({ goal: 123 });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'goal must be a string',
+        },
+      });
+    });
+
     it('when displayName is not a string => expected 400 w/ INVALID_INPUT', async () => {
       const app = createApp();
 

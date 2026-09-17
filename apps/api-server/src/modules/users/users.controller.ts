@@ -24,6 +24,8 @@ const editableProfileFields = [
   'gender',
   'dateOfBirth',
   'heightCm',
+  'weightKg',
+  'goal',
   'skillLevel',
   'preferredSports',
   'sportSkillLevels',
@@ -74,6 +76,14 @@ function buildProfileInput(body: Record<string, unknown>): UpdateUserProfileInpu
 
   if (typeof body.heightCm === 'number') {
     input.heightCm = body.heightCm;
+  }
+
+  if (typeof body.weightKg === 'number') {
+    input.weightKg = body.weightKg;
+  }
+
+  if (typeof body.goal === 'string' && body.goal.trim()) {
+    input.goal = body.goal.trim();
   }
 
   if (isStringArray(body.preferredSports)) {
@@ -352,6 +362,32 @@ export async function updateMyUserProfileHandler(req: Request, res: Response) {
         error: {
           code: 'INVALID_INPUT',
           message: 'heightCm must be an integer between 50 and 300',
+        },
+      });
+    }
+
+    if (
+      body.weightKg !== undefined &&
+      (typeof body.weightKg !== 'number' ||
+        !Number.isInteger(body.weightKg) ||
+        body.weightKg < 30 ||
+        body.weightKg > 300)
+    ) {
+      return res.status(400).json({
+        ok: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'weightKg must be an integer between 30 and 300',
+        },
+      });
+    }
+
+    if (body.goal !== undefined && typeof body.goal !== 'string') {
+      return res.status(400).json({
+        ok: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'goal must be a string',
         },
       });
     }

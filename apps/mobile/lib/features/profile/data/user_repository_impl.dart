@@ -196,10 +196,9 @@ class RemoteUserRepository implements UserRepository {
   }) async {
     try {
       // The backend's `editableProfileFields` is strict — any other key
-      // returns INVALID_INPUT. The mobile model has more fields than the
-      // backend persists (`email`, `phone`, `weightKg`, `goal`); we
-      // intentionally omit them from the PATCH body. `heightCm` IS
-      // persisted (and shown publicly), so it rides along. The local
+      // returns INVALID_INPUT. `email` and `phone` have no backend fields
+      // (email lives in Firebase Auth), so they stay omitted and local
+      // only. Everything else below rides along when set. The local
       // fallback still records everything in memory so the Edit Profile
       // screen keeps working offline.
       //
@@ -210,6 +209,7 @@ class RemoteUserRepository implements UserRepository {
       //                  `skillLevel` (dominant level — feeds the
       //                  profile-completed check and the public profile)
       //   - `joinReason`→ `joinReason` (onboarding answer, private)
+      //   - `weightKg`/`goal` → same names (private, own profile only)
       final dominant = sports != null && sports.isNotEmpty
           ? dominantSkillLevel(sports)
           : null;
@@ -232,6 +232,9 @@ class RemoteUserRepository implements UserRepository {
             'dateOfBirth': dateOfBirth.toIso8601String().split('T').first,
           if (heightCm != null && heightCm >= 50 && heightCm <= 300)
             'heightCm': heightCm,
+          if (weightKg != null && weightKg >= 30 && weightKg <= 300)
+            'weightKg': weightKg,
+          if (goal != null && goal.trim().isNotEmpty) 'goal': goal.trim(),
           if (sports != null && sports.isNotEmpty)
             'preferredSports': sports.map((s) => s.sport).toList(),
           if (levelEntries.isNotEmpty)

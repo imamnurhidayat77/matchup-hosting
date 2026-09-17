@@ -172,6 +172,17 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       );
       return;
     }
+    // Same for weight (PATCH /me accepts 30–300).
+    final weightRaw = _weightController.text.trim();
+    final weight = weightRaw.isEmpty ? null : int.tryParse(weightRaw);
+    if (weightRaw.isNotEmpty && (weight == null || weight < 30 || weight > 300)) {
+      AppSnackbar.show(
+        context,
+        message: 'Weight must be between 30 and 300 kg.',
+        variant: AppSnackbarVariant.error,
+      );
+      return;
+    }
     setState(() => _loading = true);
     try {
       await ref.read(userRepositoryProvider).updateProfile(
@@ -182,7 +193,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         phone: _phoneController.text.trim(),
         dateOfBirth: _dob,
         heightCm: height,
-        weightKg: int.tryParse(_weightController.text.trim()),
+        weightKg: weight,
         goal: _goalController.text.trim(),
         sports: _sports
             .map((s) => (
