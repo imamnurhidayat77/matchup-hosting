@@ -1,6 +1,7 @@
 import { Timestamp } from 'firebase-admin/firestore';
 import { firestore } from '../../database/firebase.js';
 import { activityDocPath, userDocPath } from '../../database/paths.js';
+import { logAdminAction } from '../admin/audit.service.js';
 import { getPublicUserProfile } from '../users/users.service.js';
 
 export type ReportTargetType = 'user' | 'activity';
@@ -398,10 +399,12 @@ async function triageReport(
     }
 
     const ref = firestore.collection('reports').doc(reportId);
+    let before: FirebaseFirestore.DocumentData | undefined;
     await firestore.runTransaction(async (transaction) => {
         const snap = await transaction.get(ref);
         if (!snap.exists) throw new Error('Report not found');
-        if (snap.data()?.status !== 'pending') {
+        before = snap.data();
+        if (before?.status !== 'pending') {
             throw new Error('Report is no longer pending');
         }
         transaction.update(ref, {
@@ -410,5 +413,17 @@ async function triageReport(
             resolvedAt: Timestamp.now(),
             resolvedBy: adminUid,
         });
+    });
+    await logAdminAction({
+        category: 'Reports',
+        action: status === 'resolved' ? 'report.resolve' : 'report.dismiss',
+        adminUid,
+        // adminEmail not threaded through this call site for v1 — see
+        // appeals.service.ts's decideAppeal for the same trade-off.
+        description: `Marked report as ${status}`,
+        targetId: reportId,
+        targetLabel: typeof before?.reason === 'string' ? before.reason : reportId,
+        before: { status: 'pending' },
+        after: { status, adminNote: note ?? null },
     });
 }
