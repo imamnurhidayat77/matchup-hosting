@@ -7,6 +7,7 @@ import { adminBroadcastsRouter } from './broadcasts.routes.js';
 import { adminSportsRouter } from './sports.routes.js';
 import { adminTemplatesRouter } from './templates.routes.js';
 import { adminAnalyticsRouter } from './analytics.routes.js';
+import { adminAuditLogRouter } from './audit.routes.js';
 import { getDashboardHandler } from './analytics.controller.js';
 
 /**
@@ -43,3 +44,4 @@ adminRouter.use('/broadcasts', adminBroadcastsRouter);
 adminRouter.use('/sports', adminSportsRouter);
 adminRouter.use('/templates', adminTemplatesRouter);
 adminRouter.use('/analytics', adminAnalyticsRouter);
+adminRouter.use('/audit-log', adminAuditLogRouter);

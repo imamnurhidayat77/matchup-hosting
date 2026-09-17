@@ -19,9 +19,14 @@ export async function updateTemplateHandler(
     res: Response,
 ) {
     try {
+        const adminUid = req.auth?.uid ?? '';
+        const adminEmail =
+            typeof req.auth?.token.email === 'string' ? req.auth.token.email : null;
         const row = await updateTemplate(
             req.params.id,
             (req.body ?? {}) as { title?: unknown; body?: unknown; enabled?: unknown },
+            adminUid,
+            adminEmail,
         );
         return res.status(200).json({ ok: true, data: row });
     } catch (error) {

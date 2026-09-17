@@ -72,6 +72,14 @@ function IconTemplate() {
     </svg>
   );
 }
+function IconAuditLog() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 1h8l3 3v11a1.5 1.5 0 01-1.5 1.5h-9A1.5 1.5 0 013 15V2.5A1.5 1.5 0 014.5 1z" />
+      <path d="M6 6h6M6 9h6M6 12h4" />
+    </svg>
+  );
+}
 
 // ─── Nav config ───────────────────────────────────────────────────────────────
 
@@ -95,6 +103,7 @@ const NAV_ITEMS = [
   { to: '/sports',                 label: 'Sports',        icon: <IconSports />                 },
   { to: '/analytics',              label: 'Analytics',     icon: <IconChart />                  },
   { to: '/notification-templates', label: 'Notif Templates', icon: <IconTemplate />             },
+  { to: '/audit-log',              label: 'Audit Log',    icon: <IconAuditLog />               },
 ] as const;
 
 // ─── Inner sidebar content ────────────────────────────────────────────────────

@@ -12,7 +12,12 @@ vi.mock('../notifications/notifications.service.js', () => ({
     displayNameOf: vi.fn().mockResolvedValue(''),
 }));
 
+vi.mock('../admin/audit.service.js', () => ({
+    logAdminAction: vi.fn(),
+}));
+
 import { firestore } from '../../database/firebase.js';
+import { logAdminAction } from '../admin/audit.service.js';
 import {
     createNotification,
     renderTemplate,
@@ -213,6 +218,21 @@ describe('decideAppeal', () => {
             expect.objectContaining({
                 recipientUid: 'u-1',
                 title: 'Your appeal was reviewed',
+            }),
+        );
+    });
+
+    it('logs the decision', async () => {
+        mockDb({ 'ap-1': appealRow() });
+        await decideAppeal('ap-1', 'approved', 'admin-1', 'Sorry!');
+        expect(logAdminAction).toHaveBeenCalledWith(
+            expect.objectContaining({
+                category: 'Appeals',
+                action: 'appeal.approve',
+                adminUid: 'admin-1',
+                targetId: 'ap-1',
+                before: { status: 'pending' },
+                after: { status: 'approved', adminNote: 'Sorry!' },
             }),
         );
     });

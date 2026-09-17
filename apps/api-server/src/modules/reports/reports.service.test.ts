@@ -9,7 +9,12 @@ vi.mock('../../database/firebase.js', () => {
     };
 });
 
+vi.mock('../admin/audit.service.js', () => ({
+    logAdminAction: vi.fn(),
+}));
+
 import { firestore } from '../../database/firebase.js';
+import { logAdminAction } from '../admin/audit.service.js';
 import {
     dismissReport,
     listReports,
@@ -296,6 +301,24 @@ describe('triage actions', () => {
         await dismissReport({ reportId: 'r-2', adminUid: 'admin-1' });
 
         expect(update.mock.calls[0][1]).toMatchObject({ status: 'dismissed' });
+    });
+
+    it('logs the triage decision', async () => {
+        const { runTransaction } = mockTransaction('pending');
+        mockTx({ runTransaction });
+
+        await resolveReport({ reportId: 'r-1', adminUid: 'admin-1', note: 'Warned' });
+
+        expect(logAdminAction).toHaveBeenCalledWith(
+            expect.objectContaining({
+                category: 'Reports',
+                action: 'report.resolve',
+                adminUid: 'admin-1',
+                targetId: 'r-1',
+                before: { status: 'pending' },
+                after: { status: 'resolved', adminNote: 'Warned' },
+            }),
+        );
     });
 
     it('rejects triage of an already-triaged report', async () => {

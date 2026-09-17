@@ -61,7 +61,10 @@ export async function updateBroadcastHandler(
             audience?: unknown;
             scheduledAt?: unknown;
         };
-        const row = await updateBroadcast(req.params.id, body);
+        const adminUid = req.auth?.uid ?? '';
+        const adminEmail =
+            typeof req.auth?.token.email === 'string' ? req.auth.token.email : null;
+        const row = await updateBroadcast(req.params.id, body, adminUid, adminEmail);
         return res.status(200).json({ ok: true, data: row });
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
@@ -106,7 +109,10 @@ export async function deleteBroadcastHandler(
     res: Response,
 ) {
     try {
-        await deleteBroadcast(req.params.id);
+        const adminUid = req.auth?.uid ?? '';
+        const adminEmail =
+            typeof req.auth?.token.email === 'string' ? req.auth.token.email : null;
+        await deleteBroadcast(req.params.id, adminUid, adminEmail);
         return res.status(200).json({ ok: true, data: { id: req.params.id } });
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
@@ -140,7 +146,10 @@ export async function sendBroadcastHandler(
     res: Response,
 ) {
     try {
-        const row = await sendBroadcast(req.params.id);
+        const adminUid = req.auth?.uid ?? '';
+        const adminEmail =
+            typeof req.auth?.token.email === 'string' ? req.auth.token.email : null;
+        const row = await sendBroadcast(req.params.id, adminUid, adminEmail);
         return res.status(200).json({ ok: true, data: row });
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';

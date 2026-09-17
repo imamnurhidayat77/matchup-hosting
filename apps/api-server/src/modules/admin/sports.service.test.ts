@@ -6,7 +6,12 @@ vi.mock('../../database/firebase.js', () => ({
     rtdb: {},
 }));
 
+vi.mock('./audit.service.js', () => ({
+    logAdminAction: vi.fn(),
+}));
+
 import { firestore } from '../../database/firebase.js';
+import { logAdminAction } from './audit.service.js';
 import {
     invalidateSportsCache,
     listSports,
@@ -100,11 +105,11 @@ describe('updateSport', () => {
         const store = mockSports([
             { id: 'golf', data: { name: 'Golf', emoji: '⛳', enabled: true, sortOrder: 10 } },
         ]);
-        const row = await updateSport('golf', {
-            enabled: false,
-            name: 'Hacked',
-            activityCount: 999,
-        });
+        const row = await updateSport(
+            'golf',
+            { enabled: false, name: 'Hacked', activityCount: 999 },
+            'admin-1',
+        );
         expect(row.enabled).toBe(false);
         expect(row.name).toBe('Golf');
         expect(store.get('golf')).not.toHaveProperty('activityCount', 999);
@@ -114,18 +119,35 @@ describe('updateSport', () => {
         mockSports([
             { id: 'golf', data: { name: 'Golf', emoji: '⛳' } },
         ]);
-        await expect(updateSport('golf', { enabled: 'yes' })).rejects.toThrow(
+        await expect(updateSport('golf', { enabled: 'yes' }, 'admin-1')).rejects.toThrow(
             'enabled must be a boolean',
         );
-        await expect(updateSport('golf', {})).rejects.toThrow(
+        await expect(updateSport('golf', {}, 'admin-1')).rejects.toThrow(
             'No updatable sport flags provided',
         );
     });
 
     it('throws for missing sport', async () => {
         mockSports([]);
-        await expect(updateSport('ghost', { enabled: false })).rejects.toThrow(
+        await expect(updateSport('ghost', { enabled: false }, 'admin-1')).rejects.toThrow(
             'Sport not found',
+        );
+    });
+
+    it('logs the flag change with before/after state', async () => {
+        mockSports([
+            { id: 'golf', data: { name: 'Golf', emoji: '⛳', enabled: true, sortOrder: 10 } },
+        ]);
+        await updateSport('golf', { enabled: false }, 'admin-1', 'admin@x.com');
+        expect(logAdminAction).toHaveBeenCalledWith(
+            expect.objectContaining({
+                category: 'Sports',
+                action: 'sport.update',
+                adminUid: 'admin-1',
+                adminEmail: 'admin@x.com',
+                targetId: 'golf',
+                after: { enabled: false },
+            }),
         );
     });
 });
@@ -148,22 +170,37 @@ describe('replaceSports', () => {
             { id: 'tennis', data: { name: 'Tennis', emoji: '🎾' } },
             { id: 'stale', data: { name: 'Stale', emoji: '❌' } },
         ]);
-        const rows = await replaceSports([entry()]);
+        const rows = await replaceSports([entry()], 'admin-1');
         expect(rows.map((r) => r.id)).toEqual(['tennis']);
         expect(rows[0]).toMatchObject({ name: 'Tennis', activityCount: 7 });
     });
 
     it('rejects bad ids, dupes, and empty arrays', async () => {
         mockSports([]);
-        await expect(replaceSports([])).rejects.toThrow(
+        await expect(replaceSports([], 'admin-1')).rejects.toThrow(
             'sports must be a non-empty array',
         );
         await expect(
-            replaceSports([{ ...entry(), id: 'Tennis!' }]),
+            replaceSports([{ ...entry(), id: 'Tennis!' }], 'admin-1'),
         ).rejects.toThrow('sports[0].id must be a lowercase alphanumeric key');
         await expect(
-            replaceSports([entry(), entry()]),
+            replaceSports([entry(), entry()], 'admin-1'),
         ).rejects.toThrow('sports ids must be unique');
+    });
+
+    it('logs a single summary entry for the whole bulk replace', async () => {
+        mockSports([{ id: 'tennis', data: { name: 'Tennis', emoji: '🎾' } }]);
+        await replaceSports([entry()], 'admin-1', 'admin@x.com');
+        expect(logAdminAction).toHaveBeenCalledWith(
+            expect.objectContaining({
+                category: 'Sports',
+                action: 'sport.replace',
+                adminUid: 'admin-1',
+                adminEmail: 'admin@x.com',
+                metadata: { count: '1', ids: 'tennis' },
+            }),
+        );
+        expect(logAdminAction).toHaveBeenCalledTimes(1);
     });
 });
 
@@ -186,7 +223,7 @@ describe('listSports cache', () => {
         ]);
         expect((await listSports())[0]).toMatchObject({ enabled: true });
 
-        const row = await updateSport('golf', { enabled: false });
+        const row = await updateSport('golf', { enabled: false }, 'admin-1');
         expect(row.enabled).toBe(false);
         expect((await listSports())[0]).toMatchObject({ enabled: false });
     });

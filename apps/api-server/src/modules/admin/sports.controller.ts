@@ -17,7 +17,10 @@ export async function listSportsHandler(_req: Request, res: Response) {
 export async function replaceSportsHandler(req: Request, res: Response) {
     try {
         const body = (req.body ?? {}) as { sports?: unknown };
-        const rows = await replaceSports(body.sports);
+        const adminUid = req.auth?.uid ?? '';
+        const adminEmail =
+            typeof req.auth?.token.email === 'string' ? req.auth.token.email : null;
+        const rows = await replaceSports(body.sports, adminUid, adminEmail);
         return res.status(200).json({ ok: true, data: rows });
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
@@ -42,9 +45,14 @@ export async function updateSportHandler(
     res: Response,
 ) {
     try {
+        const adminUid = req.auth?.uid ?? '';
+        const adminEmail =
+            typeof req.auth?.token.email === 'string' ? req.auth.token.email : null;
         const row = await updateSport(
             req.params.id,
             (req.body ?? {}) as Record<string, unknown>,
+            adminUid,
+            adminEmail,
         );
         return res.status(200).json({ ok: true, data: row });
     } catch (error) {
