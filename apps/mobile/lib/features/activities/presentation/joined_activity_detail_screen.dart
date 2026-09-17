@@ -577,15 +577,14 @@ class _HostCard extends StatelessWidget {
     // Local for flow promotion (fields never promote).
     final rating = hostRating;
     return PressableScale(
-      // Double-tap guard: duplicate pushes share a page key and
+      // pushOnce guard: duplicate pushes share a page key and
       // red-screen ('!keyReservation.contains(key)'). See NavGuard.
-      onTap: () => NavGuard.onceFor(
+      onTap: () => NavGuard.pushOnce(
+        context,
         'host-profile-${hostId.trim().isNotEmpty ? hostId.trim() : hostName}',
-        () => context.push(
-          hostId.trim().isNotEmpty
-              ? '/player-profile/uid/${hostId.trim()}'
-              : '/player-profile/$hostName',
-        ),
+        hostId.trim().isNotEmpty
+            ? '/player-profile/uid/${hostId.trim()}'
+            : '/player-profile/$hostName',
       ),
       child: Container(
         padding: const EdgeInsets.symmetric(

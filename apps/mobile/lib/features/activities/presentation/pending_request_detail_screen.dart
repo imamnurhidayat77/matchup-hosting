@@ -317,11 +317,12 @@ class _HostRow extends StatelessWidget {
       button: canOpen,
       label: canOpen ? 'View host profile: ${activity.hostName}' : null,
       child: GestureDetector(
-        // Same double-tap guard as the standard detail host card.
+        // Same pushOnce guard as the standard detail host card.
         onTap: canOpen
-            ? () => NavGuard.onceFor(
+            ? () => NavGuard.pushOnce(
+                  context,
                   'host-profile-$hostId',
-                  () => context.push('/player-profile/uid/$hostId'),
+                  '/player-profile/uid/$hostId',
                 )
             : null,
         behavior: HitTestBehavior.opaque,

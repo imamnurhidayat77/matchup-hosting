@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/providers/auth_state_provider.dart';
 import '../../../core/providers/repository_providers.dart';
 import '../data/auth_repository.dart';
+import '../../notifications/services/push_notification_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
@@ -67,6 +70,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
         // Fail-open: onboarding resume is best-effort.
       }
       if (!mounted) return;
+      // Same push-registration refresh as login: startup ran logged-out.
+      unawaited(
+        PushNotificationService.instance.refreshRegistration(
+          deviceRepository: ref.read(deviceRepositoryProvider),
+        ),
+      );
       context.go('/get-to-know-1');
     } catch (e) {
       if (!mounted) return;

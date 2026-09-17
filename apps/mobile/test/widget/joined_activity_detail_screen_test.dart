@@ -11,6 +11,7 @@ import 'package:matchup_mobile/features/chat/data/chat_repository.dart';
 import 'package:matchup_mobile/features/chat/domain/chat_message.dart';
 import 'package:matchup_mobile/features/discovery/data/activity_repository.dart';
 import 'package:matchup_mobile/features/discovery/domain/activity_model.dart';
+import 'package:matchup_mobile/core/utils/nav_guard.dart';
 
 class _MockActivityRepository extends Mock implements ActivityRepository {}
 
@@ -21,6 +22,7 @@ void main() {
   late _MockChatRepository chatRepo;
 
   setUp(() {
+    NavGuard.resetForTest();
     activityRepo = _MockActivityRepository();
     chatRepo = _MockChatRepository();
     // The participant stack reads the live roster — default to empty so

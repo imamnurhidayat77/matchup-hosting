@@ -261,7 +261,18 @@ export async function deliverPush(input: {
             tokens,
             notification: { title: input.title, body: input.body },
             data,
-            android: { priority: 'high' as const },
+            android: {
+                priority: 'high' as const,
+                // Brand the shade row like every other app: monochrome
+                // status glyph (`drawable/ic_stat_matchup.xml` — full
+                // color art would render as a white blob) tinted with
+                // the brand navy. Font itself is OS-rendered and
+                // identical across apps by design.
+                notification: {
+                    icon: 'ic_stat_matchup',
+                    color: '#0B1F8A',
+                },
+            },
         });
 
         let delivered = batch.successCount;

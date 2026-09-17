@@ -11,6 +11,7 @@ import 'package:matchup_mobile/features/chat/domain/chat_message.dart';
 import 'package:matchup_mobile/features/notifications/data/notification_repository.dart';
 import 'package:matchup_mobile/features/notifications/domain/app_notification.dart';
 import 'package:matchup_mobile/features/chat/presentation/messages_screen.dart';
+import 'package:matchup_mobile/core/utils/nav_guard.dart';
 
 class _MockChatRepository extends Mock implements ChatRepository {}
 
@@ -103,6 +104,7 @@ void main() {
   late _MockNotificationRepository notifRepo;
 
   setUp(() {
+    NavGuard.resetForTest();
     chatRepo = _MockChatRepository();
     notifRepo = _MockNotificationRepository();
     when(() => chatRepo.conversations()).thenAnswer((_) async => _fixtures());

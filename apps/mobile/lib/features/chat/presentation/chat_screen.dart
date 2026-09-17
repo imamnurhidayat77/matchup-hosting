@@ -189,15 +189,13 @@ Future<void> setChatMuted(String activityId, bool muted) async {
   } catch (_) {}
 }
 
-/// Opens a chat sender's profile from an avatar or name tap. Guarded
-/// against double-tap (duplicate page keys red-screen) and empty ids.
+/// Opens a chat sender's profile from an avatar or name tap. Uses
+/// [NavGuard.pushOnce]: repeat taps while the profile is open are
+/// ignored, so duplicate page keys can never red-screen.
 void _openSenderProfile(BuildContext context, String senderId) {
   final uid = senderId.trim();
   if (uid.isEmpty) return;
-  NavGuard.onceFor(
-    'profile-$uid',
-    () => context.push('/player-profile/uid/$uid'),
-  );
+  NavGuard.pushOnce(context, 'profile-$uid', '/player-profile/uid/$uid');
 }
 
 /// Fetches the activity for the chat header. Returns the full

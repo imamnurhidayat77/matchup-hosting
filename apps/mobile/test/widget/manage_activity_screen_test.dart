@@ -9,6 +9,7 @@ import 'package:matchup_mobile/features/activities/domain/activity_participant.d
 import 'package:matchup_mobile/features/activities/presentation/manage_activity_screen.dart';
 import 'package:matchup_mobile/features/discovery/data/activity_repository.dart';
 import 'package:matchup_mobile/features/discovery/domain/activity_model.dart';
+import 'package:matchup_mobile/core/utils/nav_guard.dart';
 
 class _MockActivityRepository extends Mock implements ActivityRepository {}
 
@@ -16,6 +17,7 @@ void main() {
   late _MockActivityRepository repo;
 
   setUp(() {
+    NavGuard.resetForTest();
     repo = _MockActivityRepository();
     when(() => repo.cancel(any())).thenAnswer((_) async {});
     when(() => repo.joinRequests(any())).thenAnswer((_) async => []);

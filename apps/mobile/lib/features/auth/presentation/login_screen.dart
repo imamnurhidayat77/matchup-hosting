@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -11,6 +13,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/utils/secure_screen.dart';
 import '../../../core/widgets/app_dialog.dart';
+import '../../notifications/services/push_notification_service.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/pressable_scale.dart';
@@ -68,6 +71,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         userId: result.userId,
       );
       if (!mounted) return;
+      // The startup registration ran logged-out (401, swallowed) — now
+      // that a session exists, register this device or pushes never
+      // arrive. Fire-and-forget: must not block navigation.
+      unawaited(
+        PushNotificationService.instance.refreshRegistration(
+          deviceRepository: ref.read(deviceRepositoryProvider),
+        ),
+      );
       // Navigate explicitly — don't rely solely on the router redirect
       // which fires asynchronously via refreshListenable. On slower devices
       // the listener notification can arrive a frame late, requiring a
