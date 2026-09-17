@@ -15,6 +15,28 @@ class ProfileUpdateException implements Exception {
   String toString() => 'ProfileUpdateException: $message';
 }
 
+/// Maximum profile-photo file size accepted (5 MB — mirrors
+/// `isAllowedProfileImage` in storage.rules). Files larger than this
+/// are rejected client-side so the UI can name the reason instead of
+/// showing a generic upload failure.
+const kMaxAvatarBytes = 5 * 1024 * 1024;
+
+/// Thrown when the picked profile photo exceeds [kMaxAvatarBytes].
+/// Screens catch this separately to show the size reason; every other
+/// upload failure keeps the generic message.
+class AvatarTooLargeException implements Exception {
+  AvatarTooLargeException([this.maxBytes = kMaxAvatarBytes]);
+  final int maxBytes;
+
+  String get message {
+    final mb = maxBytes ~/ (1024 * 1024);
+    return 'Cannot upload image more than ${mb}MB';
+  }
+
+  @override
+  String toString() => 'AvatarTooLargeException: $message';
+}
+
 abstract class UserRepository {
   Future<UserModel> me();
   Future<UserModel?> byId(String id);

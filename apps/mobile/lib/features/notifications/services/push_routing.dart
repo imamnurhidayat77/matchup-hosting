@@ -42,6 +42,25 @@ class PushPayload {
 /// banner skips muted chats.
 const mutedChatsKey = 'muted_chats';
 
+/// True when a push of this type can change My Games membership —
+/// cancelled/completed/removed games leave Upcoming, joins/requests/
+/// removals enter or move rows. The app shell invalidates the My Games
+/// tab providers on these pushes so a cancelled game vanishes without
+/// a manual pull-to-refresh (lists render stale-while-revalidate, so
+/// there is no skeleton flash). Chat/system pushes never qualify.
+bool invalidatesMyGames(PushPayload payload) {
+  return switch (payload.type) {
+    'activity_cancelled' ||
+    'activity_completed' ||
+    'activity_joined' ||
+    'activity_left' ||
+    'participant_removed' ||
+    'join_request' =>
+      true,
+    _ => false,
+  };
+}
+
 /// Deep-link route for a parsed payload, or null when the payload has
 /// no usable target (unknown type). Callers must no-op (or snackbar)
 /// on null instead of pushing the notifications feed — dropping the

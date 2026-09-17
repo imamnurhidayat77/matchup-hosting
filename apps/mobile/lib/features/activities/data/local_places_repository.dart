@@ -12,6 +12,7 @@ class LocalPlacesRepository implements PlacesRepository {
   Future<List<PlaceSuggestion>> autocomplete(
     String query, {
     String? countryCodes,
+    String? viewbox,
   }) async {
     return const [];
   }

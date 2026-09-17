@@ -45,7 +45,10 @@ class _DatePickerSheetState extends State<DatePickerSheet> {
     'July', 'August', 'September', 'October', 'November', 'December',
   ];
   static const _weekDays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-  static const _minuteStep = 5;
+
+  /// Minute granularity for the minute drum. Public so [_TimeSection]
+  /// (which owns the drums) stays in sync with [_result].
+  static const minuteStep = 5;
 
   @override
   void initState() {
@@ -59,7 +62,7 @@ class _DatePickerSheetState extends State<DatePickerSheet> {
     _isPm = h >= 12;
     _hour12 = h == 0 ? 12 : (h > 12 ? h - 12 : h);
     // Round minute up to nearest step
-    _minute = ((init.minute / _minuteStep).ceil() * _minuteStep) % 60;
+    _minute = ((init.minute / minuteStep).ceil() * minuteStep) % 60;
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
@@ -194,38 +197,19 @@ class _DatePickerSheetState extends State<DatePickerSheet> {
             const SizedBox(height: AppSpacing.x4),
 
             // ── Time picker ─────────────────────────────────────────────
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // Hour drum
-                _TimeColumn(
-                  values: List.generate(12, (i) => i + 1),
-                  selected: _hour12,
-                  label: (v) => v.toString().padLeft(2, '0'),
-                  onChanged: (v) => setState(() => _hour12 = v),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x2),
-                  child: Text(
-                    ':',
-                    style: AppTypography.titleSheet(context)
-                        .copyWith(fontSize: 22, fontWeight: FontWeight.w800),
-                  ),
-                ),
-                // Minute drum
-                _TimeColumn(
-                  values: List.generate(60 ~/ _minuteStep, (i) => i * _minuteStep),
-                  selected: _minute,
-                  label: (v) => v.toString().padLeft(2, '0'),
-                  onChanged: (v) => setState(() => _minute = v),
-                ),
-                const SizedBox(width: AppSpacing.x4),
-                // AM / PM toggle
-                _AmPmToggle(
-                  isPm: _isPm,
-                  onChanged: (v) => setState(() => _isPm = v),
-                ),
-              ],
+            // Owned by [_TimeSection] with its own local state so wheel
+            // ticks only rebuild the drums — never the whole sheet
+            // (calendar grid included). Values are pushed up without
+            // setState; [_result] reads them at confirm time.
+            _TimeSection(
+              hour12: _hour12,
+              minute: _minute,
+              isPm: _isPm,
+              onChanged: (h, m, pm) {
+                _hour12 = h;
+                _minute = m;
+                _isPm = pm;
+              },
             ),
 
             const SizedBox(height: AppSpacing.x5),
@@ -320,6 +304,90 @@ class _DatePickerSheetState extends State<DatePickerSheet> {
   }
 }
 
+// ─── Time section (local state — ticks stay scoped) ─────────────────────────
+
+/// Hour/minute/AM-PM row with its own [State] so scrolling the drums
+/// only rebuilds this subtree. Parent values are updated via
+/// [onChanged] *without* a parent `setState` — the parent only reads
+/// them when building [_DatePickerSheetState._result] on Confirm.
+class _TimeSection extends StatefulWidget {
+  const _TimeSection({
+    required this.hour12,
+    required this.minute,
+    required this.isPm,
+    required this.onChanged,
+  });
+
+  final int hour12;
+  final int minute;
+  final bool isPm;
+  final void Function(int hour12, int minute, bool isPm) onChanged;
+
+  @override
+  State<_TimeSection> createState() => _TimeSectionState();
+}
+
+class _TimeSectionState extends State<_TimeSection> {
+  late int _hour12 = widget.hour12;
+  late int _minute = widget.minute;
+  late bool _isPm = widget.isPm;
+
+  void _emit() => widget.onChanged(_hour12, _minute, _isPm);
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        // Hour drum
+        _TimeColumn(
+          values: List.generate(12, (i) => i + 1),
+          selected: _hour12,
+          label: (v) => v.toString().padLeft(2, '0'),
+          onChanged: (v) {
+            if (v == _hour12) return;
+            setState(() => _hour12 = v);
+            _emit();
+          },
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x2),
+          child: Text(
+            ':',
+            style: AppTypography.titleSheet(
+              context,
+            ).copyWith(fontSize: 22, fontWeight: FontWeight.w800),
+          ),
+        ),
+        // Minute drum
+        _TimeColumn(
+          values: List.generate(
+            60 ~/ _DatePickerSheetState.minuteStep,
+            (i) => i * _DatePickerSheetState.minuteStep,
+          ),
+          selected: _minute,
+          label: (v) => v.toString().padLeft(2, '0'),
+          onChanged: (v) {
+            if (v == _minute) return;
+            setState(() => _minute = v);
+            _emit();
+          },
+        ),
+        const SizedBox(width: AppSpacing.x4),
+        // AM / PM toggle
+        _AmPmToggle(
+          isPm: _isPm,
+          onChanged: (v) {
+            if (v == _isPm) return;
+            setState(() => _isPm = v);
+            _emit();
+          },
+        ),
+      ],
+    );
+  }
+}
+
 // ─── Time column (scrollable drum) ────────────────────────────────────────────
 
 class _TimeColumn extends StatefulWidget {
@@ -344,6 +412,11 @@ class _TimeColumnState extends State<_TimeColumn> {
   static const double _itemH = 44;
   static const int _loopFactor = 200; // large multiplier for seamless wrapping
 
+  /// Settle animation for programmatic drum moves — long enough to
+  /// read as a glide, eased so it lands softly instead of snapping.
+  static const _settleDuration = Duration(milliseconds: 350);
+  static const _settleCurve = Curves.easeOutCubic;
+
   @override
   void initState() {
     super.initState();
@@ -357,13 +430,20 @@ class _TimeColumnState extends State<_TimeColumn> {
   @override
   void didUpdateWidget(_TimeColumn old) {
     super.didUpdateWidget(old);
-    // If parent resets selection externally, jump the drum to match
+    // If parent resets selection externally, glide the drum to match
+    // instead of snapping. Skip when already aligned (the common
+    // case while scrolling) so ticks never fight the user's finger.
     if (old.selected != widget.selected) {
       final idx = widget.values.indexOf(widget.selected);
       if (idx >= 0) {
         final current = _ctrl.selectedItem;
+        if (current % widget.values.length == idx) return;
         final base = (current ~/ widget.values.length) * widget.values.length;
-        _ctrl.jumpToItem(base + idx);
+        _ctrl.animateToItem(
+          base + idx,
+          duration: _settleDuration,
+          curve: _settleCurve,
+        );
       }
     }
   }
@@ -387,7 +467,10 @@ class _TimeColumnState extends State<_TimeColumn> {
         perspective: 0.004,
         diameterRatio: 2.2,
         onSelectedItemChanged: (i) {
-          widget.onChanged(widget.values[i % count]);
+          final next = widget.values[i % count];
+          // Guard redundant ticks so a settled drum doesn't re-emit.
+          if (next == widget.selected) return;
+          widget.onChanged(next);
         },
         childDelegate: ListWheelChildBuilderDelegate(
           builder: (context, i) {
@@ -395,7 +478,8 @@ class _TimeColumnState extends State<_TimeColumn> {
             final isSelected = val == widget.selected;
             return Center(
               child: AnimatedDefaultTextStyle(
-                duration: const Duration(milliseconds: 120),
+                duration: const Duration(milliseconds: 350),
+                curve: Curves.easeOutCubic,
                 style: isSelected
                     ? AppTypography.titleSheet(context).copyWith(
                         fontSize: 22,
@@ -478,7 +562,8 @@ class _Segment extends StatelessWidget {
       feedback: AppTapFeedback.scale,
       minSize: 0,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutCubic,
         width: 48,
         height: 38,
         decoration: BoxDecoration(

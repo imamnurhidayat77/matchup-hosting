@@ -8,5 +8,11 @@ abstract class PlacesRepository {
   Future<List<PlaceSuggestion>> autocomplete(
     String query, {
     String? countryCodes,
+
+    /// Nominatim viewbox bias (`"left,top,right,bottom"` in degrees).
+    /// Local matches rank first without excluding world matches.
+    /// The picker builds one around the user's location (or Auckland
+    /// centre as fallback).
+    String? viewbox,
   });
 }

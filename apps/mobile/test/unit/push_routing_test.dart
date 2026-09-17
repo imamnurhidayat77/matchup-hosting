@@ -108,8 +108,7 @@ void main() {
     });
   });
 
-  group('routeForNotification', () {
-    test('feed and tray taps agree per backend type', () {
+  group('routeForNotification', () {    test('feed and tray taps agree per backend type', () {
       expect(
         routeForNotification(_notif(backendType: 'chat_message', activityId: 'a-1')),
         '/chat/a-1',
@@ -142,6 +141,42 @@ void main() {
         routeForNotification(_notif(backendType: 'chat_message')),
         '/notifications',
       );
+    });
+  });
+
+  group('invalidatesMyGames', () {
+    test('membership-changing pushes qualify', () {
+      for (final type in [
+        'activity_cancelled',
+        'activity_completed',
+        'activity_joined',
+        'activity_left',
+        'participant_removed',
+        'join_request',
+      ]) {
+        expect(
+          invalidatesMyGames(PushPayload(type: type, activityId: 'a-1')),
+          isTrue,
+          reason: type,
+        );
+      }
+    });
+
+    test('chat/system pushes do not qualify', () {
+      for (final type in [
+        'chat_message',
+        'dm_message',
+        'activity_interest',
+        'activity_reminder',
+        'system',
+        'totally_unknown',
+      ]) {
+        expect(
+          invalidatesMyGames(PushPayload(type: type, activityId: 'a-1')),
+          isFalse,
+          reason: type,
+        );
+      }
     });
   });
 }

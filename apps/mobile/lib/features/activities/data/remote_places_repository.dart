@@ -17,6 +17,7 @@ class RemotePlacesRepository implements PlacesRepository {
   Future<List<PlaceSuggestion>> autocomplete(
     String query, {
     String? countryCodes,
+    String? viewbox,
   }) async {
     final trimmed = query.trim();
     if (trimmed.length < 3) return const <PlaceSuggestion>[];
@@ -28,6 +29,7 @@ class RemotePlacesRepository implements PlacesRepository {
           'q': trimmed,
           if (countryCodes != null && countryCodes.isNotEmpty)
             'countryCodes': countryCodes,
+          if (viewbox != null && viewbox.isNotEmpty) 'viewbox': viewbox,
         },
       );
       return apiDataList(res.data)

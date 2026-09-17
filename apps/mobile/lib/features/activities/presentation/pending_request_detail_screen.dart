@@ -17,7 +17,7 @@ import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/asset_image.dart';
 import '../../../core/widgets/error_retry.dart';
-import '../../../core/widgets/skeleton.dart';
+import 'widgets/detail_loading_skeleton.dart';
 import '../../discovery/domain/activity_model.dart';
 import '../../discovery/presentation/widgets/venue_map_card.dart';
 import 'my_activities_screen.dart';
@@ -43,7 +43,7 @@ class PendingRequestDetailScreen extends ConsumerWidget {
       safeAreaTop: false,
       backgroundColor: context.colors.background,
       body: async.when(
-        loading: () => const SkeletonList(count: 3),
+        loading: () => const DetailLoadingSkeleton(bottomBar: false),
         error: (_, _) => ErrorRetry(
           message: 'Could not load this activity.',
           onRetry: () =>

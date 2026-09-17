@@ -19,6 +19,12 @@ void main() {
   setUp(() {
     NavGuard.resetForTest();
     repo = _MockActivityRepository();
+    when(
+      () => repo.removeParticipant(
+        activityId: any(named: 'activityId'),
+        uid: any(named: 'uid'),
+      ),
+    ).thenAnswer((_) async {});
   });
 
   Future<void> pumpScreen(WidgetTester tester) async {
@@ -140,6 +146,98 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Player Profile'), findsOneWidget);
+    });
+
+    testWidgets('host sees Remove on members and kicking works', (
+      tester,
+    ) async {
+      when(() => repo.byId('1')).thenAnswer(
+        (_) async => ActivityModel(
+          id: '1',
+          title: 'Saturday 5v5 Basketball',
+          sportType: 'Basketball',
+          description: '',
+          location: 'Central Park',
+          distanceKm: 1,
+          dateTime: DateTime(2026, 8, 22, 16),
+          skillLevel: 'Intermediate',
+          capacity: 4,
+          participantCount: 2,
+          hostName: 'Priya Nair',
+          isHost: true,
+        ),
+      );
+      when(() => repo.participants('1')).thenAnswer(
+        (_) async => [
+          ActivityParticipant(
+            userId: 'host',
+            name: 'Priya Nair',
+            avatarAsset: 'host_james.png',
+            skillLevel: 'Advanced',
+            joinedAt: DateTime.now().subtract(const Duration(days: 3)),
+            isOrganizer: true,
+          ),
+          ActivityParticipant(
+            userId: 'u2',
+            name: 'Omar Farouk',
+            avatarAsset: 'avatar_1.png',
+            skillLevel: 'Beginner',
+            joinedAt: DateTime.now().subtract(const Duration(hours: 5)),
+            isOrganizer: false,
+          ),
+        ],
+      );
+
+      await pumpScreen(tester);
+
+      // One Remove (member row only — never the organizer row).
+      expect(find.text('Remove'), findsOneWidget);
+      await tester.tap(find.text('Remove'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Remove Omar Farouk?'), findsOneWidget);
+      await tester.tap(find.text('Remove').last);
+      await tester.pumpAndSettle();
+
+      verify(
+        () => repo.removeParticipant(activityId: '1', uid: 'u2'),
+      ).called(1);
+      expect(find.text('Omar Farouk removed from the activity.'), findsOneWidget);
+    });
+
+    testWidgets('non-host viewers see no Remove buttons', (tester) async {
+      when(() => repo.byId('1')).thenAnswer(
+        (_) async => ActivityModel(
+          id: '1',
+          title: 'Saturday 5v5 Basketball',
+          sportType: 'Basketball',
+          description: '',
+          location: 'Central Park',
+          distanceKm: 1,
+          dateTime: DateTime(2026, 8, 22, 16),
+          skillLevel: 'Intermediate',
+          capacity: 4,
+          participantCount: 2,
+          hostName: 'Priya Nair',
+          isParticipant: true,
+        ),
+      );
+      when(() => repo.participants('1')).thenAnswer(
+        (_) async => [
+          ActivityParticipant(
+            userId: 'u2',
+            name: 'Omar Farouk',
+            avatarAsset: 'avatar_1.png',
+            skillLevel: 'Beginner',
+            joinedAt: DateTime.now().subtract(const Duration(hours: 5)),
+            isOrganizer: false,
+          ),
+        ],
+      );
+
+      await pumpScreen(tester);
+
+      expect(find.text('Remove'), findsNothing);
     });
   });
 }

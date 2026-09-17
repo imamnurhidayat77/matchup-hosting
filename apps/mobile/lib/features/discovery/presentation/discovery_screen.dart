@@ -411,6 +411,10 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
           ? list.where((a) => a.isParticipant || a.isHost).toList()
           : committed;
       _activities = list.where((a) {
+        // Stale `open` rows (backend expiry is eventual): never deal a
+        // game that already started — the join would 409 anyway, so the
+        // card only sets up a rejection.
+        if (!a.dateTime.isAfter(DateTime.now())) return false;
         // Joined/hosted games live in My Games — never re-deal
         // them in Discover, not on reload, not even on "Start
         // over".
@@ -827,7 +831,10 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
+                // Center (not start): buttons have different diameters
+                // (54/62/68) and start-alignment left the info button
+                // visibly higher than its neighbours.
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   DiscoveryAction.reject(onTap: _dislike),
                   const SizedBox(width: AppSpacing.x6),

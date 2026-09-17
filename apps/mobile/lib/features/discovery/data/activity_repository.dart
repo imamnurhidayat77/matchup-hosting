@@ -75,6 +75,16 @@ abstract class ActivityRepository {
 
   Future<void> leave(String activityId);
 
+  /// Host-only removal of another participant (`DELETE
+  /// /api/activities/:activityId/participants/:uid`). The backend also
+  /// allows self-removal through this route, but mobile keeps [leave]
+  /// for that path. Throws on failure so the manage screen can show
+  /// an error and keep the row in place.
+  Future<void> removeParticipant({
+    required String activityId,
+    required String uid,
+  });
+
   /// Files a join request on an approval-gated activity. Throws when
   /// the activity is open-policy (call [join] instead), full, or a
   /// request is already pending. Withdrawing a pending request goes

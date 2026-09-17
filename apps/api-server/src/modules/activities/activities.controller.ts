@@ -13,6 +13,12 @@ import {
 } from './activities.service.js';
 import { listDiscoverActivities } from './discover.service.js';
 import type { ActivitySkillLevel, ListActivitiesFilters, SportSkillFilter } from './activities.service.js';
+import { getParticipants } from './activity-participants.service.js';
+import {
+    createNotification,
+    displayNameOf,
+    renderTemplate,
+} from '../notifications/notifications.service.js';
 
 const LIMIT_VALUE = 20;
 
@@ -651,11 +657,22 @@ export async function updateActivityStatusHandler(req: Request<UpdateActivitySta
             });
         }
 
+        const previous = await getActivityById(activityId);
+
         await updateActivityStatus({
             activityId,
             hostId,
             status,
         });
+
+        // Members must hear about cancellations (UAT): fan out an
+        // `activity_cancelled` push to every participant except the
+        // host. Only on the transition INTO cancelled (repeat calls
+        // stay silent), fire-and-forget so a notification failure
+        // never fails the status update itself.
+        if (status === 'cancelled' && previous?.status !== 'cancelled') {
+            notifyCancelledMembers(activityId, hostId).catch(() => undefined);
+        }
 
         return res.status(200).json({
             ok: true,
@@ -694,6 +711,49 @@ export async function updateActivityStatusHandler(req: Request<UpdateActivitySta
                 message,
             },
         });
+    }
+}
+
+/**
+ * Fans an `activity_cancelled` notification out to every participant
+ * except the acting host. Best-effort: resolves void, never throws.
+ */
+async function notifyCancelledMembers(
+    activityId: string,
+    hostId: string,
+): Promise<void> {
+    try {
+        const [activity, participants] = await Promise.all([
+            getActivityById(activityId),
+            getParticipants(activityId).catch(() => []),
+        ]);
+        if (!activity) return;
+        const recipients = participants
+            .map((p) => p.uid)
+            .filter((uid) => typeof uid === 'string' && uid && uid !== hostId);
+        if (recipients.length === 0) return;
+        const template = await renderTemplate('activity.cancelled', {
+            activityName: activity.title,
+            activityDate: activity.startTime,
+            hostName: (await displayNameOf(hostId)) || 'The host',
+        });
+        const title = template?.title ?? 'Activity cancelled';
+        const body = template?.body ??
+            `${activity.title} has been cancelled by the host.`;
+        await Promise.all(
+            recipients.map((recipientUid) =>
+                createNotification({
+                    recipientUid,
+                    type: 'activity_cancelled',
+                    title,
+                    body,
+                    activityId,
+                    senderUid: hostId,
+                }).catch(() => undefined),
+            ),
+        );
+    } catch {
+        // Swallowed by design — the status update already succeeded.
     }
 }
 

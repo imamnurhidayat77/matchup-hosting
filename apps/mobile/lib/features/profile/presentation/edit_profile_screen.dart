@@ -252,6 +252,13 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         message: 'Profile photo updated.',
         variant: AppSnackbarVariant.success,
       );
+    } on AvatarTooLargeException catch (e) {
+      if (!mounted) return;
+      AppSnackbar.show(
+        context,
+        message: e.message,
+        variant: AppSnackbarVariant.error,
+      );
     } catch (_) {
       if (!mounted) return;
       AppSnackbar.show(

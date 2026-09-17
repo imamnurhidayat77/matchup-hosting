@@ -10,6 +10,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/system_back.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/asset_image.dart';
 import '../../../core/widgets/error_retry.dart';
@@ -32,7 +33,11 @@ class JoinRequestSentScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(_requestActivityProvider(activityId));
-    return AppScaffold(
+    // System back on a go-opened confirmation (deck swipe flow) would
+    // otherwise close the app — fall back to Discover.
+    return SystemBackFallback(
+      onEmptyStack: (context) => context.go('/discovery'),
+      child: AppScaffold(
       showHomeIndicator: false,
       backgroundColor: context.colors.background,
       body: async.when(
@@ -118,7 +123,7 @@ class JoinRequestSentScreen extends ConsumerWidget {
           return _RequestBody(activity: activity);
         },
       ),
-    );
+    ));
   }
 }
 

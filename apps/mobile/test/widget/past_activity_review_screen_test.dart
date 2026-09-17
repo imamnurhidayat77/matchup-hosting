@@ -124,6 +124,32 @@ void main() {
       },
     );
 
+    testWidgets(
+      'cancelled games show the summary read-only with no review form',
+      (tester) async {
+        when(() => repo.byId('4')).thenAnswer(
+          (_) async => activity().copyWith(lifecycleStatus: 'cancelled'),
+        );
+        when(
+          () => repo.participants('4'),
+        ).thenAnswer((_) async => participants());
+
+        await pumpScreen(tester, pushed: true);
+
+        expect(find.text('Past Activity'), findsOneWidget);
+        expect(find.text('Morning Beach Volleyball'), findsOneWidget);
+        expect(
+          find.text(
+            'This game was cancelled, so there is nothing to review.',
+          ),
+          findsOneWidget,
+        );
+        // No rating form, no submit.
+        expect(find.text('Submit Review'), findsNothing);
+        expect(find.text('Update Review'), findsNothing);
+      },
+    );
+
     testWidgets('should record a per-participant star rating', (
       tester,
     ) async {

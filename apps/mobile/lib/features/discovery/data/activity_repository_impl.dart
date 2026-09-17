@@ -115,6 +115,14 @@ class LocalActivityRepository implements ActivityRepository {
   }
 
   @override
+  Future<void> removeParticipant({
+    required String activityId,
+    required String uid,
+  }) async {
+    await _delay();
+  }
+
+  @override
   Future<void> requestJoin(String activityId) async {
     throw StateError(
       'ActivityRepository.requestJoin() requires a live backend — no offline '

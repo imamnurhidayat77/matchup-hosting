@@ -7,6 +7,7 @@ import '../../../core/network/api_client.dart';
 import '../../../core/services/rtdb_auth_service.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../core/storage/secure_token_store.dart';
+import '../../../core/utils/stream_timeout.dart';
 import '../domain/chat_message.dart';
 
 /// Canonical 1-on-1 thread id — sorted uids joined with `_`, mirroring
@@ -74,7 +75,9 @@ class RemoteDmRepository implements DmRepository {
       final ref = FirebaseDatabase.instance.ref(
         'dmChats/${dmThreadId(myUid, otherUid)}/messages',
       );
-      await for (final event in ref.onValue) {
+      // First-event watchdog (see RemoteChatRepository): a stalled socket
+      // must fall through to polling, not pin the thread on its skeleton.
+      await for (final event in withFirstEventTimeout(ref.onValue)) {
         yield _parseList(event.snapshot.value, myUid: myUid);
       }
       return;
@@ -144,7 +147,7 @@ class RemoteDmRepository implements DmRepository {
       await RtdbAuthService.instance.ensureSignedIn();
       final myUid = await _myUid();
       final ref = FirebaseDatabase.instance.ref('userDMs/$myUid');
-      await for (final _ in ref.onValue) {
+      await for (final _ in withFirstEventTimeout(ref.onValue)) {
         yield await conversations();
       }
       return;
