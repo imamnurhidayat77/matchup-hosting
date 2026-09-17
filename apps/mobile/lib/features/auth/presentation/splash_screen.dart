@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,7 +8,9 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/providers/auth_state_provider.dart';
+import '../../../core/providers/repository_providers.dart';
 import '../../../core/storage/route_store.dart';
+import '../../notifications/services/push_notification_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
@@ -70,6 +74,13 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     if (!mounted) return;
     final status = ref.read(authStatusProvider);
     if (status == AuthStatus.authenticated) {
+      // Session survived (cold start logged-in): make sure this device
+      // is registered for push — startup registration ran logged-out.
+      unawaited(
+        PushNotificationService.instance.refreshRegistration(
+          deviceRepository: ref.read(deviceRepositoryProvider),
+        ),
+      );
       // New accounts must finish onboarding: gtk_done==false resumes GTK.
       // Missing/null = old account (flag never written) → treat as done,
       // fail-open so existing users aren't trapped in onboarding.

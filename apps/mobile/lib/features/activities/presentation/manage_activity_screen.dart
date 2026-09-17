@@ -1564,14 +1564,13 @@ class _JoinRequestRow extends StatelessWidget {
             child: AppTappable(
               semanticLabel: 'View ${item.name} profile',
               feedback: AppTapFeedback.scale,
-              // Double-tap guard (duplicate page keys red-screen).
-              onTap: () => NavGuard.onceFor(
+              // pushOnce guard (duplicate page keys red-screen).
+              onTap: () => NavGuard.pushOnce(
+                context,
                 'profile-${item.userId.isNotEmpty ? item.userId : item.name}',
-                () => context.push(
-                  item.userId.isNotEmpty
-                      ? '/player-profile/uid/${item.userId}'
-                      : '/player-profile/${item.name}',
-                ),
+                item.userId.isNotEmpty
+                    ? '/player-profile/uid/${item.userId}'
+                    : '/player-profile/${item.name}',
               ),
               child: Row(
                 children: [

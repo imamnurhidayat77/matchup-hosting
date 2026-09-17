@@ -475,12 +475,11 @@ class _DmHeader extends StatelessWidget {
                     button: true,
                     label: 'View $peerName profile',
                     child: GestureDetector(
-                      onTap: () => NavGuard.onceFor(
-                        'profile-$peerUid',
-                        () => context.push(
-                          '/player-profile/uid/$peerUid',
-                        ),
-                      ),
+                    onTap: () => NavGuard.pushOnce(
+                      context,
+                      'profile-$peerUid',
+                      '/player-profile/uid/$peerUid',
+                    ),
                       behavior: HitTestBehavior.opaque,
                       child: Row(
                         children: [
@@ -607,12 +606,13 @@ class _DmSettingsSheet extends StatelessWidget {
             onTap: () {
               Navigator.of(context).pop();
               // Uid route: exact match, safe for any display name
-              // (spaces, slashes, duplicates). Guarded: a second tap
-              // before the push registers duplicates the page key and
-              // red-screens ('!keyReservation.contains(key)').
-              NavGuard.onceFor(
+              // (spaces, slashes, duplicates). Guarded: repeat pushes
+              // share a page key and red-screen
+              // ('!keyReservation.contains(key)').
+              NavGuard.pushOnce(
+                context,
                 'profile-$peerUid',
-                () => context.push('/player-profile/uid/$peerUid'),
+                '/player-profile/uid/$peerUid',
               );
             },
           ),

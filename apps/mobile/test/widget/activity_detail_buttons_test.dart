@@ -9,6 +9,7 @@ import 'package:matchup_mobile/features/activities/domain/activity_model.dart';
 import 'package:matchup_mobile/features/activities/domain/activity_participant.dart';
 import 'package:matchup_mobile/features/discovery/data/activity_repository.dart';
 import 'package:matchup_mobile/features/discovery/presentation/activity_detail_screen.dart';
+import 'package:matchup_mobile/core/utils/nav_guard.dart';
 
 /// Reproduces the user-reported bug: "tombol-tombol nya gabisa dipencet,
 /// semuanya" (none of the buttons on the activity detail screen are
@@ -52,6 +53,7 @@ void main() {
   late _MockActivityRepository repo;
 
   setUp(() {
+    NavGuard.resetForTest();
     repo = _MockActivityRepository();
     when(() => repo.byId(any())).thenAnswer((_) async => _fixture());
     when(() => repo.join(any())).thenAnswer((_) async {});

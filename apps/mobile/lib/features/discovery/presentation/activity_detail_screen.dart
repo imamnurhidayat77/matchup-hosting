@@ -727,13 +727,13 @@ class _HostCard extends StatelessWidget {
       button: canOpen,
       label: canOpen ? 'View host profile: $hostName' : null,
       child: PressableScale(
-        // Double-tap guard: a second push before the first registers
-        // creates two pages with the same key and red-screens
-        // ('!keyReservation.contains(key)'). See NavGuard.
+        // pushOnce: repeat taps while the profile is open are ignored,
+        // so duplicate page keys can never red-screen. See NavGuard.
         onTap: canOpen
-            ? () => NavGuard.onceFor(
+            ? () => NavGuard.pushOnce(
+                  context,
                   'host-profile-$hostId',
-                  () => context.push('/player-profile/uid/${hostId.trim()}'),
+                  '/player-profile/uid/${hostId.trim()}',
                 )
             : null,
         child: Container(

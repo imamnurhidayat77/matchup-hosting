@@ -7,6 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/dark_colors.dart';
+import '../../../core/utils/nav_guard.dart';
 import '../../../core/widgets/app_avatar.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_tappable.dart';
@@ -578,7 +579,11 @@ class _DmConversationListState extends ConsumerState<_DmConversationList>
             padding: const EdgeInsets.only(bottom: AppSpacing.x2),
             child: _ConversationCard(
               conversation: filtered[i],
-              onTap: () => context.push(
+              // pushOnce: repeat taps share the dm-$uid page key and
+              // red-screen. Extra carries the peer name for the header.
+              onTap: () => NavGuard.pushOnce(
+                context,
+                'dm-${filtered[i].id}',
                 '/dm/${filtered[i].id}',
                 extra: filtered[i].name,
               ),
@@ -656,12 +661,17 @@ class _ConversationListState extends ConsumerState<_ConversationList>
             itemCount: filtered.length,
             itemBuilder: (_, i) => Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.x2),
-              child: _ConversationCard(
-                conversation: filtered[i],
-                // `filtered[i].id` is the activity id (per the local
-                // seed and the backend contract for `/conversations`).
-                onTap: () => context.push('/chat/${filtered[i].id}'),
+            child: _ConversationCard(
+              conversation: filtered[i],
+              // `filtered[i].id` is the activity id (per the local
+              // seed and the backend contract for `/conversations`).
+              // pushOnce: repeat taps share the page key and red-screen.
+              onTap: () => NavGuard.pushOnce(
+                context,
+                'chat-${filtered[i].id}',
+                '/chat/${filtered[i].id}',
               ),
+            ),
             ),
           ),
         );

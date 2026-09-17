@@ -17,6 +17,7 @@ import 'package:matchup_mobile/features/chat/domain/chat_message.dart';
 import 'package:matchup_mobile/features/chat/domain/chat_poll.dart';
 import 'package:matchup_mobile/features/chat/presentation/chat_screen.dart';
 import 'package:matchup_mobile/features/discovery/data/activity_repository.dart';
+import 'package:matchup_mobile/core/utils/nav_guard.dart';
 
 class _MockChatRepository extends Mock implements ChatRepository {}
 
@@ -48,6 +49,7 @@ void main() {
   });
 
   setUp(() {
+    NavGuard.resetForTest();
     repo = _MockChatRepository();
     activityRepo = _MockActivityRepository();
     typingRepo = _MockTypingRepository();
@@ -542,6 +544,38 @@ void main() {
       final sem = tester.getSemantics(find.byType(AppAvatar));
       expect(sem.label, contains('View Alex profile'));
 
+      await tester.tap(find.text('Alex'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Profile alex-uid'), findsOneWidget);
+    });
+
+    testWidgets('double-tapping a sender never duplicates the profile page',
+      (tester,
+    ) async {
+      final today = DateTime.now();
+      when(() => repo.watchMessages(any())).thenAnswer(
+        (_) => Stream.value([
+          ChatMessage(
+            id: '1',
+            senderId: 'alex-uid',
+            senderName: 'Alex',
+            text: 'Hey there',
+            sentAt: DateTime(today.year, today.month, today.day, 9, 0),
+          ),
+        ]),
+      );
+      when(() => repo.watchPolls(any())).thenAnswer(
+        (_) => Stream.value(const <ChatPoll>[]),
+      );
+
+      await pumpScreen(tester);
+      await tester.pumpAndSettle();
+
+      // Two taps with no settle in between: without the push guard the
+      // second push duplicates the page key and red-screens
+      // ('!keyReservation.contains(key)').
+      await tester.tap(find.text('Alex'));
       await tester.tap(find.text('Alex'));
       await tester.pumpAndSettle();
 

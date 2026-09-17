@@ -11,6 +11,10 @@ import {
     activityReactionsPath,
 } from '../../database/paths.js';
 import { resolveEndMs } from '../activities/activity-lifecycle.service.js';
+import { getActivityById } from '../activities/activities.service.js';
+import { getParticipants } from '../activities/activity-participants.service.js';
+import { createNotification } from '../notifications/notifications.service.js';
+import { getPublicUserProfile } from '../users/users.service.js';
 import type { ReactionEmoji } from './chat.schema.js';
 
 export type ChatMessageType = 'text' | 'system';
@@ -99,9 +103,89 @@ export async function sendMessage(activityId: string, senderId: string, text: st
         timestamp: Date.now(),
     } satisfies ChatMessageRecord) 
 
+    // Nudge every other member (fire-and-forget — a notification
+    // failure must never fail the send). Group chat previously sent
+    // no push at all, so backgrounded members never knew about new
+    // messages; DMs already nudge via the same bridge.
+    notifyGroupMembers(
+        normalizedActivityId,
+        normalizedSenderId,
+        normalizedText,
+    ).catch(() => undefined);
+
     return {
         messageId : newMessageRef.key as string,
     };
+}
+
+/**
+ * Fans a `chat_message` notification out to all participants (plus the
+ * host) except the sender. Best-effort by contract: resolves void and
+ * never throws — callers invoke it fire-and-forget after persisting.
+ */
+export async function notifyGroupMembers(
+    activityId: string,
+    senderId: string,
+    text: string,
+): Promise<void> {
+    try {
+        const [activity, participants] = await Promise.all([
+            getActivityById(activityId).catch(() => null),
+            getParticipants(activityId).catch(() => []),
+        ]);
+        const uids = new Set<string>();
+        for (const p of participants) {
+            if (typeof p.uid === 'string' && p.uid && p.uid !== senderId) {
+                uids.add(p.uid);
+            }
+        }
+        const hostId = activity?.hostId;
+        if (typeof hostId === 'string' && hostId && hostId !== senderId) {
+            uids.add(hostId);
+        }
+        if (uids.size === 0) return;
+
+        let senderName = 'Someone';
+        try {
+            const profile = await getPublicUserProfile(senderId);
+            if (profile?.displayName) senderName = profile.displayName;
+        } catch {
+            // Fall through to the generic name.
+        }
+        const title = activity?.title
+            ? `${senderName} in ${activity.title}`
+            : `New message from ${senderName}`;
+
+        await Promise.all(
+            [...uids].map((uid) =>
+                createNotification({
+                    recipientUid: uid,
+                    type: 'chat_message',
+                    title,
+                    body: chatPreviewBody(text),
+                    activityId,
+                    senderUid: senderId,
+                }).catch(() => undefined),
+            ),
+        );
+    } catch {
+        // Swallowed by design — the message is already persisted.
+    }
+}
+
+/**
+ * Inbox preview: never leak a raw URL or maps link into the push —
+ * photos/locations render as a generic line instead.
+ */
+function chatPreviewBody(text: string): string {
+    const trimmed = text.trim();
+    if (/^https?:\/\/\S+$/i.test(trimmed)) {
+        if (/maps\.google\.|openstreetmap\.|osm\.org/i.test(trimmed)) {
+            return '📍 Shared a location';
+        }
+        return '📷 Sent a photo';
+    }
+    return trimmed.length > 80 ? `${trimmed.slice(0, 77)}...` : trimmed;
 } 
 
 export async function getMessages(activityId: string): Promise<ChatMessageWithId[]>{

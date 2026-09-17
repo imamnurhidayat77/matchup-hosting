@@ -1,6 +1,7 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
+import 'package:go_router/go_router.dart';
 
 /// Prevents the same navigation action from firing twice in quick
 /// succession (double-tap, or a slow first frame making a second tap land
@@ -58,6 +59,11 @@ class NavGuard {
   ///   child: ...,
   /// )
   /// ```
+  ///
+  /// NOTE: [onceFor] only covers taps within [cooldown]. A second tap
+  /// after the window (slow transition, impatient user) still pushes a
+  /// duplicate page and red-screens. For `push` navigation prefer
+  /// [pushOnce] below, which is correct regardless of timing.
   static void onceFor(
     String key,
     void Function() action, {
@@ -75,5 +81,33 @@ class NavGuard {
   static void resetForTest() {
     _busy = false;
     _lastRun.clear();
+    _inFlight.clear();
+  }
+
+  /// In-flight pushes by key. A key stays reserved from `push` until
+  /// the pushed route is popped (`context.push` completes on pop), so
+  /// a repeat tap can never create a duplicate page — no matter how
+  /// slow the transition or how impatient the tapper. Prefer this over
+  /// [onceFor] for every `push` whose page key derives from an id.
+  static final Set<String> _inFlight = {};
+
+  /// Pushes [location] once: repeat taps while the route is still on
+  /// the stack are ignored. Fire-and-forget safe (`onTap: () =>
+  /// NavGuard.pushOnce(context, 'chat-$id', '/chat/$id')`) — lifecycle
+  /// is tracked internally and always released in `finally`, even if
+  /// the push itself throws.
+  static Future<void> pushOnce(
+    BuildContext context,
+    String key,
+    String location, {
+    Object? extra,
+  }) async {
+    if (_inFlight.contains(key)) return;
+    _inFlight.add(key);
+    try {
+      await context.push(location, extra: extra);
+    } finally {
+      _inFlight.remove(key);
+    }
   }
 }

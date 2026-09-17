@@ -162,6 +162,28 @@ class PushNotificationService {
     }
   }
 
+  /// Re-registers the current FCM token for the signed-in user.
+  /// Call this after every successful sign-in/register (and on splash
+  /// when a session exists): [initialize] runs once at app start — which
+  /// is usually logged-OUT — so its registration attempt 401s and is
+  /// never retried, leaving the backend with no device row and every
+  /// push undelivered. Safe to call repeatedly; failures are swallowed.
+  Future<void> refreshRegistration({
+    required DeviceRepository deviceRepository,
+  }) async {
+    try {
+      if (Firebase.apps.isEmpty) return;
+      final token = await FirebaseMessaging.instance.getToken();
+      if (token == null || token.isEmpty) {
+        debugPrint('[PushNotificationService] No FCM token on refresh');
+        return;
+      }
+      await _registerWithBackend(token, deviceRepository);
+    } catch (e, st) {
+      debugPrint('[PushNotificationService] Refresh failed: $e\n$st');
+    }
+  }
+
   /// Removes this device from the backend's push-notification roster.
   /// Call this on sign-out so the server stops sending notifications to
   /// a session that's no longer active.

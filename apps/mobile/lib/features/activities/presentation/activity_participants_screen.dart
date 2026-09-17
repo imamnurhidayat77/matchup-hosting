@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
@@ -278,14 +277,13 @@ class _ParticipantCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return PressableScale(
-      // Double-tap guard (duplicate page keys red-screen).
-      onTap: () => NavGuard.onceFor(
+      // pushOnce guard (duplicate page keys red-screen).
+      onTap: () => NavGuard.pushOnce(
+        context,
         'profile-${item.userId.isNotEmpty ? item.userId : item.name}',
-        () => context.push(
-          item.userId.isNotEmpty
-              ? '/player-profile/uid/${item.userId}'
-              : '/player-profile/${item.name}',
-        ),
+        item.userId.isNotEmpty
+            ? '/player-profile/uid/${item.userId}'
+            : '/player-profile/${item.name}',
       ),
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.x3),
