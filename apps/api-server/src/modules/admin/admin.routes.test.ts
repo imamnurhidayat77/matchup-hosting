@@ -42,6 +42,13 @@ vi.mock('./analytics.service.js', () => ({
     getDashboard: vi.fn(),
 }));
 
+vi.mock('./audit.service.js', () => ({
+    listAuditLog: vi.fn(),
+    isAuditCategory: (v: unknown) =>
+        v === 'Members' || v === 'Activities' || v === 'Appeals' ||
+        v === 'Reports' || v === 'Broadcasts' || v === 'Sports' || v === 'Templates',
+}));
+
 vi.mock('../appeals/appeals.service.js', () => ({
     submitAppeal: vi.fn(),
     listMyAppeals: vi.fn(),
@@ -72,6 +79,7 @@ import * as broadcastsService from './broadcasts.service.js';
 import * as sportsService from './sports.service.js';
 import * as templatesService from './templates.service.js';
 import * as analyticsService from './analytics.service.js';
+import * as auditService from './audit.service.js';
 import * as appealsService from '../appeals/appeals.service.js';
 
 beforeEach(() => {
@@ -283,5 +291,40 @@ describe('admin routes', () => {
             .post('/api/appeals')
             .send({ type: 'suspension', statement: 'Again.' });
         expect(response.status).toBe(409);
+    });
+
+    it('GET /api/admin/audit-log lists entries with default limit', async () => {
+        vi.mocked(auditService.listAuditLog).mockResolvedValue([]);
+        const response = await request(createApp()).get('/api/admin/audit-log');
+        expect(response.status).toBe(200);
+        expect(auditService.listAuditLog).toHaveBeenCalledWith({ limit: 50 });
+    });
+
+    it('GET /api/admin/audit-log?category= filters by category', async () => {
+        vi.mocked(auditService.listAuditLog).mockResolvedValue([]);
+        const response = await request(createApp()).get(
+            '/api/admin/audit-log?category=Sports&adminUid=admin-1&limit=10',
+        );
+        expect(response.status).toBe(200);
+        expect(auditService.listAuditLog).toHaveBeenCalledWith({
+            category: 'Sports',
+            adminUid: 'admin-1',
+            limit: 10,
+        });
+    });
+
+    it('GET /api/admin/audit-log?category=bogus returns 400', async () => {
+        const response = await request(createApp()).get(
+            '/api/admin/audit-log?category=bogus',
+        );
+        expect(response.status).toBe(400);
+        expect(auditService.listAuditLog).not.toHaveBeenCalled();
+    });
+
+    it('GET /api/admin/audit-log?limit=0 returns 400', async () => {
+        const response = await request(createApp()).get(
+            '/api/admin/audit-log?limit=0',
+        );
+        expect(response.status).toBe(400);
     });
 });
