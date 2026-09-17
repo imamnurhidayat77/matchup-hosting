@@ -558,7 +558,7 @@ class _HostCard extends StatelessWidget {
   final String activityId;
   final String hostName;
   final String hostId;
-  final double hostRating;
+  final double? hostRating;
 
   /// Opens a 1-on-1 thread with the host (`/dm/:uid`). Falls back to
   /// the group chat when the host uid is unknown — never the host's
@@ -574,6 +574,8 @@ class _HostCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Local for flow promotion (fields never promote).
+    final rating = hostRating;
     return PressableScale(
       // Double-tap guard: duplicate pushes share a page key and
       // red-screen ('!keyReservation.contains(key)'). See NavGuard.
@@ -638,25 +640,33 @@ class _HostCard extends StatelessWidget {
               ),
             ),
             const SizedBox(width: AppSpacing.x3),
-            // Rating
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.star_rounded,
-                  size: 16,
-                  color: context.colors.successText,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  hostRating.toStringAsFixed(1),
-                  style: AppTypography.labelField(context).copyWith(
+            // Rating — real average, or "New host" when unrated.
+            if (rating != null)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.star_rounded,
+                    size: 16,
                     color: context.colors.successText,
-                    fontWeight: FontWeight.w700,
                   ),
+                  const SizedBox(width: 4),
+                  Text(
+                    rating.toStringAsFixed(1),
+                    style: AppTypography.labelField(context).copyWith(
+                      color: context.colors.successText,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              )
+            else
+              Text(
+                'New host',
+                style: AppTypography.metaSub(context).copyWith(
+                  fontWeight: FontWeight.w600,
                 ),
-              ],
-            ),
+              ),
           ],
         ),
       ),

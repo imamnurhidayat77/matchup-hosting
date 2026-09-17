@@ -4,8 +4,6 @@ import {
   listSwipeDecisions,
   saveSwipeDecision,
 } from './swipes.service.js';
-import { getActivityById } from '../activities/activities.service.js';
-import { createNotification } from '../notifications/notifications.service.js';
 
 type GetMySwipeParams = {
   activityId: string;
@@ -65,20 +63,11 @@ export async function saveSwipeDecisionHandler(req: Request, res: Response) {
       decision,
     });
 
-    if (decision === 'join') {
-      const activity = await getActivityById(activityId);
-
-      if (activity && activity.hostId !== uid) {
-        await createNotification({
-          recipientUid: activity.hostId,
-          type: 'activity_interest',
-          title: 'New activity interest',
-          body: 'Someone is interested in your activity',
-          activityId,
-          senderUid: uid,
-        });
-      }
-    }
+    // No notification here by design: a right-swipe is always followed
+    // by `join` (open games → `activity_joined`) or `requestJoin`
+    // (approval games → `join_request`), so notifying `activity_interest`
+    // as well would double-notify the host for a single gesture. The
+    // swipe record itself is kept for deck filtering and analytics.
 
     return res.status(200).json({
       ok: true,

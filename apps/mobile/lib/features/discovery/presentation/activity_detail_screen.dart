@@ -63,7 +63,7 @@ class ActivityDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(_activityDetailProvider(activityId));
     return async.when(
-      loading: () => _LoadingSkeleton(),
+      loading: () => const _LoadingSkeleton(),
       error: (e, _) => AppScaffold(
         body: ErrorRetry(
           message: 'Could not load activity details.',
@@ -145,31 +145,143 @@ class ActivityDetailScreen extends ConsumerWidget {
 }
 
 // ─── Loading skeleton ─────────────────────────────────────────────────────────
+// Mirrors [_DetailBody]'s real layout (hero + overlapping rounded sheet +
+// bottom bar) so the swap from loading to content doesn't jump: same hero
+// height, same sheet overlap, same paddings. Includes a working Back
+// button — the old skeleton stranded users until the fetch finished.
 
 class _LoadingSkeleton extends StatelessWidget {
+  const _LoadingSkeleton();
+
   @override
   Widget build(BuildContext context) {
+    const heroH = _Hero.heroHeight;
+    const overlap = 44.0;
     return AppScaffold(
       safeAreaTop: false,
-      body: Column(
+      bottomBar: Container(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.x5,
+          AppSpacing.x3,
+          AppSpacing.x5,
+          AppSpacing.x3,
+        ),
+        child: const SkeletonBox(
+          width: double.infinity,
+          height: 54,
+          radius: 28,
+        ),
+      ),
+      body: Stack(
         children: [
-          const SkeletonBox(width: double.infinity, height: 280, radius: 0),
-          Padding(
-            padding: const EdgeInsets.all(AppSpacing.x6),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                SkeletonBox(width: double.infinity, height: 32, radius: 6),
-                SizedBox(height: AppSpacing.x2),
-                SkeletonBox(width: 200, height: 24, radius: 6),
-                SizedBox(height: AppSpacing.x5),
-                ListRowSkeleton(),
-                SizedBox(height: AppSpacing.x3),
-                ListRowSkeleton(),
+          // Layer 1: hero, same fixed height as the real one.
+          const SizedBox(
+            height: heroH,
+            width: double.infinity,
+            child: SkeletonBox(width: double.infinity, height: 280, radius: 0),
+          ),
+
+          // Layer 2: white sheet overlapping the hero, same geometry as
+          // the real card (rounded top, sheet shadow).
+          Positioned(
+            top: heroH - overlap,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Container(
+              decoration: BoxDecoration(
+                color: context.colors.surface,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(AppRadius.xl),
+                ),
+                boxShadow: AppShadows.sheet,
+              ),
+              child: const SingleChildScrollView(
+                physics: NeverScrollableScrollPhysics(),
+                padding: EdgeInsets.fromLTRB(
+                  AppSpacing.x5,
+                  AppSpacing.x5,
+                  AppSpacing.x5,
+                  AppSpacing.x8,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SkeletonBox(width: double.infinity, height: 32, radius: 6),
+                    SizedBox(height: AppSpacing.x5),
+                    ListRowSkeleton(),
+                    SizedBox(height: AppSpacing.x3),
+                    ListRowSkeleton(),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // Layer 3: back + share affordances, same SafeArea row as real.
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.x5,
+                  vertical: AppSpacing.x2,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _SkeletonCircleBtn(label: 'Back', pop: true),
+                    _SkeletonCircleBtn(label: 'Share', pop: false),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // Layer 4: pill placeholders where the real sport/skill pills sit.
+          const Positioned(
+            left: AppSpacing.x5,
+            bottom: AppSpacing.x4 + 20 + 20,
+            child: Row(
+              children: [
+                SkeletonBox(width: 84, height: 28, radius: 6),
+                SizedBox(width: AppSpacing.x2),
+                SkeletonBox(width: 110, height: 28, radius: 6),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Circular skeleton button for the loading state. Back actually pops
+/// (loading must never trap the user); Share is inert until content
+/// arrives.
+class _SkeletonCircleBtn extends StatelessWidget {
+  const _SkeletonCircleBtn({required this.label, required this.pop});
+  final String label;
+  final bool pop;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: label,
+      child: PressableScale(
+        onTap: pop ? () => _popOrDiscovery(context) : null,
+        child: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: context.colors.scrim,
+            shape: BoxShape.circle,
+          ),
+        ),
       ),
     );
   }
@@ -604,11 +716,13 @@ class _HostCard extends StatelessWidget {
   });
   final String hostName;
   final String hostId;
-  final double hostRating;
+  final double? hostRating;
 
   @override
   Widget build(BuildContext context) {
     final canOpen = hostId.trim().isNotEmpty;
+    // Local for flow promotion (fields never promote).
+    final rating = hostRating;
     return Semantics(
       button: canOpen,
       label: canOpen ? 'View host profile: $hostName' : null,
@@ -655,25 +769,34 @@ class _HostCard extends StatelessWidget {
                   ],
                 ),
               ),
-              // Rating badge
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.star_rounded,
-                    size: 16,
-                    color: context.colors.successText,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    hostRating.toStringAsFixed(1),
-                    style: AppTypography.labelField(context).copyWith(
+              // Rating badge — real average from the host's ratings,
+              // or "New host" when they have none yet (never a fake).
+              if (rating != null)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.star_rounded,
+                      size: 16,
                       color: context.colors.successText,
-                      fontWeight: FontWeight.w700,
                     ),
+                    const SizedBox(width: 4),
+                    Text(
+                      rating.toStringAsFixed(1),
+                      style: AppTypography.labelField(context).copyWith(
+                        color: context.colors.successText,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                )
+              else
+                Text(
+                  'New host',
+                  style: AppTypography.metaSub(context).copyWith(
+                    fontWeight: FontWeight.w600,
                   ),
-                ],
-              ),
+                ),
               if (canOpen) ...[
                 const SizedBox(width: AppSpacing.x1),
                 Icon(

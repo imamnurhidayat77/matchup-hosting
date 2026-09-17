@@ -8,10 +8,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_client.dart';
+import '../../../core/providers/auth_state_provider.dart';
 import '../../../core/providers/preferences_provider.dart';
 import '../../../core/providers/repository_providers.dart';
 import '../../../core/storage/local_storage.dart';
 import '../../../core/theme/app_spacing.dart';
+import '../../../core/utils/nav_guard.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/error_retry.dart';
@@ -44,7 +46,13 @@ final _unreadNotifCountProvider = FutureProvider.autoDispose<int>((ref) async {
 /// (plain ShellRoute), so a field would reset and force another
 /// "Start over" tap on every return. A session-lived provider keeps
 /// the user's choice until the app is killed.
-final _includeSwipedProvider = StateProvider<bool>((ref) => false);
+///
+/// Rebuilt on account switch (watches the auth uid) so Lisa never
+/// inherits Benjamin's "Start over" session flag.
+final _includeSwipedProvider = StateProvider<bool>((ref) {
+  ref.watch(authStateProvider.select((s) => s.userId));
+  return false;
+});
 
 /// User-configurable discovery filter, written by the Filter screen
 /// and read by Discovery. Session-lived for the same reason as
@@ -53,22 +61,29 @@ final _includeSwipedProvider = StateProvider<bool>((ref) => false);
 /// SharedPreferences on every change (see [_persistFilter]) so it also
 /// survives app restart; the persisted value is restored in
 /// [_seedDefaultFilter] before the first load.
-final discoveryFilterProvider = StateProvider<DiscoveryFilter>(
-  (ref) => const DiscoveryFilter(),
-);
+///
+/// Rebuilt to empty on account switch (watches the auth uid) AND
+/// persisted per-user (see [_filterKeyFor]) — without both, Lisa
+/// inherits Benjamin's filter: in-memory directly, or from disk on the
+/// next seed.
+final discoveryFilterProvider = StateProvider<DiscoveryFilter>((ref) {
+  ref.watch(authStateProvider.select((s) => s.userId));
+  return const DiscoveryFilter();
+});
 
-/// SharedPreferences key for the persisted discovery filter.
-const _filterStorageKey = 'discovery_filter_v1';
+/// Per-user SharedPreferences key for the persisted discovery filter.
+/// A global key leaks filters across accounts on shared devices.
+String _filterKeyFor(String? uid) => 'discovery_filter_v1_${uid ?? 'anon'}';
 
 /// Best-effort write-through of the user filter. Never blocks UI and
 /// never throws — a failed save just means "session only" this time.
-Future<void> _persistFilter(DiscoveryFilter filter) async {
+Future<void> _persistFilter(DiscoveryFilter filter, String? uid) async {
   try {
     final store = await LocalStorage.create().timeout(
       const Duration(seconds: 2),
     );
     await store
-        .setString(_filterStorageKey, jsonEncode(filter.toJson()))
+        .setString(_filterKeyFor(uid), jsonEncode(filter.toJson()))
         .timeout(const Duration(seconds: 2));
   } catch (_) {
     // Best-effort only.
@@ -161,7 +176,13 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
         debugPrint('[Discovery] filter changed: empty=${next.isEmpty}');
         // Write-through so the choice survives app restart. Reset also
         // flows through here (empty filter overwrites the stored one).
-        unawaited(_persistFilter(next));
+        // Per-user key: Benjamin's saved filter must not follow Lisa.
+        unawaited(
+          _persistFilter(
+            next,
+            ref.read(authStateProvider).userId,
+          ),
+        );
         // Skip during seed-restore: the seed calls _load() explicitly
         // right after, so loading here would fetch twice.
         if (_restoringFilter) return;
@@ -188,7 +209,10 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
     if (!ref.read(discoveryFilterProvider).isEmpty) return;
     try {
       final store = await _openFilterStore();
-      final raw = store?.getString(_filterStorageKey);
+      // Per-user key: a persisted filter belongs to whoever saved it.
+      final raw = store?.getString(
+        _filterKeyFor(ref.read(authStateProvider).userId),
+      );
       if (raw != null && raw.isNotEmpty && mounted) {
         final restored = DiscoveryFilter.fromJson(
           Map<String, dynamic>.from(jsonDecode(raw) as Map),
@@ -694,7 +718,14 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
     // push (not go): go() replaces the whole navigation stack, which leaves
     // the detail screen's back/dislike buttons (Navigator.maybePop) with
     // nothing to pop — they'd register the tap but do nothing visible.
-    context.push('/activity/${activity.id}');
+    // Guarded per activity: a double-tap before the first push registers
+    // creates two `activity-<id>` pages with the same key and throws
+    // '!keyReservation.contains(key)', breaking the navigator (blank
+    // screen) for every later push in that session.
+    NavGuard.onceFor(
+      'activity-details-${activity.id}',
+      () => context.push('/activity/${activity.id}'),
+    );
   }
 
   @override

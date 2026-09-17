@@ -56,9 +56,12 @@ class ActivityModel {
   /// Null means "full capacity".
   final int? minPlayers;
 
-  /// Host's average rating (0–5) and the number of games they've hosted —
-  /// shown as "★ 4.8 (32 games)" on the discovery card's social row.
-  final double hostRating;
+  /// Host's average rating (0–5) for this activity's sport, read from
+  /// `hostProfile.ratingBySport[sportType]` which the backend maintains
+  /// on every rating submit — plus the number of games they've hosted.
+  /// Null when the host has no ratings yet (UI shows "New host").
+  /// Never a placeholder: there is no fake 4.8 anywhere in this app.
+  final double? hostRating;
   final int hostGamesCount;
 
   /// Short atmosphere/expectation tags shown as small chips ("Friendly
@@ -131,8 +134,8 @@ class ActivityModel {
     this.feeMode = 'fixed',
     this.totalCost,
     this.minPlayers,
-    this.hostRating = 4.8,
-    this.hostGamesCount = 32,
+    this.hostRating,
+    this.hostGamesCount = 0,
     this.vibeTags = const ['Friendly people', 'Great vibes'],
     this.isParticipant = false,
     this.isHost = false,
@@ -397,6 +400,8 @@ class ActivityModel {
     // [lifecycleStatus] so the UI can still tell cancelled apart from
     // completed.
     final rawLifecycle = json['status']?.toString() ?? '';
+    final sport =
+        json['sportType'] as String? ?? json['sport_type'] as String? ?? '';
     var status = _statusFromString(json['status'] as String?);
     if (isHost) {
       status = ActivityStatus.hosted;
@@ -407,7 +412,7 @@ class ActivityModel {
     return ActivityModel(
       id: json['id']?.toString() ?? json['activityId']?.toString() ?? '',
       title: json['title'] as String? ?? '',
-      sportType: json['sportType'] as String? ?? json['sport_type'] as String? ?? '',
+      sportType: sport,
       description: json['description'] as String? ?? '',
       location:
           json['locationName'] as String? ?? json['location'] as String? ?? '',
@@ -433,8 +438,8 @@ class ActivityModel {
           (json['totalCost'] as num?)?.toDouble(),
       minPlayers: (json['min_players'] as num?)?.toInt() ??
           (json['minPlayers'] as num?)?.toInt(),
-      hostRating: (json['host_rating'] as num?)?.toDouble() ?? 4.8,
-      hostGamesCount: (json['host_games_count'] as num?)?.toInt() ?? 0,
+      hostRating: _hostRatingFor(json, sport),
+      hostGamesCount: _hostGamesFor(json),
       vibeTags:
           (json['vibe_tags'] as List?)?.map((e) => e.toString()).toList() ??
           const [],
@@ -458,6 +463,44 @@ class ActivityModel {
         'split' => 'split',
         _ => 'fixed',
       };
+
+  /// Real host rating for [sport] from `hostProfile.ratingBySport`
+  /// (`{average, count}` per sport, maintained server-side on every
+  /// rating submit). Null when the host has no ratings for the sport —
+  /// callers render "New host". The flat `host_rating` fallback only
+  /// exists for this model's own [toJson] round-trips.
+  static double? _hostRatingFor(Map<String, dynamic> json, String sport) {
+    final profile = json['hostProfile'];
+    final buckets = profile is Map<String, dynamic>
+        ? profile['ratingBySport']
+        : null;
+    final bucket = buckets is Map<String, dynamic> && sport.isNotEmpty
+        ? buckets[sport]
+        : null;
+    if (bucket is Map<String, dynamic>) {
+      final count = (bucket['count'] as num?)?.toInt() ?? 0;
+      if (count > 0) {
+        final avg = (bucket['average'] as num?)?.toDouble();
+        if (avg != null) return avg;
+      }
+    }
+    return (json['host_rating'] as num?)?.toDouble() ??
+        (json['hostRating'] as num?)?.toDouble();
+  }
+
+  /// Real hosted-games count from `hostProfile.hostedCount`
+  /// (falling back to `activitiesCount`, then legacy flat fields).
+  static int _hostGamesFor(Map<String, dynamic> json) {
+    final profile = json['hostProfile'];
+    final counts = profile is Map<String, dynamic>
+        ? ((profile['hostedCount'] as num?)?.toInt() ??
+            (profile['activitiesCount'] as num?)?.toInt())
+        : null;
+    return counts ??
+        (json['host_games_count'] as num?)?.toInt() ??
+        (json['hostGamesCount'] as num?)?.toInt() ??
+        0;
+  }
 
   static ActivityStatus _statusFromString(String? s) => switch (s) {
     'available' => ActivityStatus.available,

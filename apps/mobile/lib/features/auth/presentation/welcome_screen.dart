@@ -287,7 +287,7 @@ class _PillButton extends StatelessWidget {
   final bool outlined;
 
   /// True while the action is unavailable (e.g. social sign-in) — the
-  /// button renders visibly disabled with a caption instead of looking
+  /// button renders with an inline "SOON" badge instead of looking
   /// tappable and going nowhere.
   final bool comingSoon;
 
@@ -307,6 +307,7 @@ class _PillButton extends StatelessWidget {
         alignment: Alignment.center,
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             if (leading != null) ...[
               leading!,
@@ -315,12 +316,20 @@ class _PillButton extends StatelessWidget {
               Icon(icon, size: 20, color: textColor),
               const SizedBox(width: AppSpacing.x2),
             ],
-            Text(
-              label,
-              style: AppTypography.buttonPrimary.copyWith(
-                color: textColor,
+            Flexible(
+              child: Text(
+                label,
+                style: AppTypography.buttonPrimary.copyWith(
+                  color: textColor,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
+            if (comingSoon) ...[
+              const SizedBox(width: AppSpacing.x2),
+              _SoonBadge(textColor: textColor),
+            ],
           ],
         ),
       ),
@@ -336,22 +345,35 @@ class _PillButton extends StatelessWidget {
       button: true,
       label: '$label (coming soon)',
       enabled: false,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Opacity(
-            opacity: 0.5,
-            child: IgnorePointer(child: button),
-          ),
-          const SizedBox(height: AppSpacing.x1),
-          Text(
-            'Coming soon',
-            style: AppTypography.caption(context).copyWith(
-              color: context.colors.textSecondary,
-              fontSize: 12,
-            ),
-          ),
-        ],
+      child: IgnorePointer(child: button),
+    );
+  }
+}
+
+/// Inline "SOON" pill that lives inside a disabled button. Tinted from
+/// the button's own foreground color so it reads correctly on both the
+/// solid-black Apple button and the outlined Google button, in light
+/// and dark mode alike.
+class _SoonBadge extends StatelessWidget {
+  const _SoonBadge({required this.textColor});
+  final Color textColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: textColor.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+      ),
+      child: Text(
+        'SOON',
+        style: AppTypography.caption(context).copyWith(
+          color: textColor,
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.8,
+        ),
       ),
     );
   }

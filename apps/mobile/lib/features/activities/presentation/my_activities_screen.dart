@@ -11,6 +11,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/dark_colors.dart';
+import '../../../core/utils/nav_guard.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/asset_image.dart';
 import '../../../core/widgets/app_tab_bar.dart';
@@ -181,11 +182,20 @@ class _MyActivitiesScreenState extends ConsumerState<MyActivitiesScreen> {
               index: _tab,
               children: [
                 _UpcomingList(
-                  onTap: (a) => context.push('/joined-activity/${a.id}'),
+                  // Guarded per activity: a double-tap before the first
+                  // push registers creates two id-keyed pages and throws
+                  // '!keyReservation.contains(key)'. See NavGuard.
+                  onTap: (a) => NavGuard.onceFor(
+                    'joined-activity-${a.id}',
+                    () => context.push('/joined-activity/${a.id}'),
+                  ),
                 ),
                 _SimpleList(
                   provider: hostedGamesProvider,
-                  onTap: (a) => context.push('/manage-activity/${a.id}'),
+                  onTap: (a) => NavGuard.onceFor(
+                    'manage-activity-${a.id}',
+                    () => context.push('/manage-activity/${a.id}'),
+                  ),
                   emptyTitle: "You haven't hosted yet",
                   emptySubtitle: 'Create an activity and invite others to join.',
                   emptyIcon: Icons.emoji_events_outlined,
@@ -194,7 +204,10 @@ class _MyActivitiesScreenState extends ConsumerState<MyActivitiesScreen> {
                 ),
                 _SimpleList(
                   provider: pendingGamesProvider,
-                  onTap: (a) => context.push('/pending-request/${a.id}'),
+                  onTap: (a) => NavGuard.onceFor(
+                    'pending-request-${a.id}',
+                    () => context.push('/pending-request/${a.id}'),
+                  ),
                   pending: true,
                   emptyTitle: 'No pending requests',
                   emptySubtitle:
@@ -203,7 +216,10 @@ class _MyActivitiesScreenState extends ConsumerState<MyActivitiesScreen> {
                 ),
                 _SimpleList(
                   provider: pastGamesProvider,
-                  onTap: (a) => context.push('/past-activity/${a.id}/review'),
+                  onTap: (a) => NavGuard.onceFor(
+                    'past-activity-${a.id}',
+                    () => context.push('/past-activity/${a.id}/review'),
+                  ),
                   past: true,
                   emptyTitle: 'No past activities',
                   emptySubtitle: 'Your completed activities will appear here.',
