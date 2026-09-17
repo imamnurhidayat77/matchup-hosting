@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
@@ -122,7 +121,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
                   onTap: () {
                     // The notifications screen marks items read; refresh
                     // the badge when coming back.
-                    context.push('/notifications').then(
+                    NavGuard.push(context, '/notifications').then(
                       (_) => ref.invalidate(_unreadNotifCountProvider),
                     );
                   },
@@ -581,9 +580,7 @@ class _DmConversationListState extends ConsumerState<_DmConversationList>
               conversation: filtered[i],
               // pushOnce: repeat taps share the dm-$uid page key and
               // red-screen. Extra carries the peer name for the header.
-              onTap: () => NavGuard.pushOnce(
-                context,
-                'dm-${filtered[i].id}',
+              onTap: () => NavGuard.push(context,
                 '/dm/${filtered[i].id}',
                 extra: filtered[i].name,
               ),
@@ -666,9 +663,7 @@ class _ConversationListState extends ConsumerState<_ConversationList>
               // `filtered[i].id` is the activity id (per the local
               // seed and the backend contract for `/conversations`).
               // pushOnce: repeat taps share the page key and red-screen.
-              onTap: () => NavGuard.pushOnce(
-                context,
-                'chat-${filtered[i].id}',
+              onTap: () => NavGuard.push(context,
                 '/chat/${filtered[i].id}',
               ),
             ),

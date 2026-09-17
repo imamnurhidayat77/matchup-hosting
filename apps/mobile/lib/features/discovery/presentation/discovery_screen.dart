@@ -718,13 +718,12 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
     // push (not go): go() replaces the whole navigation stack, which leaves
     // the detail screen's back/dislike buttons (Navigator.maybePop) with
     // nothing to pop — they'd register the tap but do nothing visible.
-    // Guarded per activity: a double-tap before the first push registers
-    // creates two `activity-<id>` pages with the same key and throws
-    // '!keyReservation.contains(key)', breaking the navigator (blank
-    // screen) for every later push in that session.
-    NavGuard.onceFor(
-      'activity-details-${activity.id}',
-      () => context.push('/activity/${activity.id}'),
+    // Guarded per activity with an in-flight set (not a time debounce):
+    // the key stays reserved until the pushed page is popped, so a second
+    // tap — however late, however slow the transition — can never create
+    // a duplicate `activity-<id>` page ('!keyReservation' red screen).
+    NavGuard.push(context,
+      '/activity/${activity.id}',
     );
   }
 
@@ -746,7 +745,7 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
               HomeHeaderAction(
                 icon: Icons.tune_rounded,
                 semanticLabel: 'Filters',
-                onTap: () => context.push('/filter'),
+                onTap: () => NavGuard.push(context, '/filter'),
                 anchorKey: TourAnchors.filterButton,
                 // Subtle dot in the corner when a non-empty filter
                 // is active — tells the user the deck is filtered
@@ -761,7 +760,7 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
               HomeHeaderAction(
                 icon: Icons.notifications_none_rounded,
                 semanticLabel: 'Notifications',
-                onTap: () => context.push('/notifications'),
+                onTap: () => NavGuard.push(context, '/notifications'),
                 showDot: unreadCount > 0,
               ),
             ],

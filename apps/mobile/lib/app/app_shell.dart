@@ -76,11 +76,16 @@ class AppShell extends StatelessWidget {
     return -1;
   }
 
+  /// Exact `/activity/<id>` locations render full-screen (no tab bar).
+  /// Sibling screens (`/activity/<id>/full`, `/participants`) keep
+  /// theirs, as before.
+  static bool _isFullScreenDetail(String location) =>
+      RegExp(r'^/activity/[^/]+$').hasMatch(location);
+
   @override
   Widget build(BuildContext context) {
     final location = GoRouterState.of(context).matchedLocation;
     final index = _indexFor(location);
-
     return Scaffold(
       // TourHost inserts its spotlight into the Navigator-level Overlay
       // (via Overlay.of(context)), which always paints above the entire
@@ -91,12 +96,14 @@ class AppShell extends StatelessWidget {
       // which is what lets a step spotlight a tab-bar item even though the
       // tab bar lives outside `body`.
       body: TourHost(location: location, child: child),
-      // SafeArea (bottom) keeps the bar above the system navigation /
-      // gesture pill on real devices — without it the labels + home
-      // indicator render underneath the system bar and look cut off.
-      // The custom HomeIndicator stays (Figma reference); SafeArea only
-      // adds the OS-reserved inset below it.
-      bottomNavigationBar: SafeArea(
+      // The activity detail screen moved inside the shell (pushing a
+      // shell-child route from outside it duplicates the shell page and
+      // red-screens). It keeps its full-screen look by hiding the tab
+      // bar — matched exactly so sibling screens (full view,
+      // participants) keep theirs.
+      bottomNavigationBar: _isFullScreenDetail(location)
+          ? null
+          : SafeArea(
         top: false,
         child: Column(
           mainAxisSize: MainAxisSize.min,

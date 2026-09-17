@@ -566,9 +566,9 @@ class _HostCard extends StatelessWidget {
   void _messageHost(BuildContext context) {
     final id = hostId.trim();
     if (id.isNotEmpty) {
-      context.push('/dm/$id');
+      NavGuard.push(context, '/dm/$id');
     } else {
-      context.push('/chat/$activityId');
+      NavGuard.push(context, '/chat/$activityId');
     }
   }
 
@@ -579,9 +579,7 @@ class _HostCard extends StatelessWidget {
     return PressableScale(
       // pushOnce guard: duplicate pushes share a page key and
       // red-screen ('!keyReservation.contains(key)'). See NavGuard.
-      onTap: () => NavGuard.pushOnce(
-        context,
-        'host-profile-${hostId.trim().isNotEmpty ? hostId.trim() : hostName}',
+      onTap: () => NavGuard.push(context,
         hostId.trim().isNotEmpty
             ? '/player-profile/uid/${hostId.trim()}'
             : '/player-profile/$hostName',
@@ -972,7 +970,7 @@ class _ChatSection extends StatelessWidget {
               ],
               // Open Chat button
               PressableScale(
-                onTap: () => context.push('/chat/$activityId'),
+                onTap: () => NavGuard.push(context, '/chat/$activityId'),
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(
@@ -1230,7 +1228,7 @@ class _CheckInButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return PressableScale(
-      onTap: () => context.push('/check-in/$activityId'),
+      onTap: () => NavGuard.push(context, '/check-in/$activityId'),
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.x3 + 2),

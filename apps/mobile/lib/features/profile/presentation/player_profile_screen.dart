@@ -8,6 +8,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/dark_colors.dart';
+import '../../../core/utils/nav_guard.dart';
 import '../../../core/utils/share_helper.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_icon.dart';
@@ -456,7 +457,7 @@ class _ProfileContent extends StatelessWidget {
                           size: 18,
                           color: AppColors.textOnPrimary,
                         ),
-                        onPressed: () => context.push(
+                        onPressed: () => NavGuard.push(context,
                           '/dm/${user.id}',
                           extra: user.displayName,
                         ),

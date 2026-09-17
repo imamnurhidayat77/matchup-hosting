@@ -145,13 +145,13 @@ class _MyActivitiesScreenState extends ConsumerState<MyActivitiesScreen> {
               HomeHeaderAction(
                 icon: Icons.calendar_month_outlined,
                 semanticLabel: 'Calendar',
-                onTap: () => context.push('/calendar'),
+                onTap: () => NavGuard.push(context, '/calendar'),
               ),
               HomeHeaderAction(
                 icon: Icons.notifications_none_rounded,
                 semanticLabel: 'Notifications',
                 onTap: () {
-                  context.push('/notifications').then(
+                  NavGuard.push(context, '/notifications').then(
                     (_) => ref.invalidate(_unreadNotifCountProvider),
                   );
                 },
@@ -187,26 +187,26 @@ class _MyActivitiesScreenState extends ConsumerState<MyActivitiesScreen> {
                   // '!keyReservation.contains(key)'. See NavGuard.
                   onTap: (a) => NavGuard.onceFor(
                     'joined-activity-${a.id}',
-                    () => context.push('/joined-activity/${a.id}'),
+                    () => NavGuard.push(context, '/joined-activity/${a.id}'),
                   ),
                 ),
                 _SimpleList(
                   provider: hostedGamesProvider,
                   onTap: (a) => NavGuard.onceFor(
                     'manage-activity-${a.id}',
-                    () => context.push('/manage-activity/${a.id}'),
+                    () => NavGuard.push(context, '/manage-activity/${a.id}'),
                   ),
                   emptyTitle: "You haven't hosted yet",
                   emptySubtitle: 'Create an activity and invite others to join.',
                   emptyIcon: Icons.emoji_events_outlined,
                   emptyActionLabel: 'Create activity',
-                  onEmptyAction: () => context.push('/create'),
+                  onEmptyAction: () => NavGuard.push(context, '/create'),
                 ),
                 _SimpleList(
                   provider: pendingGamesProvider,
                   onTap: (a) => NavGuard.onceFor(
                     'pending-request-${a.id}',
-                    () => context.push('/pending-request/${a.id}'),
+                    () => NavGuard.push(context, '/pending-request/${a.id}'),
                   ),
                   pending: true,
                   emptyTitle: 'No pending requests',
@@ -218,7 +218,7 @@ class _MyActivitiesScreenState extends ConsumerState<MyActivitiesScreen> {
                   provider: pastGamesProvider,
                   onTap: (a) => NavGuard.onceFor(
                     'past-activity-${a.id}',
-                    () => context.push('/past-activity/${a.id}/review'),
+                    () => NavGuard.push(context, '/past-activity/${a.id}/review'),
                   ),
                   past: true,
                   emptyTitle: 'No past activities',

@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/providers/preferences_provider.dart';
 import '../../../core/providers/repository_providers.dart';
@@ -62,7 +61,7 @@ class _GetToKnow2ScreenState extends ConsumerState<GetToKnow2Screen> {
       unawaited(ref.read(sportPreferencesProvider.notifier).setAll(_sports));
       ref.read(distanceFilterProvider.notifier).set(_distanceKm);
       if (!mounted) return;
-      NavGuard.onceFor('gtk-2-next', () => context.push('/get-to-know-3'));
+      NavGuard.push(context, '/get-to-know-3');
       return;
     }
     setState(() => _saving = true);
@@ -85,7 +84,7 @@ class _GetToKnow2ScreenState extends ConsumerState<GetToKnow2Screen> {
       unawaited(ref.read(sportPreferencesProvider.notifier).setAll(_sports));
       ref.read(distanceFilterProvider.notifier).set(_distanceKm);
       if (!mounted) return;
-      NavGuard.onceFor('gtk-2-next', () => context.push('/get-to-know-3'));
+      NavGuard.push(context, '/get-to-know-3');
     } catch (_) {
       if (!mounted) return;
       AppSnackbar.show(

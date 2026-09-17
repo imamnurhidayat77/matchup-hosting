@@ -191,6 +191,35 @@ void main() {
     );
 
     testWidgets(
+      'rapid taps on the host card never duplicate the profile page '
+      '(regression: keyReservation red screen)',
+      (tester) async {
+        when(() => repo.byId(any())).thenAnswer(
+          (_) async => _fixture().copyWith(hostId: 'host-1'),
+        );
+
+        await pumpViaRealNavigation(
+          tester,
+          repo: repo,
+          via: (context) => context.push('/activity/a-1'),
+        );
+
+        // Three taps with no settling between them: without the
+        // in-flight guard the second push would create a duplicate
+        // `player-profile-uid-host-1` page and red-screen.
+        await tester.tap(find.text('James Wilson'));
+        await tester.pump(const Duration(milliseconds: 50));
+        await tester.tap(find.text('James Wilson'));
+        await tester.pump(const Duration(milliseconds: 50));
+        await tester.tap(find.text('James Wilson'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Host profile host-1'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
       'dislike (X) button actually returns to the previous screen when reached via push',
       (tester) async {
         await pumpViaRealNavigation(

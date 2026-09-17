@@ -53,9 +53,8 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
       // (GoRouter `extra` does not). ResetLinkSentScreen still falls
       // back to `extra` for backward compat.
       final encoded = Uri.encodeComponent(email);
-      NavGuard.onceFor(
-        'reset-link-sent',
-        () => context.push('/reset-link-sent?email=$encoded'),
+      NavGuard.push(context,
+        '/reset-link-sent?email=$encoded',
       );
     } catch (e) {
       if (!mounted) return;

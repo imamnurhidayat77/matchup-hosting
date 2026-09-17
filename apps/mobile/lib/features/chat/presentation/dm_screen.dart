@@ -475,9 +475,7 @@ class _DmHeader extends StatelessWidget {
                     button: true,
                     label: 'View $peerName profile',
                     child: GestureDetector(
-                    onTap: () => NavGuard.pushOnce(
-                      context,
-                      'profile-$peerUid',
+                    onTap: () => NavGuard.push(context,
                       '/player-profile/uid/$peerUid',
                     ),
                       behavior: HitTestBehavior.opaque,
@@ -609,9 +607,7 @@ class _DmSettingsSheet extends StatelessWidget {
               // (spaces, slashes, duplicates). Guarded: repeat pushes
               // share a page key and red-screen
               // ('!keyReservation.contains(key)').
-              NavGuard.pushOnce(
-                context,
-                'profile-$peerUid',
+              NavGuard.push(context,
                 '/player-profile/uid/$peerUid',
               );
             },

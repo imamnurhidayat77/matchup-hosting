@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:matchup_mobile/core/utils/nav_guard.dart';
 
 import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
@@ -72,7 +72,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       title: 'Calendar',
       showHomeIndicator: false,
       actions: [
-        NotificationIconButton(onTap: () => context.push('/notifications')),
+        NotificationIconButton(onTap: () => NavGuard.push(context, '/notifications')),
       ],
       body: Column(
         children: [
@@ -496,7 +496,7 @@ class _EventCard extends StatelessWidget {
         button: true,
         label: event.title,
         child: PressableScale(
-          onTap: () => context.push(_destination),
+          onTap: () => NavGuard.push(context, _destination),
           child: Container(
             padding: const EdgeInsets.all(AppSpacing.x3),
             decoration: BoxDecoration(
