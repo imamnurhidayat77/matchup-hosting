@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
+import 'package:matchup_mobile/core/utils/nav_guard.dart';
 
 import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
@@ -111,7 +111,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     if (!mounted) return;
     final route = routeForNotification(notif);
     if (route == null || route == '/notifications') return;
-    context.push(route);
+    NavGuard.push(context, route);
   }
 
   @override

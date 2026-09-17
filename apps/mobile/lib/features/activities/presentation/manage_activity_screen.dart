@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/providers/repository_providers.dart';
@@ -72,7 +71,7 @@ class _ManageActivityScreenState extends ConsumerState<ManageActivityScreen> {
   /// because its own snackbar would die with its route).
   Future<void> _openEdit(BuildContext context) async {
     final updated =
-        await context.push<bool>('/edit-activity/$activityId');
+        await NavGuard.pushT<bool>(context, '/edit-activity/$activityId');
     if (updated != true || !context.mounted) return;
     ref.invalidate(_manageProvider(activityId));
     ref.invalidate(hostedGamesProvider);
@@ -781,7 +780,7 @@ class _QuickActions extends StatelessWidget {
                 label: 'Edit',
                 iconColor: context.colors.primaryOnSurface,
                 bgColor: context.colors.primarySoft,
-                onTap: () => context.push('/edit-activity/$activityId'),
+                onTap: () => NavGuard.push(context, '/edit-activity/$activityId'),
               ),
             ),
             Expanded(
@@ -808,7 +807,7 @@ class _QuickActions extends StatelessWidget {
                 label: 'Roster',
                 iconColor: context.colors.textPrimary,
                 bgColor: context.colors.surfaceMuted,
-                onTap: () => context.push('/activity/$activityId/participants'),
+                onTap: () => NavGuard.push(context, '/activity/$activityId/participants'),
               ),
             ),
             Expanded(
@@ -817,7 +816,7 @@ class _QuickActions extends StatelessWidget {
                 label: 'Chat',
                 iconColor: context.colors.primaryOnSurface,
                 bgColor: context.colors.primarySoft,
-                onTap: () => context.push('/chat/$activityId'),
+                onTap: () => NavGuard.push(context, '/chat/$activityId'),
               ),
             ),
           ],
@@ -1002,7 +1001,7 @@ class _ShareSheet extends StatelessWidget {
                 bgColor: context.colors.statusSuccessBg,
                 onTap: () {
                   Navigator.of(context).pop();
-                  context.push('/chat/${activity.id}');
+                  NavGuard.push(context, '/chat/${activity.id}');
                 },
               ),
               const SizedBox(width: AppSpacing.x3),
@@ -1336,7 +1335,7 @@ class _ParticipantsSection extends StatelessWidget {
               feedback: AppTapFeedback.scale,
               minSize: 0,
               onTap: () =>
-                  context.push('/activity/$activityId/participants'),
+                  NavGuard.push(context, '/activity/$activityId/participants'),
               child: Text(
                 'View all',
                 style: AppTypography.chipLabel(context).copyWith(
@@ -1565,9 +1564,7 @@ class _JoinRequestRow extends StatelessWidget {
               semanticLabel: 'View ${item.name} profile',
               feedback: AppTapFeedback.scale,
               // pushOnce guard (duplicate page keys red-screen).
-              onTap: () => NavGuard.pushOnce(
-                context,
-                'profile-${item.userId.isNotEmpty ? item.userId : item.name}',
+              onTap: () => NavGuard.push(context,
                 item.userId.isNotEmpty
                     ? '/player-profile/uid/${item.userId}'
                     : '/player-profile/${item.name}',

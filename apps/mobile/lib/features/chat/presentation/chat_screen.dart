@@ -195,7 +195,7 @@ Future<void> setChatMuted(String activityId, bool muted) async {
 void _openSenderProfile(BuildContext context, String senderId) {
   final uid = senderId.trim();
   if (uid.isEmpty) return;
-  NavGuard.pushOnce(context, 'profile-$uid', '/player-profile/uid/$uid');
+  NavGuard.push(context, '/player-profile/uid/$uid');
 }
 
 /// Fetches the activity for the chat header. Returns the full
@@ -1068,7 +1068,7 @@ class _MatchBannerState extends State<_MatchBanner> {
               button: true,
               label: 'Check in to this activity',
               child: PressableScale(
-                onTap: () => context.push('/check-in/${activity.id}'),
+                onTap: () => NavGuard.push(context, '/check-in/${activity.id}'),
                 child: Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.x4,
@@ -2420,7 +2420,7 @@ class _ChatSettingsSheetState extends State<_ChatSettingsSheet> {
             label: 'View activity details',
             onTap: () {
               Navigator.of(context).pop();
-              context.push(_detailsRoute(widget.activity, widget.activityId));
+              NavGuard.push(context, _detailsRoute(widget.activity, widget.activityId));
             },
           ),
           _SettingsRow(
@@ -2428,7 +2428,7 @@ class _ChatSettingsSheetState extends State<_ChatSettingsSheet> {
             label: 'Photo moments',
             onTap: () {
               Navigator.of(context).pop();
-              context.push('/chat/${widget.activityId}/moments');
+              NavGuard.push(context, '/chat/${widget.activityId}/moments');
             },
           ),
           if (_muted != null)

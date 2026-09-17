@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:matchup_mobile/core/utils/nav_guard.dart';
 
 import '../../../core/providers/auth_state_provider.dart';
 import '../../../core/providers/profile_providers.dart';
@@ -69,7 +70,7 @@ class ProfileScreen extends ConsumerWidget {
                 AppTappable(
                   semanticLabel: 'Notifications',
                   feedback: AppTapFeedback.scale,
-                  onTap: () => context.push('/notifications'),
+                  onTap: () => NavGuard.push(context, '/notifications'),
                   minSize: 44,
                   child: Container(
                     width: 44,
@@ -243,7 +244,7 @@ class _AvatarCard extends StatelessWidget {
                     semanticLabel: 'Edit profile photo',
                     feedback: AppTapFeedback.scale,
                     minSize: 28,
-                    onTap: () => context.push('/edit-profile'),
+                    onTap: () => NavGuard.push(context, '/edit-profile'),
                     child: Container(
                       width: 26,
                       height: 26,
@@ -515,19 +516,19 @@ class _OptionsCard extends ConsumerWidget {
           _OptionRow(
             icon: Icons.person_outline_rounded,
             label: 'Edit Profile',
-            onTap: () => context.push('/edit-profile'),
+            onTap: () => NavGuard.push(context, '/edit-profile'),
           ),
           _Divider(),
           _OptionRow(
             icon: Icons.calendar_month_outlined,
             label: 'Calendar',
-            onTap: () => context.push('/calendar'),
+            onTap: () => NavGuard.push(context, '/calendar'),
           ),
           _Divider(),
           _OptionRow(
             icon: Icons.notifications_none_rounded,
             label: 'Notification Settings',
-            onTap: () => context.push('/notification-settings'),
+            onTap: () => NavGuard.push(context, '/notification-settings'),
           ),
           _Divider(),
           _OptionRow(

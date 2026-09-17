@@ -730,9 +730,7 @@ class _HostCard extends StatelessWidget {
         // pushOnce: repeat taps while the profile is open are ignored,
         // so duplicate page keys can never red-screen. See NavGuard.
         onTap: canOpen
-            ? () => NavGuard.pushOnce(
-                  context,
-                  'host-profile-$hostId',
+            ? () => NavGuard.push(context,
                   '/player-profile/uid/${hostId.trim()}',
                 )
             : null,

@@ -319,9 +319,7 @@ class _HostRow extends StatelessWidget {
       child: GestureDetector(
         // Same pushOnce guard as the standard detail host card.
         onTap: canOpen
-            ? () => NavGuard.pushOnce(
-                  context,
-                  'host-profile-$hostId',
+            ? () => NavGuard.push(context,
                   '/player-profile/uid/$hostId',
                 )
             : null,

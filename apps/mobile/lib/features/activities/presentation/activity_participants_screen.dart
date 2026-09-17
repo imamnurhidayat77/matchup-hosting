@@ -278,9 +278,7 @@ class _ParticipantCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return PressableScale(
       // pushOnce guard (duplicate page keys red-screen).
-      onTap: () => NavGuard.pushOnce(
-        context,
-        'profile-${item.userId.isNotEmpty ? item.userId : item.name}',
+      onTap: () => NavGuard.push(context,
         item.userId.isNotEmpty
             ? '/player-profile/uid/${item.userId}'
             : '/player-profile/${item.name}',

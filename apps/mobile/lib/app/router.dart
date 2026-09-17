@@ -222,25 +222,32 @@ GoRouter buildRouter(Ref ref) {
       // has no bottom navigation on this screen — its footer holds only the home
       // indicator. Note that joined-activity-detail (74:5) DOES keep the tab
       // bar, so only this route is hoisted out.
-      //
-      // Must be reached via context.push, never context.go — its back/dislike
-      // buttons call Navigator.maybePop(), which needs a route to pop back to.
-      // See test/widget/activity_detail_buttons_test.dart for the regression
-      // this documents (PRD Appendix B.3).
-      GoRoute(
-        path: '/activity/:id',
-        pageBuilder: (_, state) {
-          final id = state.pathParameters['id'] ?? '1';
-          return appPage(
-            state,
-            ActivityDetailScreen(activityId: id),
-            key: ValueKey('activity-$id'),
-          );
-        },
-      ),
       ShellRoute(
         builder: (context, state, child) => AppShell(child: child),
         routes: [
+          // Activity detail lives INSIDE the shell (not top-level):
+          // pushing a shell-child route (host profile, full view,
+          // participants…) from a top-level screen re-adds the shell
+          // page with an identical key and red-screens
+          // ('!keyReservation.contains(key)'). Intra-shell pushes never
+          // duplicate. The tab bar stays hidden on exact detail
+          // locations (see AppShell) so the full-screen look is kept.
+          //
+          // Must be reached via context.push, never context.go — its back/dislike
+          // buttons call Navigator.maybePop(), which needs a route to pop back to.
+          // See test/widget/activity_detail_buttons_test.dart for the regression
+          // this documents (PRD Appendix B.3).
+          GoRoute(
+            path: '/activity/:id',
+            pageBuilder: (_, state) {
+              final id = state.pathParameters['id'] ?? '1';
+              return appPage(
+                state,
+                ActivityDetailScreen(activityId: id),
+                key: ValueKey('activity-$id'),
+              );
+            },
+          ),
           // Tab roots — reached only via context.go() from AppShell's tab
           // bar (or the auth/flow redirects above). go() replaces the
           // shell's matched child in place rather than pushing a page, so

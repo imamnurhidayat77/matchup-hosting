@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_colors.dart';
@@ -49,7 +48,7 @@ class _GetToKnow1ScreenState extends ConsumerState<GetToKnow1Screen> {
       if (!mounted) return;
       // Guarded: double-tap would push two /get-to-know-2 pages with the
       // same Page key → '!keyReservation.contains(key)' crash.
-      NavGuard.onceFor('gtk-1-next', () => context.push('/get-to-know-2'));
+      NavGuard.push(context, '/get-to-know-2');
     } catch (_) {
       if (!mounted) return;
       AppSnackbar.show(

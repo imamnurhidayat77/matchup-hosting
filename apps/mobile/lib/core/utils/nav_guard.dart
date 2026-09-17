@@ -84,6 +84,43 @@ class NavGuard {
     _inFlight.clear();
   }
 
+  /// Pushes [location] once per location: repeat taps for the same
+  /// destination while its page is still on the stack are ignored, so
+  /// duplicate page keys (`'!keyReservation.contains(key)'` red screen)
+  /// are impossible app-wide no matter how slow the transition is.
+  /// The key releases when the pushed route pops (or is replaced), so
+  /// legitimate re-entry always works. Fire-and-forget safe.
+  static Future<void> push(
+    BuildContext context,
+    String location, {
+    Object? extra,
+  }) async {
+    if (_inFlight.contains(location)) return;
+    _inFlight.add(location);
+    try {
+      await context.push(location, extra: extra);
+    } finally {
+      _inFlight.remove(location);
+    }
+  }
+
+  /// Typed variant of [push] for callers that await a pop result
+  /// (e.g. edit screens popping `true` on save). A swallowed duplicate
+  /// resolves `null`, which callers already treat as "no change".
+  static Future<T?> pushT<T>(
+    BuildContext context,
+    String location, {
+    Object? extra,
+  }) async {
+    if (_inFlight.contains(location)) return null;
+    _inFlight.add(location);
+    try {
+      return await context.push<T>(location, extra: extra);
+    } finally {
+      _inFlight.remove(location);
+    }
+  }
+
   /// In-flight pushes by key. A key stays reserved from `push` until
   /// the pushed route is popped (`context.push` completes on pop), so
   /// a repeat tap can never create a duplicate page — no matter how
