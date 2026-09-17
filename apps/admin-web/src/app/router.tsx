@@ -13,6 +13,7 @@ import { AnalyticsPage } from '../pages/analytics/AnalyticsPage';
 import { SportsPage } from '../pages/sports/SportsPage';
 import { AppealsPage } from '../pages/appeals/AppealsPage';
 import { NotificationTemplatesPage } from '../pages/notifications/NotificationTemplatesPage';
+import { AuditLogPage } from '../pages/audit/AuditLogPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 
 function Shell({ children }: { children: React.ReactNode }) {
@@ -36,6 +37,7 @@ const router = createBrowserRouter([
   { path: '/analytics',             element: <Shell><AnalyticsPage /></Shell> },
   { path: '/appeals',               element: <Shell><AppealsPage /></Shell> },
   { path: '/notification-templates',element: <Shell><NotificationTemplatesPage /></Shell> },
+  { path: '/audit-log',             element: <Shell><AuditLogPage /></Shell> },
   { path: '*',                      element: <Shell><NotFoundPage /></Shell> },
 ]);
 

@@ -33,7 +33,7 @@ describe('Sidebar', () => {
         <Sidebar />
       </MemoryRouter>,
     );
-    for (const label of ['Dashboard', 'Members', 'Activities', 'Reports', 'Broadcasts', 'Appeals', 'Sports', 'Analytics']) {
+    for (const label of ['Dashboard', 'Members', 'Activities', 'Reports', 'Broadcasts', 'Appeals', 'Sports', 'Analytics', 'Audit Log']) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
   });
