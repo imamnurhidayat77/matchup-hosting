@@ -6,7 +6,12 @@ vi.mock('../../database/firebase.js', () => ({
     rtdb: {},
 }));
 
+vi.mock('./audit.service.js', () => ({
+    logAdminAction: vi.fn(),
+}));
+
 import { firestore } from '../../database/firebase.js';
+import { logAdminAction } from './audit.service.js';
 import { listTemplates, updateTemplate } from './templates.service.js';
 
 function mockTemplates(seed: Record<string, Record<string, unknown>> = {}) {
@@ -64,10 +69,11 @@ describe('listTemplates', () => {
 describe('updateTemplate', () => {
     it('patches copy fields and stamps edit time', async () => {
         mockTemplates({ 'activity.joined': templateRow() });
-        const row = await updateTemplate('activity.joined', {
-            title: 'Hi!',
-            enabled: false,
-        });
+        const row = await updateTemplate(
+            'activity.joined',
+            { title: 'Hi!', enabled: false },
+            'admin-1',
+        );
         expect(row).toMatchObject({ title: 'Hi!', enabled: false });
         expect(row.lastEditedAt).not.toBeNull();
     });
@@ -75,12 +81,12 @@ describe('updateTemplate', () => {
     it('rejects blank copy and wrong types', async () => {
         mockTemplates({ 'activity.joined': templateRow() });
         await expect(
-            updateTemplate('activity.joined', { title: '  ' }),
+            updateTemplate('activity.joined', { title: '  ' }, 'admin-1'),
         ).rejects.toThrow('title is required');
         await expect(
-            updateTemplate('activity.joined', { enabled: 'yes' }),
+            updateTemplate('activity.joined', { enabled: 'yes' }, 'admin-1'),
         ).rejects.toThrow('enabled must be a boolean');
-        await expect(updateTemplate('activity.joined', {})).rejects.toThrow(
+        await expect(updateTemplate('activity.joined', {}, 'admin-1')).rejects.toThrow(
             'No updatable template fields provided',
         );
     });
@@ -88,7 +94,22 @@ describe('updateTemplate', () => {
     it('throws for missing template', async () => {
         mockTemplates({});
         await expect(
-            updateTemplate('ghost', { title: 'Hi' }),
+            updateTemplate('ghost', { title: 'Hi' }, 'admin-1'),
         ).rejects.toThrow('Template not found');
+    });
+
+    it('logs the copy change with before/after state', async () => {
+        mockTemplates({ 'activity.joined': templateRow() });
+        await updateTemplate('activity.joined', { title: 'Hi!' }, 'admin-1', 'admin@x.com');
+        expect(logAdminAction).toHaveBeenCalledWith(
+            expect.objectContaining({
+                category: 'Templates',
+                action: 'template.update',
+                adminUid: 'admin-1',
+                adminEmail: 'admin@x.com',
+                targetId: 'activity.joined',
+                after: { title: 'Hi!' },
+            }),
+        );
     });
 });

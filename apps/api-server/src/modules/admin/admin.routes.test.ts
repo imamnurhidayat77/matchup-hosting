@@ -165,7 +165,7 @@ describe('admin routes', () => {
             .put('/api/admin/sports')
             .send({ sports: [] });
         expect(response.status).toBe(200);
-        expect(sportsService.replaceSports).toHaveBeenCalledWith([]);
+        expect(sportsService.replaceSports).toHaveBeenCalledWith([], 'admin-1', null);
     });
 
     it('GET /api/public/sports returns enabled rows without counts', async () => {
