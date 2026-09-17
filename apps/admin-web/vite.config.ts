@@ -14,6 +14,16 @@ export default defineConfig({
       reporter: ['text', 'html'],
       include: ['src/**/*.{ts,tsx}'],
       exclude: ['src/main.tsx', 'src/**/*.d.ts', 'src/test/**'],
+      // Floors, not goals: measured ~19% lines / ~77% branches at
+      // introduction (only a first slice of services/hooks/components/
+      // pages is covered so far) — these lock the floor so coverage can
+      // only ratchet upward. Raise deliberately when new suites land.
+      thresholds: {
+        lines: 18,
+        functions: 55,
+        branches: 70,
+        statements: 18,
+      },
     },
   },
 })
