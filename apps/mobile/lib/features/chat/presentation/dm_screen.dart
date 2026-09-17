@@ -467,31 +467,53 @@ class _DmHeader extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: AppSpacing.x2),
-                // White ring so the avatar reads crisply on navy.
-                Container(
-                  padding: const EdgeInsets.all(2),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.5),
-                      width: 1.5,
-                    ),
-                  ),
-                  child: AppAvatar(
-                    imageUrl: peerPhotoUrl,
-                    name: peerName,
-                    size: AppAvatarSize.sm,
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.x3),
+                // Avatar + name — tappable to the peer profile.
+                // Photo comes from the peer lookup (best-effort); the
+                // settings sheet keeps a second entry point.
                 Expanded(
-                  child: Text(
-                    peerName,
-                    style: AppTypography.titleMedium(
-                      context,
-                    ).copyWith(color: Colors.white),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  child: Semantics(
+                    button: true,
+                    label: 'View $peerName profile',
+                    child: GestureDetector(
+                      onTap: () => NavGuard.onceFor(
+                        'profile-$peerUid',
+                        () => context.push(
+                          '/player-profile/uid/$peerUid',
+                        ),
+                      ),
+                      behavior: HitTestBehavior.opaque,
+                      child: Row(
+                        children: [
+                          // White ring so the avatar reads crisply on navy.
+                          Container(
+                            padding: const EdgeInsets.all(2),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.5),
+                                width: 1.5,
+                              ),
+                            ),
+                            child: AppAvatar(
+                              imageUrl: peerPhotoUrl,
+                              name: peerName,
+                              size: AppAvatarSize.sm,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.x3),
+                          Expanded(
+                            child: Text(
+                              peerName,
+                              style: AppTypography.titleMedium(
+                                context,
+                              ).copyWith(color: Colors.white),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(width: AppSpacing.x3),

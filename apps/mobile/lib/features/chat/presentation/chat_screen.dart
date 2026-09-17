@@ -21,6 +21,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/dark_colors.dart';
+import '../../../core/utils/nav_guard.dart';
 import '../../../core/widgets/app_avatar.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_snackbar.dart';
@@ -186,6 +187,17 @@ Future<void> setChatMuted(String activityId, bool muted) async {
     if (muted) next.add(activityId);
     await prefs.setStringList(mutedChatsKey, next);
   } catch (_) {}
+}
+
+/// Opens a chat sender's profile from an avatar or name tap. Guarded
+/// against double-tap (duplicate page keys red-screen) and empty ids.
+void _openSenderProfile(BuildContext context, String senderId) {
+  final uid = senderId.trim();
+  if (uid.isEmpty) return;
+  NavGuard.onceFor(
+    'profile-$uid',
+    () => context.push('/player-profile/uid/$uid'),
+  );
 }
 
 /// Fetches the activity for the chat header. Returns the full
@@ -1398,16 +1410,22 @@ class _Bubble extends StatelessWidget {
         crossAxisAlignment:
             isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
-          // Sender name — above first bubble of a run (others only)
+          // Sender name — above first bubble of a run (others only).
+          // Tappable: opens the sender's profile (same guarded push as
+          // every other profile entry point — duplicate keys red-screen).
           if (item.showSenderName)
             Padding(
               padding: const EdgeInsets.only(left: 44, bottom: 4),
-              child: Text(
-                msg.senderName,
-                style: AppTypography.metaSub(context).copyWith(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: context.colors.textSecondary,
+              child: GestureDetector(
+                onTap: () => _openSenderProfile(context, msg.senderId),
+                behavior: HitTestBehavior.opaque,
+                child: Text(
+                  msg.senderName,
+                  style: AppTypography.metaSub(context).copyWith(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: context.colors.textSecondary,
+                  ),
                 ),
               ),
             ),
@@ -1417,16 +1435,26 @@ class _Bubble extends StatelessWidget {
                 isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              // Avatar column (others only)
+              // Avatar column (others only) — tappable to the profile.
+              // Photo comes from the roster (profile photoUrl); initials
+              // when the sender has none.
               if (!isMine) ...[
                 SizedBox(
                   width: 36,
                   child: item.showAvatar
-                      ? AppAvatar(
-                          imageUrl: msg.senderAvatarUrl,
-                          assetPath: msg.senderAvatarAsset,
-                          name: msg.senderName,
-                          size: AppAvatarSize.sm,
+                      ? Semantics(
+                          button: true,
+                          label: 'View ${msg.senderName} profile',
+                          child: GestureDetector(
+                            onTap: () =>
+                                _openSenderProfile(context, msg.senderId),
+                            child: AppAvatar(
+                              imageUrl: msg.senderAvatarUrl,
+                              assetPath: msg.senderAvatarAsset,
+                              name: msg.senderName,
+                              size: AppAvatarSize.sm,
+                            ),
+                          ),
                         )
                       : null,
                 ),
@@ -1751,12 +1779,17 @@ class _PollCard extends StatelessWidget {
           if (item.showSenderName)
             Padding(
               padding: const EdgeInsets.only(left: 44, bottom: 4),
-              child: Text(
-                creatorName,
-                style: AppTypography.metaSub(context).copyWith(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: context.colors.textSecondary,
+              child: GestureDetector(
+                onTap: () =>
+                    _openSenderProfile(context, item.poll.createdBy),
+                behavior: HitTestBehavior.opaque,
+                child: Text(
+                  creatorName,
+                  style: AppTypography.metaSub(context).copyWith(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: context.colors.textSecondary,
+                  ),
                 ),
               ),
             ),

@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:mocktail/mocktail.dart';
 
 import 'package:matchup_mobile/core/providers/repository_providers.dart';
+import 'package:matchup_mobile/core/widgets/app_avatar.dart';
 import 'package:matchup_mobile/features/activities/domain/activity_model.dart';
 import 'package:matchup_mobile/features/activities/domain/activity_participant.dart';
 import 'package:matchup_mobile/features/chat/data/chat_repository.dart';
@@ -133,6 +134,12 @@ void main() {
           path: '/activity/:id',
           builder: (_, state) => Scaffold(
             body: Text('Discover ${state.pathParameters['id']}'),
+          ),
+        ),
+        GoRoute(
+          path: '/player-profile/uid/:uid',
+          builder: (_, state) => Scaffold(
+            body: Text('Profile ${state.pathParameters['uid']}'),
           ),
         ),
       ],
@@ -506,6 +513,39 @@ void main() {
           optionIndex: 1,
         ),
       ).called(1);
+    });
+
+    testWidgets('tapping a sender avatar opens their profile', (
+      tester,
+    ) async {
+      final today = DateTime.now();
+      when(() => repo.watchMessages(any())).thenAnswer(
+        (_) => Stream.value([
+          ChatMessage(
+            id: '1',
+            senderId: 'alex-uid',
+            senderName: 'Alex',
+            text: 'Hey there',
+            sentAt: DateTime(today.year, today.month, today.day, 9, 0),
+          ),
+        ]),
+      );
+      when(() => repo.watchPolls(any())).thenAnswer(
+        (_) => Stream.value(const <ChatPoll>[]),
+      );
+
+      await pumpScreen(tester);
+      await tester.pumpAndSettle();
+
+      // Avatar carries an accessibility label (merged with the
+      // initials fallback text) and both avatar + name navigate.
+      final sem = tester.getSemantics(find.byType(AppAvatar));
+      expect(sem.label, contains('View Alex profile'));
+
+      await tester.tap(find.text('Alex'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Profile alex-uid'), findsOneWidget);
     });
 
     group('View activity details routing', () {
