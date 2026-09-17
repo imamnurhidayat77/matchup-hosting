@@ -10,7 +10,12 @@ vi.mock('../notifications/notifications.service.js', () => ({
     createNotification: vi.fn().mockResolvedValue({ notificationId: 'n-1' }),
 }));
 
+vi.mock('./audit.service.js', () => ({
+    logAdminAction: vi.fn(),
+}));
+
 import { firestore } from '../../database/firebase.js';
+import { logAdminAction } from './audit.service.js';
 import { createNotification } from '../notifications/notifications.service.js';
 import {
     createBroadcast,
@@ -103,6 +108,13 @@ describe('createBroadcast', () => {
             'admin-1',
         );
         expect(scheduled.status).toBe('scheduled');
+        expect(logAdminAction).toHaveBeenCalledWith(
+            expect.objectContaining({
+                category: 'Broadcasts',
+                action: 'broadcast.create',
+                adminUid: 'admin-1',
+            }),
+        );
     });
 
     it('rejects bad audience and blank title', async () => {
@@ -126,22 +138,32 @@ describe('updateBroadcast', () => {
                 status: 'draft',
             },
         });
-        const row = await updateBroadcast('b-1', {
-            title: 'New',
-            status: 'sent',
-            recipients: 999,
-        });
+        const row = await updateBroadcast(
+            'b-1',
+            { title: 'New', status: 'sent', recipients: 999 },
+            'admin-1',
+            'admin@x.com',
+        );
         expect(row.title).toBe('New');
         expect(row.status).toBe('draft');
         expect(row.recipients).toBe(0);
         expect(store.get('b-1')).toMatchObject({ title: 'New' });
+        expect(logAdminAction).toHaveBeenCalledWith(
+            expect.objectContaining({
+                category: 'Broadcasts',
+                action: 'broadcast.update',
+                adminUid: 'admin-1',
+                adminEmail: 'admin@x.com',
+                targetId: 'b-1',
+            }),
+        );
     });
 
     it('refuses to edit sent broadcasts', async () => {
         mockBroadcasts({
             'b-1': { title: 'T', message: 'M', audience: 'All Users', status: 'sent' },
         });
-        await expect(updateBroadcast('b-1', { title: 'X' })).rejects.toThrow(
+        await expect(updateBroadcast('b-1', { title: 'X' }, 'admin-1')).rejects.toThrow(
             'Sent broadcasts cannot be edited',
         );
     });
@@ -152,12 +174,22 @@ describe('sendBroadcast', () => {
         mockBroadcasts({
             'b-1': { title: 'Hi', message: 'Hello all', audience: 'All Users', status: 'draft' },
         });
-        const row = await sendBroadcast('b-1');
+        const row = await sendBroadcast('b-1', 'admin-1', 'admin@x.com');
         expect(row.status).toBe('sent');
         expect(row.recipients).toBe(2);
         expect(createNotification).toHaveBeenCalledTimes(2);
         expect(createNotification).toHaveBeenCalledWith(
             expect.objectContaining({ type: 'system', title: 'Hi' }),
+        );
+        expect(logAdminAction).toHaveBeenCalledWith(
+            expect.objectContaining({
+                category: 'Broadcasts',
+                action: 'broadcast.send',
+                adminUid: 'admin-1',
+                adminEmail: 'admin@x.com',
+                targetId: 'b-1',
+                after: { status: 'sent', recipients: 2 },
+            }),
         );
     });
 
@@ -165,7 +197,7 @@ describe('sendBroadcast', () => {
         mockBroadcasts({
             'b-1': { title: 'H', message: 'M', audience: 'Hosts Only', status: 'draft' },
         });
-        const row = await sendBroadcast('b-1');
+        const row = await sendBroadcast('b-1', 'admin-1');
         expect(row.recipients).toBe(1);
         expect(createNotification).toHaveBeenCalledWith(
             expect.objectContaining({ recipientUid: 'u-1' }),
@@ -176,7 +208,7 @@ describe('sendBroadcast', () => {
         mockBroadcasts({
             'b-1': { title: 'H', message: 'M', audience: 'All Users', status: 'sent' },
         });
-        await expect(sendBroadcast('b-1')).rejects.toThrow('Broadcast already sent');
+        await expect(sendBroadcast('b-1', 'admin-1')).rejects.toThrow('Broadcast already sent');
     });
 });
 
@@ -186,15 +218,24 @@ describe('listBroadcasts + deleteBroadcast', () => {
             'b-1': { title: 'T', message: 'M', audience: 'All Users', status: 'draft' },
         });
         expect(await listBroadcasts()).toHaveLength(1);
-        await deleteBroadcast('b-1');
+        await deleteBroadcast('b-1', 'admin-1', 'admin@x.com');
         expect(await listBroadcasts()).toHaveLength(0);
+        expect(logAdminAction).toHaveBeenCalledWith(
+            expect.objectContaining({
+                category: 'Broadcasts',
+                action: 'broadcast.delete',
+                adminUid: 'admin-1',
+                adminEmail: 'admin@x.com',
+                targetId: 'b-1',
+            }),
+        );
     });
 
     it('refuses to delete sent broadcasts', async () => {
         mockBroadcasts({
             'b-1': { title: 'T', message: 'M', audience: 'All Users', status: 'sent' },
         });
-        await expect(deleteBroadcast('b-1')).rejects.toThrow(
+        await expect(deleteBroadcast('b-1', 'admin-1')).rejects.toThrow(
             'Sent broadcasts cannot be deleted',
         );
     });
