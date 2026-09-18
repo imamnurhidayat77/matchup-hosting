@@ -16,6 +16,7 @@ import '../../../core/network/api_client.dart';
 import '../../../core/providers/auth_state_provider.dart';
 import '../../../core/providers/repository_providers.dart';
 import '../../../core/services/location_service.dart';
+import '../../../core/services/storage_service.dart';
 import '../../../core/storage/secure_token_store.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -162,6 +163,7 @@ Future<void> _votePoll(
 /// every other photo failure keeps the generic copy.
 String _photoErrorMessage(Object e) {
   const unavailable = 'Photo uploads are unavailable right now';
+  if (e is ImageTooLargeException) return e.message;
   if (e.toString().contains(unavailable)) return unavailable;
   return 'Could not send photo.';
 }

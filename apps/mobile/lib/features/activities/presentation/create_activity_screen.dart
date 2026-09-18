@@ -757,6 +757,23 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
     // else (e.g. `uploads/activity-covers/…`) is denied and used to
     // fail silently, leaving every game photoless.
     final coverBytes = _decodeCoverBytes(data.coverImagePath);
+    // Fail fast on oversized covers (8 MB server cap): stay on the
+    // form with the reason so the user can pick a smaller photo —
+    // never create the game first and silently drop the cover.
+    if (coverBytes != null &&
+        coverBytes.lengthInBytes > kMaxCoverImageBytes) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      AppSnackbar.show(
+        context,
+        message: ImageTooLargeException(
+          kMaxCoverImageBytes,
+          coverBytes.lengthInBytes,
+        ).message,
+        variant: AppSnackbarVariant.error,
+      );
+      return;
+    }
     // Weather snapshot (best-effort): captured now so the detail screen
     // can show it without another lookup. Null when unavailable — the
     // detail falls back to a live Open-Meteo fetch instead.

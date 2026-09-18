@@ -619,6 +619,9 @@ class RemoteChatRepository implements ChatRepository {
     // as the message text. The local bubble keeps `imagePath` so the
     // photo renders inline immediately.
     try {
+      // Fail fast on oversized picks (8 MB server cap): the denial
+      // must surface as a "too large" alert, never as a silent drop.
+      await StorageService.checkImageSize(imagePath, kMaxChatImageBytes);
       final uploadedUrl = await StorageService.instance.uploadImage(
         localPath: imagePath,
         folder: 'chat-attachments/$activityId',
@@ -643,9 +646,10 @@ class RemoteChatRepository implements ChatRepository {
       );
     } catch (e, st) {
       debugPrint('[RemoteChatRepository.sendImage] $e\n$st');
-      // The upload-unavailable signal must reach the screen verbatim
-      // (it renders as its own snackbar copy) — never downgrade it to
-      // the generic offline fallback error.
+      // The upload-unavailable and too-large signals must reach the
+      // screen verbatim (each renders as its own snackbar copy) —
+      // never downgrade them to the generic offline fallback error.
+      if (e is ImageTooLargeException) rethrow;
       if (e.toString().contains('Photo uploads are unavailable')) rethrow;
       return _fallback.sendImage(activityId: activityId, imagePath: imagePath);
     }
