@@ -94,6 +94,10 @@ class LocalActivityRepository implements ActivityRepository {
     String feeMode = 'fixed',
     double? totalCost,
     int? minPlayers,
+    double? weatherTemp,
+    int? weatherCode,
+    String? weatherDesc,
+    int? weatherRain,
   }) async {
     // Writes only succeed against the backend. The fallback here is
     // a no-op: we don't fabricate a fake activity just because the
@@ -177,6 +181,8 @@ class LocalActivityRepository implements ActivityRepository {
     String? skillLevel,
     int? capacity,
     String? joinPolicy,
+    bool? isPaid,
+    double? fee,
   }) async {
     await _delay();
   }

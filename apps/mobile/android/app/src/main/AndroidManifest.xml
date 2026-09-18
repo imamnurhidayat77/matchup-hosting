@@ -9,6 +9,10 @@
     <!-- Chat "share location" attachment -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <!-- Camera capture for profile/activity photos (image_picker).
+         Gallery uses the system picker (no permission needed); camera
+         capture requests this at runtime on first use. -->
+    <uses-permission android:name="android.permission.CAMERA" />
     <application
         android:label="MatchUp"
         android:name="${applicationName}"

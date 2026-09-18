@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/providers/auth_state_provider.dart';
 import '../../../core/providers/repository_providers.dart';
 import '../../../core/storage/route_store.dart';
+import '../../../core/storage/secure_token_store.dart';
 import '../../notifications/services/push_notification_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -57,14 +58,14 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     Future.wait([
       ref.read(authStateProvider.notifier).checkSession(),
       Future.delayed(const Duration(milliseconds: 800)),
-    ]).then((_) {
+    ]).timeout(const Duration(seconds: 8)).then((_) {
       if (!mounted) return;
       _routeBySession();
     }).catchError((_) {
-      // Session check failed — fall back to onboarding instead of
-      // hanging on the splash screen forever. (No wall-clock timeout:
-      // a pending Timer would break widget-test pumpAndSettle, and
-      // checkSession is only two local storage reads.)
+      // Session check failed or hung (a never-completing secure-storage
+      // read pins `Future.wait` forever — `.catchError` alone can't
+      // cover that, hence the 8s wall-clock timeout above) — fall back
+      // to onboarding instead of hanging on the splash screen forever.
       if (!mounted) return;
       context.go('/onboarding');
     });
@@ -81,13 +82,23 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           deviceRepository: ref.read(deviceRepositoryProvider),
         ),
       );
-      // New accounts must finish onboarding: gtk_done==false resumes GTK.
-      // Missing/null = old account (flag never written) → treat as done,
-      // fail-open so existing users aren't trapped in onboarding.
+      // New accounts must finish onboarding: gtk_done_<uid>==false
+      // resumes GTK. The flag is scoped per account so a second user on
+      // a shared device never inherits the first user's completion.
+      // Missing/null = old account (flag never written) or unknown uid
+      // → treated as done, fail-open so existing users aren't trapped
+      // in onboarding.
       bool? gtkDone;
       try {
-        final prefs = await SharedPreferences.getInstance();
-        gtkDone = prefs.getBool('gtk_done');
+        final uid = ref.read(authStateProvider).userId ??
+            await SecureTokenStore.instance.readUserId() ??
+            '';
+        if (uid.isEmpty) {
+          gtkDone = null;
+        } else {
+          final prefs = await SharedPreferences.getInstance();
+          gtkDone = prefs.getBool(gtkDoneKeyFor(uid));
+        }
       } catch (_) {
         gtkDone = null;
       }

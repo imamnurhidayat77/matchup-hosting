@@ -299,6 +299,9 @@ class _StatsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Host-role average (even one rating shows) — displayed on the
+    // Hosted card so trust as a host reads at a glance.
+    final host = user.overallHostRating;
     return Row(
       children: [
         Expanded(
@@ -320,8 +323,12 @@ class _StatsRow extends StatelessWidget {
               size: 22,
               color: context.colors.successText,
             ),
-            value: '${user.hostedCount}',
-            label: 'Hosted',
+            value: host != null
+                ? '${user.hostedCount} · ★${host.average.toStringAsFixed(1)}'
+                : '${user.hostedCount}',
+            label: host != null
+                ? 'Hosted · ${host.count} ${host.count == 1 ? 'rating' : 'ratings'}'
+                : 'Hosted',
           ),
         ),
         const SizedBox(width: AppSpacing.x3),

@@ -2421,6 +2421,7 @@ class _ChatSettingsSheetState extends State<_ChatSettingsSheet> {
   @override
   Widget build(BuildContext context) {
     final muted = _muted ?? false;
+    final isHost = widget.activity?.isHost ?? false;
     return Container(
       padding: EdgeInsets.fromLTRB(
         AppSpacing.x5,
@@ -2445,8 +2446,10 @@ class _ChatSettingsSheetState extends State<_ChatSettingsSheet> {
           ),
           const SizedBox(height: AppSpacing.x4),
           _SettingsRow(
-            icon: Icons.info_outline_rounded,
-            label: 'View activity details',
+            icon: isHost
+                ? Icons.settings_suggest_outlined
+                : Icons.info_outline_rounded,
+            label: isHost ? 'Manage activity' : 'View activity details',
             onTap: () {
               Navigator.of(context).pop();
               NavGuard.push(context, _detailsRoute(widget.activity, widget.activityId));

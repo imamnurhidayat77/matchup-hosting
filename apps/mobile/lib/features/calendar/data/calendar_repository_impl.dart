@@ -8,12 +8,13 @@ import '../../discovery/data/activity_repository.dart';
 import '../domain/calendar_event.dart';
 import 'calendar_repository.dart';
 
-/// Offline-only calendar store. Reads return empty, writes no-op —
-/// going offline never throws: [upcoming] resolves to an empty list and
-/// [addToDeviceCalendar] silently drops the event instead of touching
-/// the OS calendar. UID resolution is unchanged (both this repo and My
-/// Games read the signed-in uid from [SecureTokenStore] — My Games via
-/// `myGamesUidProvider`, this repo directly — so they always agree).
+/// Offline-only calendar store. Reads return empty, writes report
+/// failure — going offline never throws: [upcoming] resolves to an
+/// empty list and [addToDeviceCalendar] returns false instead of
+/// touching the OS calendar. UID resolution is unchanged (both this
+/// repo and My Games read the signed-in uid from [SecureTokenStore] —
+/// My Games via `myGamesUidProvider`, this repo directly — so they
+/// always agree).
 class LocalCalendarRepository implements CalendarRepository {
   @override
   Future<List<CalendarEvent>> upcoming({int days = 30}) async {
@@ -21,7 +22,7 @@ class LocalCalendarRepository implements CalendarRepository {
   }
 
   @override
-  Future<void> addToDeviceCalendar(CalendarEvent event) async {}
+  Future<bool> addToDeviceCalendar(CalendarEvent event) async => false;
 }
 
 class RemoteCalendarRepository implements CalendarRepository {
@@ -120,7 +121,7 @@ class RemoteCalendarRepository implements CalendarRepository {
   }
 
   @override
-  Future<void> addToDeviceCalendar(CalendarEvent event) async {
+  Future<bool> addToDeviceCalendar(CalendarEvent event) async {
     try {
       final ok = await CalendarService.instance.addEvent(
         title: event.title,
@@ -130,21 +131,29 @@ class RemoteCalendarRepository implements CalendarRepository {
         location: event.location.isNotEmpty ? event.location : null,
       );
       if (ok) _syncedIds.add(event.activityId);
+      return ok;
     } catch (e, st) {
       debugPrint('[RemoteCalendarRepository] $e\n$st');
-      await _fallback.addToDeviceCalendar(event);
+      return _fallback.addToDeviceCalendar(event);
     }
   }
 
   CalendarEvent _parse(dynamic raw) {
     final json = raw as Map<String, dynamic>;
+    // Backend sends UTC ISO (`Z`); convert to device-local ONCE here so
+    // calendar rows render correct local times. Unparseable timestamps
+    // fall back to a far-future sentinel (NOT now) so corrupt rows sort
+    // last instead of masquerading as starting now.
     return CalendarEvent(
       id: json['id']?.toString() ?? '',
       activityId: json['activity_id']?.toString() ?? '',
       title: json['title'] as String? ?? '',
       start:
-          DateTime.tryParse(json['start'] as String? ?? '') ?? DateTime.now(),
-      end: DateTime.tryParse(json['end'] as String? ?? '') ?? DateTime.now(),
+          DateTime.tryParse(json['start'] as String? ?? '')?.toLocal() ??
+              DateTime(2100),
+      end:
+          DateTime.tryParse(json['end'] as String? ?? '')?.toLocal() ??
+              DateTime(2100),
       location: json['location'] as String? ?? '',
       addedToDeviceCalendar: json['synced'] as bool? ?? false,
     );

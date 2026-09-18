@@ -64,6 +64,13 @@ class ActivityModel {
   final double? hostRating;
   final int hostGamesCount;
 
+  /// Host-role average for this activity's sport, from
+  /// `hostProfile.hostRatingBySport[sportType]` (stars received while
+  /// hosting — separate from [hostRating], the mixed player-role
+  /// aggregate). Null until the first host-role rating lands; even a
+  /// single rating shows.
+  final double? hostHostRating;
+  final int hostHostRatingCount;
   /// Short atmosphere/expectation tags shown as small chips ("Friendly
   /// people", "Great vibes", "Arrive 15m early"). Purely descriptive.
   final List<String> vibeTags;
@@ -113,6 +120,14 @@ class ActivityModel {
   /// no status (e.g. hand-built fixtures).
   final String lifecycleStatus;
 
+  /// Weather snapshot captured at creation (Open-Meteo, best-effort).
+  /// Null on legacy rows / when the forecast was unavailable.
+  /// Detail screens prefer this, falling back to a live lookup.
+  final double? weatherTemp;
+  final int? weatherCode;
+  final String? weatherDesc;
+  final int? weatherRain;
+
   const ActivityModel({
     required this.id,
     required this.title,
@@ -136,6 +151,8 @@ class ActivityModel {
     this.minPlayers,
     this.hostRating,
     this.hostGamesCount = 0,
+    this.hostHostRating,
+    this.hostHostRatingCount = 0,
     this.vibeTags = const ['Friendly people', 'Great vibes'],
     this.isParticipant = false,
     this.isHost = false,
@@ -147,6 +164,10 @@ class ActivityModel {
     this.joinRequestStatus,
     this.pendingRequestCount = 0,
     this.lifecycleStatus = '',
+    this.weatherTemp,
+    this.weatherCode,
+    this.weatherDesc,
+    this.weatherRain,
   });
 
   /// The activity's end time, derived from [dateTime] + [durationMinutes].
@@ -214,6 +235,8 @@ class ActivityModel {
     bool? isPaid,
     double? hostRating,
     int? hostGamesCount,
+    double? hostHostRating,
+    int? hostHostRatingCount,
     List<String>? vibeTags,
     String? lifecycleStatus,
     ActivityStatus? status,
@@ -231,6 +254,10 @@ class ActivityModel {
     double? totalCost,
     int? minPlayers,
     int? pendingRequestCount,
+    double? weatherTemp,
+    int? weatherCode,
+    String? weatherDesc,
+    int? weatherRain,
   }) {
     return ActivityModel(
       id: id,
@@ -255,6 +282,9 @@ class ActivityModel {
       minPlayers: minPlayers ?? this.minPlayers,
       hostRating: hostRating ?? this.hostRating,
       hostGamesCount: hostGamesCount ?? this.hostGamesCount,
+      hostHostRating: hostHostRating ?? this.hostHostRating,
+      hostHostRatingCount:
+          hostHostRatingCount ?? this.hostHostRatingCount,
       vibeTags: vibeTags ?? this.vibeTags,
       isParticipant: isParticipant ?? this.isParticipant,
       isHost: isHost ?? this.isHost,
@@ -266,6 +296,10 @@ class ActivityModel {
       joinRequestStatus: joinRequestStatus ?? this.joinRequestStatus,
       pendingRequestCount: pendingRequestCount ?? this.pendingRequestCount,
       lifecycleStatus: lifecycleStatus ?? this.lifecycleStatus,
+      weatherTemp: weatherTemp ?? this.weatherTemp,
+      weatherCode: weatherCode ?? this.weatherCode,
+      weatherDesc: weatherDesc ?? this.weatherDesc,
+      weatherRain: weatherRain ?? this.weatherRain,
     );
   }
 
@@ -299,6 +333,13 @@ class ActivityModel {
   /// approval-gated activity.
   bool get hasPendingRequest => joinRequestStatus == 'pending';
 
+  /// True when a weather snapshot was saved at creation.
+  bool get hasWeatherSnapshot =>
+      weatherTemp != null ||
+      weatherCode != null ||
+      weatherDesc != null ||
+      weatherRain != null;
+
   /// Serialises to the API wire format (snake_case).
   /// Used by [RemoteActivityRepository] for request bodies and
   /// as the canonical JSON representation of this model.
@@ -326,6 +367,8 @@ class ActivityModel {
       'min_players': minPlayers,
       'host_rating': hostRating,
       'host_games_count': hostGamesCount,
+      'host_host_rating': hostHostRating,
+      'host_host_rating_count': hostHostRatingCount,
       'vibe_tags': vibeTags,
       'is_participant': isParticipant,
       'is_host': isHost,
@@ -336,6 +379,10 @@ class ActivityModel {
       'join_policy': joinPolicy,
       'join_request_status': joinRequestStatus,
       'pending_request_count': pendingRequestCount,
+      'weather_temp': weatherTemp,
+      'weather_code': weatherCode,
+      'weather_desc': weatherDesc,
+      'weather_rain': weatherRain,
     };
   }
 
@@ -360,8 +407,15 @@ class ActivityModel {
     final startRaw = json['startTime'] as String? ?? json['date_time'] as String?;
     final endRaw = json['endTime'] as String? ?? json['end_time'] as String?;
 
-    final start = DateTime.tryParse(startRaw ?? '') ?? DateTime.now();
-    final end = endRaw == null ? null : DateTime.tryParse(endRaw);
+    // Backend sends UTC ISO (`Z`); convert to device-local ONCE here so
+    // every downstream formatter renders correct local times with no
+    // per-site `.toLocal()` calls.
+    // Unparseable start falls back to a far-future sentinel (NOT now) so
+    // corrupt rows sort last in soonest-first lists instead of
+    // masquerading as starting-now ghost live cards.
+    final start =
+        DateTime.tryParse(startRaw ?? '')?.toLocal() ?? DateTime(2100);
+    final end = endRaw == null ? null : DateTime.tryParse(endRaw)?.toLocal();
 
     int resolvedDuration;
     if (end != null && end.isAfter(start)) {
@@ -440,6 +494,8 @@ class ActivityModel {
           (json['minPlayers'] as num?)?.toInt(),
       hostRating: _hostRatingFor(json, sport),
       hostGamesCount: _hostGamesFor(json),
+      hostHostRating: _hostHostRatingFor(json, sport),
+      hostHostRatingCount: _hostHostRatingCountFor(json, sport),
       vibeTags:
           (json['vibe_tags'] as List?)?.map((e) => e.toString()).toList() ??
           const [],
@@ -456,6 +512,14 @@ class ActivityModel {
           (json['pending_request_count'] as num?)?.toInt() ??
           0,
       lifecycleStatus: rawLifecycle,
+      weatherTemp: (json['weatherTemp'] as num?)?.toDouble() ??
+          (json['weather_temp'] as num?)?.toDouble(),
+      weatherCode: (json['weatherCode'] as num?)?.toInt() ??
+          (json['weather_code'] as num?)?.toInt(),
+      weatherDesc: json['weatherDesc'] as String? ??
+          json['weather_desc'] as String?,
+      weatherRain: (json['weatherRain'] as num?)?.toInt() ??
+          (json['weather_rain'] as num?)?.toInt(),
     );
   }
 
@@ -486,6 +550,54 @@ class ActivityModel {
     }
     return (json['host_rating'] as num?)?.toDouble() ??
         (json['hostRating'] as num?)?.toDouble();
+  }
+
+  /// Host-role rating bucket for [sport] from
+  /// `hostProfile.hostRatingBySport` (`{average, count}`, maintained on
+  /// every rating submit). Null entry when none yet.
+  static Map<String, dynamic>? _hostBucketFor(
+    Map<String, dynamic> json,
+    String sport,
+  ) {
+    final profile = json['hostProfile'];
+    final buckets = profile is Map<String, dynamic>
+        ? profile['hostRatingBySport'] ?? profile['host_rating_by_sport']
+        : null;
+    if (buckets is Map<String, dynamic> && sport.isNotEmpty) {
+      final bucket = buckets[sport];
+      if (bucket is Map<String, dynamic>) return bucket;
+      if (bucket is Map) return Map<String, dynamic>.from(bucket);
+    }
+    return null;
+  }
+
+  /// Host-role average for [sport]. Null until the first host-role
+  /// rating — even one rating shows (no minimum count).
+  static double? _hostHostRatingFor(Map<String, dynamic> json, String sport) {
+    final bucket = _hostBucketFor(json, sport);
+    if (bucket != null) {
+      final count = (bucket['count'] as num?)?.toInt() ?? 0;
+      if (count > 0) {
+        final avg = (bucket['average'] as num?)?.toDouble();
+        if (avg != null) return avg;
+      }
+    }
+    return (json['host_host_rating'] as num?)?.toDouble() ??
+        (json['hostHostRating'] as num?)?.toDouble();
+  }
+
+  /// Host-role rating count for [sport].
+  static int _hostHostRatingCountFor(
+    Map<String, dynamic> json,
+    String sport,
+  ) {
+    final bucket = _hostBucketFor(json, sport);
+    if (bucket != null) {
+      return (bucket['count'] as num?)?.toInt() ?? 0;
+    }
+    return (json['host_host_rating_count'] as num?)?.toInt() ??
+        (json['hostHostRatingCount'] as num?)?.toInt() ??
+        0;
   }
 
   /// Real hosted-games count from `hostProfile.hostedCount`

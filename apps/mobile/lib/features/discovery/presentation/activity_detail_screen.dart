@@ -24,6 +24,7 @@ import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../../activities/domain/activity_model.dart';
+import '../../activities/presentation/widgets/activity_weather_section.dart';
 import '../../activities/presentation/widgets/detail_loading_skeleton.dart';
 import '../../activities/domain/activity_participant.dart';
 import '../../activities/presentation/my_activities_screen.dart';
@@ -71,6 +72,7 @@ class ActivityDetailScreen extends ConsumerWidget {
       child: async.when(
       loading: () => const DetailLoadingSkeleton(),
       error: (e, _) => AppScaffold(
+        showHomeIndicator: false, // inside ShellRoute — AppShell draws its own.
         body: ErrorRetry(
           message: 'Could not load activity details.',
           onRetry: () => ref.invalidate(_activityDetailProvider(activityId)),
@@ -79,6 +81,7 @@ class ActivityDetailScreen extends ConsumerWidget {
       data: (activity) {
         if (activity == null) {
           return AppScaffold(
+            showHomeIndicator: false, // inside ShellRoute — AppShell draws its own.
             body: Center(
               child: Padding(
                 padding: const EdgeInsets.all(AppSpacing.x5),
@@ -275,6 +278,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
 
     return AppScaffold(
       safeAreaTop: false,
+      showHomeIndicator: false, // inside ShellRoute — AppShell draws its own.
       bottomBar: _ActionBar(
         activity: widget.activity,
         joining: _joining,
@@ -339,9 +343,12 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                         hostName: a.hostName,
                         hostId: a.hostId,
                         hostRating: a.hostRating,
+                        hostHostRating: a.hostHostRating,
+                        hostHostRatingCount: a.hostHostRatingCount,
                       ),
                       const SizedBox(height: AppSpacing.x3),
                       _MetaCard(activity: a),
+                      ActivityWeatherSection(activity: a),
                       const SizedBox(height: AppSpacing.x5),
                       // Venue map only when the activity carries
                       // coordinates — older rows may not have them.
@@ -580,16 +587,26 @@ class _HostCard extends StatelessWidget {
     required this.hostName,
     required this.hostId,
     required this.hostRating,
+    this.hostHostRating,
+    this.hostHostRatingCount = 0,
   });
   final String hostName;
   final String hostId;
   final double? hostRating;
+
+  /// Host-role average (stars received while hosting). Shown first —
+  /// even a single rating. Falls back to [hostRating] (mixed) on
+  /// legacy rows, then "New host".
+  final double? hostHostRating;
+  final int hostHostRatingCount;
 
   @override
   Widget build(BuildContext context) {
     final canOpen = hostId.trim().isNotEmpty;
     // Local for flow promotion (fields never promote).
     final rating = hostRating;
+    final hostStars = hostHostRating;
+    final hostCount = hostHostRatingCount;
     return Semantics(
       button: canOpen,
       label: canOpen ? 'View host profile: $hostName' : null,
@@ -634,9 +651,35 @@ class _HostCard extends StatelessWidget {
                   ],
                 ),
               ),
-              // Rating badge — real average from the host's ratings,
-              // or "New host" when they have none yet (never a fake).
-              if (rating != null)
+              // Host-role rating badge — stars received while hosting
+              // (even one shows). Falls back to the mixed community
+              // average on legacy rows, then "New host" (never a fake).
+              if (hostStars != null)
+                Semantics(
+                  label:
+                      'Host rating ${hostStars.toStringAsFixed(1)} from $hostCount reviews',
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.star_rounded,
+                        size: 16,
+                        color: context.colors.successText,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        hostCount > 0
+                            ? '${hostStars.toStringAsFixed(1)} ($hostCount)'
+                            : hostStars.toStringAsFixed(1),
+                        style: AppTypography.labelField(context).copyWith(
+                          color: context.colors.successText,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else if (rating != null)
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [

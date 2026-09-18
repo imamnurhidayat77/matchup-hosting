@@ -8,3 +8,58 @@ import '@testing-library/jest-dom/vitest';
 afterEach(() => {
   cleanup();
 });
+
+// Node 22+ ships global web-storage objects that shadow jsdom's real
+// Storage under vitest (pre-existing globals are not overwritten), and
+// the shadowing object lacks the Storage interface (`clear`, ...).
+// CI pins Node 20 so it never sees this, but local runs on newer Node
+// fail every suite touching localStorage/sessionStorage. Install tiny
+// in-memory implementations when the globals are unusable so service
+// tests behave identically on every Node version.
+class MemoryStorage implements Storage {
+  private readonly map = new Map<string, string>();
+
+  get length(): number {
+    return this.map.size;
+  }
+
+  clear(): void {
+    this.map.clear();
+  }
+
+  getItem(key: string): string | null {
+    return this.map.has(key) ? this.map.get(key)! : null;
+  }
+
+  key(index: number): string | null {
+    return [...this.map.keys()][index] ?? null;
+  }
+
+  removeItem(key: string): void {
+    this.map.delete(key);
+  }
+
+  setItem(key: string, value: string): void {
+    this.map.set(key, String(value));
+  }
+}
+
+for (const name of ['localStorage', 'sessionStorage'] as const) {
+  const current = (globalThis as Record<string, unknown>)[name] as
+    | Storage
+    | null
+    | undefined;
+  const usable =
+    current != null &&
+    typeof current.clear === 'function' &&
+    typeof current.getItem === 'function' &&
+    typeof current.setItem === 'function' &&
+    typeof current.removeItem === 'function';
+  if (!usable) {
+    Object.defineProperty(globalThis, name, {
+      value: new MemoryStorage(),
+      configurable: true,
+      writable: true,
+    });
+  }
+}

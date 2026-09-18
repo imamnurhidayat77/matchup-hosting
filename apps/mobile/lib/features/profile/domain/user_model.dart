@@ -45,6 +45,15 @@ class UserModel {
   /// it works even if the backend returns just a count, no breakdown.
   final int totalRatingCount;
 
+  /// Host-role rating aggregates (stars received while hosting), keyed
+  /// by sport. Separate from [ratingBySport] (player role) so trust as
+  /// a host reads independently. Empty on legacy rows / until the
+  /// first host-role rating lands. Even one rating shows.
+  final Map<String, SportRatingSummary> hostRatingBySport;
+
+  /// Cumulative host-role count across sports.
+  final int totalHostRatingCount;
+
   // ─── Fields editable from Edit Profile (PRD Section 2.3) ────────────────
   // These used to be string literals hardcoded in the screen's
   // `_initFields`. Now they live on the model so Edit Profile reads real
@@ -70,6 +79,8 @@ class UserModel {
     this.skillLevel,
     this.ratingBySport = const {},
     this.totalRatingCount = 0,
+    this.hostRatingBySport = const {},
+    this.totalHostRatingCount = 0,
     this.email,
     this.phone,
     this.dateOfBirth,
@@ -98,6 +109,8 @@ class UserModel {
     String? skillLevel,
     Map<String, SportRatingSummary>? ratingBySport,
     int? totalRatingCount,
+    Map<String, SportRatingSummary>? hostRatingBySport,
+    int? totalHostRatingCount,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -113,6 +126,9 @@ class UserModel {
       skillLevel: skillLevel ?? this.skillLevel,
       ratingBySport: ratingBySport ?? this.ratingBySport,
       totalRatingCount: totalRatingCount ?? this.totalRatingCount,
+      hostRatingBySport: hostRatingBySport ?? this.hostRatingBySport,
+      totalHostRatingCount:
+          totalHostRatingCount ?? this.totalHostRatingCount,
       email: email ?? this.email,
       phone: phone ?? this.phone,
       dateOfBirth: dateOfBirth ?? this.dateOfBirth,
@@ -146,5 +162,25 @@ class UserModel {
       return SportRatingSummary(average: rating!, count: totalRatingCount);
     }
     return null;
+  }
+
+  /// Host-role summary for a sport. Shows even a single rating —
+  /// no minimum count. Null when no host-role data yet.
+  SportRatingSummary? hostRatingFor(String sportType) {
+    final keyed = hostRatingBySport[sportType];
+    if (keyed != null && keyed.hasRatings) return keyed;
+    return null;
+  }
+
+  /// Blended host average across sports (count-weighted). Null when none.
+  SportRatingSummary? get overallHostRating {
+    var sum = 0.0;
+    var count = 0;
+    for (final s in hostRatingBySport.values) {
+      sum += s.average * s.count;
+      count += s.count;
+    }
+    if (count <= 0) return null;
+    return SportRatingSummary(average: sum / count, count: count);
   }
 }

@@ -17,6 +17,7 @@ import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../../ratings/domain/rating_models.dart';
+import '../../report/presentation/report_user_sheet.dart';
 import '../domain/activity_participant.dart';
 import '../../discovery/domain/activity_model.dart';
 
@@ -733,6 +734,29 @@ class _ParticipantRow extends StatelessWidget {
               );
             }),
           ),
+
+          // Report — same sheet as profile/DM, reachable right where
+          // the bad experience happened. Hidden when the uid is
+          // unknown (never report a bare display name).
+          if (item.userId.isNotEmpty)
+            AppTappable(
+              semanticLabel: 'Report ${item.name}',
+              feedback: AppTapFeedback.scale,
+              minSize: 36,
+              onTap: () => ReportUserSheet.show(
+                context,
+                userId: item.userId,
+                userName: item.name,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(6),
+                child: Icon(
+                  Icons.flag_outlined,
+                  size: 18,
+                  color: context.colors.textTertiary,
+                ),
+              ),
+            ),
         ],
       ),
     );

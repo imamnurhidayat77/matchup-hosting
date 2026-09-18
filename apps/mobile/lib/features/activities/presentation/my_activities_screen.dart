@@ -284,6 +284,10 @@ class _UpcomingList extends ConsumerStatefulWidget {
 class _UpcomingListState extends ConsumerState<_UpcomingList>
     with AutomaticKeepAliveClientMixin {
   int _visibleOthers = _pageSize;
+
+  /// Total "other" rows from the last build. Lets [_onScroll] skip the
+  /// setState storm once everything is already shown.
+  int _totalOthers = 0;
   final _scroll = ScrollController();
 
   @override
@@ -305,6 +309,9 @@ class _UpcomingListState extends ConsumerState<_UpcomingList>
     if (!_scroll.hasClients) return;
     if (_scroll.position.pixels >
         _scroll.position.maxScrollExtent - 400) {
+      // Fully shown — skip the setState so resting at the bottom of a
+      // short list doesn't rebuild on every scroll event.
+      if (_visibleOthers >= _totalOthers) return;
       setState(() => _visibleOthers += _pageSize);
     }
   }
@@ -352,6 +359,16 @@ class _UpcomingListState extends ConsumerState<_UpcomingList>
     final sorted = _sortedForMyGames(activities);
     final featured = sorted.first;
     final others = sorted.skip(1).toList();
+    // The list can shrink under us (e.g. after leaving a game): clamp
+    // the counter so it can't strand past the end showing nothing new.
+    // Empty resets to the page size so the next non-empty fetch pages
+    // from the top instead of rendering zero rows.
+    _totalOthers = others.length;
+    if (others.isEmpty) {
+      _visibleOthers = _pageSize;
+    } else if (_visibleOthers > others.length) {
+      _visibleOthers = others.length;
+    }
     final shownOthers = others.take(_visibleOthers).toList();
     final hasMore = shownOthers.length < others.length;
 
@@ -792,6 +809,10 @@ class _SimpleList extends ConsumerStatefulWidget {
 class _SimpleListState extends ConsumerState<_SimpleList>
     with AutomaticKeepAliveClientMixin {
   int _visible = _pageSize;
+
+  /// Total rows from the last build. Lets [_onScroll] skip the setState
+  /// storm once everything is already shown.
+  int _total = 0;
   final _scroll = ScrollController();
 
   @override
@@ -813,6 +834,9 @@ class _SimpleListState extends ConsumerState<_SimpleList>
     if (!_scroll.hasClients) return;
     if (_scroll.position.pixels >
         _scroll.position.maxScrollExtent - 400) {
+      // Fully shown — skip the setState so resting at the bottom of a
+      // short list doesn't rebuild on every scroll event.
+      if (_visible >= _total) return;
       setState(() => _visible += _pageSize);
     }
   }
@@ -872,6 +896,15 @@ class _SimpleListState extends ConsumerState<_SimpleList>
           ...sorted,
         ];
       }
+    }
+    // The list can shrink under us (e.g. after leaving/cancelling):
+    // clamp the counter so it can't strand past the end. Empty resets
+    // to the page size so the next non-empty fetch pages from the top.
+    _total = merged.length;
+    if (merged.isEmpty) {
+      _visible = _pageSize;
+    } else if (_visible > merged.length) {
+      _visible = merged.length;
     }
     final shown = merged.take(_visible).toList();
     final hasMore = shown.length < merged.length;

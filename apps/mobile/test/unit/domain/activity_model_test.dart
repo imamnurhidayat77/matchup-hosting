@@ -51,6 +51,24 @@ void main() {
       expect(minimal.coverImageUrl, isNull);
     });
 
+    test('should convert UTC payloads to device-local once', () {
+      final model = ActivityModel.fromJson(baseJson);
+      expect(
+        model.dateTime,
+        DateTime.parse('2026-09-15T16:00:00.000Z').toLocal(),
+      );
+    });
+
+    test('should fall back to far-future sentinel on corrupt timestamps', () {
+      final model = ActivityModel.fromJson({
+        ...baseJson,
+        'date_time': 'not-a-date',
+      });
+      // NOT now: corrupt rows sort last in soonest-first lists instead
+      // of masquerading as starting-now ghost live cards.
+      expect(model.dateTime, DateTime(2100));
+    });
+
     group('isFull', () {
       test('should return true when participantCount equals capacity', () {
         final full = ActivityModel.fromJson({
@@ -120,7 +138,12 @@ void main() {
           'date_time': '2026-09-15T16:00:00.000Z',
           'duration_minutes': 90,
         });
-        expect(model.endTime, DateTime.parse('2026-09-15T17:30:00.000Z'));
+        // fromJson converts UTC payloads to device-local once, so the
+        // expectation is local too (== UTC only when the device is on UTC).
+        expect(
+          model.endTime,
+          DateTime.parse('2026-09-15T17:30:00.000Z').toLocal(),
+        );
       });
 
       test('should round-trip durationMinutes through toJson/fromJson', () {

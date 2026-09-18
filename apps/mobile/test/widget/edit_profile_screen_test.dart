@@ -182,6 +182,10 @@ void main() {
         await tester.tap(find.text('Change Photo'));
         await tester.pumpAndSettle();
 
+        // Source chooser (same modal as the create flow): pick Gallery.
+        await tester.tap(find.text('Gallery'));
+        await tester.pumpAndSettle();
+
         verify(
           () => userRepo.uploadAvatar(localPath: '/tmp/picked-avatar.jpg'),
         ).called(1);

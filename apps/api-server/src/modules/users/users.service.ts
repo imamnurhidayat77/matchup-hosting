@@ -50,6 +50,9 @@ export type UserRecord = {
   joinReason?: string;
   ratingBySport?: Record<string, SportRatingAggregate>;
   totalRatingCount?: number;
+  /** Host-role aggregates (ratings received while hosting). Absent on old docs. */
+  hostRatingBySport?: Record<string, SportRatingAggregate>;
+  totalHostRatingCount?: number;
   /** Admin-managed suspension state. Absent on old docs = 'active'. */
   status?: UserStatus;
 };
@@ -99,6 +102,9 @@ export type PublicUserProfile = {
   profileCompleted?: boolean;
   ratingBySport?: Record<string, SportRatingAggregate>;
   totalRatingCount?: number;
+  /** Host-role aggregates (ratings received while hosting). Absent on old docs. */
+  hostRatingBySport?: Record<string, SportRatingAggregate>;
+  totalHostRatingCount?: number;
 };
 
 export type UpdateUserPhotoInput = {
@@ -247,6 +253,12 @@ function mapUserDoc(userDoc: FirebaseFirestore.DocumentSnapshot): UserRecord | n
     ...(typeof data.totalRatingCount === 'number'
       ? { totalRatingCount: data.totalRatingCount }
       : {}),
+    ...(data.hostRatingBySport !== undefined
+      ? { hostRatingBySport: assertRatingBySport(data.hostRatingBySport) }
+      : {}),
+    ...(typeof data.totalHostRatingCount === 'number'
+      ? { totalHostRatingCount: data.totalHostRatingCount }
+      : {}),
     ...(isUserStatus(data.status) ? { status: data.status } : {}),
   };
 }
@@ -268,6 +280,8 @@ function toPublicUserProfile(user: UserRecord): PublicUserProfile {
     ...(user.profileCompleted !== undefined ? { profileCompleted: user.profileCompleted } : {}),
     ...(user.ratingBySport !== undefined ? { ratingBySport: user.ratingBySport } : {}),
     ...(user.totalRatingCount !== undefined ? { totalRatingCount: user.totalRatingCount } : {}),
+    ...(user.hostRatingBySport !== undefined ? { hostRatingBySport: user.hostRatingBySport } : {}),
+    ...(user.totalHostRatingCount !== undefined ? { totalHostRatingCount: user.totalHostRatingCount } : {}),
   };
 }
 

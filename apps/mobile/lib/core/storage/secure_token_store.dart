@@ -7,6 +7,12 @@ const _kAccessToken = 'auth_access_token';
 const _kRefreshToken = 'auth_refresh_token';
 const _kUserId = 'auth_user_id';
 
+/// Per-account "get-to-know onboarding done" prefs key. Scoped by uid so
+/// a second user on a shared device never inherits the first user's
+/// completion flag. An empty uid means the account is unknown — callers
+/// treat that as done (legacy fail-open for pre-flag accounts).
+String gtkDoneKeyFor(String uid) => 'gtk_done_$uid';
+
 /// Stores and retrieves auth tokens using the platform secure enclave
 /// (Keychain on iOS, Keystore-backed EncryptedSharedPreferences on Android).
 ///

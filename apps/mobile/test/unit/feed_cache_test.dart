@@ -36,6 +36,31 @@ void main() {
       );
     });
 
+    test('key carries a coarse 1-decimal position bucket', () {
+      const f = DiscoveryFilter();
+      final noPos = FeedCache.keyFor(filter: f, limit: 20, offset: 0);
+      // Unknown position leaves the bucket segment empty.
+      expect(noPos.endsWith('|'), isTrue);
+
+      // Same bucket (within rounding) → same key: hit rates stay sane.
+      expect(
+        FeedCache.keyFor(filter: f, limit: 20, offset: 0, lat: -36.84, lng: 174.76),
+        FeedCache.keyFor(filter: f, limit: 20, offset: 0, lat: -36.849, lng: 174.764),
+      );
+
+      // Moved across town → different key so stale distances miss.
+      expect(
+        FeedCache.keyFor(filter: f, limit: 20, offset: 0, lat: -36.8, lng: 174.7),
+        isNot(FeedCache.keyFor(filter: f, limit: 20, offset: 0, lat: -41.3, lng: 174.8)),
+      );
+
+      // Positioned vs unpositioned never collide.
+      expect(
+        noPos,
+        isNot(FeedCache.keyFor(filter: f, limit: 20, offset: 0, lat: -36.8, lng: 174.7)),
+      );
+    });
+
     test('hit before TTL, miss after', () {
       var now = DateTime(2026, 1, 1, 12);
       final cache = FeedCache(

@@ -331,9 +331,53 @@ class _ProfileContent extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.x5),
 
-                // ── Ratings by sport ─────────────────────────────────────
-                if (user.ratingBySport.isNotEmpty) ...[
+                // ── Host rating ─────────────────────────────────────────
+                // Stars received while hosting (separate from the player
+                // rating above). Even a single rating shows.
+                if (user.overallHostRating != null) ...[
                   Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.x6,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Host rating',
+                          style: AppTypography.titleMedium(context),
+                        ),
+                        const SizedBox(height: AppSpacing.x3),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.x4,
+                            vertical: AppSpacing.x2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: context.colors.card,
+                            borderRadius: AppRadius.cardR,
+                            border: Border.all(color: context.colors.border),
+                          ),
+                          child: Column(
+                            children: [
+                              for (final entry
+                                  in user.hostRatingBySport.entries)
+                                _RatingRow(
+                                  sport: entry.key,
+                                  average: entry.value.average,
+                                  count: entry.value.count,
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.x5),
+                ],
+
+                // ── Ratings by sport ─────────────────────────────────────
+                if (user.ratingBySport.isNotEmpty) ...[                  Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.x6,
                     ),

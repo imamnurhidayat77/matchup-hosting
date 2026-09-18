@@ -69,6 +69,10 @@ abstract class ActivityRepository {
     String feeMode = 'fixed',
     double? totalCost,
     int? minPlayers,
+    double? weatherTemp,
+    int? weatherCode,
+    String? weatherDesc,
+    int? weatherRain,
   });
 
   Future<void> join(String activityId);
@@ -122,6 +126,8 @@ abstract class ActivityRepository {
     String? skillLevel,
     int? capacity,
     String? joinPolicy,
+    bool? isPaid,
+    double? fee,
   });
 
   /// Host-only cover update (`PATCH /api/activities/:activityId/cover`).

@@ -61,6 +61,10 @@ export async function createActivityHandler(req: Request, res: Response) {
             feeMode,
             totalCost,
             minPlayers,
+            weatherTemp,
+            weatherCode,
+            weatherDesc,
+            weatherRain,
         } = req.body as {
             title?: unknown;
             sportType?: unknown;
@@ -81,6 +85,10 @@ export async function createActivityHandler(req: Request, res: Response) {
             feeMode?: unknown;
             totalCost?: unknown;
             minPlayers?: unknown;
+            weatherTemp?: unknown;
+            weatherCode?: unknown;
+            weatherDesc?: unknown;
+            weatherRain?: unknown;
         };
 
         if (!hostId) {
@@ -284,6 +292,10 @@ export async function createActivityHandler(req: Request, res: Response) {
             ...(feeMode === 'fixed' || feeMode === 'split' ? { feeMode } : {}),
             ...(typeof totalCost === 'number' ? { totalCost } : {}),
             ...(typeof minPlayers === 'number' ? { minPlayers } : {}),
+            ...(typeof weatherTemp === 'number' ? { weatherTemp } : {}),
+            ...(typeof weatherCode === 'number' ? { weatherCode } : {}),
+            ...(typeof weatherDesc === 'string' ? { weatherDesc } : {}),
+            ...(typeof weatherRain === 'number' ? { weatherRain } : {}),
         });
 
         return res.status(201).json({
@@ -345,6 +357,10 @@ export async function updateActivityHandler(req: Request<UpdateActivityParams>, 
             feeMode,
             totalCost,
             minPlayers,
+            weatherTemp,
+            weatherCode,
+            weatherDesc,
+            weatherRain,
         } = req.body as {
             title?: unknown;
             sportType?: unknown;
@@ -365,6 +381,10 @@ export async function updateActivityHandler(req: Request<UpdateActivityParams>, 
             feeMode?: unknown;
             totalCost?: unknown;
             minPlayers?: unknown;
+            weatherTemp?: unknown;
+            weatherCode?: unknown;
+            weatherDesc?: unknown;
+            weatherRain?: unknown;
         };
 
         if (!hostId) {
@@ -536,6 +556,10 @@ export async function updateActivityHandler(req: Request<UpdateActivityParams>, 
             ...(feeMode === 'fixed' || feeMode === 'split' ? { feeMode } : {}),
             ...(typeof totalCost === 'number' ? { totalCost } : {}),
             ...(typeof minPlayers === 'number' ? { minPlayers } : {}),
+            ...(typeof weatherTemp === 'number' ? { weatherTemp } : {}),
+            ...(typeof weatherCode === 'number' ? { weatherCode } : {}),
+            ...(typeof weatherDesc === 'string' ? { weatherDesc } : {}),
+            ...(typeof weatherRain === 'number' ? { weatherRain } : {}),
         });
 
         return res.status(200).json({

@@ -156,6 +156,14 @@ class RemoteUserRepository implements UserRepository {
       }
       return await _fallback.me();
     } on DioException catch (e) {
+      // A 401 means the session is dead — rethrow so session-expiry
+      // flows (interceptor → SessionEvents → router) handle it instead
+      // of masking it behind a stale fallback user. Transport errors
+      // and other statuses keep the offline fallback below.
+      final status = e.response?.statusCode;
+      final wrapped = e.error;
+      final wrappedStatus = wrapped is ApiException ? wrapped.statusCode : null;
+      if (status == 401 || wrappedStatus == 401) rethrow;
       logError(
         '[RemoteUserRepository.me] DioException ${e.response?.statusCode}',
       );
@@ -407,6 +415,13 @@ class RemoteUserRepository implements UserRepository {
       totalRatingCount:
           (json['totalRatingCount'] as num?)?.toInt() ??
           (json['total_rating_count'] as num?)?.toInt() ??
+          0,
+      hostRatingBySport: _parseRatingBySport(
+        json['hostRatingBySport'] ?? json['host_rating_by_sport'],
+      ),
+      totalHostRatingCount:
+          (json['totalHostRatingCount'] as num?)?.toInt() ??
+          (json['total_host_rating_count'] as num?)?.toInt() ??
           0,
       email: json['email'] as String?,
       phone: json['phone'] as String?,

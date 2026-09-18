@@ -20,6 +20,7 @@ import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../domain/user_model.dart';
 import '../data/user_repository.dart';
+import '../../activities/presentation/create/components/image_picker_modal.dart';
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
@@ -229,8 +230,20 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   /// photo applies immediately so the preview below is always real.
   Future<void> _changePhoto() async {
     if (_uploadingPhoto) return;
+    // Gallery or camera — same source chooser as the create flow.
+    // A missing camera (denied permission, no hardware) surfaces as a
+    // picker failure below, not a crash.
+    final choice = await showModalBottomSheet<ImageSourceChoice>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const ImagePickerModal(),
+    );
+    if (choice == null || !mounted) return;
     final picked = await ImagePicker().pickImage(
-      source: ImageSource.gallery,
+      source: choice == ImageSourceChoice.camera
+          ? ImageSource.camera
+          : ImageSource.gallery,
       maxWidth: 1024,
       imageQuality: 85,
     );
@@ -306,12 +319,17 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           children: [
             // ── Header ────────────────────────────────────────────────
             Container(
-              color: context.colors.surface,
               padding: const EdgeInsets.fromLTRB(
                 AppSpacing.x4,
                 AppSpacing.x3,
                 AppSpacing.x5,
                 AppSpacing.x3,
+              ),
+              decoration: BoxDecoration(
+                color: context.colors.surface,
+                border: Border(
+                  bottom: BorderSide(color: context.colors.border),
+                ),
               ),
               child: Row(
                 children: [
@@ -324,11 +342,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                         width: 38,
                         height: 38,
                         decoration: BoxDecoration(
-                          color: context.colors.surface,
+                          color: context.colors.surfaceMuted,
                           borderRadius:
-                              BorderRadius.circular(AppRadius.sm),
-                          border: Border.all(color: context.colors.border),
-                          boxShadow: AppShadows.card,
+                              BorderRadius.circular(AppRadius.md),
                         ),
                         alignment: Alignment.center,
                         child: Icon(
@@ -341,10 +357,29 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                   ),
                   const SizedBox(width: AppSpacing.x3),
                   Expanded(
-                    child: Text(
-                      'Edit Profile',
-                      style: AppTypography.titleSheet(context),
-                      textAlign: TextAlign.center,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Edit Profile',
+                          style: AppTypography.titleSheet(context),
+                        ),
+                        // Live unsaved-changes dot.
+                        AnimatedOpacity(
+                          opacity: _dirty ? 1 : 0,
+                          duration: const Duration(milliseconds: 200),
+                          child: Container(
+                            margin: const EdgeInsets.only(left: 8),
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: AppColors.primary,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   // Mirror spacer
@@ -385,6 +420,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                         // Personal info card
                         _SectionCard(
                           title: 'Personal Info',
+                          icon: Icons.person_outline_rounded,
                           child: Column(
                             children: [
                               AppTextField.form(
@@ -429,6 +465,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                         // instead of faking a save.
                         _SectionCard(
                           title: 'Contact',
+                          icon: Icons.mail_outline_rounded,
                           child: Column(
                             children: [
                               AppTextField.form(
@@ -451,6 +488,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                         // before the request leaves the device.
                         _SectionCard(
                           title: 'Physical',
+                          icon: Icons.fitness_center_outlined,
                           child: Column(
                             children: [
                               Row(
@@ -486,6 +524,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                         // My sports card
                         _SectionCard(
                           title: 'My Sports',
+                          icon: Icons.sports_basketball_outlined,
                           trailing: AppTappable(
                             semanticLabel: 'Add sport',
                             feedback: AppTapFeedback.scale,
@@ -676,11 +715,32 @@ class _NotSyncedCaption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Text(
-        'Not synced to your profile yet',
-        style: AppTypography.metaSub(context),
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.x3,
+        vertical: AppSpacing.x2,
+      ),
+      decoration: BoxDecoration(
+        color: context.colors.primarySoft,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.info_outline_rounded,
+            size: 14,
+            color: context.colors.primaryOnSurface,
+          ),
+          const SizedBox(width: AppSpacing.x2),
+          Expanded(
+            child: Text(
+              'Saved on this device only for now',
+              style: AppTypography.metaSub(context).copyWith(
+                color: context.colors.primaryOnSurface,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -690,10 +750,12 @@ class _SectionCard extends StatelessWidget {
   const _SectionCard({
     required this.title,
     required this.child,
+    required this.icon,
     this.trailing,
   });
   final String title;
   final Widget child;
+  final IconData icon;
   final Widget? trailing;
 
   @override
@@ -703,7 +765,7 @@ class _SectionCard extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.x4),
       decoration: BoxDecoration(
         color: context.colors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.card),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
         border: Border.all(color: context.colors.border),
         boxShadow: AppShadows.card,
       ),
@@ -712,6 +774,21 @@ class _SectionCard extends StatelessWidget {
         children: [
           Row(
             children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: context.colors.primarySoft,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  icon,
+                  size: 17,
+                  color: context.colors.primaryOnSurface,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.x3),
               Expanded(
                 child: Text(
                   title,
@@ -751,22 +828,32 @@ class _AvatarBlock extends StatelessWidget {
         children: [
           Stack(
             clipBehavior: Clip.none,
+            alignment: Alignment.center,
             children: [
-              // Avatar with blue ring (matches profile screen).
-              // Backend photo URL first, bundled asset for legacy
-              // payloads, person placeholder when neither exists.
+              // Soft halo behind the avatar.
               Container(
-                width: 96,
-                height: 96,
+                width: 124,
+                height: 124,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(
-                    color: context.colors.primaryOnSurface,
-                    width: 3,
+                  color: context.colors.primarySoft,
+                ),
+              ),
+              // Avatar with gradient ring.
+              Container(
+                width: 104,
+                height: 104,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [AppColors.primary, AppColors.primaryDark],
                   ),
+                  boxShadow: AppShadows.glowPrimary,
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.all(2),
+                  padding: const EdgeInsets.all(3),
                   child: ClipOval(
                     child: photo != null
                         ? AssetImageWithFallback(
@@ -775,7 +862,7 @@ class _AvatarBlock extends StatelessWidget {
                             isAvatar: true,
                           )
                         : Container(
-                            color: context.colors.primarySoft,
+                            color: context.colors.surface,
                             child: Icon(
                               Icons.person,
                               size: 48,
@@ -803,17 +890,18 @@ class _AvatarBlock extends StatelessWidget {
                 ),
               // Camera badge
               Positioned(
-                right: 2,
-                bottom: 2,
+                right: 6,
+                bottom: 6,
                 child: Container(
                   padding: const EdgeInsets.all(7),
                   decoration: BoxDecoration(
                     color: AppColors.primary,
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: AppColors.textOnPrimary,
-                      width: 2,
+                      color: context.colors.surface,
+                      width: 2.5,
                     ),
+                    boxShadow: AppShadows.glowPrimary,
                   ),
                   child: const Icon(
                     Icons.camera_alt_rounded,
@@ -829,6 +917,7 @@ class _AvatarBlock extends StatelessWidget {
             isUploading ? 'Uploading…' : 'Change Photo',
             style: AppTypography.chipLabel(context).copyWith(
               color: context.colors.primaryOnSurface,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ],
@@ -865,7 +954,7 @@ class _SportCard extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.x3),
       decoration: BoxDecoration(
         color: context.colors.surfaceMuted,
-        borderRadius: BorderRadius.circular(AppRadius.card),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
         border: Border.all(color: context.colors.border),
       ),
       child: Column(
@@ -876,7 +965,9 @@ class _SportCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   entry.name,
-                  style: AppTypography.labelField(context),
+                  style: AppTypography.labelField(context).copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
               AppTappable(
@@ -884,10 +975,19 @@ class _SportCard extends StatelessWidget {
                 feedback: AppTapFeedback.scale,
                 minSize: 32,
                 onTap: onRemove,
-                child: Icon(
-                  Icons.close_rounded,
-                  size: 18,
-                  color: context.colors.textTertiary,
+                child: Container(
+                  width: 26,
+                  height: 26,
+                  decoration: BoxDecoration(
+                    color: context.colors.surface,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: context.colors.border),
+                  ),
+                  child: Icon(
+                    Icons.close_rounded,
+                    size: 14,
+                    color: context.colors.textTertiary,
+                  ),
                 ),
               ),
             ],
@@ -895,10 +995,10 @@ class _SportCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.x2),
           // Level segmented toggle
           Container(
-            height: 34,
+            height: 36,
             decoration: BoxDecoration(
               color: context.colors.surface,
-              borderRadius: BorderRadius.circular(AppRadius.lg),
+              borderRadius: BorderRadius.circular(AppRadius.pill),
               border: Border.all(color: context.colors.border),
             ),
             child: Row(
@@ -908,14 +1008,25 @@ class _SportCard extends StatelessWidget {
                   child: PressableScale(
                     onTap: () => onLevelChanged(i),
                     child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeOut,
                       margin: const EdgeInsets.all(3),
                       decoration: BoxDecoration(
-                        color: selected
-                            ? AppColors.primary
-                            : Colors.transparent,
+                        gradient: selected
+                            ? const LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  AppColors.primary,
+                                  AppColors.primaryDark,
+                                ],
+                              )
+                            : null,
                         borderRadius:
-                            BorderRadius.circular(AppRadius.sm),
+                            BorderRadius.circular(AppRadius.pill),
+                        boxShadow: selected
+                            ? AppShadows.glowPrimary
+                            : null,
                       ),
                       alignment: Alignment.center,
                       child: Text(
@@ -927,7 +1038,7 @@ class _SportCard extends StatelessWidget {
                               : context.colors.textSecondary,
                           fontWeight: selected
                               ? FontWeight.w700
-                              : FontWeight.w400,
+                              : FontWeight.w500,
                         ),
                       ),
                     ),
@@ -966,11 +1077,18 @@ class _SaveBar extends StatelessWidget {
         onTap: loading ? null : onSave,
         child: Container(
           width: double.infinity,
-          height: 54,
+          height: 56,
           decoration: BoxDecoration(
-            color: loading
-                ? AppColors.primary.withValues(alpha: 0.6)
-                : AppColors.primary,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: loading
+                  ? [
+                      AppColors.primary.withValues(alpha: 0.6),
+                      AppColors.primaryDark.withValues(alpha: 0.6),
+                    ]
+                  : const [AppColors.primary, AppColors.primaryDark],
+            ),
             borderRadius: BorderRadius.circular(AppRadius.pill),
             boxShadow: loading ? null : AppShadows.glowPrimary,
           ),
