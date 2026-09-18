@@ -131,6 +131,10 @@ class _DatePickerSheetState extends State<DatePickerSheet> {
     final firstDayOfMonth = DateTime(_focused.year, _focused.month, 1);
     final daysInMonth = DateTime(_focused.year, _focused.month + 1, 0).day;
     final leading = firstDayOfMonth.weekday % 7;
+    // Only the rows the month actually needs (4–6): a fixed 6-row grid
+    // leaves up to two fully blank rows (~112px of dead space) between
+    // the calendar and the time drums on short months.
+    final rowCount = ((leading + daysInMonth) / 7).ceil();
 
     return SafeArea(
       top: false,
@@ -195,8 +199,8 @@ class _DatePickerSheetState extends State<DatePickerSheet> {
                   .toList(),
             ),
             const SizedBox(height: 6),
-            // Day grid
-            ...List.generate(6, (row) {
+            // Day grid — only populated rows, no blank trailing rows.
+            ...List.generate(rowCount, (row) {
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 2),
                 child: Row(
@@ -227,9 +231,9 @@ class _DatePickerSheetState extends State<DatePickerSheet> {
               );
             }),
 
-            const SizedBox(height: AppSpacing.x3),
+            const SizedBox(height: AppSpacing.x2),
             Divider(height: 1, color: context.colors.border),
-            const SizedBox(height: AppSpacing.x4),
+            const SizedBox(height: AppSpacing.x3),
 
             // ── Time picker ─────────────────────────────────────────────
             // Drums keep local state for smooth scrolling; values are
