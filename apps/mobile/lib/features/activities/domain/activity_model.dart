@@ -360,8 +360,15 @@ class ActivityModel {
     final startRaw = json['startTime'] as String? ?? json['date_time'] as String?;
     final endRaw = json['endTime'] as String? ?? json['end_time'] as String?;
 
-    final start = DateTime.tryParse(startRaw ?? '') ?? DateTime.now();
-    final end = endRaw == null ? null : DateTime.tryParse(endRaw);
+    // Backend sends UTC ISO (`Z`); convert to device-local ONCE here so
+    // every downstream formatter renders correct local times with no
+    // per-site `.toLocal()` calls.
+    // Unparseable start falls back to a far-future sentinel (NOT now) so
+    // corrupt rows sort last in soonest-first lists instead of
+    // masquerading as starting-now ghost live cards.
+    final start =
+        DateTime.tryParse(startRaw ?? '')?.toLocal() ?? DateTime(2100);
+    final end = endRaw == null ? null : DateTime.tryParse(endRaw)?.toLocal();
 
     int resolvedDuration;
     if (end != null && end.isAfter(start)) {

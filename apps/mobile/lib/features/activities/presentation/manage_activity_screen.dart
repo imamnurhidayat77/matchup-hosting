@@ -438,6 +438,7 @@ class _ManageBody extends StatelessWidget {
                   _QuickActions(
                     activityId: activityId,
                     activity: activity,
+                    onEdit: onEdit,
                   ),
                   const SizedBox(height: AppSpacing.x5),
 
@@ -826,9 +827,17 @@ class _MetaRow extends StatelessWidget {
 // ─── Quick actions ────────────────────────────────────────────────────────────
 
 class _QuickActions extends StatelessWidget {
-  const _QuickActions({required this.activityId, required this.activity});
+  const _QuickActions({
+    required this.activityId,
+    required this.activity,
+    required this.onEdit,
+  });
   final String activityId;
   final ActivityModel activity;
+
+  /// Opens the full-screen edit screen (no tab bar, ✕ to cancel) — the
+  /// single edit path, shared with the hero "Edit activity" button.
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -845,7 +854,7 @@ class _QuickActions extends StatelessWidget {
                 label: 'Edit',
                 iconColor: context.colors.primaryOnSurface,
                 bgColor: context.colors.primarySoft,
-                onTap: () => NavGuard.push(context, '/edit-activity/$activityId'),
+                onTap: onEdit,
               ),
             ),
             Expanded(
@@ -1327,7 +1336,7 @@ class _AnnounceSheetState extends ConsumerState<_AnnounceSheet> {
   }
 }
 
-// ─── Announce sheet primary button ──────────────────────────────────────────
+// ─── Shared sheet widgets ─────────────────────────────────────────────────────
 
 class _SheetPrimaryBtn extends StatelessWidget {
   const _SheetPrimaryBtn({

@@ -177,6 +177,8 @@ class LocalActivityRepository implements ActivityRepository {
     String? skillLevel,
     int? capacity,
     String? joinPolicy,
+    bool? isPaid,
+    double? fee,
   }) async {
     await _delay();
   }

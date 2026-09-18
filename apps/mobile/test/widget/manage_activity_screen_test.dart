@@ -6,6 +6,7 @@ import 'package:mocktail/mocktail.dart';
 
 import 'package:matchup_mobile/core/providers/repository_providers.dart';
 import 'package:matchup_mobile/features/activities/domain/activity_participant.dart';
+import 'package:matchup_mobile/features/activities/presentation/edit_activity_screen.dart';
 import 'package:matchup_mobile/features/activities/presentation/manage_activity_screen.dart';
 import 'package:matchup_mobile/features/discovery/data/activity_repository.dart';
 import 'package:matchup_mobile/features/discovery/domain/activity_model.dart';
@@ -44,6 +45,8 @@ void main() {
         skillLevel: any(named: 'skillLevel'),
         capacity: any(named: 'capacity'),
         joinPolicy: any(named: 'joinPolicy'),
+        isPaid: any(named: 'isPaid'),
+        fee: any(named: 'fee'),
       ),
     ).thenAnswer((_) async {});
   });
@@ -89,7 +92,7 @@ void main() {
         GoRoute(
           path: '/edit-activity/:id',
           builder: (_, state) =>
-              Scaffold(body: Text('Edit ${state.pathParameters['id']}')),
+              EditActivityScreen(activityId: state.pathParameters['id']!),
         ),
         GoRoute(
           path: '/chat/:id',
@@ -260,7 +263,7 @@ void main() {
       await tester.tap(find.bySemanticsLabel('Edit activity'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Edit 5'), findsOneWidget);
+      expect(find.text('Edit Activity'), findsOneWidget);
     });
 
     testWidgets('should open the requester profile from the waiting list', (
@@ -346,7 +349,7 @@ void main() {
       expect(find.text('Tavita Faleolo removed from the activity.'), findsOneWidget);
     });
 
-    testWidgets('quick-action Edit should push the edit screen', (
+    testWidgets('Edit should open the full-screen editor and refresh on save', (
       tester,
     ) async {
       when(() => repo.byId('5')).thenAnswer((_) async => activity());
@@ -355,8 +358,8 @@ void main() {
 
       await pumpScreen(tester);
 
-      // Quick-action "Edit" navigates to the full edit screen (same as
-      // the hero edit button) — no more inline quick-edit sheet.
+      // Quick-action "Edit" pushes the full-screen editor (hero edit button
+      // uses the 'Edit activity' semantics label, so text 'Edit' is unique).
       await tester.scrollUntilVisible(
         find.text('Edit'),
         300,
@@ -365,25 +368,34 @@ void main() {
       await tester.tap(find.text('Edit'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Edit 5'), findsOneWidget);
-      // Nothing saved inline.
-      verifyNever(
+      // Full-screen editor — no bottom sheet, no tab bar.
+      expect(find.text('Edit Activity'), findsOneWidget);
+
+      await tester.tap(find.text('Save Changes'));
+      await tester.pumpAndSettle();
+
+      verify(
         () => repo.updateActivity(
-          activityId: any(named: 'activityId'),
-          title: any(named: 'title'),
-          sportType: any(named: 'sportType'),
-          description: any(named: 'description'),
-          locationName: any(named: 'locationName'),
-          latitude: any(named: 'latitude'),
-          longitude: any(named: 'longitude'),
+          activityId: '5',
+          title: 'Thursday Night Volleyball',
+          sportType: 'Volleyball',
+          description: '',
+          locationName: 'Eastside Rec Centre',
+          latitude: -36.8485,
+          longitude: 174.7633,
           geohash: any(named: 'geohash'),
-          startTime: any(named: 'startTime'),
+          startTime: DateTime(2026, 8, 27, 19),
           endTime: any(named: 'endTime'),
-          skillLevel: any(named: 'skillLevel'),
-          capacity: any(named: 'capacity'),
-          joinPolicy: any(named: 'joinPolicy'),
+          skillLevel: 'Intermediate',
+          capacity: 8,
+          joinPolicy: 'open',
+          isPaid: false,
+          fee: null,
         ),
-      );
+      ).called(1);
+      // Editor pops with success — manage refreshes and confirms.
+      expect(find.text('Edit Activity'), findsNothing);
+      expect(find.text('Activity updated.'), findsOneWidget);
     });
 
     testWidgets('quick-action Chat should push the group chat', (

@@ -24,6 +24,12 @@ export type SubmitActivityRatingInput = {
 export type RatedParticipant = {
     rateeUid: string;
     stars: number;
+    /**
+     * True when the ratee hosted this activity. Server-computed from
+     * `activity.hostId` (never trusted from the client) so host-role
+     * ratings aggregate separately from player ratings.
+     */
+    wasHost: boolean;
 };
 
 export type ActivityRatingRecord = {
@@ -125,7 +131,7 @@ export async function submitActivityRating(
 
         assertStars(entry.stars, rateeUid);
 
-        return { rateeUid, stars: entry.stars };
+        return { rateeUid, stars: entry.stars, wasHost: rateeUid === activity.hostId };
     });
 
     // Everyone involved must belong to the activity (host counts).
@@ -155,6 +161,7 @@ export async function submitActivityRating(
 
     const now = Timestamp.now();
     const ratingRef = firestore.doc(activityRatingDocPath(activityId, raterUid));
+    const hostUid = activity.hostId;
 
     const updated = await firestore.runTransaction(async (transaction) => {
         const ratingSnap = await transaction.get(ratingRef);
@@ -183,8 +190,19 @@ export async function submitActivityRating(
         } satisfies ActivityRatingRecord);
 
         // Fold the old submission out and the new one in, per ratee.
-        const previousByRatee = new Map(previousRatings.map((r) => [r.rateeUid, r.stars]));
-        const nextByRatee = new Map(ratings.map((r) => [r.rateeUid, r.stars]));
+        // Legacy docs predate `wasHost` — derive the role from the
+        // activity host (a ratee's role never changes for an activity).
+        const isHostRole = (rateeUid: string, wasHost?: boolean): boolean =>
+            wasHost ?? rateeUid === hostUid;
+        const previousByRatee = new Map(
+            previousRatings.map((r) => [
+                r.rateeUid,
+                { stars: r.stars, wasHost: isHostRole(r.rateeUid, r.wasHost) },
+            ]),
+        );
+        const nextByRatee = new Map(
+            ratings.map((r) => [r.rateeUid, { stars: r.stars, wasHost: r.wasHost }]),
+        );
 
         const affectedList = [...affectedRatees];
         userRefs.forEach((userRef, index) => {
@@ -200,22 +218,45 @@ export async function submitActivityRating(
             let sum = bucket.average * bucket.count;
             let count = bucket.count;
 
-            const oldStars = previousByRatee.get(rateeUid);
-            if (oldStars !== undefined) {
-                sum -= oldStars;
+            const oldEntry = previousByRatee.get(rateeUid);
+            if (oldEntry !== undefined) {
+                sum -= oldEntry.stars;
                 count -= 1;
             }
 
-            const newStars = nextByRatee.get(rateeUid);
-            if (newStars !== undefined) {
-                sum += newStars;
+            const newEntry = nextByRatee.get(rateeUid);
+            if (newEntry !== undefined) {
+                sum += newEntry.stars;
                 count += 1;
             }
 
             const totalCount = typeof userData.totalRatingCount === 'number'
                 ? userData.totalRatingCount
                 : 0;
-            const totalDelta = (newStars !== undefined ? 1 : 0) - (oldStars !== undefined ? 1 : 0);
+            const totalDelta = (newEntry !== undefined ? 1 : 0) - (oldEntry !== undefined ? 1 : 0);
+
+            // Host-role fold: same stars, separate buckets, only when the
+            // ratee hosted this activity. Old (pre-wasHost) submissions
+            // derive the role from the host id above, so updates to them
+            // backfill the host buckets automatically.
+            const hostBuckets = (userData.hostRatingBySport ?? {}) as Record<string, SportRatingAggregate>;
+            const hostBucket = hostBuckets[sportType] ?? { average: 0, count: 0 };
+            let hostSum = hostBucket.average * hostBucket.count;
+            let hostCount = hostBucket.count;
+            if (oldEntry !== undefined && oldEntry.wasHost) {
+                hostSum -= oldEntry.stars;
+                hostCount -= 1;
+            }
+            if (newEntry !== undefined && newEntry.wasHost) {
+                hostSum += newEntry.stars;
+                hostCount += 1;
+            }
+            const totalHostCount = typeof userData.totalHostRatingCount === 'number'
+                ? userData.totalHostRatingCount
+                : 0;
+            const hostDelta =
+                (newEntry !== undefined && newEntry.wasHost ? 1 : 0) -
+                (oldEntry !== undefined && oldEntry.wasHost ? 1 : 0);
 
             transaction.set(
                 userRef,
@@ -228,6 +269,14 @@ export async function submitActivityRating(
                         },
                     },
                     totalRatingCount: Math.max(totalCount + totalDelta, 0),
+                    hostRatingBySport: {
+                        ...hostBuckets,
+                        [sportType]: {
+                            average: hostCount > 0 ? hostSum / hostCount : 0,
+                            count: Math.max(hostCount, 0),
+                        },
+                    },
+                    totalHostRatingCount: Math.max(totalHostCount + hostDelta, 0),
                     updatedAt: now,
                 },
                 { merge: true },

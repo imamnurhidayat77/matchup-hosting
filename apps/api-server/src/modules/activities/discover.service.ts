@@ -347,6 +347,10 @@ function mapDocForDiscover(
         ...(typeof data.coverImageUrl === 'string'
             ? { coverImageUrl: data.coverImageUrl }
             : {}),
+        isPaid: data.isPaid === true,
+        ...(typeof data.fee === 'number' && Number.isFinite(data.fee) && data.fee > 0
+            ? { fee: data.fee }
+            : {}),
         ...(data.cancelledAt !== undefined
             ? { cancelledAt: data.cancelledAt as FirebaseFirestore.Timestamp }
             : {}),

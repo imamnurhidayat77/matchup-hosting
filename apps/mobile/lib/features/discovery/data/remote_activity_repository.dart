@@ -630,6 +630,8 @@ class RemoteActivityRepository implements ActivityRepository {
     String? skillLevel,
     int? capacity,
     String? joinPolicy,
+    bool? isPaid,
+    double? fee,
   }) async {
     _invalidateDetails();
     invalidateFeed();
@@ -653,6 +655,8 @@ class RemoteActivityRepository implements ActivityRepository {
     );
     setIfPresent('capacity', capacity);
     setIfPresent('joinPolicy', joinPolicy);
+    setIfPresent('isPaid', isPaid);
+    setIfPresent('fee', fee);
     try {
       await _client.dio.patch('$_base/$activityId', data: data);
     } catch (e, st) {

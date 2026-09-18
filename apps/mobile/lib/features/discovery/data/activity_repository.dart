@@ -122,6 +122,8 @@ abstract class ActivityRepository {
     String? skillLevel,
     int? capacity,
     String? joinPolicy,
+    bool? isPaid,
+    double? fee,
   });
 
   /// Host-only cover update (`PATCH /api/activities/:activityId/cover`).

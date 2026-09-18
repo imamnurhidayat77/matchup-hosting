@@ -60,6 +60,50 @@ export function isFeeMode(value: unknown): value is ActivityFeeMode {
 }
 
 /**
+ * Normalises an optional weather snapshot. Returns the storable shape
+ * (fields omitted when absent/invalid) — never throws, so a bad
+ * snapshot can't fail activity creation.
+ */
+export function normalizeWeatherSnapshot(input: {
+    weatherTemp?: number | null | undefined;
+    weatherCode?: number | undefined;
+    weatherDesc?: string | undefined;
+    weatherRain?: number | undefined;
+}): Partial<ActivityRecord> {
+    const out: Partial<ActivityRecord> = {};
+    if (input.weatherTemp !== undefined && input.weatherTemp !== null) {
+        if (typeof input.weatherTemp === 'number' && Number.isFinite(input.weatherTemp)) {
+            out.weatherTemp = Math.round(input.weatherTemp * 10) / 10;
+        }
+    } else if (input.weatherTemp === null) {
+        out.weatherTemp = null;
+    }
+    if (
+        input.weatherCode !== undefined &&
+        typeof input.weatherCode === 'number' &&
+        Number.isInteger(input.weatherCode) &&
+        input.weatherCode >= 0 &&
+        input.weatherCode <= 99
+    ) {
+        out.weatherCode = input.weatherCode;
+    }
+    if (input.weatherDesc !== undefined && typeof input.weatherDesc === 'string') {
+        const desc = input.weatherDesc.trim().slice(0, 40);
+        if (desc) out.weatherDesc = desc;
+    }
+    if (
+        input.weatherRain !== undefined &&
+        typeof input.weatherRain === 'number' &&
+        Number.isInteger(input.weatherRain) &&
+        input.weatherRain >= 0 &&
+        input.weatherRain <= 100
+    ) {
+        out.weatherRain = input.weatherRain;
+    }
+    return out;
+}
+
+/**
  * Normalises split-cost inputs. `totalCost` must be positive,
  * `minPlayers` (when given) an integer >= 2. Returns the stored shape;
  * both fields are omitted for `fixed` mode.
@@ -120,6 +164,14 @@ export type CreateActivityInput = {
     totalCost?: number;
     /** Minimum players for split mode. Defaults to full capacity. */
     minPlayers?: number;
+    /**
+     * Weather snapshot captured at creation (Open-Meteo, best-effort).
+     * All optional so old clients keep working; legacy rows omit them.
+     */
+    weatherTemp?: number | null;
+    weatherCode?: number;
+    weatherDesc?: string;
+    weatherRain?: number;
 };
 
 export type UpdateActivityStatusInput = {
@@ -157,6 +209,10 @@ export type UpdateActivityInput = {
     feeMode?: ActivityFeeMode;
     totalCost?: number;
     minPlayers?: number;
+    weatherTemp?: number | null;
+    weatherCode?: number;
+    weatherDesc?: string;
+    weatherRain?: number;
 };
 
 export type ActivityRecord = {
@@ -212,6 +268,13 @@ export type ActivityRecord = {
      * Minimum players for `split` mode. Absent means full capacity.
      */
     minPlayers?: number;
+    /**
+     * Weather snapshot (see [CreateActivityInput]). Absent on legacy rows.
+     */
+    weatherTemp?: number | null;
+    weatherCode?: number;
+    weatherDesc?: string;
+    weatherRain?: number;
     cancelledAt?: FirebaseFirestore.Timestamp;
     cancelledBy?: string;
     createdAt: FirebaseFirestore.Timestamp;
@@ -360,6 +423,15 @@ export async function createActivity(input: CreateActivityInput): Promise<{ acti
                 ) / 100
             : undefined);
 
+    // Weather snapshot (best-effort, all optional). Validated lightly —
+    // a bad snapshot must never fail activity creation.
+    const weather = normalizeWeatherSnapshot({
+        weatherTemp: input.weatherTemp,
+        weatherCode: input.weatherCode,
+        weatherDesc: input.weatherDesc,
+        weatherRain: input.weatherRain,
+    });
+
     const activitiesRef = firestore.collection('activities');
     const newActivityRef = activitiesRef.doc();
 
@@ -387,6 +459,7 @@ export async function createActivity(input: CreateActivityInput): Promise<{ acti
         feeMode: split.feeMode,
         ...(split.totalCost !== undefined ? { totalCost: split.totalCost } : {}),
         ...(split.minPlayers !== undefined ? { minPlayers: split.minPlayers } : {}),
+        ...weather,
         createdAt: now,
         updatedAt: now,
     });
@@ -739,6 +812,16 @@ export async function updateActivity(input: UpdateActivityInput): Promise<void> 
 
         updates.joinPolicy = input.joinPolicy;
     }
+
+    Object.assign(
+        updates,
+        normalizeWeatherSnapshot({
+            weatherTemp: input.weatherTemp,
+            weatherCode: input.weatherCode,
+            weatherDesc: input.weatherDesc,
+            weatherRain: input.weatherRain,
+        }),
+    );
 
     if (input.skillLevel !== undefined){
         if(

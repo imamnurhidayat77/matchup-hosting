@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -8,7 +9,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/geohash.dart';
-import '../../../core/widgets/app_dialog.dart';
+import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/error_retry.dart';
@@ -22,13 +23,14 @@ import 'widgets/venue_field.dart';
 
 /// Host-only edit screen for an existing activity.
 ///
-/// Prefills every field from the loaded activity and PATCHes only the
-/// fields the host actually changed — unchanged fields are passed as
-/// `null` to [updateActivity], which skips nulls server-side (see
-/// `RemoteActivityRepository.updateActivity`). Venue coordinates travel
-/// along only when the venue was re-picked. Returns `true` via pop on
-/// success so the caller (manage screen) can refresh its detail
-/// provider.
+/// Prefills every field from the loaded activity and PATCHes only what
+/// the host changed (venue coordinates travel along when the venue is
+/// re-picked). Returns `true` via pop on success so the caller
+/// (manage screen) can refresh its detail provider.
+///
+/// Layout follows the same visual language as [CreateActivityScreen]:
+/// icon-led setting cards, choice cards for skill / join policy, and a
+/// pinned bottom CTA — so Edit never drifts from Create.
 class EditActivityScreen extends ConsumerStatefulWidget {
   const EditActivityScreen({super.key, required this.activityId});
   final String activityId;
@@ -62,11 +64,48 @@ class _EditActivityScreenState extends ConsumerState<EditActivityScreen> {
     'Advanced',
   ];
 
+  static const _sportIcons = <String, IconData>{
+    'Basketball': Icons.sports_basketball_outlined,
+    'Tennis': Icons.sports_tennis_outlined,
+    'Running': Icons.directions_run_outlined,
+    'Volleyball': Icons.sports_volleyball_outlined,
+    'Football': Icons.sports_football_outlined,
+    'Soccer': Icons.sports_soccer_outlined,
+    'Cycling': Icons.directions_bike_outlined,
+    'Hiking': Icons.hiking_outlined,
+    'Golf': Icons.sports_golf_outlined,
+    'Swimming': Icons.pool_outlined,
+  };
+
+  static const _skillMeta = <String, ({IconData icon, String subtitle})>{
+    'All Level': (icon: Icons.groups_outlined, subtitle: 'Everyone welcome'),
+    'Beginner': (icon: Icons.eco_outlined, subtitle: 'Just starting out'),
+    'Intermediate': (
+      icon: Icons.trending_up_outlined,
+      subtitle: 'Knows the basics'
+    ),
+    'Advanced': (icon: Icons.bolt_outlined, subtitle: 'Competitive play'),
+  };
+
+  static const _joinPolicyMeta = <String, ({IconData icon, String subtitle})>{
+    'open': (
+      icon: Icons.lock_open_outlined,
+      subtitle: 'Anyone can join instantly'
+    ),
+    'approval': (
+      icon: Icons.verified_outlined,
+      subtitle: 'You approve each request'
+    ),
+  };
+
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
+  final _priceController = TextEditingController();
 
   bool _initialised = false;
   bool _saving = false;
+  int _titleLen = 0;
+  int _descLen = 0;
 
   String _sport = 'Basketball';
   DateTime? _date;
@@ -77,31 +116,48 @@ class _EditActivityScreenState extends ConsumerState<EditActivityScreen> {
   String _skill = 'All Level';
   String _joinPolicy = 'open';
 
-  // Snapshot of the loaded activity, taken in [_initFrom] — [_save]
-  // diffs the current inputs against these and sends only what changed
-  // (null for the rest), and [_isDirty] compares against the same.
-  String _initTitle = '';
-  String _initDescription = '';
-  String _initSport = 'Basketball';
-  DateTime? _initDate;
-  int _initDurationMinutes = 120;
-  String? _initVenueLabel;
-  double? _initVenueLat;
-  double? _initVenueLng;
-  int _initCapacity = 10;
-  String _initSkill = 'All Level';
-  String _initJoinPolicy = 'open';
+  /// Entry fee: 0 = Free, 1 = Paid (same convention as Create).
+  int _feeType = 0;
+
+  // Original snapshot — powers the discard-changes check behind the ✕.
+  String _origTitle = '';
+  String _origDesc = '';
+  String _origSport = '';
+  DateTime? _origDate;
+  int _origDuration = 0;
+  String? _origVenueLabel;
+  double? _origLat;
+  double? _origLng;
+  int _origCapacity = 0;
+  String _origSkill = '';
+  String _origJoinPolicy = '';
+  int _origFeeType = 0;
+  String _origPrice = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _titleController.addListener(
+      () => setState(() => _titleLen = _titleController.text.length),
+    );
+    _descriptionController.addListener(
+      () => setState(() => _descLen = _descriptionController.text.length),
+    );
+  }
 
   @override
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
+    _priceController.dispose();
     super.dispose();
   }
 
   void _initFrom(ActivityModel a) {
     _titleController.text = a.title;
     _descriptionController.text = a.description;
+    _titleLen = a.title.length;
+    _descLen = a.description.length;
     _sport = _sportOptions.contains(a.sportType) ? a.sportType : 'Basketball';
     _date = a.dateTime;
     _durationMinutes = a.durationMinutes;
@@ -110,14 +166,8 @@ class _EditActivityScreenState extends ConsumerState<EditActivityScreen> {
     if (_capacity < _minCapacity) _capacity = _minCapacity;
     _skill = _skillOptions.contains(a.skillLevel) ? a.skillLevel : 'All Level';
     _joinPolicy = a.joinPolicy;
-    _initTitle = a.title;
-    _initDescription = a.description;
-    _initSport = _sport;
-    _initDate = a.dateTime;
-    _initDurationMinutes = a.durationMinutes;
-    _initCapacity = a.capacity;
-    _initSkill = _skill;
-    _initJoinPolicy = a.joinPolicy;
+    _feeType = a.isPaid ? 1 : 0;
+    _priceController.text = _formatPrice(a.fee);
     if (a.latitude != null && a.longitude != null) {
       _venue = PlaceSuggestion(
         placeId: 'existing',
@@ -127,10 +177,84 @@ class _EditActivityScreenState extends ConsumerState<EditActivityScreen> {
         longitude: a.longitude!,
       );
     }
-    _initVenueLabel = _venue?.label;
-    _initVenueLat = _venue?.latitude;
-    _initVenueLng = _venue?.longitude;
+    // Snapshot for the discard-changes check.
+    _origTitle = a.title;
+    _origDesc = a.description;
+    _origSport = _sport;
+    _origDate = _date;
+    _origDuration = _durationMinutes;
+    _origVenueLabel = _venue?.label;
+    _origLat = _venue?.latitude;
+    _origLng = _venue?.longitude;
+    _origCapacity = _capacity;
+    _origSkill = _skill;
+    _origJoinPolicy = _joinPolicy;
+    _origFeeType = _feeType;
+    _origPrice = _priceController.text;
     _initialised = true;
+  }
+
+  /// Display form of a stored fee: `5.0` → `'5'`, `4.5` → `'4.5'`.
+  static String _formatPrice(double? fee) {
+    if (fee == null) return '';
+    return fee.truncateToDouble() == fee
+        ? fee.toInt().toString()
+        : fee.toString();
+  }
+
+  double? get _parsedPrice {
+    final v = double.tryParse(_priceController.text.trim());
+    return (v != null && v > 0) ? v : null;
+  }
+
+  bool get _isDirty {
+    if (!_initialised) return false;
+    return _titleController.text != _origTitle ||
+        _descriptionController.text != _origDesc ||
+        _sport != _origSport ||
+        _date != _origDate ||
+        _durationMinutes != _origDuration ||
+        _venue?.label != _origVenueLabel ||
+        _venue?.latitude != _origLat ||
+        _venue?.longitude != _origLng ||
+        _capacity != _origCapacity ||
+        _skill != _origSkill ||
+        _joinPolicy != _origJoinPolicy ||
+        _feeType != _origFeeType ||
+        _priceController.text != _origPrice;
+  }
+
+  /// ✕ pressed — pop straight away when nothing changed, otherwise confirm
+  /// so an accidental tap never throws edits away silently.
+  Future<void> _onClose() async {
+    if (_saving) return;
+    if (!_isDirty) {
+      Navigator.of(context).maybePop();
+      return;
+    }
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Discard changes?'),
+        content: const Text(
+          'You have unsaved changes. They will be lost if you leave.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Keep editing'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(
+              'Discard',
+              style: TextStyle(color: context.colors.errorText),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (discard == true && mounted) Navigator.of(context).maybePop();
   }
 
   String? _error() {
@@ -139,10 +263,14 @@ class _EditActivityScreenState extends ConsumerState<EditActivityScreen> {
     }
     if (_venue == null) return 'Please pick a venue on the map.';
     if (_date == null) return 'Please pick a date and time.';
+    if (_feeType == 1 && _parsedPrice == null) {
+      return 'Please enter a valid price.';
+    }
     return null;
   }
 
   Future<void> _save(ActivityModel original) async {
+    FocusScope.of(context).unfocus();
     final err = _error();
     if (err != null) {
       AppSnackbar.show(context,
@@ -161,37 +289,31 @@ class _EditActivityScreenState extends ConsumerState<EditActivityScreen> {
     }
     setState(() => _saving = true);
     try {
-      final title = _titleController.text.trim();
-      final description = _descriptionController.text.trim();
       final venue = _venue!;
       final start = _date!;
-      final venueChanged = venue.label != _initVenueLabel ||
-          venue.latitude != _initVenueLat ||
-          venue.longitude != _initVenueLng;
-      final timeChanged =
-          start != _initDate || _durationMinutes != _initDurationMinutes;
+      final paid = _feeType == 1;
       await ref.read(activityRepositoryProvider).updateActivity(
             activityId: widget.activityId,
-            title: title == _initTitle ? null : title,
-            sportType: _sport == _initSport ? null : _sport,
-            description: description == _initDescription ? null : description,
-            locationName: venueChanged ? venue.label : null,
-            latitude: venueChanged ? venue.latitude : null,
-            longitude: venueChanged ? venue.longitude : null,
-            geohash: venueChanged
-                ? geohashEncode(venue.latitude, venue.longitude)
-                : null,
-            startTime: timeChanged ? start : null,
-            endTime: timeChanged
-                ? start.add(Duration(minutes: _durationMinutes))
-                : null,
-            skillLevel: _skill == _initSkill ? null : _skill,
-            capacity: _capacity == _initCapacity ? null : _capacity,
-            joinPolicy: _joinPolicy == _initJoinPolicy ? null : _joinPolicy,
+            title: _titleController.text.trim(),
+            sportType: _sport,
+            description: _descriptionController.text.trim(),
+            locationName: venue.label,
+            latitude: venue.latitude,
+            longitude: venue.longitude,
+            geohash: geohashEncode(venue.latitude, venue.longitude),
+            startTime: start,
+            endTime: start.add(Duration(minutes: _durationMinutes)),
+            skillLevel: _skill,
+            capacity: _capacity,
+            joinPolicy: _joinPolicy,
+            isPaid: paid,
+            // Free clears any stored fee server-side; paid sends the price.
+            fee: paid ? _parsedPrice : null,
           );
       ref.invalidate(hostedGamesProvider);
       ref.invalidate(joinedGamesProvider);
       if (!mounted) return;
+      HapticFeedback.mediumImpact();
       // Pop silent — the manage screen shows the confirmation snackbar
       // (a snackbar shown here would die with this route).
       Navigator.of(context).pop(true);
@@ -204,43 +326,6 @@ class _EditActivityScreenState extends ConsumerState<EditActivityScreen> {
         variant: AppSnackbarVariant.error,
       );
     }
-  }
-
-  /// True when any input differs from the loaded activity snapshot.
-  bool _isDirty() {
-    if (!_initialised) return false;
-    if (_titleController.text.trim() != _initTitle) return true;
-    if (_descriptionController.text.trim() != _initDescription) return true;
-    if (_sport != _initSport) return true;
-    if (_date != _initDate) return true;
-    if (_durationMinutes != _initDurationMinutes) return true;
-    if (_venue?.label != _initVenueLabel ||
-        _venue?.latitude != _initVenueLat ||
-        _venue?.longitude != _initVenueLng) {
-      return true;
-    }
-    if (_capacity != _initCapacity) return true;
-    if (_skill != _initSkill) return true;
-    if (_joinPolicy != _initJoinPolicy) return true;
-    return false;
-  }
-
-  /// Pops straight away when nothing changed; otherwise asks the host
-  /// to confirm discarding their edits.
-  Future<void> _maybePop() async {
-    if (!_isDirty()) {
-      Navigator.of(context).maybePop();
-      return;
-    }
-    final discard = await AppDialog.confirm(
-      context,
-      title: 'Discard changes?',
-      body: 'You have unsaved changes. They will be lost if you go back.',
-      confirmLabel: 'Discard',
-      cancelLabel: 'Keep editing',
-      destructive: true,
-    );
-    if (discard == true && mounted) Navigator.of(context).maybePop();
   }
 
   Future<void> _pickDate() async {
@@ -257,6 +342,7 @@ class _EditActivityScreenState extends ConsumerState<EditActivityScreen> {
       initialTime: TimeOfDay.fromDateTime(_date ?? now),
     );
     if (time == null) return;
+    HapticFeedback.selectionClick();
     setState(() {
       _date = DateTime(date.year, date.month, date.day, time.hour, time.minute);
     });
@@ -264,58 +350,194 @@ class _EditActivityScreenState extends ConsumerState<EditActivityScreen> {
 
   Future<void> _pickOption({
     required String title,
+    String? subtitle,
     required List<String> options,
     required String current,
     required ValueChanged<String> onSelect,
+    IconData Function(String option)? iconFor,
+    String Function(String option)? subtitleFor,
   }) async {
+    HapticFeedback.selectionClick();
     final selected = await showModalBottomSheet<String>(
       context: context,
       useSafeArea: true,
+      isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (sheetContext) => Container(
-        decoration: BoxDecoration(
-          color: context.colors.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: EdgeInsets.fromLTRB(
-          AppSpacing.x4,
-          AppSpacing.x3,
-          AppSpacing.x4,
-          AppSpacing.x5 + MediaQuery.of(sheetContext).viewPadding.bottom,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: context.colors.border,
-                  borderRadius: BorderRadius.circular(2),
-                ),
+      builder: (sheetContext) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(sheetContext).size.height * 0.7,
+          ),
+          child: Container(
+            decoration: BoxDecoration(
+              color: context.colors.surface,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(AppRadius.xl),
               ),
+              boxShadow: AppShadows.sheet,
             ),
-            const SizedBox(height: AppSpacing.x3),
-            Text(title, style: AppTypography.titleMedium(context)),
-            const SizedBox(height: AppSpacing.x2),
-            Flexible(
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: options.length,
-                itemBuilder: (_, i) => ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(options[i]),
-                  trailing: options[i] == current
-                      ? Icon(Icons.check_rounded,
-                          color: context.colors.primaryOnSurface)
-                      : null,
-                  onTap: () => Navigator.of(sheetContext).pop(options[i]),
+            padding: EdgeInsets.fromLTRB(
+              AppSpacing.x5,
+              AppSpacing.x3,
+              AppSpacing.x5,
+              AppSpacing.x6 +
+                  MediaQuery.of(sheetContext).viewPadding.bottom,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: AppSpacing.x4),
+                    decoration: BoxDecoration(
+                      color: context.colors.border,
+                      borderRadius: AppRadius.pillR,
+                    ),
+                  ),
                 ),
-              ),
+                Text(
+                  title,
+                  style: AppTypography.titleLarge(context).copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: AppTypography.bodyMedium(context).copyWith(
+                      color: context.colors.textSecondary,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: AppSpacing.x4),
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: options.length,
+                    separatorBuilder: (_, _) =>
+                        const SizedBox(height: AppSpacing.x2),
+                    itemBuilder: (_, i) {
+                      final opt = options[i];
+                      final isCurrent = opt == current;
+                      final icon = iconFor?.call(opt);
+                      final sub = subtitleFor?.call(opt);
+                      final c = context.colors;
+                      return PressableScale(
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          Navigator.of(sheetContext).pop(opt);
+                        },
+                        child: AnimatedContainer(
+                          duration: AppDurations.fast,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.x4,
+                            vertical: AppSpacing.x3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isCurrent ? c.primarySoft : c.surface,
+                            borderRadius:
+                                BorderRadius.circular(AppRadius.card),
+                            border: Border.all(
+                              color:
+                                  isCurrent ? c.primaryOnSurface : c.border,
+                              width: isCurrent ? 1.5 : 1,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              if (icon != null) ...[
+                                Container(
+                                  width: 38,
+                                  height: 38,
+                                  decoration: BoxDecoration(
+                                    color: isCurrent
+                                        ? c.surface
+                                        : c.surfaceSubtle,
+                                    borderRadius: BorderRadius.circular(
+                                      AppRadius.input,
+                                    ),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Icon(
+                                    icon,
+                                    size: 19,
+                                    color: isCurrent
+                                        ? c.primaryOnSurface
+                                        : c.textSecondary,
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.x3),
+                              ],
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      opt,
+                                      style: AppTypography.bodyMedium(
+                                        context,
+                                      ).copyWith(
+                                        fontSize: 15,
+                                        fontWeight: isCurrent
+                                            ? FontWeight.w700
+                                            : FontWeight.w600,
+                                        color: isCurrent
+                                            ? c.primaryOnSurface
+                                            : c.textPrimary,
+                                      ),
+                                    ),
+                                    if (sub != null) ...[
+                                      const SizedBox(height: 1),
+                                      Text(
+                                        sub,
+                                        style:
+                                            AppTypography.metaSub(context),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: AppSpacing.x2),
+                              AnimatedContainer(
+                                duration: AppDurations.fast,
+                                width: 24,
+                                height: 24,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: isCurrent
+                                      ? c.primaryOnSurface
+                                      : Colors.transparent,
+                                  border: Border.all(
+                                    color: isCurrent
+                                        ? c.primaryOnSurface
+                                        : c.borderInput,
+                                    width: 1.5,
+                                  ),
+                                ),
+                                alignment: Alignment.center,
+                                child: isCurrent
+                                    ? const Icon(
+                                        Icons.check_rounded,
+                                        size: 15,
+                                        color: Colors.white,
+                                      )
+                                    : null,
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -325,164 +547,407 @@ class _EditActivityScreenState extends ConsumerState<EditActivityScreen> {
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(_editActivityProvider(widget.activityId));
-    return AppScaffold(
-      showHomeIndicator: false,
-      backgroundColor: context.colors.background,
-      body: async.when(
-        loading: () => const SkeletonList(count: 4),
-        error: (_, _) => ErrorRetry(
+    return async.when(
+      loading: () => AppScaffold(
+        title: 'Edit Activity',
+        leading: _CloseButton(
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
+        // Outside ShellRoute (no tab bar) so this draws its own indicator.
+        showHomeIndicator: true,
+        body: const SkeletonList(count: 4),
+      ),
+      error: (_, _) => AppScaffold(
+        title: 'Edit Activity',
+        leading: _CloseButton(
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
+        showHomeIndicator: true,
+        body: ErrorRetry(
           message: 'Could not load this activity.',
           onRetry: () =>
               ref.invalidate(_editActivityProvider(widget.activityId)),
         ),
-        data: (activity) {
-          if (activity == null) {
-            return const Center(child: Text('Activity not found.'));
-          }
-          if (!_initialised) {
-            // Prefill once — guarded so typing never gets clobbered
-            // by a provider rebuild.
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted && !_initialised) {
-                setState(() => _initFrom(activity));
-              }
-            });
-            return const SkeletonList(count: 4);
-          }
-          return Column(
+      ),
+      data: (activity) {
+        if (activity == null) {
+          return AppScaffold(
+            title: 'Edit Activity',
+            leading: _CloseButton(
+              onPressed: () => Navigator.of(context).maybePop(),
+            ),
+            showHomeIndicator: true,
+            body: const Center(child: Text('Activity not found.')),
+          );
+        }
+        if (!_initialised) {
+          // Prefill once — guarded so typing never gets clobbered
+          // by a provider rebuild.
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && !_initialised) {
+              setState(() => _initFrom(activity));
+            }
+          });
+          return AppScaffold(
+            title: 'Edit Activity',
+            leading: _CloseButton(
+              onPressed: () => Navigator.of(context).maybePop(),
+            ),
+            showHomeIndicator: true,
+            body: const SkeletonList(count: 4),
+          );
+        }
+        return AppScaffold(
+          title: 'Edit Activity',
+          leading: _CloseButton(onPressed: _onClose),
+          actions: [
+            _SaveAction(
+              enabled: !_saving,
+              onTap: () => _save(activity),
+            ),
+          ],
+          // Outside ShellRoute (no tab bar) so this draws its own indicator.
+          showHomeIndicator: true,
+          body: _buildForm(),
+          bottomBar: _buildBottomBar(activity),
+        );
+      },
+    );
+  }
+
+  Widget _buildForm() {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.x5,
+        AppSpacing.x2,
+        AppSpacing.x5,
+        AppSpacing.x8,
+      ),
+      children: [
+        const _SectionHeading(
+          title: 'Basic details',
+          subtitle: 'What, when and where',
+        ),
+        const SizedBox(height: AppSpacing.x3),
+        _SettingCard(
+          icon: Icons.edit_outlined,
+          label: 'Activity Title',
+          trailing: Text(
+            '$_titleLen/40',
+            style: AppTypography.metaSub(context),
+          ),
+          value: TextField(
+            controller: _titleController,
+            style: _inputStyle(context),
+            cursorColor: AppColors.primary,
+            textInputAction: TextInputAction.next,
+            inputFormatters: [LengthLimitingTextInputFormatter(40)],
+            decoration: _dec(context, 'Weekend Basketball Runs'),
+          ),
+        ),
+        _SettingCard(
+          icon: _sportIcons[_sport] ?? Icons.sports_basketball_outlined,
+          label: 'Sport',
+          onTap: () => _pickOption(
+            title: 'Sport',
+            subtitle: 'What will you be playing?',
+            options: pickSportNames(
+              ref.watch(sportsConfigProvider).valueOrNull ?? const [],
+              (s) => s.canHost,
+              _sportOptions,
+            ),
+            current: _sport,
+            onSelect: (v) => setState(() => _sport = v),
+            iconFor: (o) =>
+                _sportIcons[o] ?? Icons.sports_basketball_outlined,
+          ),
+          value: Text(_sport, style: _valueStyle(context)),
+          trailing: _chevron(context),
+        ),
+        _SettingCard(
+          icon: Icons.calendar_month_outlined,
+          label: 'Date & Time',
+          onTap: _pickDate,
+          value: Text(
+            _date == null
+                ? 'Pick a date'
+                : DateFormat('EEE, MMM d · h:mm a').format(_date!),
+            style: _valueStyle(context).copyWith(
+              color: _date == null
+                  ? context.colors.textSecondary
+                  : context.colors.textPrimary,
+            ),
+          ),
+          trailing: _chevron(context),
+        ),
+        _SettingCard(
+          icon: Icons.schedule_outlined,
+          label: 'Duration',
+          value: Text(
+            _formatDuration(_durationMinutes),
+            style: _valueStyle(context),
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              _Header(
-                saving: _saving,
-                onBack: () => _maybePop(),
-                onSave: () => _save(activity),
+              _CounterBtn(
+                icon: Icons.remove,
+                enabled: _durationMinutes > 30,
+                semanticLabel: 'Shorten duration',
+                onTap: () =>
+                    setState(() => _durationMinutes -= 15),
               ),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.x5,
-                    AppSpacing.x3,
-                    AppSpacing.x5,
-                    AppSpacing.x8,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _Label('Title'),
-                      _TextBox(
-                        controller: _titleController,
-                        hint: 'Weekend Basketball Runs',
-                      ),
-                      const SizedBox(height: AppSpacing.x4),
-                      _Label('Sport'),
-                      _OptionRow(
-                        value: _sport,
-                        onTap: () => _pickOption(
-                          title: 'Sport',
-                          // Admin-curated list (canHost); bundled fallback offline.
-                          options: pickSportNames(
-                            ref.watch(sportsConfigProvider).valueOrNull ?? const [],
-                            (s) => s.canHost,
-                            _sportOptions,
-                          ),
-                          current: _sport,
-                          onSelect: (v) => setState(() => _sport = v),
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.x4),
-                      _Label('Date & time'),
-                      _OptionRow(
-                        value: _date == null
-                            ? 'Pick a date'
-                            : DateFormat('EEE, MMM d · h:mm a').format(_date!),
-                        onTap: _pickDate,
-                      ),
-                      const SizedBox(height: AppSpacing.x4),
-                      _Label('Duration'),
-                      _StepperRow(
-                        value: _formatDuration(_durationMinutes),
-                        onMinus: _durationMinutes > 30
-                            ? () => setState(
-                                () => _durationMinutes -= 15)
-                            : null,
-                        onPlus: _durationMinutes < 480
-                            ? () => setState(
-                                () => _durationMinutes += 15)
-                            : null,
-                        minusLabel: 'Shorten duration',
-                        plusLabel: 'Extend duration',
-                      ),
-                      const SizedBox(height: AppSpacing.x4),
-                      VenueField(
-                        value: _venue,
-                        onSuggestionSelected: (s) =>
-                            setState(() => _venue = s),
-                      ),
-                      const SizedBox(height: AppSpacing.x4),
-                      _Label('Max participants'),
-                      _StepperRow(
-                        value: '$_capacity players',
-                        onMinus: _capacity > _minCapacity
-                            ? () => setState(() => _capacity -= 1)
-                            : null,
-                        onPlus: _capacity < 50
-                            ? () => setState(() => _capacity += 1)
-                            : null,
-                        minusLabel: 'Remove one participant',
-                        plusLabel: 'Add one participant',
-                      ),
-                      const SizedBox(height: AppSpacing.x4),
-                      _Label('Skill level'),
-                      _OptionRow(
-                        value: _skill,
-                        onTap: () => _pickOption(
-                          title: 'Skill level',
-                          options: _skillOptions,
-                          current: _skill,
-                          onSelect: (v) => setState(() => _skill = v),
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.x4),
-                      _Label('Who can join'),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _PolicyCard(
-                              title: 'Open',
-                              subtitle: 'Instant join',
-                              selected: _joinPolicy == 'open',
-                              onTap: () =>
-                                  setState(() => _joinPolicy = 'open'),
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.x3),
-                          Expanded(
-                            child: _PolicyCard(
-                              title: 'Approval',
-                              subtitle: 'Host approves',
-                              selected: _joinPolicy == 'approval',
-                              onTap: () =>
-                                  setState(() => _joinPolicy = 'approval'),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.x4),
-                      _Label('Description'),
-                      _TextBox(
-                        controller: _descriptionController,
-                        hint: 'What should players know?',
-                        maxLines: 4,
-                      ),
-                    ],
-                  ),
-                ),
+              _CounterBtn(
+                icon: Icons.add,
+                enabled: _durationMinutes < 480,
+                emphasised: true,
+                semanticLabel: 'Extend duration',
+                onTap: () =>
+                    setState(() => _durationMinutes += 15),
               ),
             ],
-          );
-        },
+          ),
+        ),
+        VenueField(
+          value: _venue,
+          onSuggestionSelected: (s) => setState(() => _venue = s),
+        ),
+        _SettingCard(
+          icon: Icons.group_outlined,
+          label: 'Max Participants',
+          value: Text(
+            '$_capacity players',
+            style: _valueStyle(context),
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _CounterBtn(
+                icon: Icons.remove,
+                enabled: _capacity > _minCapacity,
+                semanticLabel: 'Remove one participant',
+                onTap: () => setState(() => _capacity -= 1),
+              ),
+              _CounterBtn(
+                icon: Icons.add,
+                enabled: _capacity < 50,
+                emphasised: true,
+                semanticLabel: 'Add one participant',
+                onTap: () => setState(() => _capacity += 1),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.x5),
+        const _SectionHeading(
+          title: 'Preferences',
+          subtitle: 'Who should join your game',
+        ),
+        const SizedBox(height: AppSpacing.x3),
+        _FieldLabel('Skill Level'),
+        const SizedBox(height: AppSpacing.x2),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            mainAxisSpacing: AppSpacing.x3,
+            crossAxisSpacing: AppSpacing.x3,
+            mainAxisExtent: 76,
+          ),
+          itemCount: _skillOptions.length,
+          itemBuilder: (context, i) {
+            final opt = _skillOptions[i];
+            final meta = _skillMeta[opt];
+            return _ChoiceCard(
+              icon: meta?.icon ?? Icons.signal_cellular_alt_outlined,
+              title: opt,
+              subtitle: meta?.subtitle ?? '',
+              selected: _skill == opt,
+              onTap: () {
+                HapticFeedback.selectionClick();
+                setState(() => _skill = opt);
+              },
+            );
+          },
+        ),
+        const SizedBox(height: AppSpacing.x4),
+        _FieldLabel('Who Can Join'),
+        const SizedBox(height: AppSpacing.x2),
+        Row(
+          children: [
+            Expanded(
+              child: _ChoiceCard(
+                icon: _joinPolicyMeta['open']!.icon,
+                title: 'Open',
+                subtitle: _joinPolicyMeta['open']!.subtitle,
+                selected: _joinPolicy == 'open',
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  setState(() => _joinPolicy = 'open');
+                },
+              ),
+            ),
+            const SizedBox(width: AppSpacing.x3),
+            Expanded(
+              child: _ChoiceCard(
+                icon: _joinPolicyMeta['approval']!.icon,
+                title: 'Approval',
+                subtitle: _joinPolicyMeta['approval']!.subtitle,
+                selected: _joinPolicy == 'approval',
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  setState(() => _joinPolicy = 'approval');
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.x5),
+        _FieldLabel('Entry Fee'),
+        const SizedBox(height: 2),
+        Text(
+          'Is there a cost to join?',
+          style: AppTypography.metaSub(context),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _ChoiceCard(
+                icon: Icons.volunteer_activism_outlined,
+                title: 'Free',
+                subtitle: 'Anyone can join',
+                selected: _feeType == 0,
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  setState(() => _feeType = 0);
+                },
+              ),
+            ),
+            const SizedBox(width: AppSpacing.x3),
+            Expanded(
+              child: _ChoiceCard(
+                icon: Icons.payments_outlined,
+                title: 'Paid',
+                subtitle: 'Set a price',
+                selected: _feeType == 1,
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  setState(() => _feeType = 1);
+                },
+              ),
+            ),
+          ],
+        ),
+        if (_feeType == 1) ...[
+          const SizedBox(height: AppSpacing.x3),
+          Container(
+            height: 48,
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x4),
+            alignment: Alignment.centerLeft,
+            decoration: BoxDecoration(
+              color: context.colors.surface,
+              borderRadius: BorderRadius.circular(AppRadius.input),
+              border: Border.all(color: context.colors.border),
+            ),
+            child: Row(
+              children: [
+                Text(
+                  '\$',
+                  style: _inputStyle(context).copyWith(
+                    color: context.colors.textSecondary,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.x1),
+                Expanded(
+                  child: TextField(
+                    controller: _priceController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    textInputAction: TextInputAction.done,
+                    cursorColor: AppColors.primary,
+                    style: _inputStyle(context),
+                    decoration: _dec(context, '0.00'),
+                  ),
+                ),
+                Text('per person', style: AppTypography.metaSub(context)),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: AppSpacing.x5),
+        Row(
+          children: [
+            _FieldLabel('Description'),
+            const SizedBox(width: 6),
+            Text('(Optional)', style: AppTypography.metaSub(context)),
+            const Spacer(),
+            Text(
+              '$_descLen/300',
+              style: AppTypography.metaSub(context),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.x4,
+            vertical: AppSpacing.x3,
+          ),
+          decoration: BoxDecoration(
+            color: context.colors.surface,
+            borderRadius: BorderRadius.circular(AppRadius.input),
+            border: Border.all(color: context.colors.border),
+          ),
+          child: TextField(
+            controller: _descriptionController,
+            style: _inputStyle(context),
+            cursorColor: AppColors.primary,
+            minLines: 3,
+            maxLines: 5,
+            inputFormatters: [LengthLimitingTextInputFormatter(300)],
+            decoration: _dec(context, 'What should players know?'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBottomBar(ActivityModel activity) {
+    return Container(
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        border: Border(top: BorderSide(color: context.colors.border)),
+        boxShadow: AppShadows.bottomBar,
+      ),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.x5,
+        AppSpacing.x3,
+        AppSpacing.x5,
+        AppSpacing.x4,
+      ),
+      child: AppButton(
+        label: 'Save Changes',
+        onPressed: _saving ? null : () => _save(activity),
+        loading: _saving,
       ),
     );
   }
+
+  Widget _chevron(BuildContext context) => Icon(
+        Icons.chevron_right_rounded,
+        size: 20,
+        color: context.colors.textTertiary,
+      );
+
+  TextStyle _valueStyle(BuildContext context) =>
+      AppTypography.bodyMedium(context).copyWith(
+        fontSize: 15,
+        fontWeight: FontWeight.w500,
+        color: context.colors.textPrimary,
+      );
 
   static String _formatDuration(int minutes) {
     if (minutes < 60) return '$minutes min';
@@ -493,259 +958,264 @@ class _EditActivityScreenState extends ConsumerState<EditActivityScreen> {
   }
 }
 
-// ─── Small building blocks (screen-local) ────────────────────────────────────
+// ─── Building blocks (same language as Create) ───────────────────────────────
 
-class _Header extends StatelessWidget {
-  const _Header({
-    required this.saving,
-    required this.onBack,
-    required this.onSave,
-  });
-  final bool saving;
-  final VoidCallback onBack;
-  final VoidCallback onSave;
+/// ✕ button that cancels the edit — same 44px circle treatment as the
+/// standard back button so the header keeps its rhythm.
+class _CloseButton extends StatelessWidget {
+  const _CloseButton({required this.onPressed});
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: context.colors.surface,
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.x2,
-        AppSpacing.x2,
-        AppSpacing.x4,
-        AppSpacing.x3,
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Row(
-          children: [
-            Semantics(
-              button: true,
-              label: 'Back',
-              child: GestureDetector(
-                onTap: saving ? null : onBack,
-                child: const Padding(
-                  padding: EdgeInsets.all(10),
-                  child: Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-                ),
+    return Semantics(
+      button: true,
+      label: 'Close',
+      child: PressableScale(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          onPressed();
+        },
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: Center(
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: context.colors.surfaceSubtle,
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+                border: Border.all(color: context.colors.border),
+              ),
+              child: Icon(
+                Icons.close_rounded,
+                size: 18,
+                color: context.colors.textPrimary,
               ),
             ),
-            Expanded(
-              child: Text(
-                'Edit Activity',
-                style: AppTypography.titleMedium(context),
-              ),
-            ),
-            PressableScale(
-              onTap: saving ? null : onSave,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.x5,
-                  vertical: AppSpacing.x2,
-                ),
-                decoration: BoxDecoration(
-                  color: saving
-                      ? context.colors.surfaceMuted
-                      : AppColors.primary,
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
-                ),
-                alignment: Alignment.center,
-                child: saving
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: AppColors.textOnPrimary,
-                        ),
-                      )
-                    : Text(
-                        'Save',
-                        style: AppTypography.buttonPrimary.copyWith(
-                          color: AppColors.textOnPrimary,
-                          fontSize: 14,
-                        ),
-                      ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _Label extends StatelessWidget {
-  const _Label(this.text);
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.x2),
-      child: Text(text, style: AppTypography.labelField(context)),
-    );
-  }
-}
-
-class _TextBox extends StatelessWidget {
-  const _TextBox({
-    required this.controller,
-    required this.hint,
-    this.maxLines = 1,
-  });
-  final TextEditingController controller;
-  final String hint;
-  final int maxLines;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x4),
-      decoration: BoxDecoration(
-        color: context.colors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.input),
-        border: Border.all(color: context.colors.border),
-      ),
-      child: TextField(
-        controller: controller,
-        maxLines: maxLines,
-        style: AppTypography.bodyMedium(context),
-        cursorColor: AppColors.primary,
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: AppTypography.bodyMedium(context).copyWith(
-            color: context.colors.textTertiary,
           ),
-          border: InputBorder.none,
         ),
       ),
     );
   }
 }
 
-class _OptionRow extends StatelessWidget {
-  const _OptionRow({required this.value, required this.onTap});
-  final String value;
+/// Trailing "Save" text action — mirrors `AppScaffold.sheet`'s trailing slot.
+class _SaveAction extends StatelessWidget {
+  const _SaveAction({required this.enabled, required this.onTap});
+  final bool enabled;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return PressableScale(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.x4,
-          vertical: AppSpacing.x3,
-        ),
-        decoration: BoxDecoration(
-          color: context.colors.surface,
-          borderRadius: BorderRadius.circular(AppRadius.input),
-          border: Border.all(color: context.colors.border),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                value,
-                style: AppTypography.bodyMedium(context),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+    return Semantics(
+      button: true,
+      label: 'Save',
+      enabled: enabled,
+      child: PressableScale(
+        onTap: enabled ? onTap : null,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.x2,
+            vertical: AppSpacing.x3,
+          ),
+          child: Text(
+            'Save',
+            style: AppTypography.labelField(context).copyWith(
+              color: enabled
+                  ? context.colors.primaryOnSurface
+                  : context.colors.textTertiary,
             ),
-            Icon(
-              Icons.chevron_right_rounded,
-              size: 18,
-              color: context.colors.textTertiary,
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _StepperRow extends StatelessWidget {
-  const _StepperRow({
-    required this.value,
-    required this.onMinus,
-    required this.onPlus,
-    required this.minusLabel,
-    required this.plusLabel,
-  });
-  final String value;
-  final VoidCallback? onMinus;
-  final VoidCallback? onPlus;
-  final String minusLabel;
-  final String plusLabel;
+class _SectionHeading extends StatelessWidget {
+  const _SectionHeading({required this.title, required this.subtitle});
+  final String title;
+  final String subtitle;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: AppTypography.titleMedium(context)),
+        const SizedBox(height: 2),
+        Text(
+          subtitle,
+          style: AppTypography.bodyMedium(context).copyWith(
+            color: context.colors.textSecondary,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SettingCard extends StatelessWidget {
+  const _SettingCard({
+    required this.icon,
+    required this.label,
+    this.value,
+    this.trailing,
+    this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final Widget? value;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final card = Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.x3),
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.x4,
-        vertical: AppSpacing.x2,
+        vertical: AppSpacing.x3,
       ),
       decoration: BoxDecoration(
         color: context.colors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.input),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         border: Border.all(color: context.colors.border),
       ),
       child: Row(
         children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: context.colors.primarySoft,
+              borderRadius: BorderRadius.circular(AppRadius.input),
+            ),
+            alignment: Alignment.center,
+            child: Icon(
+              icon,
+              size: 19,
+              color: context.colors.primaryOnSurface,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.x3),
           Expanded(
-            child: Text(value, style: AppTypography.bodyMedium(context)),
-          ),
-          Semantics(
-            button: true,
-            label: minusLabel,
-            child: GestureDetector(
-              onTap: onMinus,
-              child: Container(
-                width: 36,
-                height: 36,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: context.colors.border),
-                ),
-                child: Icon(Icons.remove_rounded,
-                    size: 18, color: context.colors.textPrimary),
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: AppTypography.metaSub(context)),
+                if (value != null) ...[
+                  const SizedBox(height: 2),
+                  value!,
+                ],
+              ],
             ),
           ),
-          const SizedBox(width: AppSpacing.x2),
-          Semantics(
-            button: true,
-            label: plusLabel,
-            child: GestureDetector(
-              onTap: onPlus,
-              child: Container(
-                width: 36,
-                height: 36,
-                alignment: Alignment.center,
-                decoration: const BoxDecoration(
-                  color: AppColors.primary,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.add_rounded,
-                    size: 18, color: AppColors.textOnPrimary),
-              ),
-            ),
-          ),
+          if (trailing != null) ...[
+            const SizedBox(width: AppSpacing.x2),
+            trailing!,
+          ],
         ],
+      ),
+    );
+
+    if (onTap == null) return card;
+    return PressableScale(onTap: onTap, child: card);
+  }
+}
+
+class _FieldLabel extends StatelessWidget {
+  const _FieldLabel(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) =>
+      Text(text, style: AppTypography.labelField(context));
+}
+
+/// Stepper button — 32px visual inside a 44px touch target. Decrement is
+/// neutral outlined, increment is filled `primarySoft`. Matches Create.
+class _CounterBtn extends StatelessWidget {
+  const _CounterBtn({
+    required this.icon,
+    required this.enabled,
+    required this.onTap,
+    this.emphasised = false,
+    required this.semanticLabel,
+  });
+
+  final IconData icon;
+  final bool enabled;
+  final VoidCallback onTap;
+  final bool emphasised;
+  final String semanticLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color fill;
+    final Color iconColor;
+    final BoxBorder? border;
+
+    if (!enabled) {
+      fill = context.colors.surfaceSubtle;
+      iconColor = context.colors.textTertiary;
+      border = Border.all(color: context.colors.border);
+    } else if (emphasised) {
+      fill = context.colors.primarySoft;
+      iconColor = context.colors.primaryOnSurface;
+      border = null;
+    } else {
+      fill = context.colors.surfaceSubtle;
+      iconColor = context.colors.textPrimary;
+      border = Border.all(color: context.colors.border);
+    }
+
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: semanticLabel,
+      child: PressableScale(
+        onTap: enabled
+            ? () {
+                HapticFeedback.selectionClick();
+                onTap();
+              }
+            : null,
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: Center(
+            child: Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: fill,
+                border: border,
+              ),
+              alignment: Alignment.center,
+              child: Icon(icon, size: 16, color: iconColor),
+            ),
+          ),
+        ),
       ),
     );
   }
 }
 
-class _PolicyCard extends StatelessWidget {
-  const _PolicyCard({
+class _ChoiceCard extends StatelessWidget {
+  const _ChoiceCard({
+    required this.icon,
     required this.title,
     required this.subtitle,
     required this.selected,
     required this.onTap,
   });
+
+  final IconData icon;
   final String title;
   final String subtitle;
   final bool selected;
@@ -753,36 +1223,77 @@ class _PolicyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PressableScale(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.x3),
-        decoration: BoxDecoration(
-          color: selected
-              ? context.colors.primarySoft
-              : context.colors.surface,
-          borderRadius: BorderRadius.circular(AppRadius.input),
-          border: Border.all(
-            color: selected
-                ? context.colors.primaryOnSurface
-                : context.colors.border,
-            width: selected ? 1.5 : 1,
+    final c = context.colors;
+    final accent = selected ? c.primaryOnSurface : c.textSecondary;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: title,
+      child: PressableScale(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: AppDurations.fast,
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.x4,
+            vertical: AppSpacing.x3,
           ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: AppTypography.labelField(context).copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+          decoration: BoxDecoration(
+            color: selected ? c.primarySoft : c.surface,
+            borderRadius: BorderRadius.circular(AppRadius.card),
+            border: Border.all(
+              color: selected ? c.primaryOnSurface : c.border,
+              width: selected ? 1.5 : 1,
             ),
-            const SizedBox(height: 2),
-            Text(subtitle, style: AppTypography.metaSub(context)),
-          ],
+          ),
+          child: Row(
+            children: [
+              Icon(icon, size: 22, color: accent),
+              const SizedBox(width: AppSpacing.x3),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      title,
+                      style: AppTypography.bodyMedium(context).copyWith(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: selected ? c.primaryOnSurface : c.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.metaSub(context),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
+
+TextStyle _inputStyle(BuildContext context) =>
+    AppTypography.bodyFormSecondary(context).copyWith(
+      color: context.colors.textPrimary,
+    );
+
+InputDecoration _dec(BuildContext context, String hint) => InputDecoration(
+      hintText: hint,
+      hintStyle: AppTypography.bodyFormSecondary(context).copyWith(
+        color: context.colors.textTertiary,
+      ),
+      filled: false,
+      border: InputBorder.none,
+      enabledBorder: InputBorder.none,
+      focusedBorder: InputBorder.none,
+      isDense: true,
+      contentPadding: EdgeInsets.zero,
+    );

@@ -156,6 +156,14 @@ class RemoteUserRepository implements UserRepository {
       }
       return await _fallback.me();
     } on DioException catch (e) {
+      // A 401 means the session is dead — rethrow so session-expiry
+      // flows (interceptor → SessionEvents → router) handle it instead
+      // of masking it behind a stale fallback user. Transport errors
+      // and other statuses keep the offline fallback below.
+      final status = e.response?.statusCode;
+      final wrapped = e.error;
+      final wrappedStatus = wrapped is ApiException ? wrapped.statusCode : null;
+      if (status == 401 || wrappedStatus == 401) rethrow;
       logError(
         '[RemoteUserRepository.me] DioException ${e.response?.statusCode}',
       );

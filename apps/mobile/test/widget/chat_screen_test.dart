@@ -135,7 +135,7 @@ void main() {
         GoRoute(
           path: '/activity/:id',
           builder: (_, state) => Scaffold(
-            body: Text('Discover ${state.pathParameters['id']}'),
+            body: Text('Detail ${state.pathParameters['id']}'),
           ),
         ),
         GoRoute(
@@ -297,6 +297,61 @@ void main() {
 
       expect(find.text('View activity details'), findsOneWidget);
       expect(find.text('Report activity'), findsOneWidget);
+    });
+
+    testWidgets('should route non-hosts to the public detail screen', (
+      tester,
+    ) async {
+      await pumpScreen(tester);
+
+      final settings = find.bySemanticsLabel('Chat settings');
+      await tester.ensureVisible(settings);
+      await tester.pumpAndSettle();
+      await tester.tap(settings);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('View activity details'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Detail Test Group'), findsOneWidget);
+    });
+
+    testWidgets('should route hosts to manage-activity from settings', (
+      tester,
+    ) async {
+      final a = testActivity();
+      when(() => activityRepo.byId(any())).thenAnswer(
+        (_) async => ActivityModel(
+          id: a.id,
+          title: a.title,
+          sportType: a.sportType,
+          description: a.description,
+          location: a.location,
+          distanceKm: a.distanceKm,
+          dateTime: a.dateTime,
+          skillLevel: a.skillLevel,
+          capacity: a.capacity,
+          participantCount: a.participantCount,
+          hostName: a.hostName,
+          isHost: true,
+        ),
+      );
+
+      await pumpScreen(tester);
+
+      final settings = find.bySemanticsLabel('Chat settings');
+      await tester.ensureVisible(settings);
+      await tester.pumpAndSettle();
+      await tester.tap(settings);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Manage activity'), findsOneWidget);
+      expect(find.text('View activity details'), findsNothing);
+
+      await tester.tap(find.text('Manage activity'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Manage Test Group'), findsOneWidget);
     });
 
     testWidgets('should hide the Check In button outside the check-in window',
@@ -611,7 +666,10 @@ void main() {
     });
 
     group('View activity details routing', () {
-      Future<void> openDetails(WidgetTester tester) async {
+      Future<void> openDetails(
+        WidgetTester tester, {
+        String rowLabel = 'View activity details',
+      }) async {
         await pumpScreen(tester);
         await tester.pump(const Duration(milliseconds: 100));
         final settings = find.bySemanticsLabel('Chat settings');
@@ -619,7 +677,7 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(settings);
         await tester.pumpAndSettle();
-        await tester.tap(find.text('View activity details'));
+        await tester.tap(find.text(rowLabel));
         await tester.pumpAndSettle();
       }
 
@@ -641,7 +699,7 @@ void main() {
           (_) async => testActivity().copyWith(isHost: true),
         );
 
-        await openDetails(tester);
+        await openDetails(tester, rowLabel: 'Manage activity');
 
         expect(find.text('Manage Test Group'), findsOneWidget);
       });
