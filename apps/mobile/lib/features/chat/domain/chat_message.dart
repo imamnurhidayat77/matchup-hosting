@@ -40,6 +40,11 @@ class ChatMessage {
   final double? latitude;
   final double? longitude;
 
+  /// Wire `type` of the message (`'text'` default, `'system'` for
+  /// server-posted events like "Sam left the group"). System messages
+  /// render as a centered grey pill, never as a chat bubble.
+  final String messageType;
+
   const ChatMessage({
     required this.id,
     required this.senderId,
@@ -53,10 +58,12 @@ class ChatMessage {
     this.imageUrl,
     this.latitude,
     this.longitude,
+    this.messageType = 'text',
   });
 
   bool get isImage => imagePath != null || imageUrl != null;
   bool get isLocation => latitude != null && longitude != null;
+  bool get isSystem => messageType == 'system';
 
   /// Returns [text] when it is exactly one image URL, `null` otherwise.
   ///

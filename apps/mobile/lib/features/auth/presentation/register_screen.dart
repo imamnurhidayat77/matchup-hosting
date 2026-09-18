@@ -149,7 +149,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
     final availableHeight = screenHeight - safeAreaTop - safeAreaBottom;
 
     return SystemBackFallback(
-      onEmptyStack: (context) => context.go('/welcome'),
+      // Same dirty-check as the UI close button: typed input must
+      // confirm before it is discarded.
+      onEmptyStack: (_) => _onClose(),
       child: AppScaffold(
       safeAreaTop: true,
       showHomeIndicator: true,

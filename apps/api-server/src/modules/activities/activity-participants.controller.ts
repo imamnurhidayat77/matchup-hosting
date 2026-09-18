@@ -10,6 +10,8 @@ import {
     requestToJoin,
 } from './activity-participants.service.js';
 import { getActivityById } from './activities.service.js';
+import { rtdb } from '../../database/firebase.js';
+import { activityMessagesPath } from '../../database/paths.js';
 import {
     createNotification,
     displayNameOf,
@@ -208,6 +210,9 @@ export async function leaveActivityHandler(req: Request<LeaveActivityParams>, re
                 activityId,
                 senderUid: uid,
             });
+            // In-chat tombstone so remaining members see why the person
+            // vanished. Fire-and-forget — never fails the leave itself.
+            postLeaveTombstone(activityId, uid, false).catch(() => undefined);
         } else if (activity && isHostRemoval) {
             await createNotification({
                 recipientUid: uid,
@@ -217,6 +222,7 @@ export async function leaveActivityHandler(req: Request<LeaveActivityParams>, re
                 activityId,
                 senderUid: authUid,
             });
+            postLeaveTombstone(activityId, uid, true).catch(() => undefined);
         } else if (activity && isHostSelfRemoval) {
             const participants = await getParticipants(activityId);
             const notificationRecipients = participants
@@ -575,5 +581,36 @@ export async function listMyJoinRequestsHandler(req: Request, res: Response) {
             ok: false,
             error: { code: 'INTERNAL_ERROR', message },
         });
+    }
+}
+
+/**
+ * Posts a `system` tombstone into the group chat when someone leaves or
+ * is removed, so remaining members see why the person vanished
+ * ("Sam left the group"). Best-effort: resolves void, never throws —
+ * a chat write must never fail the membership change itself. No push
+ * is sent for tombstones (a silent in-chat event, WhatsApp-style);
+ * the removed/left user is notified through their own push type.
+ */
+async function postLeaveTombstone(
+    activityId: string,
+    leaverUid: string,
+    removed: boolean,
+): Promise<void> {
+    try {
+        const name = (await displayNameOf(leaverUid)) || 'Someone';
+        const text = removed
+            ? `${name} was removed from the group`
+            : `${name} left the group`;
+        const messageRef = rtdb.ref(activityMessagesPath(activityId));
+        const newMessageRef = messageRef.push();
+        await newMessageRef.set({
+            senderId: 'system',
+            text,
+            type: 'system',
+            timestamp: Date.now(),
+        });
+    } catch {
+        // Best-effort only.
     }
 }

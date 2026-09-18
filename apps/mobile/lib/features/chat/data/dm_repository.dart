@@ -310,6 +310,7 @@ class RemoteDmRepository implements DmRepository {
       imageUrl: ChatMessage.imageUrlFromText(text),
       latitude: coords?.latitude,
       longitude: coords?.longitude,
+      messageType: json['type']?.toString() == 'system' ? 'system' : 'text',
     );
   }
 }
@@ -320,8 +321,7 @@ class RemoteDmRepository implements DmRepository {
 /// belong to [ChatMessage.imageUrlFromText].
 ({double latitude, double longitude})? parseSharedLocation(String text) {
   const prefix = '📍 Shared location: ';
-  if (!text.startsWith(prefix)) return null;
-  final link = text.substring(prefix.length).trim();
+  if (!text.startsWith(prefix)) return null;  final link = text.substring(prefix.length).trim();
   final uri = Uri.tryParse(link);
   if (uri == null) return null;
   // Group chat writes `https://maps.google.com/?q=<lat>,<lng>`.
@@ -377,5 +377,6 @@ ChatMessage _parseDmMessage(Map<String, dynamic> json, {required String myUid}) 
     imageUrl: ChatMessage.imageUrlFromText(text),
     latitude: coords?.latitude,
     longitude: coords?.longitude,
+    messageType: json['type']?.toString() == 'system' ? 'system' : 'text',
   );
 }

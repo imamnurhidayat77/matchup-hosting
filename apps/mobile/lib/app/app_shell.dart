@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/providers/auth_state_provider.dart';
 import '../core/theme/app_typography.dart';
 import '../core/theme/dark_colors.dart';
 import '../core/widgets/home_indicator.dart';
@@ -8,7 +10,7 @@ import '../core/widgets/pressable_scale.dart';
 import '../features/tour/presentation/tour_anchors.dart';
 import '../features/tour/presentation/tour_host.dart';
 
-class AppShell extends StatefulWidget {
+class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key, required this.child});
 
   final Widget child;
@@ -56,15 +58,21 @@ class AppShell extends StatefulWidget {
 
 
   @override
-  State<AppShell> createState() => _AppShellState();
+  ConsumerState<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
+class _AppShellState extends ConsumerState<AppShell> {
   /// Tab-visit history for the system back button. Tab switches go()
   /// (no stack), so without this the back button on a tab root would
   /// close the app instead of returning to the previous tab.
   /// Bounded; empty means "exit the app".
   final List<int> _tabHistory = [];
+
+  /// Last handled back-press: same anti-double-tap debounce as
+  /// [SystemBackFallback] — a second press mid-transition lands on
+  /// unexpected screens.
+  DateTime? _lastBackHandled;
+  static const _backDebounceWindow = Duration(milliseconds: 500);
 
   void _goTab(int index, int currentIndex) {
     if (index == currentIndex) return;
@@ -110,15 +118,30 @@ class _AppShellState extends State<AppShell> {
     final location = GoRouterState.of(context).matchedLocation;
     final index = _indexFor(location);
 
+    // A new account must not inherit the previous one's tab history
+    // (back would jump to tabs the new user never visited).
+    ref.listen<AuthStatus>(authStatusProvider, (_, _) {
+      _tabHistory.clear();
+    });
+
     // System back on a tab root walks the tab-visit history instead of
     // closing the app; empty history exits normally. Placed here (not
     // deeper): pushed pages sit above the shell and pop before this
     // PopScope is ever consulted, and TourHost's own PopScope (deeper,
     // inside body) still gets first shot while a tour is active.
+    // Double-presses within the debounce window are ignored: the first
+    // press already started a transition, and handling the second one
+    // mid-transition lands on unexpected screens.
     return PopScope(
       canPop: _tabHistory.isEmpty,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
+        final now = DateTime.now();
+        final age = now.difference(
+          _lastBackHandled ?? DateTime.fromMillisecondsSinceEpoch(0),
+        );
+        if (!age.isNegative && age < _backDebounceWindow) return;
+        _lastBackHandled = now;
         if (_tabHistory.isNotEmpty) {
           var prev = _tabHistory.removeLast();
           // Drop duplicates of where we already are (e.g. arrived via

@@ -441,6 +441,34 @@ void main() {
       ).called(1);
     });
 
+    testWidgets('should render system messages as a centered pill', (
+      tester,
+    ) async {
+      final today = DateTime.now();
+      when(() => repo.watchMessages(any())).thenAnswer(
+        (_) => Stream.value([
+          ChatMessage(
+            id: 'sys-1',
+            senderId: 'system',
+            senderName: '',
+            text: 'Sam left the group',
+            sentAt: DateTime(today.year, today.month, today.day, 9, 0),
+            messageType: 'system',
+          ),
+        ]),
+      );
+
+      await pumpScreen(tester);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Sam left the group'), findsOneWidget);
+
+      // No reaction picker on long-press: system events are not messages.
+      await tester.longPress(find.text('Sam left the group'));
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.text('🔥'), findsNothing);
+    });
+
     ChatPoll testPoll() {
       final today = DateTime.now();
       return ChatPoll(

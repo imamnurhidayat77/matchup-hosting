@@ -9,9 +9,9 @@ import 'package:matchup_mobile/core/utils/nav_guard.dart';
 /// `/notifications`) is still on the stack replaces the whole route
 /// match list without ever popping it — go_router's `ImperativeRouteMatch`
 /// completer is only completed from the pop path, so `context.go(...)`
-/// discards it unresolved. Before the safety-net timeout was added, that
-/// permanently stranded the location in `NavGuard`'s in-flight set, so
-/// every future tap to it silently no-op'd until the app restarted.
+/// discards it unresolved. Without the staleness backstop that would
+/// strand the location in `NavGuard`'s in-flight set forever, so every
+/// future tap to it would silently no-op until the app restarted.
 void main() {
   setUp(NavGuard.resetForTest);
 
@@ -54,6 +54,21 @@ void main() {
   }
 
   testWidgets(
+    'rapid double-tap pushes only one page (no duplicate key)',
+    (tester) async {
+      await pumpShell(tester);
+
+      await tester.tap(find.text('Open Notifications'));
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.tap(find.text('Open Notifications'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Notifications open'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'NavGuard.push self-heals after context.go() abandons the pushed route',
     (tester) async {
       final router = await pumpShell(tester);
@@ -72,25 +87,14 @@ void main() {
       router.go('/home');
       await tester.pumpAndSettle();
 
-      // Immediately re-opening notifications is still blocked — the
-      // safety net hasn't elapsed, so the guard is (correctly, for now)
-      // still protecting against a duplicate push.
-      await tester.tap(find.text('Open Notifications'));
-      await tester.pumpAndSettle();
-      expect(find.text('Notifications open'), findsNothing);
-
-      // Advance past the safety-net window — the stranded key must
-      // release on its own so a genuinely new tap works again, without
-      // requiring an app restart.
-      await tester.pump(const Duration(seconds: 6));
+      // Force the staleness window to elapse deterministically, then a
+      // genuinely new tap must work again without an app restart.
+      await tester.pump(const Duration(seconds: 9));
 
       await tester.tap(find.text('Open Notifications'));
       await tester.pumpAndSettle();
       expect(find.text('Notifications open'), findsOneWidget);
-
-      // Let this push's own safety-net timer fire too, so the test ends
-      // with no pending timers (flutter_test asserts against that).
-      await tester.pump(const Duration(seconds: 6));
+      expect(tester.takeException(), isNull);
     },
   );
 }

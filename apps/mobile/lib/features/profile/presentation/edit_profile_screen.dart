@@ -34,7 +34,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   final _nameController = TextEditingController();
   final _bioController = TextEditingController();
   final _emailController = TextEditingController();
-  final _phoneController = TextEditingController();
   final _locationController = TextEditingController();
   final _heightController = TextEditingController();
   final _weightController = TextEditingController();
@@ -62,7 +61,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       _nameController,
       _bioController,
       _emailController,
-      _phoneController,
       _locationController,
       _heightController,
       _weightController,
@@ -87,7 +85,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _nameController.dispose();
     _bioController.dispose();
     _emailController.dispose();
-    _phoneController.dispose();
     _locationController.dispose();
     _heightController.dispose();
     _weightController.dispose();
@@ -102,7 +99,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _nameController.text = user.displayName;
     _bioController.text = user.bio ?? '';
     _emailController.text = user.email ?? '';
-    _phoneController.text = user.phone ?? '';
     _locationController.text = user.location ?? '';
     _dob = user.dateOfBirth;
     _syncDobText();
@@ -190,7 +186,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         bio: _bioController.text.trim(),
         location: _locationController.text.trim(),
         email: _emailController.text.trim(),
-        phone: _phoneController.text.trim(),
         dateOfBirth: _dob,
         heightCm: height,
         weightKg: weight,
@@ -442,13 +437,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                 keyboardType: TextInputType.emailAddress,
                                 enabled: false,
                               ),
-                              const SizedBox(height: AppSpacing.x4),
-                              AppTextField.form(
-                                label: 'PHONE',
-                                controller: _phoneController,
-                                keyboardType: TextInputType.phone,
-                                enabled: false,
-                              ),
                               const SizedBox(height: AppSpacing.x3),
                               const _NotSyncedCaption(),
                             ],
@@ -456,10 +444,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                         ),
                         const SizedBox(height: AppSpacing.x4),
 
-                        // Physical card — height persists via PATCH /me
-                        // (and shows publicly); weight/goal are not part
-                        // of PATCH /me, so they keep the
-                        // disabled-with-caption treatment.
+                        // Physical card — height, weight and goal all
+                        // persist via PATCH /me (weight 30–300, goal
+                        // free text). Validation mirrors the repo
+                        // guards; garbage is rejected with a snackbar
+                        // before the request leaves the device.
                         _SectionCard(
                           title: 'Physical',
                           child: Column(
@@ -479,7 +468,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                       label: 'WEIGHT (KG)',
                                       controller: _weightController,
                                       keyboardType: TextInputType.number,
-                                      enabled: false,
                                     ),
                                   ),
                                 ],
@@ -488,10 +476,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                               AppTextField.form(
                                 label: 'PRIMARY GOAL',
                                 controller: _goalController,
-                                enabled: false,
+                                hint: 'e.g. Run a half-marathon',
                               ),
-                              const SizedBox(height: AppSpacing.x3),
-                              const _NotSyncedCaption(),
                             ],
                           ),
                         ),

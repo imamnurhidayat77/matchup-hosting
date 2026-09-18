@@ -1,6 +1,23 @@
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const rtdbMocks = vi.hoisted(() => {
+    return {
+        ref: vi.fn(),
+        push: vi.fn(),
+        set: vi.fn(),
+    };
+});
+
+vi.mock('../../database/firebase.js', () => {
+    return {
+        rtdb: { ref: rtdbMocks.ref },
+        firestore: {},
+        auth: {},
+        checkFirestoreConnection: vi.fn().mockResolvedValue(true),
+    };
+});
+
 vi.mock('./activities.service.js', () => {
     return {
         createActivity: vi.fn().mockResolvedValue({ activityId: 'activity-1' }),
@@ -1880,6 +1897,9 @@ describe('GET /api/activities/:activityId/participants', () => {
 describe('DELETE /api/activities/:activityId/participants/:uid', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        rtdbMocks.set.mockResolvedValue(undefined);
+        rtdbMocks.push.mockReturnValue({ set: rtdbMocks.set });
+        rtdbMocks.ref.mockReturnValue({ push: rtdbMocks.push });
     });
 
     it('when request is valid => expected 200', async () => {
@@ -1916,6 +1936,16 @@ describe('DELETE /api/activities/:activityId/participants/:uid', () => {
             senderUid: 'test-uid-1',
         });
         expect(notificationsService.createNotification).toHaveBeenCalledTimes(1);
+        // In-chat tombstone so remaining members see why they left.
+        expect(rtdbMocks.ref).toHaveBeenCalledWith(
+            'activityChats/activity-1/messages',
+        );
+        expect(rtdbMocks.set).toHaveBeenCalledWith({
+            senderId: 'system',
+            text: 'Someone left the group',
+            type: 'system',
+            timestamp: expect.any(Number),
+        });
     });
 
     it('when activity host removes another participant => expected 200', async () => {
@@ -1952,6 +1982,12 @@ describe('DELETE /api/activities/:activityId/participants/:uid', () => {
             senderUid: 'test-uid-1',
         });
         expect(notificationsService.createNotification).toHaveBeenCalledTimes(1);
+        expect(rtdbMocks.set).toHaveBeenCalledWith({
+            senderId: 'system',
+            text: 'Someone was removed from the group',
+            type: 'system',
+            timestamp: expect.any(Number),
+        });
     });
 
     it('when activity host removes themselves => expected 200', async () => {
