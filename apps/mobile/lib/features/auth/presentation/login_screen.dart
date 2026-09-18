@@ -15,6 +15,7 @@ import '../../../core/utils/secure_screen.dart';
 import '../../../core/widgets/app_dialog.dart';
 import '../../notifications/services/push_notification_service.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/system_back.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/pressable_scale.dart';
 
@@ -117,7 +118,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     final safeAreaBottom = MediaQuery.of(context).padding.bottom;
     final availableHeight = screenHeight - safeAreaTop - safeAreaBottom;
 
-    return AppScaffold(
+    return SystemBackFallback(
+      onEmptyStack: (context) => context.go('/welcome'),
+      child: AppScaffold(
       safeAreaTop: true,
       showHomeIndicator: true,
       backgroundColor: context.colors.background,
@@ -363,7 +366,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           ),
         ),
       ),
-    );
+    ));
   }
 }
 

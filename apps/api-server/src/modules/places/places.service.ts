@@ -23,9 +23,20 @@ export type PlaceSuggestion = {
 const NOMINATIM_SEARCH_URL = 'https://nominatim.openstreetmap.org/search';
 const REQUEST_TIMEOUT_MS = 5000;
 const CACHE_TTL_MS = 5 * 60 * 1000;
-const MAX_RESULTS = 6;
+// Room for a full suggestion sheet: the mobile list comfortably fits
+// ~12 rows and users complained 6 hid nearby Auckland venues behind
+// bigger world matches.
+const MAX_RESULTS = 15;
 const MIN_QUERY_LENGTH = 3;
 const MAX_QUERY_LENGTH = 100;
+
+/** Auckland-biased search window (`left,top,right,bottom` degrees). */
+export type Viewbox = {
+    left: number;
+    top: number;
+    right: number;
+    bottom: number;
+};
 
 interface CacheEntry {
     at: number;
@@ -69,6 +80,7 @@ function splitDisplayName(displayName: string): { label: string; secondary: stri
 export async function autocompletePlaces(
     query: string,
     countryCodes?: string,
+    viewbox?: Viewbox,
 ): Promise<PlaceSuggestion[]> {
     const normalized = normalizeQuery(query);
 
@@ -80,7 +92,10 @@ export async function autocompletePlaces(
         throw new Error('countryCodes must be a comma-separated list of ISO 3166-1 alpha-2 codes');
     }
 
-    const cacheKey = `${countryCodes ?? '*'}|${normalized.toLowerCase()}`;
+    const viewboxKey = viewbox !== undefined
+        ? `${viewbox.left},${viewbox.top},${viewbox.right},${viewbox.bottom}`
+        : '*';
+    const cacheKey = `${countryCodes ?? '*'}|${viewboxKey}|${normalized.toLowerCase()}`;
     const cached = cache.get(cacheKey);
 
     if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
@@ -95,6 +110,16 @@ export async function autocompletePlaces(
 
     if (countryCodes) {
         url.searchParams.set('countrycodes', countryCodes);
+    }
+
+    if (viewbox !== undefined) {
+        // Bias (not restrict): Auckland matches rank first, world
+        // matches still appear below instead of vanishing.
+        url.searchParams.set(
+            'viewbox',
+            `${viewbox.left},${viewbox.top},${viewbox.right},${viewbox.bottom}`,
+        );
+        url.searchParams.set('bounded', '0');
     }
 
     const controller = new AbortController();

@@ -440,8 +440,21 @@ export async function listActivities(
     // large, create the composite index and restore orderBy+limit.
     const snap = await query.get();
 
+    // Deterministic start gate for joinable listings. The expiry sweep
+    // is eventual + fire-and-forget, so just-started `open` rows would
+    // otherwise leak into feeds whose join then 409s. Scoped to `open`
+    // (the default): history reads (`completed`, `cancelled`, …) must
+    // keep returning past games.
+    const nowMs = Date.now();
+    const gateStart = (filters.status ?? 'open') === 'open';
+
     const activities = snap.docs
         .map(mapActivityDoc)
+        .filter((a) => {
+            if (!gateStart) return true;
+            const startMs = Date.parse(a.startTime);
+            return !Number.isNaN(startMs) && startMs >= nowMs;
+        })
         .sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis())
         .slice(0, filters.limit);
 
@@ -464,6 +477,12 @@ export async function listActivities(
  * (Upcoming / Hosting) must read nearest-first so the featured card is the
  * closest game. If My Games grows large, create the composite index and
  * push sort/page into the query.
+ *
+ * Terminal states (`cancelled`, `completed`, `removed`) are excluded:
+ * Upcoming/Hosting are live games (`open`/`full`) only. Cancelled games
+ * surface in Past (mobile queries them explicitly with a CANCELLED label),
+ * completed ones via the Past `status=completed` read, and removed ones
+ * nowhere — an admin-hidden game must not linger in anyone's list.
  */
 export async function listMyActivities(
     viewerUid: string,
@@ -487,6 +506,7 @@ export async function listMyActivities(
             .get();
         const activities = snap.docs
             .map(mapActivityDoc)
+            .filter((a) => !isTerminalStatus(a.status))
             .sort(compareStartTimeAsc)
             .slice(offset, offset + limit);
         return Promise.all(activities.map(enrichActivityWithHostProfile));
@@ -511,9 +531,19 @@ export async function listMyActivities(
         .filter((s) => s.exists)
         .map(mapActivityDoc)
         .filter((a) => a.hostId !== uid)
+        .filter((a) => !isTerminalStatus(a.status))
         .sort(compareStartTimeAsc)
         .slice(offset, offset + limit);
     return Promise.all(activities.map(enrichActivityWithHostProfile));
+}
+
+/**
+ * True for lifecycles that must not appear in Upcoming/Hosting
+ * (`cancelled` called off, `completed` finished, `removed` admin-hidden).
+ * `full` is NOT terminal — it flips back to `open` when a spot frees up.
+ */
+function isTerminalStatus(status: ActivityStatus): boolean {
+    return status === 'cancelled' || status === 'completed' || status === 'removed';
 }
 
 /**

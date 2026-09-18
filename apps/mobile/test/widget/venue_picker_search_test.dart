@@ -32,6 +32,7 @@ class _StubPlacesRepository implements PlacesRepository {
   Future<List<PlaceSuggestion>> autocomplete(
     String query, {
     String? countryCodes,
+    String? viewbox,
   }) async {
     final q = query.trim().toLowerCase();
     if (q.length < 2) return const [];

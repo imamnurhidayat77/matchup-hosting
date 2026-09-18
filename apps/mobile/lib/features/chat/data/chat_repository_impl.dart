@@ -10,6 +10,7 @@ import '../../../core/network/api_client.dart';
 import '../../../core/services/rtdb_auth_service.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../core/storage/secure_token_store.dart';
+import '../../../core/utils/stream_timeout.dart';
 import '../../discovery/data/remote_activity_repository.dart';
 import '../domain/chat_message.dart';
 import '../domain/chat_poll.dart';
@@ -209,10 +210,15 @@ class RemoteChatRepository implements ChatRepository {
         await RtdbAuthService.instance.ensureSignedIn();
         final myUid = await SecureTokenStore.instance.readUserId() ?? '';
         final senders = await _senderProfiles(activityId);
-        await for (final messages in _watchViaRtdb(
-          activityId,
-          myUid: myUid,
-          senders: senders,
+        // First-event watchdog: a stalled RTDB socket emits neither data
+        // nor error, which would pin the chat on its skeleton forever.
+        // The timeout throws into the catch below → HTTP polling.
+        await for (final messages in withFirstEventTimeout(
+          _watchViaRtdb(
+            activityId,
+            myUid: myUid,
+            senders: senders,
+          ),
         )) {
           yield messages;
         }
@@ -298,7 +304,7 @@ class RemoteChatRepository implements ChatRepository {
       try {
         await RtdbAuthService.instance.ensureSignedIn();
         await for (final reactions
-            in _watchReactionsViaRtdb(activityId)) {
+            in withFirstEventTimeout(_watchReactionsViaRtdb(activityId))) {
           yield reactions;
         }
         return;
@@ -383,7 +389,8 @@ class RemoteChatRepository implements ChatRepository {
     if (_isFirebaseReady()) {
       try {
         await RtdbAuthService.instance.ensureSignedIn();
-        await for (final polls in _watchPollsViaRtdb(activityId)) {
+        await for (final polls
+            in withFirstEventTimeout(_watchPollsViaRtdb(activityId))) {
           yield polls;
         }
         return;

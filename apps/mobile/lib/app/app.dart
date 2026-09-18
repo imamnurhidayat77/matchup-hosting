@@ -12,6 +12,7 @@ import '../core/theme/app_typography.dart';
 import '../core/theme/dark_colors.dart';
 import '../core/theme/theme_controller.dart';
 import '../core/widgets/app_snackbar.dart';
+import '../features/activities/presentation/my_activities_screen.dart';
 import '../features/notifications/services/push_notification_service.dart';
 import '../features/notifications/services/push_routing.dart';
 import 'router.dart';
@@ -415,15 +416,15 @@ class MatchUpApp extends ConsumerWidget {
 /// Context comes from [rootNavigatorKey] so this works without being
 /// under any particular screen. Taps landing on auth-gated routes while
 /// logged out simply hit the router's existing redirect to /welcome.
-class _PushRouter extends StatefulWidget {
+class _PushRouter extends ConsumerStatefulWidget {
   const _PushRouter({required this.child});
   final Widget child;
 
   @override
-  State<_PushRouter> createState() => _PushRouterState();
+  ConsumerState<_PushRouter> createState() => _PushRouterState();
 }
 
-class _PushRouterState extends State<_PushRouter> {
+class _PushRouterState extends ConsumerState<_PushRouter> {
   StreamSubscription<PushPayload>? _openedSub;
   StreamSubscription<PushPayload>? _foregroundSub;
 
@@ -446,6 +447,10 @@ class _PushRouterState extends State<_PushRouter> {
   void _open(PushPayload payload) {
     final route = routeForPush(payload);
     if (route == null || !mounted) return;
+    // Membership may have changed underneath the cached tabs (e.g. a
+    // cancelled game must leave Upcoming) — refetch now so the lists
+    // are fresh when the user returns to them.
+    _refreshMyGames(payload);
     // Defer a frame so taps arriving mid-transition don't race the
     // navigator.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -461,6 +466,9 @@ class _PushRouterState extends State<_PushRouter> {
 
   void _banner(PushPayload payload) async {
     if (!mounted) return;
+    // Same membership refresh as the tray-tap path: the user may be
+    // sitting on Upcoming right now watching the stale row.
+    _refreshMyGames(payload);
     // Locally muted group chats never banner while foregrounded.
     final muted = await _isMutedChat(payload);
     if (muted || !mounted) return;
@@ -479,6 +487,17 @@ class _PushRouterState extends State<_PushRouter> {
               if (c != null && c.mounted) GoRouter.of(c).go(route);
             },
     );
+  }
+
+  /// Invalidates the My Games tab providers when [payload] can have
+  /// changed membership. No-op for chat/system pushes. Safe to call
+  /// redundantly — providers refetch stale-while-revalidate.
+  void _refreshMyGames(PushPayload payload) {
+    if (!invalidatesMyGames(payload)) return;
+    ref.invalidate(joinedGamesProvider);
+    ref.invalidate(hostedGamesProvider);
+    ref.invalidate(pastGamesProvider);
+    ref.invalidate(pendingGamesProvider);
   }
 
   /// True when [payload] targets a locally muted group chat. Mute is

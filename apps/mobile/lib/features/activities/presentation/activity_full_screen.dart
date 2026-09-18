@@ -16,7 +16,7 @@ import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/asset_image.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/pressable_scale.dart';
-import '../../../core/widgets/skeleton.dart';
+import 'widgets/detail_loading_skeleton.dart';
 import '../../discovery/domain/activity_model.dart';
 import 'my_activities_screen.dart';
 
@@ -56,7 +56,7 @@ class ActivityFullScreen extends ConsumerWidget {
       backgroundColor: context.colors.surface,
       showHomeIndicator: false, // reached from inside ShellRoute screens.
       body: async.when(
-        loading: () => const SkeletonList(count: 3),
+        loading: () => const DetailLoadingSkeleton(bottomBar: false),
         error: (_, _) => ErrorRetry(
           message: 'Could not load this activity.',
           onRetry: () => ref.invalidate(_fullProvider(activityId)),

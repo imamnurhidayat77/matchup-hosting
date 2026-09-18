@@ -20,7 +20,7 @@ import '../../../core/widgets/app_tappable.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/label_badge.dart';
 import '../../../core/widgets/pressable_scale.dart';
-import '../../../core/widgets/skeleton.dart';
+import 'widgets/detail_loading_skeleton.dart';
 import '../domain/activity_participant.dart';
 import '../../discovery/domain/activity_model.dart';
 import 'my_activities_screen.dart';
@@ -63,6 +63,11 @@ class _ManageActivityScreenState extends ConsumerState<ManageActivityScreen> {
   /// buttons of a busy row are disabled until its uid is removed in
   /// `finally`, so rapid double-taps can't fire duplicate decisions.
   final Set<String> _deciding = {};
+
+  /// Uids with a kick (host removal) currently in flight. Same
+  /// double-tap protection as [_deciding], tracked separately so a
+  /// kick never disables the approve/decline buttons and vice versa.
+  final Set<String> _kicking = {};
 
   String get activityId => widget.activityId;
 
@@ -156,6 +161,51 @@ class _ManageActivityScreenState extends ConsumerState<ManageActivityScreen> {
     }
   }
 
+  Future<void> _kickParticipant(
+    BuildContext context,
+    String uid,
+    String name,
+  ) async {
+    // Per-row guard: ignore taps while this row's kick is pending.
+    if (_kicking.contains(uid)) return;
+    final confirmed = await AppDialog.confirm(
+      context,
+      title: 'Remove $name?',
+      body:
+          '$name will be removed from this activity and notified. They can re-join while spots are still available.',
+      confirmLabel: 'Remove',
+      cancelLabel: 'Keep',
+      destructive: true,
+    );
+    if (confirmed != true) return;
+    if (_kicking.contains(uid)) return;
+    setState(() => _kicking.add(uid));
+    try {
+      await ref.read(activityRepositoryProvider).removeParticipant(
+            activityId: activityId,
+            uid: uid,
+          );
+      ref.invalidate(_manageProvider(activityId));
+      ref.invalidate(hostedGamesProvider);
+      ref.invalidate(joinedGamesProvider);
+      if (!context.mounted) return;
+      AppSnackbar.show(
+        context,
+        message: '$name removed from the activity.',
+        variant: AppSnackbarVariant.info,
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      AppSnackbar.show(
+        context,
+        message: 'Could not remove $name. Please try again.',
+        variant: AppSnackbarVariant.error,
+      );
+    } finally {
+      if (mounted) setState(() => _kicking.remove(uid));
+    }
+  }
+
   Future<void> _confirmComplete(BuildContext context) async {
     final confirmed = await AppDialog.confirm(
       context,
@@ -198,7 +248,7 @@ class _ManageActivityScreenState extends ConsumerState<ManageActivityScreen> {
       backgroundColor: context.colors.background,
       showHomeIndicator: false,
       body: async.when(
-        loading: () => const SkeletonList(count: 5),
+        loading: () => const DetailLoadingSkeleton(bottomBar: false),
         error: (_, _) => ErrorRetry(
           message: 'Could not load this activity.',
           onRetry: () => ref.invalidate(_manageProvider(activityId)),
@@ -209,6 +259,7 @@ class _ManageActivityScreenState extends ConsumerState<ManageActivityScreen> {
           roster: data.roster,
           requests: data.requests,
           deciding: _deciding,
+          kicking: _kicking,
           onEdit: () => _openEdit(context),
           onCancel: () => _confirmCancel(context),
           onComplete: () => _confirmComplete(context),
@@ -216,6 +267,7 @@ class _ManageActivityScreenState extends ConsumerState<ManageActivityScreen> {
               _decideRequest(context, uid, name, approve: true),
           onDecline: (uid, name) =>
               _decideRequest(context, uid, name, approve: false),
+          onKick: (uid, name) => _kickParticipant(context, uid, name),
         ),
       ),
     );
@@ -231,11 +283,13 @@ class _ManageBody extends StatelessWidget {
     required this.roster,
     required this.requests,
     required this.deciding,
+    required this.kicking,
     required this.onEdit,
     required this.onCancel,
     required this.onComplete,
     required this.onApprove,
     required this.onDecline,
+    required this.onKick,
   });
 
   final String activityId;
@@ -247,6 +301,9 @@ class _ManageBody extends StatelessWidget {
 
   /// Uids with a decision in flight — their rows render disabled.
   final Set<String> deciding;
+
+  /// Uids with a kick in flight — their Remove buttons render disabled.
+  final Set<String> kicking;
   final VoidCallback onEdit;
   final VoidCallback onCancel;
   final VoidCallback onComplete;
@@ -254,6 +311,9 @@ class _ManageBody extends StatelessWidget {
   /// `onApprove(uid, displayName)` / `onDecline(uid, displayName)`.
   final void Function(String uid, String name) onApprove;
   final void Function(String uid, String name) onDecline;
+
+  /// `onKick(uid, displayName)` — host-only removal from the roster.
+  final void Function(String uid, String name) onKick;
 
   static const double _heroHeight = 280;
   static const double _overlapAmount = 44;
@@ -385,6 +445,11 @@ class _ManageBody extends StatelessWidget {
                   _ParticipantsSection(
                     activityId: activityId,
                     roster: roster,
+                    // Kicking only makes sense while the game is still
+                    // live — same terminal rule as Cancel/Complete.
+                    canKick: !_isTerminalLifecycle(lc),
+                    kicking: kicking,
+                    onKick: onKick,
                   ),
                   const SizedBox(height: AppSpacing.x5),
 
@@ -1311,9 +1376,22 @@ class _ParticipantsSection extends StatelessWidget {
   const _ParticipantsSection({
     required this.activityId,
     required this.roster,
+    required this.canKick,
+    required this.kicking,
+    required this.onKick,
   });
   final String activityId;
   final List<ActivityParticipant> roster;
+
+  /// False on terminal lifecycles (cancelled/completed/removed) — no
+  /// Remove buttons are rendered at all.
+  final bool canKick;
+
+  /// Uids with a kick in flight — their Remove buttons render disabled.
+  final Set<String> kicking;
+
+  /// `onKick(uid, displayName)`.
+  final void Function(String uid, String name) onKick;
 
   @override
   Widget build(BuildContext context) {
@@ -1362,7 +1440,12 @@ class _ParticipantsSection extends StatelessWidget {
             child: Column(
               children: [
                 for (var i = 0; i < preview.length; i++) ...[
-                  _ParticipantRow(item: preview[i]),
+                  _ParticipantRow(
+                    item: preview[i],
+                    canKick: canKick,
+                    kicking: kicking.contains(preview[i].userId),
+                    onKick: () => onKick(preview[i].userId, preview[i].name),
+                  ),
                   if (i < preview.length - 1)
                     Divider(
                       height: 1,
@@ -1380,11 +1463,28 @@ class _ParticipantsSection extends StatelessWidget {
 }
 
 class _ParticipantRow extends StatelessWidget {
-  const _ParticipantRow({required this.item});
+  const _ParticipantRow({
+    required this.item,
+    required this.canKick,
+    required this.kicking,
+    required this.onKick,
+  });
   final ActivityParticipant item;
+
+  /// Whether the host may kick this row. The organizer (host) row
+  /// never renders Remove even when true.
+  final bool canKick;
+
+  /// True while this row's kick is in flight — the button renders
+  /// disabled with a spinner.
+  final bool kicking;
+  final VoidCallback onKick;
 
   @override
   Widget build(BuildContext context) {
+    // The host can't kick themselves — and kicking is meaningless on
+    // terminal games (the section hides Remove entirely via canKick).
+    final showRemove = canKick && !item.isOrganizer;
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.x4,
@@ -1412,17 +1512,79 @@ class _ParticipantRow extends StatelessWidget {
               ],
             ),
           ),
-          StatusBadge(
-            // "PENDING" used to mean "not checked in", which reads as
-            // "waiting approval" — wrong for confirmed participants
-            // (worst case: the host themselves). Checked-in state is
-            // the only thing this badge may claim.
-            label: item.isCheckedIn ? 'CHECKED IN' : 'JOINED',
-            tone: item.isCheckedIn
-                ? StatusTone.checkedIn
-                : StatusTone.pending,
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              StatusBadge(
+                // "PENDING" used to mean "not checked in", which reads as
+                // "waiting approval" — wrong for confirmed participants
+                // (worst case: the host themselves). Checked-in state is
+                // the only thing this badge may claim.
+                label: item.isCheckedIn ? 'CHECKED IN' : 'JOINED',
+                tone: item.isCheckedIn
+                    ? StatusTone.checkedIn
+                    : StatusTone.pending,
+              ),
+              if (showRemove) ...[
+                const SizedBox(height: 4),
+                _RemoveButton(kicking: kicking, onKick: onKick),
+              ],
+            ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Host-only "Remove" link under a roster row's status badge. Disabled
+/// with a spinner while the kick is in flight so rapid double-taps
+/// can't fire duplicate removals.
+class _RemoveButton extends StatelessWidget {
+  const _RemoveButton({required this.kicking, required this.onKick});
+  final bool kicking;
+  final VoidCallback onKick;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      enabled: !kicking,
+      label: 'Remove participant',
+      child: PressableScale(
+        onTap: kicking ? null : onKick,
+        child: Opacity(
+          opacity: kicking ? 0.45 : 1,
+          child: SizedBox(
+            height: 28,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (kicking)
+                  const SizedBox(
+                    width: 12,
+                    height: 12,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                else
+                  Icon(
+                    Icons.person_remove_outlined,
+                    size: 14,
+                    color: context.colors.errorText,
+                  ),
+                const SizedBox(width: 4),
+                Text(
+                  kicking ? 'Removing…' : 'Remove',
+                  style: AppTypography.metaSub(context).copyWith(
+                    color: context.colors.errorText,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -158,8 +158,11 @@ class ActivityListCardSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Mirrors _CompactCard (My Games) exactly: x3 outer padding, 72px
+    // thumbnail, x3 gaps — any drift reintroduces the layout jump this
+    // skeleton exists to prevent. Keep in sync when the card changes.
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.x4),
+      padding: const EdgeInsets.all(AppSpacing.x3),
       decoration: BoxDecoration(
         color: context.colors.surface,
         borderRadius: BorderRadius.circular(AppRadius.card),
@@ -168,8 +171,8 @@ class ActivityListCardSkeleton extends StatelessWidget {
       child: const Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SkeletonBox(width: 70, height: 70, radius: 14),
-          SizedBox(width: AppSpacing.x4),
+          SkeletonBox(width: 72, height: 72, radius: 14),
+          SizedBox(width: AppSpacing.x3),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

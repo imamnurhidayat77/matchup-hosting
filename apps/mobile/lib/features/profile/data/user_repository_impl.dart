@@ -1,5 +1,7 @@
 import 'package:dio/dio.dart';
 
+import 'dart:io';
+
 import '../../../core/network/api_client.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../core/storage/secure_token_store.dart';
@@ -295,6 +297,19 @@ class RemoteUserRepository implements UserRepository {
 
   @override
   Future<UserModel> uploadAvatar({required String localPath}) async {
+    // Client-side size gate (mirrors `isAllowedProfileImage` in
+    // storage.rules): reject oversized files here so the UI can name
+    // the reason instead of surfacing a generic upload failure.
+    // A missing/unreadable file falls through to the upload attempt,
+    // which fails generically as before.
+    try {
+      final size = await File(localPath).length();
+      if (size > kMaxAvatarBytes) throw AvatarTooLargeException();
+    } on AvatarTooLargeException {
+      rethrow;
+    } catch (_) {
+      // Ignore stat errors — handled by the upload below.
+    }
     // The backend (`PATCH /users/me/photo`) requires the Storage path
     // to be `users/{uid}/profile/…` and stores both path and URL.
     final uid = await SecureTokenStore.instance.readUserId();

@@ -307,6 +307,29 @@ describe('listDiscoverActivities', () => {
         expect(out.map((a) => a.activityId)).toEqual(['live']);
     });
 
+    it('excludes games that started but have not ended yet', async () => {
+        // Started 30 min ago, ends in 90 min: the end-gate passes but
+        // the join would 409 ("already started"), so the card must not
+        // be dealt at all.
+        const started = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+        const endsSoon = new Date(Date.now() + 90 * 60 * 1000).toISOString();
+        const future = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+        chain.get.mockResolvedValue({
+            docs: [
+                { id: 'live-now', data: () => baseAct({ activityId: 'live-now', startTime: started, endTime: endsSoon }) },
+                { id: 'live', data: () => baseAct({ activityId: 'live', startTime: future }) },
+            ],
+        });
+
+        const out = await listDiscoverActivities({
+            limit: 10,
+            viewerUid: 'u-1',
+            discover: { sportFilters: [] },
+        });
+
+        expect(out.map((a) => a.activityId)).toEqual(['live']);
+    });
+
     it('excludes activities the viewer joined without swiping', async () => {
         mocks.collectionGroup.mockReturnValue({
             where: vi.fn().mockReturnValue({
@@ -351,5 +374,26 @@ describe('listDiscoverActivities', () => {
 
         expect(out).toHaveLength(1);
         expect(out[0].joinPolicy).toBe('approval');
+    });
+
+    it('scans the full open set instead of a paginated overscan', async () => {
+        // Regression: the old `limit(overscan)` paginated an UNORDERED
+        // query before in-memory filtering, so a matching game outside
+        // the arbitrary first 50 could never appear (UAT: Tennis filter
+        // hid a Tennis game the unfiltered feed showed).
+        chain.get.mockResolvedValue({
+            docs: [
+                { id: 'a-1', data: () => baseAct({ activityId: 'a-1' }) },
+            ],
+        });
+
+        const out = await listDiscoverActivities({
+            limit: 10,
+            viewerUid: 'u-1',
+            discover: { sportFilters: [{ sport: 'Basketball', skill: 'any' }] },
+        });
+
+        expect(chain.limit).toHaveBeenCalledWith(500);
+        expect(out.map((a) => a.activityId)).toEqual(['a-1']);
     });
 });

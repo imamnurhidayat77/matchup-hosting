@@ -81,7 +81,8 @@ void main() {
     expect(find.text('Chat a-1'), findsOneWidget);
   });
 
-  testWidgets('system notification tap marks read and stays on feed',
+  testWidgets(
+      'system notification tap marks read and opens the full message',
       (tester) async {
     await _pump(tester, repo, [
       _notif(id: 'n-2', title: 'Welcome!', backendType: 'system'),
@@ -91,7 +92,9 @@ void main() {
     await tester.pumpAndSettle();
 
     verify(() => repo.markRead('n-2')).called(1);
-    expect(find.text('Welcome!'), findsOneWidget);
+    // Target-less notifications open the full-message sheet (title +
+    // body) instead of navigating away from the feed.
+    expect(find.text('No additional details.'), findsOneWidget);
     expect(find.text('Chat a-1'), findsNothing);
   });
 }

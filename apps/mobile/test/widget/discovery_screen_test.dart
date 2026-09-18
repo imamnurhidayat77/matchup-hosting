@@ -169,6 +169,41 @@ void main() {
       expect(find.text('Saturday Basketball'), findsOneWidget);
     });
 
+    testWidgets('should never deal games that already started', (
+      tester,
+    ) async {
+      // Stale `open` rows slip past the eventual backend sweep — the
+      // deck must drop them locally, since the join would 409 anyway.
+      when(
+        () => activityRepo.feed(
+          limit: any(named: 'limit'),
+          offset: any(named: 'offset'),
+          filter: any(named: 'filter'),
+          forceRefresh: any(named: 'forceRefresh'),
+        ),
+      ).thenAnswer(
+        (_) async => [
+          ..._fixtures(),
+          ActivityModel(
+            id: '0',
+            title: 'Yesterday Football',
+            sportType: 'Football',
+            description: 'Already kicked off.',
+            location: 'Old Grounds',
+            distanceKm: 1.0,
+            dateTime: DateTime.now().subtract(const Duration(hours: 1)),
+            skillLevel: 'Beginner',
+            capacity: 10,
+            participantCount: 3,
+            hostName: 'Alex',
+          ),
+        ],
+      );
+      await pumpDiscovery(tester);
+      expect(find.text('Saturday Basketball'), findsOneWidget);
+      expect(find.text('Yesterday Football'), findsNothing);
+    });
+
     testWidgets(
       'should push the activity detail route when the card is tapped',
       (tester) async {

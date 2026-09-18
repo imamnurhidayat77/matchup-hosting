@@ -13,6 +13,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/utils/nav_guard.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/asset_image.dart';
 import '../../../core/widgets/app_tab_bar.dart';
 import '../../../core/widgets/empty_state.dart';
@@ -61,6 +62,26 @@ final pastGamesProvider = FutureProvider<List<ActivityModel>>((ref) async {
 final pendingGamesProvider = FutureProvider<List<ActivityModel>>(
   (ref) => ref.watch(activityRepositoryProvider).pendingRequests(),
 );
+
+/// Games the viewer left this session. Leaving deletes the participant
+/// doc server-side, so the game would otherwise vanish from every tab
+/// with no trace — these rows keep Past honest with a LEFT pill.
+/// Session-scoped (in-memory, most-recent-first, capped): a full
+/// history would need backend tombstones.
+final leftGamesProvider = StateProvider<List<ActivityModel>>(
+  (ref) => const [],
+);
+
+/// Records a freshly-left game for the Past tab. Call after a
+/// successful `leave()`, before invalidating the tab providers.
+void rememberLeftGame(WidgetRef ref, ActivityModel activity) {
+  final current = ref.read(leftGamesProvider);
+  ref.read(leftGamesProvider.notifier).state = [
+    activity,
+    for (final a in current)
+      if (a.id != activity.id) a,
+  ].take(10).toList();
+}
 
 final _unreadNotifCountProvider = FutureProvider.autoDispose<int>((ref) async {
   final all = await ref.watch(notificationRepositoryProvider).all();
@@ -121,6 +142,17 @@ class _MyActivitiesScreenState extends ConsumerState<MyActivitiesScreen> {
   int _tab = 0;
   static const _tabLabels = ['Upcoming', 'Hosting', 'Pending', 'Past'];
 
+  /// Provider behind each tab, in [_tabLabels] order. Used to refresh
+  /// the visited tab (see the tab bar's `onChanged`).
+  static FutureProvider<List<ActivityModel>> _tabProvider(int index) {
+    return switch (index) {
+      1 => hostedGamesProvider,
+      2 => pendingGamesProvider,
+      3 => pastGamesProvider,
+      _ => joinedGamesProvider,
+    };
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -171,7 +203,15 @@ class _MyActivitiesScreenState extends ConsumerState<MyActivitiesScreen> {
             child: AppTabBar(
               labels: _tabLabels,
               selectedIndex: _tab,
-              onChanged: (i) => setState(() => _tab = i),
+              // Refresh-on-visit: approvals, joins and cancellations
+              // happen on other screens/devices (e.g. a host approving
+              // your request moves it Pending → Upcoming). Lists render
+              // stale-while-revalidate, so the cached rows stay visible
+              // while the fresh fetch lands — no skeleton flash.
+              onChanged: (i) {
+                setState(() => _tab = i);
+                ref.invalidate(_tabProvider(i));
+              },
             ),
           ),
 
@@ -182,20 +222,16 @@ class _MyActivitiesScreenState extends ConsumerState<MyActivitiesScreen> {
               index: _tab,
               children: [
                 _UpcomingList(
-                  // Guarded per activity: a double-tap before the first
-                  // push registers creates two id-keyed pages and throws
-                  // '!keyReservation.contains(key)'. See NavGuard.
-                  onTap: (a) => NavGuard.onceFor(
-                    'joined-activity-${a.id}',
-                    () => NavGuard.push(context, '/joined-activity/${a.id}'),
-                  ),
+                  // In-flight guarded (not time-debounced): the key stays
+                  // reserved until pop, so a duplicate id-keyed page can
+                  // never throw '!keyReservation'. See NavGuard.
+                  onTap: (a) =>
+                      NavGuard.push(context, '/joined-activity/${a.id}'),
                 ),
                 _SimpleList(
                   provider: hostedGamesProvider,
-                  onTap: (a) => NavGuard.onceFor(
-                    'manage-activity-${a.id}',
-                    () => NavGuard.push(context, '/manage-activity/${a.id}'),
-                  ),
+                  onTap: (a) =>
+                      NavGuard.push(context, '/manage-activity/${a.id}'),
                   emptyTitle: "You haven't hosted yet",
                   emptySubtitle: 'Create an activity and invite others to join.',
                   emptyIcon: Icons.emoji_events_outlined,
@@ -204,10 +240,8 @@ class _MyActivitiesScreenState extends ConsumerState<MyActivitiesScreen> {
                 ),
                 _SimpleList(
                   provider: pendingGamesProvider,
-                  onTap: (a) => NavGuard.onceFor(
-                    'pending-request-${a.id}',
-                    () => NavGuard.push(context, '/pending-request/${a.id}'),
-                  ),
+                  onTap: (a) =>
+                      NavGuard.push(context, '/pending-request/${a.id}'),
                   pending: true,
                   emptyTitle: 'No pending requests',
                   emptySubtitle:
@@ -216,9 +250,9 @@ class _MyActivitiesScreenState extends ConsumerState<MyActivitiesScreen> {
                 ),
                 _SimpleList(
                   provider: pastGamesProvider,
-                  onTap: (a) => NavGuard.onceFor(
-                    'past-activity-${a.id}',
-                    () => NavGuard.push(context, '/past-activity/${a.id}/review'),
+                  onTap: (a) => NavGuard.push(
+                    context,
+                    '/past-activity/${a.id}/review',
                   ),
                   past: true,
                   emptyTitle: 'No past activities',
@@ -542,19 +576,28 @@ class _FeaturedCard extends StatelessWidget {
 
 class _CompactCard extends StatelessWidget {
   const _CompactCard(
-      {required this.activity, required this.onTap, this.pending = false});
+      {required this.activity,
+      required this.onTap,
+      this.pending = false,
+      this.left = false});
   final ActivityModel activity;
   final VoidCallback onTap;
 
   /// Pending requests show an amber status pill instead of the count.
   final bool pending;
 
+  /// Games left this session: grey LEFT pill, no joined count.
+  final bool left;
+
   @override
   Widget build(BuildContext context) {
-    // Past-tab rows for called-off games. `lifecycleStatus` carries the
-    // raw backend string; payloads without one never match.
-    final isCancelled =
-        activity.lifecycleStatus.toLowerCase() == 'cancelled';
+    // Past-tab rows for ended games. `lifecycleStatus` carries the raw
+    // backend string; payloads without one never match. Completed is
+    // the quiet default (grey) so called-off games stand out in red.
+    final lifecycle = activity.lifecycleStatus.toLowerCase();
+    final isCancelled = lifecycle == 'cancelled';
+    final isRemoved = lifecycle == 'removed';
+    final isCompleted = lifecycle == 'completed';
     return Semantics(
       button: true,
       label: activity.title,
@@ -616,25 +659,28 @@ class _CompactCard extends StatelessWidget {
                             ),
                           )
                         else if (isCancelled)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: context.colors.errorLight,
-                              borderRadius:
-                                  BorderRadius.circular(AppRadius.pill),
-                            ),
-                            child: Text(
-                              'CANCELLED',
-                              style: AppTypography.chipLabel(context).copyWith(
-                                color: context.colors.errorText,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.4,
-                              ),
-                            ),
+                          _StatusPill(
+                            text: 'CANCELLED',
+                            bg: context.colors.errorLight,
+                            fg: context.colors.errorText,
+                          )
+                        else if (isRemoved)
+                          _StatusPill(
+                            text: 'REMOVED',
+                            bg: context.colors.errorLight,
+                            fg: context.colors.errorText,
+                          )
+                        else if (left)
+                          _StatusPill(
+                            text: 'LEFT',
+                            bg: context.colors.surfaceMuted,
+                            fg: context.colors.textSecondary,
+                          )
+                        else if (isCompleted)
+                          _StatusPill(
+                            text: 'COMPLETED',
+                            bg: context.colors.surfaceMuted,
+                            fg: context.colors.textSecondary,
                           )
                         else
                           Text(
@@ -670,6 +716,39 @@ class _CompactCard extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Small uppercase status pill for Past-tab rows (CANCELLED / REMOVED /
+/// COMPLETED), sharing one shape with the WAITING APPROVAL pill.
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({
+    required this.text,
+    required this.bg,
+    required this.fg,
+  });
+  final String text;
+  final Color bg;
+  final Color fg;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+      ),
+      child: Text(
+        text,
+        style: AppTypography.chipLabel(context).copyWith(
+          color: fg,
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.4,
         ),
       ),
     );
@@ -777,8 +856,25 @@ class _SimpleListState extends ConsumerState<_SimpleList>
       activities,
       mostRecentFirst: widget.past,
     );
-    final shown = sorted.take(_visible).toList();
-    final hasMore = shown.length < sorted.length;
+    // Past additionally surfaces games left this session (their
+    // participant docs are gone server-side, so the fetch above can
+    // never return them). Most-recent-left first, deduplicated.
+    var merged = sorted;
+    Set<String> leftIds = const {};
+    if (widget.past) {
+      final left = ref.watch(leftGamesProvider);
+      leftIds = left.map((a) => a.id).toSet();
+      if (left.isNotEmpty) {
+        final have = sorted.map((a) => a.id).toSet();
+        merged = [
+          for (final a in left)
+            if (!have.contains(a.id)) a,
+          ...sorted,
+        ];
+      }
+    }
+    final shown = merged.take(_visible).toList();
+    final hasMore = shown.length < merged.length;
     return RefreshIndicator(
       onRefresh: () async {
         setState(() => _visible = _pageSize);
@@ -816,11 +912,22 @@ class _SimpleListState extends ConsumerState<_SimpleList>
             );
           }
           final a = shown[i];
+          // Left rows are history, not navigable targets (the review
+          // flow requires membership the viewer no longer has).
+          final isLeftRow = leftIds.contains(a.id);
           return RepaintBoundary(
             child: _CompactCard(
               activity: a,
               pending: widget.pending,
-              onTap: () => widget.onTap(a),
+              left: isLeftRow,
+              onTap: isLeftRow
+                  ? () => AppSnackbar.show(
+                        context,
+                        message:
+                            'You left "${a.title}". Re-join from Discover to play again.',
+                        variant: AppSnackbarVariant.info,
+                      )
+                  : () => widget.onTap(a),
             ),
           );
         },

@@ -11,6 +11,7 @@ import '../../../core/theme/dark_colors.dart';
 import '../../../core/utils/nav_guard.dart';
 import '../../../core/utils/secure_screen.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/system_back.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/pressable_scale.dart';
 
@@ -75,7 +76,9 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
     final safeBottom = MediaQuery.of(context).padding.bottom;
     final availableHeight = screenHeight - safeTop - safeBottom;
 
-    return AppScaffold(
+    return SystemBackFallback(
+      onEmptyStack: (context) => context.go('/login'),
+      child: AppScaffold(
       safeAreaTop: true,
       showHomeIndicator: true,
       backgroundColor: context.colors.background,
@@ -240,7 +243,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
           ),
         ),
       ),
-    );
+    ));
   }
 }
 

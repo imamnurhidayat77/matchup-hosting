@@ -178,14 +178,65 @@ class _PastActivityReviewScreenState
               ref.invalidate(_reviewDataProvider(widget.activityId)),
         ),
         data: (data) {
-          final rateable = myUid == null
+          // The host is rateable too, but isn't guaranteed a roster row
+          // (hosts don't always carry a participant doc) — union them in
+          // explicitly so "rate the host" is never missing. Self is still
+          // excluded below.
+          final withHost = data.participants.any(
+                (p) => p.userId == data.activity.hostId,
+              )
               ? data.participants
-              : data.participants.where((p) => p.userId != myUid).toList();
+              : [
+                  ...data.participants,
+                  if (data.activity.hostId.isNotEmpty)
+                    ActivityParticipant(
+                      userId: data.activity.hostId,
+                      name: data.activity.hostName.isNotEmpty
+                          ? data.activity.hostName
+                          : 'Host',
+                      skillLevel: data.activity.skillLevel,
+                      joinedAt: data.activity.dateTime,
+                      isOrganizer: true,
+                    ),
+                ];
+          final rateable = myUid == null
+              ? withHost
+              : withHost.where((p) => p.userId != myUid).toList();
           final submitLabel = ratedLoading
               ? 'Loading…'
               : alreadyRated
                   ? 'Update Review'
                   : 'Submit Review';
+          // Called-off games land here from the Past tab too, but there
+          // is nothing to rate — show the summary read-only instead of
+          // the review form.
+          final isCancelled =
+              data.activity.lifecycleStatus.toLowerCase() == 'cancelled';
+          if (isCancelled) {
+            return Column(
+              children: [
+                const _Header(title: 'Past Activity'),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.x5,
+                      AppSpacing.x4,
+                      AppSpacing.x5,
+                      AppSpacing.x6,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _SummaryCard(activity: data.activity),
+                        const SizedBox(height: AppSpacing.x5),
+                        const _CancelledNotice(),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }
           return Column(
           children: [
             // Header
@@ -259,7 +310,8 @@ class _PastActivityReviewScreenState
 // ─── Header ───────────────────────────────────────────────────────────────────
 
 class _Header extends StatelessWidget {
-  const _Header();
+  const _Header({this.title = 'Activity Review'});
+  final String title;
 
   @override
   Widget build(BuildContext context) {
@@ -299,7 +351,7 @@ class _Header extends StatelessWidget {
           const SizedBox(width: AppSpacing.x3),
           Expanded(
             child: Text(
-              'Activity Review',
+              title,
               style: AppTypography.titleSheet(context),
               textAlign: TextAlign.center,
             ),
@@ -690,8 +742,42 @@ class _ParticipantRow extends StatelessWidget {
 // ─── Submit bar ───────────────────────────────────────────────────────────────
 
 /// Shown when the viewer already rated — resubmitting edits.
-class _RatedNotice extends StatelessWidget {
+/// Read-only notice for called-off games: no rating form, no submit.
+class _CancelledNotice extends StatelessWidget {
+  const _CancelledNotice();
+
   @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.x4),
+      decoration: BoxDecoration(
+        color: context.colors.errorLight,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        border: Border.all(
+          color: context.colors.errorText.withValues(alpha: 0.25),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.event_busy_outlined,
+            size: 20,
+            color: context.colors.errorText,
+          ),
+          const SizedBox(width: AppSpacing.x3),
+          Expanded(
+            child: Text(
+              'This game was cancelled, so there is nothing to review.',
+              style: AppTypography.metaSub(context).copyWith(fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RatedNotice extends StatelessWidget {  @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.x4),

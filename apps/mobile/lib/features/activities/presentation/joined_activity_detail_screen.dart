@@ -21,7 +21,7 @@ import '../../../core/widgets/app_tappable.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/label_badge.dart';
 import '../../../core/widgets/pressable_scale.dart';
-import '../../../core/widgets/skeleton.dart';
+import 'widgets/detail_loading_skeleton.dart';
 import '../../calendar/domain/calendar_event.dart';
 import '../../chat/domain/chat_message.dart';
 import '../../discovery/domain/activity_model.dart';
@@ -69,6 +69,9 @@ class JoinedActivityDetailScreen extends ConsumerWidget {
     if (confirmed != true || !context.mounted) return;
     try {
       await ref.read(activityRepositoryProvider).leave(activityId);
+      // Remember BEFORE invalidating: the refetch can no longer see it.
+      final left = ref.read(_detailProvider(activityId)).valueOrNull?.activity;
+      if (left != null) rememberLeftGame(ref, left);
       ref.invalidate(_detailProvider(activityId));
       ref.invalidate(activityFeedProvider);
       ref.invalidate(joinedGamesProvider);
@@ -100,7 +103,7 @@ class JoinedActivityDetailScreen extends ConsumerWidget {
       backgroundColor: context.colors.background,
       showHomeIndicator: false,
       body: async.when(
-        loading: () => const SkeletonList(count: 4),
+        loading: () => const DetailLoadingSkeleton(bottomBar: false),
         error: (_, _) => ErrorRetry(
           message: 'Could not load this activity.',
           onRetry: () => ref.invalidate(_detailProvider(activityId)),

@@ -18,11 +18,13 @@ import '../../../core/widgets/app_avatar.dart';
 import '../../../core/widgets/app_icon.dart';
 import '../../../core/widgets/asset_image.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/system_back.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/skeleton.dart';
 import '../../activities/domain/activity_model.dart';
+import '../../activities/presentation/widgets/detail_loading_skeleton.dart';
 import '../../activities/domain/activity_participant.dart';
 import '../../activities/presentation/my_activities_screen.dart';
 import '../../report/presentation/report_activity_sheet.dart';
@@ -62,8 +64,12 @@ class ActivityDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(_activityDetailProvider(activityId));
-    return async.when(
-      loading: () => const _LoadingSkeleton(),
+    // System back on a go-opened detail (deep link, restored route)
+    // would otherwise close the app — fall back to Discover.
+    return SystemBackFallback(
+      onEmptyStack: (context) => context.go('/discovery'),
+      child: async.when(
+      loading: () => const DetailLoadingSkeleton(),
       error: (e, _) => AppScaffold(
         body: ErrorRetry(
           message: 'Could not load activity details.',
@@ -140,148 +146,6 @@ class ActivityDetailScreen extends ConsumerWidget {
         }
         return _DetailBody(activity: activity, activityId: activityId);
       },
-    );
-  }
-}
-
-// ─── Loading skeleton ─────────────────────────────────────────────────────────
-// Mirrors [_DetailBody]'s real layout (hero + overlapping rounded sheet +
-// bottom bar) so the swap from loading to content doesn't jump: same hero
-// height, same sheet overlap, same paddings. Includes a working Back
-// button — the old skeleton stranded users until the fetch finished.
-
-class _LoadingSkeleton extends StatelessWidget {
-  const _LoadingSkeleton();
-
-  @override
-  Widget build(BuildContext context) {
-    const heroH = _Hero.heroHeight;
-    const overlap = 44.0;
-    return AppScaffold(
-      safeAreaTop: false,
-      bottomBar: Container(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.x5,
-          AppSpacing.x3,
-          AppSpacing.x5,
-          AppSpacing.x3,
-        ),
-        child: const SkeletonBox(
-          width: double.infinity,
-          height: 54,
-          radius: 28,
-        ),
-      ),
-      body: Stack(
-        children: [
-          // Layer 1: hero, same fixed height as the real one.
-          const SizedBox(
-            height: heroH,
-            width: double.infinity,
-            child: SkeletonBox(width: double.infinity, height: 280, radius: 0),
-          ),
-
-          // Layer 2: white sheet overlapping the hero, same geometry as
-          // the real card (rounded top, sheet shadow).
-          Positioned(
-            top: heroH - overlap,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Container(
-              decoration: BoxDecoration(
-                color: context.colors.surface,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(AppRadius.xl),
-                ),
-                boxShadow: AppShadows.sheet,
-              ),
-              child: const SingleChildScrollView(
-                physics: NeverScrollableScrollPhysics(),
-                padding: EdgeInsets.fromLTRB(
-                  AppSpacing.x5,
-                  AppSpacing.x5,
-                  AppSpacing.x5,
-                  AppSpacing.x8,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SkeletonBox(width: double.infinity, height: 32, radius: 6),
-                    SizedBox(height: AppSpacing.x5),
-                    ListRowSkeleton(),
-                    SizedBox(height: AppSpacing.x3),
-                    ListRowSkeleton(),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          // Layer 3: back + share affordances, same SafeArea row as real.
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.x5,
-                  vertical: AppSpacing.x2,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    _SkeletonCircleBtn(label: 'Back', pop: true),
-                    _SkeletonCircleBtn(label: 'Share', pop: false),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          // Layer 4: pill placeholders where the real sport/skill pills sit.
-          const Positioned(
-            left: AppSpacing.x5,
-            bottom: AppSpacing.x4 + 20 + 20,
-            child: Row(
-              children: [
-                SkeletonBox(width: 84, height: 28, radius: 6),
-                SizedBox(width: AppSpacing.x2),
-                SkeletonBox(width: 110, height: 28, radius: 6),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Circular skeleton button for the loading state. Back actually pops
-/// (loading must never trap the user); Share is inert until content
-/// arrives.
-class _SkeletonCircleBtn extends StatelessWidget {
-  const _SkeletonCircleBtn({required this.label, required this.pop});
-  final String label;
-  final bool pop;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: label,
-      child: PressableScale(
-        onTap: pop ? () => _popOrDiscovery(context) : null,
-        child: Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: context.colors.scrim,
-            shape: BoxShape.circle,
-          ),
-        ),
       ),
     );
   }
@@ -371,7 +235,10 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       );
       // The joined activity rides along as route extra for any
       // downstream screen that accepts cached fallback content.
-      context.go(
+      // Pushed (not go) so the system back button returns to this
+      // detail screen instead of closing the app.
+      NavGuard.push(
+        context,
         '/joined-activity/${widget.activityId}',
         extra: widget.activity,
       );

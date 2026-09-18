@@ -8,7 +8,9 @@ import '../../../core/theme/dark_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/utils/nav_guard.dart';
 import '../../../core/widgets/app_avatar.dart';
+import '../../../core/widgets/app_dialog.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/pressable_scale.dart';
@@ -20,6 +22,9 @@ typedef _ParticipantsData = ({
   List<ActivityParticipant> roster,
   int capacity,
   String activityTitle,
+  /// Host-only kick affordance: viewer is host AND the game is still
+  /// live. Computed here (not in rows) so every row reads one flag.
+  bool canKick,
 });
 
 final _participantsProvider = FutureProvider.autoDispose
@@ -32,10 +37,16 @@ final _participantsProvider = FutureProvider.autoDispose
       ]);
       final activity = results[0] as ActivityModel?;
       final roster = results[1] as List<ActivityParticipant>;
+      // Kicking is meaningless on terminal lifecycles
+      // (cancelled/completed/removed) — same rule as Manage.
+      final lc = activity?.lifecycleStatus.toLowerCase() ?? '';
+      final terminal =
+          lc == 'cancelled' || lc == 'completed' || lc == 'removed';
       return (
         roster: roster,
         capacity: activity?.capacity ?? roster.length,
         activityTitle: activity?.title ?? 'this activity',
+        canKick: (activity?.isHost ?? false) && !terminal,
       );
     });
 
@@ -72,13 +83,64 @@ final _rosterUidsProvider =
       .toList(growable: false);
 });
 
-class ActivityParticipantsScreen extends ConsumerWidget {
+class ActivityParticipantsScreen extends ConsumerStatefulWidget {
   final String activityId;
 
   const ActivityParticipantsScreen({super.key, required this.activityId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ActivityParticipantsScreen> createState() =>
+      _ActivityParticipantsScreenState();
+}
+
+class _ActivityParticipantsScreenState
+    extends ConsumerState<ActivityParticipantsScreen> {
+  String get activityId => widget.activityId;
+
+  /// Uids with a kick currently in flight — their Remove buttons
+  /// render disabled so rapid double-taps can't fire duplicates.
+  final Set<String> _kicking = {};
+
+  Future<void> _kick(String uid, String name) async {
+    if (_kicking.contains(uid)) return;
+    final confirmed = await AppDialog.confirm(
+      context,
+      title: 'Remove $name?',
+      body:
+          '$name will be removed from this activity and notified. They can re-join while spots are still available.',
+      confirmLabel: 'Remove',
+      cancelLabel: 'Keep',
+      destructive: true,
+    );
+    if (confirmed != true) return;
+    if (_kicking.contains(uid)) return;
+    setState(() => _kicking.add(uid));
+    try {
+      await ref.read(activityRepositoryProvider).removeParticipant(
+            activityId: activityId,
+            uid: uid,
+          );
+      ref.invalidate(_participantsProvider(activityId));
+      if (!mounted) return;
+      AppSnackbar.show(
+        context,
+        message: '$name removed from the activity.',
+        variant: AppSnackbarVariant.info,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      AppSnackbar.show(
+        context,
+        message: 'Could not remove $name. Please try again.',
+        variant: AppSnackbarVariant.error,
+      );
+    } finally {
+      if (mounted) setState(() => _kicking.remove(uid));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final async = ref.watch(_participantsProvider(activityId));
 
     return AppScaffold.detail(
@@ -151,6 +213,9 @@ class ActivityParticipantsScreen extends ConsumerWidget {
                               item: p,
                               isOnline:
                                   onlineUids.contains(p.userId),
+                              canKick: result.canKick,
+                              kicking: _kicking.contains(p.userId),
+                              onKick: () => _kick(p.userId, p.name),
                             );
                           },
                         ),
@@ -270,12 +335,29 @@ class _CapacitySummary extends StatelessWidget {
 }
 
 class _ParticipantCard extends StatelessWidget {
-  const _ParticipantCard({required this.item, required this.isOnline});
+  const _ParticipantCard({
+    required this.item,
+    required this.isOnline,
+    required this.canKick,
+    required this.kicking,
+    required this.onKick,
+  });
   final ActivityParticipant item;
   final bool isOnline;
 
+  /// Host-only kick affordance (false for non-host viewers and on
+  /// terminal games). The organizer row never renders Remove.
+  final bool canKick;
+
+  /// True while this row's kick is in flight.
+  final bool kicking;
+  final VoidCallback onKick;
+
   @override
   Widget build(BuildContext context) {
+    // The host can't kick themselves; the inner button wins the tap
+    // arena so Remove never also opens the profile behind it.
+    final showRemove = canKick && !item.isOrganizer;
     return PressableScale(
       // pushOnce guard (duplicate page keys red-screen).
       onTap: () => NavGuard.push(context,
@@ -367,6 +449,45 @@ class _ParticipantCard extends StatelessWidget {
               _timeAgo(item.joinedAt),
               style: AppTypography.caption(context),
             ),
+            if (showRemove) ...[
+              const SizedBox(height: 4),
+              Semantics(
+                button: true,
+                enabled: !kicking,
+                label: 'Remove participant',
+                child: PressableScale(
+                  onTap: kicking ? null : onKick,
+                  child: Opacity(
+                    opacity: kicking ? 0.45 : 1,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (kicking)
+                          const SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        else
+                          Icon(
+                            Icons.person_remove_outlined,
+                            size: 14,
+                            color: context.colors.errorText,
+                          ),
+                        const SizedBox(width: 4),
+                        Text(
+                          kicking ? 'Removing…' : 'Remove',
+                          style: AppTypography.caption(context).copyWith(
+                            color: context.colors.errorText,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),

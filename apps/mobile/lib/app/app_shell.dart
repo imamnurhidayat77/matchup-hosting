@@ -8,7 +8,7 @@ import '../core/widgets/pressable_scale.dart';
 import '../features/tour/presentation/tour_anchors.dart';
 import '../features/tour/presentation/tour_host.dart';
 
-class AppShell extends StatelessWidget {
+class AppShell extends StatefulWidget {
   const AppShell({super.key, required this.child});
 
   final Widget child;
@@ -54,6 +54,29 @@ class AppShell extends StatelessWidget {
     ),
   ];
 
+
+  @override
+  State<AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends State<AppShell> {
+  /// Tab-visit history for the system back button. Tab switches go()
+  /// (no stack), so without this the back button on a tab root would
+  /// close the app instead of returning to the previous tab.
+  /// Bounded; empty means "exit the app".
+  final List<int> _tabHistory = [];
+
+  void _goTab(int index, int currentIndex) {
+    if (index == currentIndex) return;
+    // Only real tabs participate (-1 = pushed screens like
+    // notifications/chat threads, which pop normally instead).
+    if (currentIndex >= 0) {
+      _tabHistory.add(currentIndex);
+      if (_tabHistory.length > 20) _tabHistory.removeAt(0);
+    }
+    context.go(AppShell._tabs[index].route);
+  }
+
   int _indexFor(String location) {
     if (location == '/discovery' || location.startsWith('/discovery/')) {
       return 0;
@@ -86,7 +109,32 @@ class AppShell extends StatelessWidget {
   Widget build(BuildContext context) {
     final location = GoRouterState.of(context).matchedLocation;
     final index = _indexFor(location);
-    return Scaffold(
+
+    // System back on a tab root walks the tab-visit history instead of
+    // closing the app; empty history exits normally. Placed here (not
+    // deeper): pushed pages sit above the shell and pop before this
+    // PopScope is ever consulted, and TourHost's own PopScope (deeper,
+    // inside body) still gets first shot while a tour is active.
+    return PopScope(
+      canPop: _tabHistory.isEmpty,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (_tabHistory.isNotEmpty) {
+          var prev = _tabHistory.removeLast();
+          // Drop duplicates of where we already are (e.g. arrived via
+          // deep link onto a tab that's also atop history).
+          final here = _indexFor(
+            GoRouterState.of(context).matchedLocation,
+          );
+          while (_tabHistory.isNotEmpty &&
+              (_tabHistory.last == prev || _tabHistory.last == here)) {
+            prev = _tabHistory.removeLast();
+          }
+          if (prev == here || prev < 0 || prev >= AppShell._tabs.length) return;
+          context.go(AppShell._tabs[prev].route);
+        }
+      },
+      child: Scaffold(
       // TourHost inserts its spotlight into the Navigator-level Overlay
       // (via Overlay.of(context)), which always paints above the entire
       // routed screen — body AND bottomNavigationBar — regardless of where
@@ -95,7 +143,7 @@ class AppShell extends StatelessWidget {
       // does not restrict the resulting OverlayEntry to body's bounds,
       // which is what lets a step spotlight a tab-bar item even though the
       // tab bar lives outside `body`.
-      body: TourHost(location: location, child: child),
+      body: TourHost(location: location, child: widget.child),
       // The activity detail screen moved inside the shell (pushing a
       // shell-child route from outside it duplicates the shell page and
       // red-screens). It keeps its full-screen look by hiding the tab
@@ -110,13 +158,13 @@ class AppShell extends StatelessWidget {
           children: [
             _TabBar(
               currentIndex: index,
-              onTap: (i) => context.go(_tabs[i].route),
+              onTap: (i) => _goTab(i, index),
             ),
             const HomeIndicator(),
           ],
         ),
       ),
-    );
+    ));
   }
 }
 

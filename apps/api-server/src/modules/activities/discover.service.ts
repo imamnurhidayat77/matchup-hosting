@@ -88,15 +88,20 @@ function passesInMemoryFilters(
     filters: ListActivitiesFilters,
     nowMs: number,
 ): boolean {
+    const startMs = Date.parse(row.startTime);
+    // Stale `open` rows (the expiry sweep is eventual + fire-and-forget):
+    // never deal a game that already started — the join would 409
+    // anyway, so showing the card only sets up a rejection.
+    if (Number.isNaN(startMs) || startMs < nowMs) {
+        return false;
+    }
     if (filters.discover?.startAfter) {
-        const startMs = Date.parse(row.startTime);
-        if (Number.isNaN(startMs) || startMs < Date.parse(filters.discover.startAfter)) {
+        if (startMs < Date.parse(filters.discover.startAfter)) {
             return false;
         }
     }
     if (filters.discover?.startBefore) {
-        const startMs = Date.parse(row.startTime);
-        if (Number.isNaN(startMs) || startMs > Date.parse(filters.discover.startBefore)) {
+        if (startMs > Date.parse(filters.discover.startBefore)) {
             return false;
         }
     }
@@ -147,11 +152,16 @@ export async function listDiscoverActivities(
     const base = firestore.collection('activities');
     const { query } = buildQuery(base, { ...filters, status: 'open' });
 
-    // Pull a generous superset — the cell cover over-includes and
-    // we'll trim by exact haversine below. Capped to avoid paying
-    // for the full limit when we expect to throw half away.
-    const overscan = Math.min(50, Math.max(filters.limit * 3, 30));
-    const snap = await query.limit(overscan).get();
+    // No limit here: the in-memory sport/date/geo/swipe filters below can
+    // only REMOVE rows, so paginating first silently drops matching games
+    // (UAT: filtering to Tennis hid a Tennis game the unfiltered feed
+    // showed, because it fell outside the arbitrary first 50 open docs).
+    // The collection is small (~100 docs); re-check this if it ever grows
+    // past SCAN_CAP — beyond that, filtered results go back to being a
+    // lottery and the query needs a real shape (per-sport equality reads
+    // or the geoCells array-contains-any cover noted in buildQuery).
+    const SCAN_CAP = 500;
+    const snap = await query.limit(SCAN_CAP).get();
     const activities = snap.docs.map((doc) => mapDocForDiscover(doc));
 
     // Resolve swipes to exclude, unless the caller already provided a

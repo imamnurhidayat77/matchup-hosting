@@ -17,17 +17,49 @@ interface ThemeContextValue {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 const KEY = 'matchup_admin_theme';
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(() => {
-    const stored = localStorage.getItem(KEY) as Theme | null;
+function readStoredTheme(): Theme | null {
+  try {
+    const stored = localStorage.getItem(KEY);
     if (stored === 'dark' || stored === 'light') return stored;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  });
+  } catch {
+    // Storage unavailable (e.g. private mode) — fall through to default.
+  }
+  return null;
+}
+
+/// Applies the theme app-wide: the `dark` class on <html> drives
+/// Tailwind's `darkMode: 'class'` variants, the same class on <body>
+/// drives the `body:not(.dark)` light-mode overrides in index.css
+/// (body never inherited the class before, so those rules always won
+/// on specificity and dark mode appeared broken), and `data-theme` +
+/// `color-scheme` keep form controls consistent.
+function applyTheme(theme: Theme) {
+  const dark = theme === 'dark';
+  for (const el of [document.documentElement, document.body]) {
+    el.classList.toggle('dark', dark);
+    el.dataset.theme = theme;
+  }
+  document.documentElement.style.colorScheme = theme;
+}
+
+function initialTheme(): Theme {
+  const stored = readStoredTheme();
+  if (stored != null) return stored;
+  return window.matchMedia('(prefers-color-scheme: dark)').matches
+      ? 'dark'
+      : 'light';
+}
+
+export function ThemeProvider({ children }: { children: ReactNode }) {
+  const [theme, setTheme] = useState<Theme>(initialTheme);
 
   useEffect(() => {
-    const root = document.documentElement;
-    root.classList.toggle('dark', theme === 'dark');
-    localStorage.setItem(KEY, theme);
+    applyTheme(theme);
+    try {
+      localStorage.setItem(KEY, theme);
+    } catch {
+      // Storage unavailable — theme still applies for this session.
+    }
   }, [theme]);
 
   const toggle = useCallback(() => setTheme((t) => (t === 'dark' ? 'light' : 'dark')), []);

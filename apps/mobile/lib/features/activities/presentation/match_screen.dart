@@ -7,6 +7,8 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/providers/repository_providers.dart';
+import '../../../core/utils/nav_guard.dart';
+import '../../../core/widgets/system_back.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/dark_colors.dart';
@@ -112,7 +114,9 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
       },
     );
 
-    return AppScaffold(
+    return SystemBackFallback(
+      onEmptyStack: (context) => context.go('/discovery'),
+      child: AppScaffold(
       backgroundColor: context.colors.background,
       showHomeIndicator: false,
       body: Stack(
@@ -146,7 +150,7 @@ class _MatchScreenState extends ConsumerState<MatchScreen>
           ),
         ],
       ),
-    );
+    ));
   }
 }
 
@@ -247,11 +251,13 @@ class _MatchBody extends StatelessWidget {
             _ActivityCard(activity: activity),
             const SizedBox(height: AppSpacing.x5),
 
-            // View Activity Details — full-width blue pill
+            // View Activity Details — full-width blue pill. Pushed
+            // (not go) so the system back button returns to the
+            // match screen instead of closing the app.
             PressableScale(
               onTap: () {
                 HapticFeedback.lightImpact();
-                context.go('/joined-activity/${activity.id}');
+                NavGuard.push(context, '/joined-activity/${activity.id}');
               },
               child: Container(
                 width: double.infinity,

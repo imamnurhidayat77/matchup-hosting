@@ -332,7 +332,23 @@ class _SuspendedScreenState extends ConsumerState<SuspendedScreen> {
 
   List<Widget> _appealForm(BuildContext context, {required String heading}) {
     return [
-      Text(heading, style: AppTypography.labelField(context)),
+      Row(
+        children: [
+          Expanded(
+            child: Text(heading, style: AppTypography.labelField(context)),
+          ),
+          // Live character count lives in the heading row: the default
+          // maxLength counter renders BELOW the field — outside the
+          // bordered box (UAT: "text appearing outside the border").
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: _statementController,
+            builder: (context, value, _) => Text(
+              '${value.text.trim().length}/2000',
+              style: AppTypography.metaSub(context),
+            ),
+          ),
+        ],
+      ),
       const SizedBox(height: 6),
       Container(
         padding: const EdgeInsets.symmetric(
@@ -352,6 +368,15 @@ class _SuspendedScreenState extends ConsumerState<SuspendedScreen> {
           maxLines: 5,
           minLines: 4,
           maxLength: 2000,
+          // Hide the built-in counter (it renders outside the box);
+          // the count lives in the heading row above instead.
+          buildCounter: (
+            _, {
+            required int currentLength,
+            required bool isFocused,
+            required int? maxLength,
+          }) =>
+              null,
           decoration: InputDecoration.collapsed(
             hintText:
                 'Explain what happened and why you believe this was a mistake…',

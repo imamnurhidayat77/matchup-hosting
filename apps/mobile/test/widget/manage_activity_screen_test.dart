@@ -24,6 +24,12 @@ void main() {
     when(() => repo.approveJoinRequest(any(), any())).thenAnswer((_) async {});
     when(() => repo.declineJoinRequest(any(), any())).thenAnswer((_) async {});
     when(
+      () => repo.removeParticipant(
+        activityId: any(named: 'activityId'),
+        uid: any(named: 'uid'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
       () => repo.updateActivity(
         activityId: any(named: 'activityId'),
         title: any(named: 'title'),
@@ -290,6 +296,54 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Profile uid:u9'), findsOneWidget);
+    });
+
+    testWidgets('host can kick a participant from the preview roster', (
+      tester,
+    ) async {
+      when(() => repo.byId('5')).thenAnswer((_) async => activity());
+      when(() => repo.participants('5')).thenAnswer(
+        (_) async => [
+          ActivityParticipant(
+            userId: 'host',
+            name: 'Noor Haddad',
+            avatarAsset: 'host_james.png',
+            skillLevel: 'Advanced',
+            joinedAt: DateTime.now(),
+            isOrganizer: true,
+          ),
+          ActivityParticipant(
+            userId: 'u2',
+            name: 'Tavita Faleolo',
+            avatarAsset: 'avatar_1.png',
+            skillLevel: 'Beginner',
+            joinedAt: DateTime.now(),
+            isOrganizer: false,
+          ),
+        ],
+      );
+
+      await pumpScreen(tester);
+      await tester.scrollUntilVisible(
+        find.text('Tavita Faleolo'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+
+      // Organizer row never offers Remove; member row does.
+      expect(find.text('Remove'), findsOneWidget);
+      await tester.tap(find.text('Remove'));
+      await tester.pumpAndSettle();
+
+      // Confirm dialog → confirm.
+      expect(find.text('Remove Tavita Faleolo?'), findsOneWidget);
+      await tester.tap(find.text('Remove').last);
+      await tester.pumpAndSettle();
+
+      verify(
+        () => repo.removeParticipant(activityId: '5', uid: 'u2'),
+      ).called(1);
+      expect(find.text('Tavita Faleolo removed from the activity.'), findsOneWidget);
     });
 
     testWidgets('quick-action Edit should push the edit screen', (

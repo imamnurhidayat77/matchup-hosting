@@ -104,14 +104,64 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 
   /// Marks the notification read, then deep-links to its screen.
   /// `push` (not `go`) keeps the feed underneath so back returns here.
-  /// Taps without a usable target (null route) stay on the feed —
-  /// still marked read.
+  /// Taps without a usable target (report decisions, admin broadcasts —
+  /// null route) open the full message in a sheet instead, since the
+  /// feed card truncates at 2 lines and there is nowhere to navigate.
   Future<void> _openNotif(AppNotification notif) async {
     await _markRead(notif.id);
     if (!mounted) return;
     final route = routeForNotification(notif);
-    if (route == null || route == '/notifications') return;
+    if (route == null || route == '/notifications') {
+      _showFullMessage(notif);
+      return;
+    }
     NavGuard.push(context, route);
+  }
+
+  /// Bottom sheet with the complete title + body + timestamp. Used for
+  /// target-less notifications (reports, broadcasts) whose full text
+  /// never appears anywhere else.
+  void _showFullMessage(AppNotification notif) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.x5,
+            AppSpacing.x2,
+            AppSpacing.x5,
+            AppSpacing.x6,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                notif.title,
+                style: AppTypography.titleMedium(context),
+              ),
+              const SizedBox(height: AppSpacing.x2),
+              Text(
+                _sheetTimeAgo(notif.createdAt),
+                style: AppTypography.metaSub(context),
+              ),
+              const SizedBox(height: AppSpacing.x3),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Text(
+                    (notif.body == null || notif.body!.isEmpty)
+                        ? 'No additional details.'
+                        : notif.body!,
+                    style: AppTypography.bodyReading(context),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -654,4 +704,16 @@ class _NotifCard extends StatelessWidget {
     if (diff.inDays == 1) return 'Yesterday';
     return '${diff.inDays}d ago';
   }
+}
+
+/// Relative timestamp for the full-message sheet (mirrors the card's
+/// `_timeAgo` formatting; kept as a top-level helper because the card
+/// widgets each own a private copy bound to their own classes).
+String _sheetTimeAgo(DateTime dt) {
+  final diff = DateTime.now().difference(dt);
+  if (diff.inMinutes < 1) return 'Just now';
+  if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+  if (diff.inHours < 24) return '${diff.inHours}h ago';
+  if (diff.inDays == 1) return 'Yesterday';
+  return '${diff.inDays}d ago';
 }

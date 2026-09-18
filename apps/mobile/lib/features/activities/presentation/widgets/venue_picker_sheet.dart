@@ -190,18 +190,22 @@ class _VenuePickerSheetState extends ConsumerState<VenuePickerSheet>
       _error = null;
     });
     try {
-      final results = await ref
-          .read(placesRepositoryProvider)
-          .autocomplete(query, countryCodes: widget.countryCodes);
+      final origin = _pickedLatLng ??
+          _selectedLatLng ??
+          _userLocation ??
+          const LatLng(-36.8485, 174.7633);
+      final results = await ref.read(placesRepositoryProvider).autocomplete(
+            query,
+            countryCodes: widget.countryCodes,
+            // Bias the geocoder to the user's area (~±35km) so nearby
+            // Auckland venues rank above same-named world matches.
+            viewbox: _viewboxAround(origin),
+          );
       if (!mounted) return;
       // Discard stale responses (user kept typing past us).
       if (_searchCtrl.text.trim() != query) return;
       // Rank results by combined relevance + distance score. See
       // [PlacesRanker] for the tier-by-tier algorithm.
-      final origin = _pickedLatLng ??
-          _selectedLatLng ??
-          _userLocation ??
-          const LatLng(-36.8485, 174.7633);
       // Re-rank once and split: the ranked list feeds the row
       // widget (for matched-range highlighting + precomputed
       // distance); the bare suggestions feed `_results` (so the
@@ -225,8 +229,19 @@ class _VenuePickerSheetState extends ConsumerState<VenuePickerSheet>
     }
   }
 
-  Future<void> _pick(PlaceSuggestion suggestion) async {
-    await _saveRecent(suggestion);
+  /// Nominatim viewbox (`"left,top,right,bottom"`) around [origin],
+  /// roughly ±35 km, clamped to valid world degrees. Sent as a *bias*
+  /// (bounded=0 server-side): nearby venues rank first, world matches
+  /// still appear below.
+  String _viewboxAround(LatLng origin) {
+    final left = (origin.longitude - 0.35).clamp(-180.0, 180.0);
+    final right = (origin.longitude + 0.35).clamp(-180.0, 180.0);
+    final top = (origin.latitude + 0.25).clamp(-90.0, 90.0);
+    final bottom = (origin.latitude - 0.25).clamp(-90.0, 90.0);
+    return '$left,$top,$right,$bottom';
+  }
+
+  Future<void> _pick(PlaceSuggestion suggestion) async {    await _saveRecent(suggestion);
     if (!mounted) return;
     Navigator.of(context).pop(suggestion);
   }
@@ -311,14 +326,16 @@ class _VenuePickerSheetState extends ConsumerState<VenuePickerSheet>
                     bottom: AppSpacing.x5,
                     child: _PickedLocationCard(
                       latLng: _pickedLatLng!,
-                      onConfirm: () {
+                      onConfirm: (name) {
                         final ll = _pickedLatLng!;
+                        final trimmed = name.trim();
                         Navigator.of(context).pop(
                           PlaceSuggestion(
                             placeId:
                                 'pin:${ll.latitude.toStringAsFixed(5)},${ll.longitude.toStringAsFixed(5)}',
-                            label:
-                                '${ll.latitude.toStringAsFixed(5)}, ${ll.longitude.toStringAsFixed(5)}',
+                            label: trimmed.isNotEmpty
+                                ? trimmed
+                                : '${ll.latitude.toStringAsFixed(5)}, ${ll.longitude.toStringAsFixed(5)}',
                             secondary: 'Dropped pin',
                             latitude: ll.latitude,
                             longitude: ll.longitude,
@@ -1680,14 +1697,42 @@ class _ShimmerResultsState extends State<_ShimmerResults>
 
 // ─── floating "Use this location" ───────────────────────────────────────────
 
-class _PickedLocationCard extends StatelessWidget {
+/// Card shown after a tap-on-map pick. Offers a small text field so the
+/// user can NAME the dropped pin instead of keeping raw coordinates —
+/// prefilled with the reverse-geocoded label when one is available
+/// (none exists today: [PlacesRepository] only exposes autocomplete,
+/// so it starts empty with the 'Name this place' hint). The entered
+/// value becomes the location name on confirm; blank falls back to
+/// the `lat, lng` coordinates as before.
+class _PickedLocationCard extends StatefulWidget {
   const _PickedLocationCard({
     required this.latLng,
     required this.onConfirm,
   });
 
   final LatLng latLng;
-  final VoidCallback onConfirm;
+  final ValueChanged<String> onConfirm;
+
+  @override
+  State<_PickedLocationCard> createState() => _PickedLocationCardState();
+}
+
+class _PickedLocationCardState extends State<_PickedLocationCard> {
+  // No reverse-geocode endpoint exists ([PlacesRepository] only exposes
+  // autocomplete), so the field starts empty with the hint below; when
+  // a reverse lookup is available, prefill the controller with it here.
+  late final TextEditingController _nameCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    super.dispose();
+  }
+
+  void _confirm() {
+    HapticFeedback.lightImpact();
+    widget.onConfirm(_nameCtrl.text);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1699,51 +1744,87 @@ class _PickedLocationCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(16),
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.x3),
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              alignment: Alignment.center,
-              child: Icon(
-                Icons.place_rounded,
-                size: 20,
-                color: theme.colorScheme.onPrimaryContainer,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.x3),
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Dropped pin',
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+            Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${latLng.latitude.toStringAsFixed(5)}, '
-                    '${latLng.longitude.toStringAsFixed(5)}',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.place_rounded,
+                    size: 20,
+                    color: theme.colorScheme.onPrimaryContainer,
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(width: AppSpacing.x3),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Dropped pin',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${widget.latLng.latitude.toStringAsFixed(5)}, '
+                        '${widget.latLng.longitude.toStringAsFixed(5)}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: AppSpacing.x2),
+            const SizedBox(height: AppSpacing.x2),
+            TextField(
+              controller: _nameCtrl,
+              textInputAction: TextInputAction.done,
+              textCapitalization: TextCapitalization.words,
+              maxLength: 80,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurface,
+              ),
+              decoration: InputDecoration(
+                hintText: 'Name this place',
+                hintStyle: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant.withValues(
+                    alpha: 0.7,
+                  ),
+                ),
+                isDense: true,
+                counterText: '',
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: theme.colorScheme.outlineVariant),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: theme.colorScheme.primary),
+                ),
+              ),
+              onSubmitted: (_) => _confirm(),
+            ),
+            const SizedBox(height: AppSpacing.x2),
             FilledButton(
-              onPressed: () {
-                HapticFeedback.lightImpact();
-                onConfirm();
-              },
+              onPressed: _confirm,
               child: const Text('Use'),
             ),
           ],

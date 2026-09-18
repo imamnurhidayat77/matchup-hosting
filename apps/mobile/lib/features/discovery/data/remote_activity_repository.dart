@@ -570,6 +570,19 @@ class RemoteActivityRepository implements ActivityRepository {
   }
 
   @override
+  Future<void> removeParticipant({
+    required String activityId,
+    required String uid,
+  }) async {
+    // No local fallback (mirrors join/leave): the backend owns
+    // membership state, and its 403/404 answers carry the reason the
+    // manage screen shows. Swallowing them would drop the row locally
+    // while the player is still in the game server-side.
+    _invalidateDetails();
+    await _client.dio.delete('$_base/$activityId/participants/$uid');
+  }
+
+  @override
   Future<void> cancel(String activityId) async {
     // No local fallback (mirrors join/requestJoin) — see above.
     _invalidateDetails();
@@ -681,11 +694,11 @@ class RemoteActivityRepository implements ActivityRepository {
   }) async {
     try {
       // No dedicated backend route — "past" means terminal lifecycles
-      // (`completed` AND `cancelled`) filtered to activities the viewer
-      // hosted or joined. Cancelled must be included: otherwise a
-      // called-off game vanishes from every My Games tab (Upcoming only
-      // lists open games). Most-recent first so history reads backwards
-      // from today.
+      // (`completed`, `cancelled` AND `removed`) filtered to activities
+      // the viewer hosted or joined. Cancelled/removed must be included:
+      // otherwise a called-off game vanishes from every My Games tab
+      // (Upcoming only lists open games). Most-recent first so history
+      // reads backwards from today.
       final responses = await Future.wait([
         _client.dio.get(
           _base,
@@ -695,11 +708,20 @@ class RemoteActivityRepository implements ActivityRepository {
           _base,
           queryParameters: {'status': 'cancelled', 'limit': 50},
         ),
+        _client.dio.get(
+          _base,
+          queryParameters: {'status': 'removed', 'limit': 50},
+        ),
       ]);
-      final past = responses
-          .expand((res) => _parseList(apiDataList(res.data)))
-          .where((a) => a.isParticipant || a.isHost)
-          .toList();
+      final seen = <String>{};
+      final past = <ActivityModel>[];
+      for (final res in responses) {
+        for (final a in _parseList(apiDataList(res.data))) {
+          if (!(a.isParticipant || a.isHost)) continue;
+          if (!seen.add(a.id)) continue;
+          past.add(a);
+        }
+      }
       _sortRecentFirst(past);
       return past.skip(offset).take(limit).toList();
     } catch (e, st) {
