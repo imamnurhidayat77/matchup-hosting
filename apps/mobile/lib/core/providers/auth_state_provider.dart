@@ -41,7 +41,9 @@ class AuthState {
 // ─── Notifier ────────────────────────────────────────────────────────────────
 
 class AuthStateNotifier extends StateNotifier<AuthState> {
-  AuthStateNotifier() : super(AuthState.unknown) {
+  AuthStateNotifier({SecureTokenExchange? exchange})
+      : _exchange = exchange ?? secureTokenExchange,
+        super(AuthState.unknown) {
     // Fired by the API layer when the refresh token itself is dead.
     // Re-login is the only recovery — flip to unauthenticated so the
     // router sends the user to login instead of stranding them in a
@@ -61,6 +63,10 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
   }
 
   final _store = SecureTokenStore.instance;
+
+  /// Exchange used by the cold-start silent refresh. Injectable for
+  /// tests; production hits Google's securetoken endpoint.
+  final SecureTokenExchange _exchange;
   late final StreamSubscription<void> _expirySub;
   late final StreamSubscription<void> _suspendedSub;
 
@@ -76,6 +82,13 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
   /// best-effort probes the server so suspended users don't flash app
   /// content on cold start.
   ///
+  /// An expired ID token is NOT a logout: Firebase ID tokens live 1 hour
+  /// while the refresh token lives indefinitely, so a returning user
+  /// almost always arrives with an expired ID token. When the ID token
+  /// is expired/missing but a refresh token exists, one silent refresh
+  /// is attempted before routing to login — otherwise every app restart
+  /// after an hour looks like an "automatic logout".
+  ///
   /// Probe semantics (all fail-open except explicit signals):
   /// - 200 → keep local authenticated status.
   /// - 401/unauthorized → dead session → unauthenticated (storage cleared).
@@ -86,8 +99,11 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
   Future<void> checkSession() async {
     final hasSession = await _store.hasValidSession;
     if (!hasSession) {
-      state = AuthState.unauthenticated;
-      return;
+      // Definitive outcomes set state inside; transient failure fails
+      // open to authenticated and also returns false (no probe — it
+      // would just 401 on the stale token while offline).
+      final refreshed = await _silentRefresh();
+      if (!refreshed) return;
     }
     final userId = await _store.readUserId();
     state = AuthState(status: AuthStatus.authenticated, userId: userId);
@@ -128,6 +144,44 @@ class AuthStateNotifier extends StateNotifier<AuthState> {
     } catch (_) {
       // TimeoutException, network errors, unexpected shapes → fail open,
       // keep the local authenticated status.
+    }
+  }
+
+  /// One silent refresh attempt for cold starts whose ID token expired
+  /// (or is missing) while a refresh token is still stored. Returns true
+  /// when the caller should continue as authenticated (tokens fresh —
+  /// run the probe); false when state was set here and the caller must
+  /// return: unauthenticated on missing/rotated-out credentials, or
+  /// fail-open authenticated when the network is unusable (the user
+  /// never logged out — the reactive refresh path retries later).
+  Future<bool> _silentRefresh() async {
+    final refreshToken = await _store.readRefreshToken();
+    final userId = await _store.readUserId();
+    if (refreshToken == null ||
+        refreshToken.isEmpty ||
+        userId == null ||
+        userId.isEmpty) {
+      state = AuthState.unauthenticated;
+      return false;
+    }
+    try {
+      final pair = await _exchange(refreshToken);
+      await _store.saveAccessToken(pair.idToken);
+      final rotated = pair.refreshToken;
+      if (rotated != null && rotated.isNotEmpty) {
+        await _store.saveRefreshToken(rotated);
+      }
+      return true;
+    } on UnrecoverableRefreshException {
+      // Refresh token rejected/revoked (or user disabled): the session
+      // is genuinely dead — re-login is the only way out.
+      await _store.clearAll();
+      state = AuthState.unauthenticated;
+      return false;
+    } catch (_) {
+      // Offline/transient: stay logged in locally.
+      state = AuthState(status: AuthStatus.authenticated, userId: userId);
+      return false;
     }
   }
 

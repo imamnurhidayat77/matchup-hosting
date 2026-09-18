@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/providers/profile_providers.dart';
 import '../../../core/providers/repository_providers.dart';
+import '../../../core/storage/secure_token_store.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/dark_colors.dart';
@@ -96,9 +97,18 @@ class _GetToKnow3ScreenState extends ConsumerState<GetToKnow3Screen> {
       );
       ref.invalidate(myProfileProvider);
       // Onboarding complete — splash must not resume GTK on next cold start.
+      // Scoped per account (gtk_done_<uid>) so shared devices don't leak
+      // completion across users.
       try {
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool('gtk_done', true);
+        final uid = await SecureTokenStore.instance
+            .readUserId()
+            // A hung Keystore read must not pin the onboarding flow on
+            // "Saving…" — fail open after a bounded wait.
+            .timeout(const Duration(seconds: 3));
+        if (uid != null && uid.isNotEmpty) {
+          await prefs.setBool(gtkDoneKeyFor(uid), true);
+        }
       } catch (_) {
         // Fail-open: next splash treats missing as done for old accounts,
         // and new accounts will simply resume GTK once more.

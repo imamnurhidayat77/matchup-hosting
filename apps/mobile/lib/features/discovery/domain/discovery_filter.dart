@@ -111,6 +111,13 @@ class DiscoveryFilter {
     /// Maps the slider's `Today / Tomorrow / Weekend / This Week` chips
     /// to ISO bounds. Mirrors the controller's parse logic so the chip
     /// labels and the actual query stay in sync.
+    ///
+    /// Bounds are the user's LOCAL calendar day expressed in UTC
+    /// (local midnight → `.toUtc()`): the backend compares instants in
+    /// UTC, so "Today" for an NZ user is [prev-day 12:00Z, today
+    /// 12:00Z]. Building `DateTime.utc` from local components instead
+    /// would shift the window by the whole UTC offset (a full 12h of
+    /// wrong games in NZ) — do not "simplify" this.
     static String _isoStartOfDay(DateTime d) =>
         DateTime(d.year, d.month, d.day).toUtc().toIso8601String();
     static String _isoEndOfDay(DateTime d) =>

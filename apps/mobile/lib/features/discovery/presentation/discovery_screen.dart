@@ -151,6 +151,13 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
   /// active" (render a chip + tap to reset).
   bool _hasActiveFilter = false;
 
+  /// True when the active filter caps distance but the device couldn't
+  /// provide a position (GPS off / denied). The repo fail-softs to
+  /// unfiltered rows in that case, so the deck shows this inline notice
+  /// instead of silently pretending the distance filter applied.
+  /// Filtering semantics are unchanged — this is display-only.
+  bool _locationUnknown = false;
+
   @override
   void initState() {
     super.initState();
@@ -362,6 +369,11 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
       // State and would otherwise force another "Start over" tap on
       // every return.
       _applyDeck(list, filter, committed: committed, anchorId: anchorId);
+      // When the active filter caps distance, probe location availability
+      // so the deck can warn instead of silently showing unfiltered
+      // rows. Best-effort and off the critical path: the deck above
+      // already painted; this only flips the notice chip.
+      unawaited(_probeLocationNotice(remote, filter));
       // Silent background refresh when the render above came from a
       // fresh cache entry: the deck converges to live data without
       // ever flashing the skeleton. Skipped on cold loads (nothing
@@ -382,8 +394,7 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
     }
   }
 
-  /// Builds [_activities] from a raw feed inside setState. Shared by
-  /// [_load] (skeleton path) and [_refreshSilently] (no-skeleton path
+  /// Builds [_activities] from a raw feed inside setState. Shared by  /// [_load] (skeleton path) and [_refreshSilently] (no-skeleton path
   /// that preserves the user's swipe position).
   void _applyDeck(
     List<ActivityModel> list,
@@ -455,6 +466,33 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
     ref.read(discoveryContentReadyProvider.notifier).state = true;
   }
 
+  /// Checks whether the device can provide a position when the active
+  /// filter caps distance. Sets [_locationUnknown] so the deck shows an
+  /// inline "location off" notice instead of silently returning
+  /// everything. Display-only: filtering semantics are untouched.
+  /// Best-effort — failures leave the previous flag alone.
+  Future<void> _probeLocationNotice(
+    RemoteActivityRepository? remote,
+    DiscoveryFilter filter,
+  ) async {
+    if (filter.maxDistanceKm == null || remote == null) {
+      if (mounted && _locationUnknown) {
+        setState(() => _locationUnknown = false);
+      }
+      return;
+    }
+    try {
+      final has = await remote
+          .hasLocationForGeo()
+          .timeout(const Duration(seconds: 5));
+      if (!mounted) return;
+      if (_locationUnknown == !has) return;
+      setState(() => _locationUnknown = !has);
+    } catch (_) {
+      // Silent path — the deck simply stays without the notice.
+    }
+  }
+
   /// Re-fetches bypassing the cache and swaps the deck silently — no
   /// skeleton, and the swipe position is preserved so a mid-deck user
   /// is never yanked back to the top. No-op when the fresh feed is
@@ -469,7 +507,20 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
       final sameIds = fresh.map((a) => a.id).join(',') ==
           _activities.map((a) => a.id).join(',');
       if (sameIds) return;
-      _applyDeck(fresh, filter);
+      // Same committed lists as [_load] so the time-clash filter stays
+      // at full strength. Best-effort: on failure [_applyDeck] falls
+      // back to the feed page's own participant/host flags.
+      List<ActivityModel> committed = const [];
+      try {
+        final results = await Future.wait([
+          repo.joinedByUser('', limit: 50),
+          repo.hostedByUser('', limit: 50),
+        ]);
+        committed = [...results[0], ...results[1]];
+      } catch (_) {
+        // Offline — feed-derived fallback inside [_applyDeck].
+      }
+      _applyDeck(fresh, filter, committed: committed);
     } catch (_) {
       // Silent path — stale deck simply stays.
     }
@@ -769,6 +820,50 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
               ),
             ],
           ),
+          // Location-off notice: the distance filter can't apply without
+          // a GPS fix, so the deck is unfiltered — say so inline instead
+          // of silently showing everything.
+          if (_locationUnknown && _hasActiveFilter)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.x5,
+                0,
+                AppSpacing.x5,
+                AppSpacing.x2,
+              ),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.x3,
+                  vertical: AppSpacing.x2,
+                ),
+                decoration: BoxDecoration(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(AppSpacing.x2),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.location_off_outlined,
+                      size: 16,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: AppSpacing.x2),
+                    const Flexible(
+                      child: Text(
+                        'Location off — distances unknown, showing all',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(
@@ -776,8 +871,7 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
                 AppSpacing.x2,
                 AppSpacing.x5,
                 AppSpacing.x2,
-              ),
-              // Tapping the card opens details — a natural gesture that
+              ),              // Tapping the card opens details — a natural gesture that
               // mirrors how the like/dismiss buttons mirror the swipe.
               child: _isLoading
                   ? KeyedSubtree(

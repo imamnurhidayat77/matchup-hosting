@@ -172,8 +172,9 @@ class RemoteChatRepository implements ChatRepository {
   }
 
   /// Resolves sender uids to display names + avatar URLs via the
-  /// activity roster. Falls back to raw uids when the roster is
-  /// unreachable.
+  /// activity roster. Falls back to the last-known cached entry (even
+  /// if stale) when the roster is unreachable, so good names never wipe
+  /// to raw UIDs; only a cache-less failure degrades to raw uids.
   Future<Map<String, _SenderProfile>> _senderProfiles(
     String activityId,
   ) async {
@@ -190,8 +191,23 @@ class RemoteChatRepository implements ChatRepository {
           p.userId: _SenderProfile(name: p.name, avatarUrl: p.avatarUrl),
       };
       _senderCache[activityId] = _SenderCache(senders, DateTime.now());
+      // Cap the per-activity cache: drop the stalest entries beyond 100
+      // so long sessions can't grow it without bound.
+      while (_senderCache.length > 100) {
+        var oldestKey = _senderCache.keys.first;
+        var oldestAt = _senderCache[oldestKey]!.fetchedAt;
+        for (final entry in _senderCache.entries) {
+          if (entry.value.fetchedAt.isBefore(oldestAt)) {
+            oldestKey = entry.key;
+            oldestAt = entry.value.fetchedAt;
+          }
+        }
+        _senderCache.remove(oldestKey);
+      }
       return senders;
     } catch (_) {
+      final stale = _senderCache[activityId];
+      if (stale != null) return stale.senders;
       return const {};
     }
   }

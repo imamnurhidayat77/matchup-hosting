@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../theme/app_spacing.dart';
@@ -5,6 +6,10 @@ import '../theme/dark_colors.dart';
 
 /// iOS home indicator pill (139×5px, 100px radius) shown at the bottom of
 /// every screen to match Figma designs.
+///
+/// iOS only: Android draws its own system gesture pill in the same spot,
+/// so rendering ours too produces a doubled indicator. [defaultTargetPlatform]
+/// (not `Platform.isIOS`) keeps this test-safe and web-compatible.
 class HomeIndicator extends StatelessWidget {
   const HomeIndicator({
     super.key,
@@ -21,6 +26,11 @@ class HomeIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Android (and desktop/web) already show a system gesture pill or
+    // navigation buttons — a second in-app pill doubles the indicator.
+    if (defaultTargetPlatform != TargetPlatform.iOS) {
+      return const SizedBox.shrink();
+    }
     return Padding(
       padding: padding,
       child: Center(

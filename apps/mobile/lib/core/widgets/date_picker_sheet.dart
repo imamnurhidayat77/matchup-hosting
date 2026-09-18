@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../services/weather_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
@@ -21,11 +22,18 @@ class DatePickerSheet extends StatefulWidget {
     this.initialDate,
     this.minDate,
     this.maxDate,
+    this.latitude,
+    this.longitude,
   });
 
   final DateTime? initialDate;
   final DateTime? minDate;
   final DateTime? maxDate;
+
+  /// Venue coords (opsional). Jika ada, sheet menampilkan ikon cuaca
+  /// per-tanggal via Open-Meteo. Null = tanpa cuaca (tidak blokir).
+  final double? latitude;
+  final double? longitude;
 
   @override
   State<DatePickerSheet> createState() => _DatePickerSheetState();
@@ -39,6 +47,10 @@ class _DatePickerSheetState extends State<DatePickerSheet> {
   late int _hour12;   // 1–12
   late int _minute;   // 0–59, shown in 5-min steps
   late bool _isPm;
+
+  // Daily + hourly forecast (Open-Meteo, best-effort, one network call).
+  Map<DateTime, DailyWeather> _daily = const {};
+  Map<DateTime, WeatherInfo> _hourly = const {};
 
   static const _months = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -63,7 +75,29 @@ class _DatePickerSheetState extends State<DatePickerSheet> {
     _hour12 = h == 0 ? 12 : (h > 12 ? h - 12 : h);
     // Round minute up to nearest step
     _minute = ((init.minute / minuteStep).ceil() * minuteStep) % 60;
+    _loadWeather();
   }
+
+  Future<void> _loadWeather() async {
+    final lat = widget.latitude;
+    final lng = widget.longitude;
+    if (lat == null || lng == null) return;
+    final results = await Future.wait([
+      WeatherService.instance.fetchDaily(lat, lng),
+      WeatherService.instance.fetchHourly(lat, lng),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      _daily = results[0] as Map<DateTime, DailyWeather>;
+      _hourly = results[1] as Map<DateTime, WeatherInfo>;
+    });
+  }
+
+  DailyWeather? _weatherFor(DateTime d) =>
+      _daily[DateTime(d.year, d.month, d.day)];
+
+  WeatherInfo? _hourlyFor(DateTime dt) =>
+      _hourly[DateTime(dt.year, dt.month, dt.day, dt.hour)];
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -170,7 +204,7 @@ class _DatePickerSheetState extends State<DatePickerSheet> {
                     final index = row * 7 + col;
                     final dayNum = index - leading + 1;
                     if (dayNum < 1 || dayNum > daysInMonth) {
-                      return const Expanded(child: SizedBox(height: 40));
+                      return const Expanded(child: SizedBox(height: 52));
                     }
                     final date = DateTime(_focused.year, _focused.month, dayNum);
                     final isSel = _dateOnly(date) == _dateOnly(_selected);
@@ -182,6 +216,7 @@ class _DatePickerSheetState extends State<DatePickerSheet> {
                         isSelected: isSel,
                         isToday: isToday && !isSel,
                         enabled: inRange,
+                        weather: _weatherFor(date),
                         onTap: inRange
                             ? () => setState(() => _selected = date)
                             : null,
@@ -192,15 +227,14 @@ class _DatePickerSheetState extends State<DatePickerSheet> {
               );
             }),
 
-            const SizedBox(height: AppSpacing.x4),
+            const SizedBox(height: AppSpacing.x3),
             Divider(height: 1, color: context.colors.border),
             const SizedBox(height: AppSpacing.x4),
 
             // ── Time picker ─────────────────────────────────────────────
-            // Owned by [_TimeSection] with its own local state so wheel
-            // ticks only rebuild the drums — never the whole sheet
-            // (calendar grid included). Values are pushed up without
-            // setState; [_result] reads them at confirm time.
+            // Drums keep local state for smooth scrolling; values are
+            // pushed up AND refresh the hourly strip below via setState
+            // so the forecast follows the spun hour live.
             _TimeSection(
               hour12: _hour12,
               minute: _minute,
@@ -209,7 +243,17 @@ class _DatePickerSheetState extends State<DatePickerSheet> {
                 _hour12 = h;
                 _minute = m;
                 _isPm = pm;
+                setState(() {});
               },
+            ),
+
+            const SizedBox(height: AppSpacing.x3),
+            _SelectedDayWeather(
+              hasCoords:
+                  widget.latitude != null && widget.longitude != null,
+              hourly: _hourlyFor(_result),
+              daily: _weatherFor(_selected),
+              result: _result,
             ),
 
             const SizedBox(height: AppSpacing.x5),
@@ -598,6 +642,7 @@ class _DayCell extends StatelessWidget {
     required this.isToday,
     required this.enabled,
     required this.onTap,
+    this.weather,
   });
 
   final int day;
@@ -605,6 +650,9 @@ class _DayCell extends StatelessWidget {
   final bool isToday;
   final bool enabled;
   final VoidCallback? onTap;
+
+  /// Cuaca harian (null = belum dimuat / di luar 16 hari / tanpa venue).
+  final DailyWeather? weather;
 
   @override
   Widget build(BuildContext context) {
@@ -618,7 +666,14 @@ class _DayCell extends StatelessWidget {
       '$day',
       if (isToday) '(today)',
       if (isSelected) '(selected)',
+      if (weather != null) '(${weather!.description})',
     ].join(' ');
+
+    final w = weather;
+    final showTemp = w != null &&
+        enabled &&
+        !w.tempMax.isNaN &&
+        !w.tempMin.isNaN;
 
     return Semantics(
       button: true,
@@ -628,19 +683,200 @@ class _DayCell extends StatelessWidget {
       child: PressableScale(
         onTap: onTap,
         child: Container(
-          height: 40,
+          height: 52,
           margin: const EdgeInsets.symmetric(horizontal: 2),
-          decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(16),
+          ),
           alignment: Alignment.center,
-          child: Text(
-            '$day',
-            style: AppTypography.labelField(context).copyWith(
-              fontWeight:
-                  isSelected || isToday ? FontWeight.w700 : FontWeight.w500,
-              color: color,
-            ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '$day',
+                    style: AppTypography.labelField(context).copyWith(
+                      fontWeight: isSelected || isToday
+                          ? FontWeight.w700
+                          : FontWeight.w500,
+                      color: color,
+                    ),
+                  ),
+                  if (w != null &&
+                      enabled &&
+                      w.precipitationProbabilityMax >= 60) ...[
+                    const SizedBox(width: 2),
+                    Container(
+                      width: 5,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isSelected
+                            ? AppColors.textOnPrimary
+                            : context.colors.primaryOnSurface,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              if (showTemp)
+                Text(
+                  '${w.tempMax.round()}°',
+                  style: AppTypography.bodySmall(context).copyWith(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: isSelected
+                        ? AppColors.textOnPrimary.withValues(alpha: 0.85)
+                        : context.colors.textTertiary,
+                  ),
+                )
+              else
+                const SizedBox(height: 12),
+            ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Hourly weather strip for the currently picked date + time.
+/// Updates live as the hour/minute drums spin (parent rebuilds on
+/// every tick). Falls back to the daily summary when the exact hour
+/// is missing, e.g. beyond the 16-day hourly range.
+class _SelectedDayWeather extends StatelessWidget {
+  const _SelectedDayWeather({
+    required this.hasCoords,
+    required this.hourly,
+    required this.daily,
+    required this.result,
+  });
+
+  final bool hasCoords;
+  final WeatherInfo? hourly;
+  final DailyWeather? daily;
+  final DateTime result;
+
+  String _hourLabel(DateTime dt) {
+    final h12 = dt.hour == 0 ? 12 : (dt.hour > 12 ? dt.hour - 12 : dt.hour);
+    final ampm = dt.hour < 12 ? 'AM' : 'PM';
+    return '$h12:${dt.minute.toString().padLeft(2, '0')} $ampm';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!hasCoords) {
+      return Row(
+        children: [
+          Icon(
+            Icons.cloud_outlined,
+            size: 16,
+            color: context.colors.textTertiary,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              'Pick a venue first to see weather per date',
+              style: AppTypography.metaSub(context),
+            ),
+          ),
+        ],
+      );
+    }
+    final h = hourly;
+    if (h != null) {
+      final temp =
+          h.temperatureC.isNaN ? '—' : '${h.temperatureC.round()}°C';
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: context.colors.surfaceSubtle,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(color: context.colors.border),
+        ),
+        child: Row(
+          children: [
+            Icon(h.icon, size: 20, color: context.colors.primaryOnSurface),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${_hourLabel(result)} · $temp · ${h.description}',
+                    style: AppTypography.bodySmall(context).copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    h.precipitationProbability > 0
+                        ? 'Rain ${h.precipitationProbability}%'
+                        : 'Low rain',
+                    style: AppTypography.metaSub(context),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    final w = daily;
+    if (w == null) {
+      return Row(
+        children: [
+          Icon(
+            Icons.cloud_outlined,
+            size: 16,
+            color: context.colors.textTertiary,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              'Weather beyond 16 days is unavailable',
+              style: AppTypography.metaSub(context),
+            ),
+          ),
+        ],
+      );
+    }
+    final temp = w.tempMax.isNaN || w.tempMin.isNaN
+        ? w.description
+        : '${w.tempMax.round()}° / ${w.tempMin.round()}° · ${w.description}';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: context.colors.surfaceSubtle,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: context.colors.border),
+      ),
+      child: Row(
+        children: [
+          Icon(w.icon, size: 20, color: context.colors.primaryOnSurface),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  temp,
+                  style: AppTypography.bodySmall(context).copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(
+                  w.precipitationProbabilityMax > 0
+                      ? 'Rain ${w.precipitationProbabilityMax}%'
+                      : 'Low rain',
+                  style: AppTypography.metaSub(context),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

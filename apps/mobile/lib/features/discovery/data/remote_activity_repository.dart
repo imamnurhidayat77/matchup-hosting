@@ -20,6 +20,24 @@ String _normaliseSkill(String skillLevel) {
   return lower;
 }
 
+/// Weather snapshot entries for the create payload, or null when empty
+/// (spread with `...?`). Built with statements rather than collection-
+/// `if`s so no null-aware-element lint fires.
+Map<String, Object>? _weatherPayload({
+  required double? temp,
+  required int? code,
+  required String? desc,
+  required int? rain,
+}) {
+  final map = <String, Object>{};
+  if (temp != null && temp.isFinite) map['weatherTemp'] = temp;
+  if (code != null) map['weatherCode'] = code;
+  final trimmed = desc?.trim();
+  if (trimmed != null && trimmed.isNotEmpty) map['weatherDesc'] = trimmed;
+  if (rain != null) map['weatherRain'] = rain;
+  return map.isEmpty ? null : map;
+}
+
 /// HTTP-backed [ActivityRepository] for the live MatchUp API.
 ///
 /// Hits the real api-server routes under `/api/activities` and unwraps
@@ -61,12 +79,30 @@ class RemoteActivityRepository implements ActivityRepository {
     _feedCache.invalidateAll();
   }
 
+  /// Best-effort last-known device position, refreshed inside
+  /// [_withDistances] after every successful GPS fix. Feeds the position
+  /// bucket in [FeedCache.keyFor] so cached rows (with computed
+  /// distances baked in) invalidate when the user moves — without ever
+  /// awaiting GPS on the cache-hit path.
+  double? _lastLat;
+  double? _lastLng;
+
+  /// Cache key for the current filter/page at the last-known position.
+  /// Never awaits GPS: a null bucket simply matches entries cached
+  /// before any fix.
+  String _feedKey(DiscoveryFilter? filter, int limit, int offset) =>
+      FeedCache.keyFor(
+        filter: filter,
+        limit: limit,
+        offset: offset,
+        lat: _lastLat,
+        lng: _lastLng,
+      );
+
   /// True when a fresh (unexpired) cache entry exists — lets screens
   /// render instantly, then decide about a silent background refresh.
   bool isFeedFresh({DiscoveryFilter? filter, int limit = 20, int offset = 0}) =>
-      _feedCache.isFresh(
-        FeedCache.keyFor(filter: filter, limit: limit, offset: offset),
-      );
+      _feedCache.isFresh(_feedKey(filter, limit, offset));
 
   /// Drops cached feeds (whole map, or one filter). Called after a
   /// swipe is persisted so a just-swiped card can't be re-dealt from
@@ -75,9 +111,7 @@ class RemoteActivityRepository implements ActivityRepository {
     if (filter == null) {
       _feedCache.invalidateAll();
     } else {
-      _feedCache.remove(
-        FeedCache.keyFor(filter: filter, limit: limit, offset: offset),
-      );
+      _feedCache.remove(_feedKey(filter, limit, offset));
     }
   }
 
@@ -103,7 +137,7 @@ class RemoteActivityRepository implements ActivityRepository {
       'datePreset=${filter?.datePreset} '
       'maxDistanceKm=${filter?.maxDistanceKm} limit=$limit',
     );
-    final key = FeedCache.keyFor(filter: filter, limit: limit, offset: offset);
+    final key = _feedKey(filter, limit, offset);
     if (!forceRefresh) {
       final hit = _feedCache.get(key);
       if (hit != null) {
@@ -243,6 +277,9 @@ class RemoteActivityRepository implements ActivityRepository {
       return activities;
     }
     if (position == null) return activities;
+    // Remember the fix for the feed-cache position bucket (see [_lastLat]).
+    _lastLat = position.latitude;
+    _lastLng = position.longitude;
     return [
       for (final a in activities)
         if (a.latitude != null && a.longitude != null)
@@ -406,6 +443,10 @@ class RemoteActivityRepository implements ActivityRepository {
     double? totalCost,
     int? minPlayers,
     String? address,
+    double? weatherTemp,
+    int? weatherCode,
+    String? weatherDesc,
+    int? weatherRain,
   }) async {
     _invalidateDetails();
     try {
@@ -440,6 +481,13 @@ class RemoteActivityRepository implements ActivityRepository {
             'totalCost': totalCost,
           if (isPaid && feeMode == 'split' && minPlayers != null)
             'minPlayers': minPlayers,
+          // Weather snapshot (best-effort) — backend stores + returns it.
+          ...?_weatherPayload(
+            temp: weatherTemp,
+            code: weatherCode,
+            desc: weatherDesc,
+            rain: weatherRain,
+          ),
         },
       );
       // Create returns `{activityId}` only — fetch the full record so
@@ -945,25 +993,34 @@ class FeedCache<T> {
     this.maxEntries = 20,
   }) : _clock = clock ?? DateTime.now;
 
-  /// Cache key — full filter identity plus paging. Built from stable
-  /// filter fields (never `filter.hashCode`, which is unstable across
-  /// restarts and churns the cache on every launch).
+  /// Cache key — full filter identity plus paging plus a coarse
+  /// position bucket. Built from stable filter fields (never
+  /// `filter.hashCode`, which is unstable across restarts and churns
+  /// the cache on every launch). The bucket is 1-decimal (~11 km):
+  /// coarse enough to keep hit rates sane, fine enough that cached
+  /// rows (with computed distances baked in) don't go stale after
+  /// the user moves across town. Null = unknown position.
   static String keyFor({
     required DiscoveryFilter? filter,
     required int limit,
     required int offset,
+    double? lat,
+    double? lng,
   }) {
+    final pos = (lat == null || lng == null)
+        ? ''
+        : '${lat.toStringAsFixed(1)},${lng.toStringAsFixed(1)}';
     // Null (bare legacy-feed callers) must not collide with an empty
     // but non-null filter — both fetch the same rows, but the legacy
     // `filter.hashCode` key distinguished them, so keep that split.
-    if (filter == null) return 'nofilter|$limit:$offset';
+    if (filter == null) return 'nofilter|$limit:$offset|$pos';
     final sports = filter.sportFiltersQueryParam ?? '';
     final preset = filter.datePreset.name;
     final after = filter.startAfter?.toIso8601String() ?? '';
     final before = filter.startBefore?.toIso8601String() ?? '';
     final dist = filter.maxDistanceKm?.toString() ?? '';
     final swiped = filter.includeSwiped;
-    return '$sports|$preset|$after|$before|$dist|$swiped|$limit:$offset';
+    return '$sports|$preset|$after|$before|$dist|$swiped|$limit:$offset|$pos';
   }
 
   final Duration ttl;

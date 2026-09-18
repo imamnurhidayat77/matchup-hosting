@@ -14,6 +14,7 @@ import '../../../core/widgets/app_dialog.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/widgets/app_avatar.dart';
+import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/asset_image.dart';
 import '../../../core/widgets/app_snackbar.dart';
@@ -22,6 +23,7 @@ import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/label_badge.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import 'widgets/detail_loading_skeleton.dart';
+import 'widgets/activity_weather_section.dart';
 import '../../calendar/domain/calendar_event.dart';
 import '../../chat/domain/chat_message.dart';
 import '../../discovery/domain/activity_model.dart';
@@ -216,6 +218,7 @@ class _DetailBody extends StatelessWidget {
 
                   // Meta card — date + location
                   _MetaCard(activity: activity),
+                  ActivityWeatherSection(activity: activity),
                   const SizedBox(height: AppSpacing.x5),
 
                   // Venue map (only when coordinates exist).
@@ -875,45 +878,64 @@ class _ParticipantsSection extends ConsumerWidget {
             final visible = members.take(_maxVisible).toList();
             final overflow = members.length - visible.length;
             final slots = visible.length + (overflow > 0 ? 1 : 0);
-            return SizedBox(
-              // Keyed so tests can scope finders to the live roster
-              // stack (the host card elsewhere shows the same
-              // initials when host == organizer).
-              key: const ValueKey('participant-stack'),
-              height: _size,
-              width: _step * (slots - 1) + _size,
-              child: Stack(
-                children: [
-                  for (var i = 0; i < visible.length; i++)
-                    Positioned(
-                      left: i * _step,
-                      child: _Ring(
-                        child: AppAvatar(
-                          imageUrl: visible[i].avatarUrl,
-                          name: visible[i].name,
-                          size: AppAvatarSize.sm,
+            // Visual facepile only — one "View roster" button below is
+            // the single entry point to the full participants screen.
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  // Keyed so tests can scope finders to the live roster
+                  // stack (the host card elsewhere shows the same
+                  // initials when host == organizer).
+                  key: const ValueKey('participant-stack'),
+                  height: _size,
+                  width: _step * (slots - 1) + _size,
+                  child: Stack(
+                    children: [
+                      for (var i = 0; i < visible.length; i++)
+                        Positioned(
+                          left: i * _step,
+                          child: _Ring(
+                            child: AppAvatar(
+                              imageUrl: visible[i].avatarUrl,
+                              name: visible[i].name,
+                              size: AppAvatarSize.sm,
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  if (overflow > 0)
-                    Positioned(
-                      left: visible.length * _step,
-                      child: _Ring(
-                        child: ColoredBox(
-                          color: context.colors.border,
-                          child: Center(
-                            child: Text(
-                              '+$overflow',
-                              style: AppTypography.badgeSport(context).copyWith(
-                                color: context.colors.textSecondary,
+                      if (overflow > 0)
+                        Positioned(
+                          left: visible.length * _step,
+                          child: _Ring(
+                            child: ColoredBox(
+                              color: context.colors.border,
+                              child: Center(
+                                child: Text(
+                                  '+$overflow',
+                                  style: AppTypography.badgeSport(
+                                    context,
+                                  ).copyWith(
+                                    color: context.colors.textSecondary,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                    ),
-                ],
-              ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.x3),
+                AppButton.secondary(
+                  label:
+                      'View roster · ${members.length} joined',
+                  size: AppButtonSize.sm,
+                  onPressed: () => NavGuard.push(
+                    context,
+                    '/activity/${activity.id}/participants',
+                  ),
+                ),
+              ],
             );
           },
         ),
@@ -1146,7 +1168,7 @@ class _AddToCalendarButtonState
     setState(() => _saving = true);
     try {
       final activity = widget.activity;
-      await ref.read(calendarRepositoryProvider).addToDeviceCalendar(
+      final ok = await ref.read(calendarRepositoryProvider).addToDeviceCalendar(
             CalendarEvent(
               id: activity.id,
               activityId: activity.id,
@@ -1157,6 +1179,15 @@ class _AddToCalendarButtonState
             ),
           );
       if (!mounted) return;
+      if (!ok) {
+        setState(() => _saving = false);
+        AppSnackbar.show(
+          context,
+          message: 'Could not add to calendar',
+          variant: AppSnackbarVariant.error,
+        );
+        return;
+      }
       setState(() {
         _saving = false;
         _added = true;

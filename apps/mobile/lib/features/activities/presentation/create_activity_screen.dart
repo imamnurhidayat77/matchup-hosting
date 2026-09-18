@@ -14,6 +14,7 @@ import '../../../core/network/api_client.dart';
 import '../../../core/providers/repository_providers.dart';
 import 'my_activities_screen.dart';
 import '../../../core/services/storage_service.dart';
+import '../../../core/services/weather_service.dart';
 import '../../../core/storage/local_storage.dart';
 import '../../../core/utils/geohash.dart';
 import '../../../core/theme/app_colors.dart';
@@ -35,6 +36,7 @@ import 'create/providers/form_data_provider.dart';
 import 'create/services/form_validator.dart' show validateField;
 import '../domain/place_suggestion.dart';
 import 'widgets/venue_field.dart';
+import 'widgets/weather_chip.dart';
 import 'create/providers/image_upload_provider.dart';
 
 /// Two-step create-activity wizard with a live preview.
@@ -330,7 +332,8 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
   }
 
   Future<void> _pickDate() async {
-    final current = ref.read(formDataProvider).selectedDate;
+    final form = ref.read(formDataProvider);
+    final current = form.selectedDate;
     final picked = await showModalBottomSheet<DateTime>(
       context: context,
       isScrollControlled: true,
@@ -338,6 +341,8 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
       builder: (_) => DatePickerSheet(
         initialDate: current ?? DateTime.now().add(const Duration(hours: 2)),
         minDate: DateTime.now(),
+        latitude: form.venueLatitude ?? _venue?.latitude,
+        longitude: form.venueLongitude ?? _venue?.longitude,
       ),
     );
     if (picked != null) _form.setSelectedDate(picked);
@@ -570,8 +575,25 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
   void _goToPreview() {
     final data = ref.read(formDataProvider);
     if (data.feeType == 1) {
-      final price = double.tryParse(_priceController.text.trim());
-      if (price == null || price <= 0) {
+      // Same shared gate as [_submit]: the strict format rule first,
+      // then the positivity check — so preview and submit agree on
+      // every input (including zero/negative, which parses fine but
+      // must not pass).
+      final priceErr = validateField(
+        'price',
+        _priceController.text.trim(),
+        data,
+      );
+      if (priceErr != null) {
+        AppSnackbar.show(
+          context,
+          message: priceErr,
+          variant: AppSnackbarVariant.error,
+        );
+        return;
+      }
+      final amount = double.tryParse(_priceController.text.trim());
+      if (amount == null || amount <= 0) {
         AppSnackbar.show(
           context,
           message: data.priceMode == 1
@@ -735,6 +757,19 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
     // else (e.g. `uploads/activity-covers/…`) is denied and used to
     // fail silently, leaving every game photoless.
     final coverBytes = _decodeCoverBytes(data.coverImagePath);
+    // Weather snapshot (best-effort): captured now so the detail screen
+    // can show it without another lookup. Null when unavailable — the
+    // detail falls back to a live Open-Meteo fetch instead.
+    WeatherInfo? snapshot;
+    try {
+      snapshot = await WeatherService.instance.fetchForDateTime(
+        pickedLat,
+        pickedLng,
+        data.selectedDate!,
+      );
+    } catch (_) {
+      snapshot = null;
+    }
     try {
       final created = await ref
           .read(activityRepositoryProvider)
@@ -761,6 +796,12 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
             minPlayers: split && minPlayers != null && minPlayers < data.maxParticipants
                 ? minPlayers
                 : null,
+            weatherTemp: snapshot?.temperatureC.isNaN == false
+                ? snapshot?.temperatureC
+                : null,
+            weatherCode: snapshot?.weatherCode,
+            weatherDesc: snapshot?.description,
+            weatherRain: snapshot?.precipitationProbability,
           );
       // Phase two (best-effort): store the bytes, upload to the
       // host-only cover path, and point the activity at the URL. The
@@ -954,6 +995,26 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
           trailing: _chevron(context),
         ),
 
+        // Location first — venue coords drive the weather forecast
+        // below, so pick this before the date. Picking a venue
+        // populates both the local `_venue` state (so we get
+        // accurate lat/lng on submit) AND the form's location
+        // string (so the `_setupError` validator treats the
+        // setup step as complete).
+        VenueField(
+          value: _venue,
+          errorText: venueErr,
+          onSuggestionSelected: (s) {
+            setState(() => _venue = s);
+            _form.setVenue(
+              label: s.label,
+              address: s.secondary,
+              latitude: s.latitude,
+              longitude: s.longitude,
+            );
+          },
+        ),
+
         // Date & time.
         _SettingCard(
           icon: Icons.calendar_month_outlined,
@@ -967,6 +1028,14 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
             style: _valueStyle(context),
           ),
           trailing: _chevron(context),
+        ),
+
+        // Weather forecast for the picked venue + date.
+        // Best-effort via Open-Meteo — never blocks submit.
+        WeatherChip(
+          latitude: data.venueLatitude ?? _venue?.latitude,
+          longitude: data.venueLongitude ?? _venue?.longitude,
+          dateTime: data.selectedDate,
         ),
 
         // Duration — custom, stepped in 15-minute increments.
@@ -1000,25 +1069,6 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
               ),
             ],
           ),
-        ),
-
-        // Location — venue picker with OSM map. Picking a venue
-        // populates both the local `_venue` state (so we get
-        // accurate lat/lng on submit) AND the form's location
-        // string (so the `_setupError` validator treats the
-        // setup step as complete).
-        VenueField(
-          value: _venue,
-          errorText: venueErr,
-          onSuggestionSelected: (s) {
-            setState(() => _venue = s);
-            _form.setVenue(
-              label: s.label,
-              address: s.secondary,
-              latitude: s.latitude,
-              longitude: s.longitude,
-            );
-          },
         ),
 
         // Max participants.

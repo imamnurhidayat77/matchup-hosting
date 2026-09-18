@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/providers/auth_state_provider.dart';
 import '../../../core/providers/repository_providers.dart';
+import '../../../core/storage/secure_token_store.dart';
 import '../data/auth_repository.dart';
 import '../../notifications/services/push_notification_service.dart';
 import '../../../core/theme/app_colors.dart';
@@ -63,10 +64,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
         userId: result.userId,
       );
       // New account: onboarding not yet done. Splash resumes GTK while
-      // this flag is false (missing/null = old account, treated as done).
+      // this per-account flag is false (missing/null = old account or
+      // unknown uid, treated as done).
       try {
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool('gtk_done', false);
+        await prefs.setBool(gtkDoneKeyFor(result.userId), false);
       } catch (_) {
         // Fail-open: onboarding resume is best-effort.
       }

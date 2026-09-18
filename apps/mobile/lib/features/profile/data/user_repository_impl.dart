@@ -416,6 +416,13 @@ class RemoteUserRepository implements UserRepository {
           (json['totalRatingCount'] as num?)?.toInt() ??
           (json['total_rating_count'] as num?)?.toInt() ??
           0,
+      hostRatingBySport: _parseRatingBySport(
+        json['hostRatingBySport'] ?? json['host_rating_by_sport'],
+      ),
+      totalHostRatingCount:
+          (json['totalHostRatingCount'] as num?)?.toInt() ??
+          (json['total_host_rating_count'] as num?)?.toInt() ??
+          0,
       email: json['email'] as String?,
       phone: json['phone'] as String?,
       dateOfBirth: json['dateOfBirth'] != null

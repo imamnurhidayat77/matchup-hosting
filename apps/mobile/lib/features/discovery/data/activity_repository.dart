@@ -69,6 +69,10 @@ abstract class ActivityRepository {
     String feeMode = 'fixed',
     double? totalCost,
     int? minPlayers,
+    double? weatherTemp,
+    int? weatherCode,
+    String? weatherDesc,
+    int? weatherRain,
   });
 
   Future<void> join(String activityId);

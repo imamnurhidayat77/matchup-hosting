@@ -344,6 +344,17 @@ GoRouter buildRouter(Ref ref) {
               );
             },
           ),
+          GoRoute(
+            path: '/edit-activity/:id',
+            pageBuilder: (_, state) {
+              final id = state.pathParameters['id'] ?? '1';
+              return appPage(
+                state,
+                EditActivityScreen(activityId: id),
+                key: ValueKey('edit-activity-$id'),
+              );
+            },
+          ),
           // '/joined-activities' removed (PRD Section 3 / Appendix E.2):
           // JoinedActivitiesScreen duplicated My Activities and nothing in
           // the app ever navigated to it — confirmed via a full-repo grep
