@@ -242,8 +242,10 @@ class RemoteDmRepository implements DmRepository {
   }) async {
     // Same text-only wire format as group chat: upload to Storage
     // first, post the download URL as the text. Scoped per thread so
-    // one peer's attachments never mix with another's.
+    // one peer's attachments never mix with another's. Oversized picks
+    // throw before burning upload bandwidth (see StorageService).
     final myUid = await _myUid();
+    await StorageService.checkImageSize(imagePath, kMaxChatImageBytes);
     final uploadedUrl = await StorageService.instance.uploadImage(
       localPath: imagePath,
       folder: 'chat-attachments/dm_${dmThreadId(myUid, otherUid)}',

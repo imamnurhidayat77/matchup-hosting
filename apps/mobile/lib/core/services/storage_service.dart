@@ -4,6 +4,35 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 
+/// Server-side size caps (mirrors `storage.rules` — keep in sync):
+/// profile photos 5 MB, activity covers and chat attachments 8 MB.
+/// Client-side pre-checks against these caps let the UI name the reason
+/// ("too large") instead of surfacing a generic upload failure after
+/// burning the upload bandwidth.
+const kMaxChatImageBytes = 8 * 1024 * 1024;
+const kMaxCoverImageBytes = 8 * 1024 * 1024;
+
+/// Thrown by [StorageService.checkImageSize] when the picked file exceeds
+/// the destination's cap. Callers must let this reach the screen verbatim
+/// (it carries the user-facing copy) — never swallow it into a generic
+/// failure or, worse, silently proceed without the photo.
+class ImageTooLargeException implements Exception {
+  ImageTooLargeException(this.maxBytes, [this.actualBytes]);
+
+  final int maxBytes;
+  final int? actualBytes;
+
+  static String _mb(int bytes) => (bytes / (1024 * 1024)).toStringAsFixed(1);
+
+  String get message {
+    final actual = actualBytes != null ? ' (${_mb(actualBytes!)} MB)' : '';
+    return 'Photo is too large$actual. Maximum is ${_mb(maxBytes)} MB — pick a smaller one.';
+  }
+
+  @override
+  String toString() => 'ImageTooLargeException: $message';
+}
+
 /// Thin wrapper around Firebase Storage for the two image-upload
 /// flows the app actually has: activity cover photos and chat
 /// attachments.
@@ -28,6 +57,22 @@ class StorageService {
   StorageService._();
 
   static final StorageService instance = StorageService._();
+
+  /// Client-side size gate: throws [ImageTooLargeException] when the
+  /// file at [localPath] exceeds [maxBytes], so the UI can alert with
+  /// the reason instead of uploading megabytes just to be denied by
+  /// `storage.rules`. Unreadable/missing files are ignored here — the
+  /// upload attempt below fails generically as before.
+  static Future<void> checkImageSize(String localPath, int maxBytes) async {
+    try {
+      final size = await File(localPath).length();
+      if (size > maxBytes) throw ImageTooLargeException(maxBytes, size);
+    } on ImageTooLargeException {
+      rethrow;
+    } catch (_) {
+      // Ignore stat errors — handled by the upload below.
+    }
+  }
 
   /// Uploads [localPath] to Firebase Storage and returns the
   /// public download URL. Returns `null` if Firebase isn't
