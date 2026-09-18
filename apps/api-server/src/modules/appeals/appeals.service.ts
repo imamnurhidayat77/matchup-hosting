@@ -1,5 +1,6 @@
 import { Timestamp } from 'firebase-admin/firestore';
 import { firestore } from '../../database/firebase.js';
+import { logAdminAction } from '../admin/audit.service.js';
 import {
     createNotification,
     renderTemplate,
@@ -277,6 +278,19 @@ export async function decideAppeal(
     const updated = await ref.get();
     const view = await enrich(ref.id, updated.data());
     if (!view) throw new Error('Appeal not found');
+    await logAdminAction({
+        category: 'Appeals',
+        action: decision === 'approved' ? 'appeal.approve' : 'appeal.reject',
+        adminUid,
+        // adminEmail is not threaded through this call site today —
+        // adminUid alone is sufficient attribution; not worth touching
+        // this working, tested signature for v1.
+        description: `${decision === 'approved' ? 'Approved' : 'Rejected'} ${data.type} appeal`,
+        targetId: normalizedId,
+        targetLabel: view.userName,
+        before: { status: 'pending' },
+        after: { status: decision, adminNote },
+    });
     // Decision notice — best-effort, never fails triage. The appellant may
     // be suspended (no API access), so push is their only channel back.
     // Copy comes from the admin-curated template library, falling back to

@@ -6,7 +6,12 @@ vi.mock('../../database/firebase.js', () => ({
     rtdb: {},
 }));
 
+vi.mock('./audit.service.js', () => ({
+    logAdminAction: vi.fn(),
+}));
+
 import { auth, firestore } from '../../database/firebase.js';
+import { logAdminAction } from './audit.service.js';
 import {
     deleteMember,
     getMemberDetail,
@@ -130,14 +135,31 @@ describe('setMemberStatus', () => {
             { id: 'u-1', data: userRow() },
         ]);
         void collection;
-        const row = await setMemberStatus('u-1', 'suspended');
+        const row = await setMemberStatus('u-1', 'suspended', 'admin-1', 'admin@x.com');
         expect(row.status).toBe('suspended');
     });
 
     it('rejects non-enum status (mass-assignment safe)', async () => {
         mockUsersCollection([{ id: 'u-1', data: userRow() }]);
-        await expect(setMemberStatus('u-1', 'admin')).rejects.toThrow(
+        await expect(setMemberStatus('u-1', 'admin', 'admin-1')).rejects.toThrow(
             'status must be active or suspended',
+        );
+    });
+
+    it('logs the status change with before/after state', async () => {
+        mockUsersCollection([{ id: 'u-1', data: userRow({ status: 'active' }) }]);
+        await setMemberStatus('u-1', 'suspended', 'admin-1', 'admin@x.com');
+        expect(logAdminAction).toHaveBeenCalledWith(
+            expect.objectContaining({
+                category: 'Members',
+                action: 'member.status_change',
+                adminUid: 'admin-1',
+                adminEmail: 'admin@x.com',
+                targetId: 'u-1',
+                targetLabel: 'athlete@example.com',
+                before: { status: 'active' },
+                after: { status: 'suspended' },
+            }),
         );
     });
 });
@@ -145,7 +167,7 @@ describe('setMemberStatus', () => {
 describe('deleteMember', () => {
     it('deletes auth account, doc, and email index', async () => {
         mockUsersCollection([{ id: 'u-1', data: userRow() }]);
-        await deleteMember('u-1');
+        await deleteMember('u-1', 'admin-1');
         expect(auth.deleteUser).toHaveBeenCalledWith('u-1');
     });
 
@@ -154,11 +176,27 @@ describe('deleteMember', () => {
         vi.mocked(auth.deleteUser).mockRejectedValueOnce(
             Object.assign(new Error('gone'), { code: 'auth/user-not-found' }),
         );
-        await expect(deleteMember('u-1')).resolves.toBeUndefined();
+        await expect(deleteMember('u-1', 'admin-1')).resolves.toBeUndefined();
     });
 
     it('throws for missing user', async () => {
         mockUsersCollection([]);
-        await expect(deleteMember('ghost')).rejects.toThrow('User not found');
+        await expect(deleteMember('ghost', 'admin-1')).rejects.toThrow('User not found');
+    });
+
+    it('logs the deletion with a before snapshot', async () => {
+        mockUsersCollection([{ id: 'u-1', data: userRow() }]);
+        await deleteMember('u-1', 'admin-1', 'admin@x.com');
+        expect(logAdminAction).toHaveBeenCalledWith(
+            expect.objectContaining({
+                category: 'Members',
+                action: 'member.delete',
+                adminUid: 'admin-1',
+                adminEmail: 'admin@x.com',
+                targetId: 'u-1',
+                targetLabel: 'athlete@example.com',
+                before: expect.objectContaining({ email: 'athlete@example.com' }),
+            }),
+        );
     });
 });

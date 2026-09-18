@@ -1,6 +1,7 @@
 import { Timestamp } from 'firebase-admin/firestore';
 import { firestore } from '../../database/firebase.js';
 import { createNotification } from '../notifications/notifications.service.js';
+import { logAdminAction } from './audit.service.js';
 
 export type BroadcastAudience =
     | 'All Users'
@@ -146,6 +147,15 @@ export async function createBroadcast(
     const snap = await ref.get();
     const view = mapBroadcast(ref.id, snap.data());
     if (!view) throw new Error('Could not read created broadcast');
+    await logAdminAction({
+        category: 'Broadcasts',
+        action: 'broadcast.create',
+        adminUid: createdBy,
+        description: `Created broadcast "${title}"`,
+        targetId: ref.id,
+        targetLabel: title,
+        after: { title, message, audience: input.audience, status: record.status },
+    });
     return view;
 }
 
@@ -163,6 +173,8 @@ export type UpdateBroadcastInput = {
 export async function updateBroadcast(
     id: string,
     input: UpdateBroadcastInput,
+    adminUid: string,
+    adminEmail: string | null = null,
 ): Promise<BroadcastView> {
     const normalizedId = id.trim();
     if (!normalizedId) throw new Error('broadcastId is required');
@@ -211,10 +223,25 @@ export async function updateBroadcast(
     const updated = await ref.get();
     const view = mapBroadcast(ref.id, updated.data());
     if (!view) throw new Error('Could not read updated broadcast');
+    await logAdminAction({
+        category: 'Broadcasts',
+        action: 'broadcast.update',
+        adminUid,
+        adminEmail,
+        description: `Updated broadcast "${current.title}"`,
+        targetId: normalizedId,
+        targetLabel: current.title,
+        before: { title: current.title, message: current.message, audience: current.audience },
+        after: { title: view.title, message: view.message, audience: view.audience },
+    });
     return view;
 }
 
-export async function deleteBroadcast(id: string): Promise<void> {
+export async function deleteBroadcast(
+    id: string,
+    adminUid: string,
+    adminEmail: string | null = null,
+): Promise<void> {
     const normalizedId = id.trim();
     if (!normalizedId) throw new Error('broadcastId is required');
     const ref = firestore.collection('broadcasts').doc(normalizedId);
@@ -225,6 +252,16 @@ export async function deleteBroadcast(id: string): Promise<void> {
         throw new Error('Sent broadcasts cannot be deleted');
     }
     await ref.delete();
+    await logAdminAction({
+        category: 'Broadcasts',
+        action: 'broadcast.delete',
+        adminUid,
+        adminEmail,
+        description: `Deleted broadcast "${current?.title ?? normalizedId}"`,
+        targetId: normalizedId,
+        targetLabel: current?.title ?? normalizedId,
+        before: current ? { title: current.title, status: current.status } : null,
+    });
 }
 
 /** Resolve recipient uids for an audience, bounded by the safety cap. */
@@ -282,7 +319,11 @@ async function resolveRecipients(
  * per recipient (best-effort; failures don't fail the send) and records
  * the delivered count. Idempotent guard — sent broadcasts stay sent.
  */
-export async function sendBroadcast(id: string): Promise<BroadcastView> {
+export async function sendBroadcast(
+    id: string,
+    adminUid: string,
+    adminEmail: string | null = null,
+): Promise<BroadcastView> {
     const normalizedId = id.trim();
     if (!normalizedId) throw new Error('broadcastId is required');
     const ref = firestore.collection('broadcasts').doc(normalizedId);
@@ -317,5 +358,16 @@ export async function sendBroadcast(id: string): Promise<BroadcastView> {
     const updated = await ref.get();
     const view = mapBroadcast(ref.id, updated.data());
     if (!view) throw new Error('Could not read sent broadcast');
+    await logAdminAction({
+        category: 'Broadcasts',
+        action: 'broadcast.send',
+        adminUid,
+        adminEmail,
+        description: `Sent broadcast "${current.title}"`,
+        targetId: normalizedId,
+        targetLabel: current.title,
+        before: { status: current.status },
+        after: { status: 'sent', recipients: delivered },
+    });
     return view;
 }

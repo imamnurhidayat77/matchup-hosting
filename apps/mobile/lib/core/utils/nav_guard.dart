@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:clock/clock.dart';
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
@@ -63,7 +64,7 @@ class NavGuard {
   /// NOTE: [onceFor] only covers taps within [cooldown]. A second tap
   /// after the window (slow transition, impatient user) still pushes a
   /// duplicate page and red-screens. For `push` navigation prefer
-  /// [push]/[pushT] below, which are correct regardless of timing.
+  /// [pushOnce] below, which is correct regardless of timing.
   static void onceFor(
     String key,
     void Function() action, {
@@ -81,110 +82,107 @@ class NavGuard {
   static void resetForTest() {
     _busy = false;
     _lastRun.clear();
-    _inFlightAt.clear();
+    _inFlightSince.clear();
+  }
+
+  /// Safety-net window for [push]/[pushT]/[pushOnce]: a key older than
+  /// this is treated as stale and released on the next check, even if
+  /// `context.push()`'s Future never resolved.
+  ///
+  /// That Future only resolves on a genuine pop — go_router's
+  /// `ImperativeRouteMatch` completer is only completed from the pop
+  /// path (`_completeRouteMatch` in its delegate). A `context.go(...)`
+  /// elsewhere (e.g. tapping a bottom-nav tab while this push is still
+  /// on the stack) replaces the whole route match list from scratch and
+  /// discards that completer without ever resolving it, permanently
+  /// stranding the key — every future tap to the same location silently
+  /// no-ops until the app is restarted (observed: the Notifications
+  /// bell going dead after switching tabs instead of using the
+  /// in-screen back arrow). Far longer than any real transition, so it
+  /// never reintroduces the double-push race this guard exists to
+  /// prevent.
+  ///
+  /// Checked lazily on the next [_isStuck] call rather than via a
+  /// scheduled `Timer` — a live Timer left running past a normal pop
+  /// (cancelled) is fine, but one left running because the test/screen
+  /// never popped at all trips flutter_test's "Timer still pending
+  /// after dispose" assertion; plain timestamps avoid that entirely.
+  static const Duration _pushSafetyNet = Duration(seconds: 5);
+
+  /// In-flight pushes by key, timestamped when reserved. A key stays
+  /// reserved from `push` until the pushed route is popped
+  /// (`context.push` completes on pop) or [_pushSafetyNet] elapses —
+  /// whichever comes first — so a repeat tap can never create a
+  /// duplicate page, and a key can never be stuck forever either.
+  /// Prefer this over [onceFor] for every `push` whose page key derives
+  /// from an id.
+  static final Map<String, DateTime> _inFlightSince = {};
+
+  static bool _isStuck(String key) {
+    final since = _inFlightSince[key];
+    if (since == null) return false;
+    if (clock.now().difference(since) > _pushSafetyNet) {
+      _inFlightSince.remove(key);
+      return false;
+    }
+    return true;
   }
 
   /// Pushes [location] once per location: repeat taps for the same
   /// destination while its page is still on the stack are ignored, so
   /// duplicate page keys (`'!keyReservation.contains(key)'` red screen)
-  /// are impossible app-wide no matter how slow the transition is.
-  /// The key releases when the pushed route pops (or is replaced), so
+  /// are impossible app-wide no matter how slow the transition is. The
+  /// key releases on a normal pop, or after [_pushSafetyNet] if the
+  /// route instead leaves the stack via `context.go(...)` — either way
   /// legitimate re-entry always works. Fire-and-forget safe.
-  ///
-  /// Safety net: go_router only completes a push future on pop — if the
-  /// pushed page vanishes via `go()`/redirect instead, the future (and
-  /// our key) would hang forever, leaving the button permanently dead
-  /// until restart (UAT: "buttons don't open after navigation"). Entries
-  /// older than [_stuckReleaseAfter] are therefore treated as stale.
-  /// No [Timer] is used (a pending timer breaks widget-test
-  /// `pumpAndSettle`); staleness is evaluated from timestamps on each
-  /// call. A negative age (test fake-clock reset) also counts as stale
-  /// so one test file can never wedge the next.
-  static const Duration _stuckReleaseAfter = Duration(seconds: 8);
-
-  /// In-flight pushes by location → when the push started.
-  static final Map<String, DateTime> _inFlightAt = {};
-
-  /// True when [location] may be pushed now (records the attempt).
-  static bool _claim(String location) {
-    final now = DateTime.now();
-    final last = _inFlightAt[location];
-    if (last != null) {
-      final age = now.difference(last);
-      if (!age.isNegative && age < _stuckReleaseAfter) return false;
-    }
-    _inFlightAt[location] = now;
-    return true;
-  }
-
-  static void _release(String location) => _inFlightAt.remove(location);
-
   static Future<void> push(
     BuildContext context,
     String location, {
     Object? extra,
   }) async {
-    await _guardedPush<void>(
-      context,
-      location,
-      (ctx) => ctx.push(location, extra: extra),
-    );
+    if (_isStuck(location)) return;
+    _inFlightSince[location] = clock.now();
+    try {
+      await context.push(location, extra: extra);
+    } finally {
+      _inFlightSince.remove(location);
+    }
   }
 
   /// Typed variant of [push] for callers that await a pop result
   /// (e.g. edit screens popping `true` on save). A swallowed duplicate
   /// resolves `null`, which callers already treat as "no change".
-  /// Same 8s stuck-key backstop as [push].
   static Future<T?> pushT<T>(
     BuildContext context,
     String location, {
     Object? extra,
   }) async {
-    return _guardedPush<T>(
-      context,
-      location,
-      (ctx) => ctx.push<T>(location, extra: extra),
-    );
-  }
-
-  /// Shared claim lifecycle for [push]/[pushT].
-  ///
-  /// The claim releases when the push future completes (normal pop).
-  /// It ALSO releases when the router leaves the pushed location for a
-  /// different one: a tab switch via `go()` replaces the stack, so the
-  /// pushed page vanishes and its future never completes. Without the
-  /// listener the key stays held until the 8s backstop expires — reopening
-  /// the same activity within that window silently does nothing
-  /// (My Games → open → Discover → back → tap = dead tap).
-  static Future<T?> _guardedPush<T>(
-    BuildContext context,
-    String location,
-    Future<T?> Function(BuildContext ctx) doPush,
-  ) async {
-    if (!_claim(location)) return null;
-    final router = GoRouter.of(context);
-    var seen = false;
-    void listener() {
-      // First ticks still point at the pushed page — only arm after we
-      // have actually observed it, otherwise an instant redirect bounce
-      // would release prematurely.
-      if (router.state.uri.path == location) {
-        seen = true;
-        return;
-      }
-      if (seen) {
-        _release(location);
-        router.routerDelegate.removeListener(listener);
-      }
-    }
-
-    router.routerDelegate.addListener(listener);
+    if (_isStuck(location)) return null;
+    _inFlightSince[location] = clock.now();
     try {
-      return await doPush(context);
+      return await context.push<T>(location, extra: extra);
     } finally {
-      _release(location);
-      router.routerDelegate.removeListener(listener);
+      _inFlightSince.remove(location);
     }
   }
 
+  /// Pushes [location] once: repeat taps while the route is still on
+  /// the stack are ignored. Fire-and-forget safe (`onTap: () =>
+  /// NavGuard.pushOnce(context, 'chat-$id', '/chat/$id')`) — lifecycle
+  /// is tracked internally and always released in `finally`, even if
+  /// the push itself throws.
+  static Future<void> pushOnce(
+    BuildContext context,
+    String key,
+    String location, {
+    Object? extra,
+  }) async {
+    if (_isStuck(key)) return;
+    _inFlightSince[key] = clock.now();
+    try {
+      await context.push(location, extra: extra);
+    } finally {
+      _inFlightSince.remove(key);
+    }
+  }
 }

@@ -1,6 +1,7 @@
 import { Timestamp } from 'firebase-admin/firestore';
 import { firestore } from '../../database/firebase.js';
 import { TtlCache } from '../../utils/ttl-cache.js';
+import { logAdminAction } from './audit.service.js';
 
 /**
  * Admin-managed master sports list — the future source of truth for the
@@ -148,6 +149,8 @@ function assertBulkSport(value: unknown, index: number): {
  */
 export async function replaceSports(
     sports: unknown,
+    adminUid: string,
+    adminEmail: string | null = null,
 ): Promise<SportView[]> {
     if (!Array.isArray(sports) || sports.length === 0) {
         throw new Error('sports must be a non-empty array');
@@ -173,10 +176,25 @@ export async function replaceSports(
     // Invalidate BEFORE the trailing listSports() so the mutation
     // response itself carries fresh rows, not the pre-write cache.
     invalidateSportsCache();
+    // One summary entry for the whole bulk replace, not one per sport —
+    // avoids write-amplification on a "Publish Changes" that can touch
+    // up to 100 rows at once.
+    await logAdminAction({
+        category: 'Sports',
+        action: 'sport.replace',
+        adminUid,
+        adminEmail,
+        description: `Published sports config (${parsed.length} sports)`,
+        metadata: { count: String(parsed.length), ids: parsed.map((p) => p.id).join(',') },
+    });
     return listSports();
-}export async function updateSport(
+}
+
+export async function updateSport(
     id: string,
     input: UpdateSportInput,
+    adminUid: string,
+    adminEmail: string | null = null,
 ): Promise<SportView> {
     const normalizedId = id.trim();
     if (!normalizedId) throw new Error('sportId is required');
@@ -196,10 +214,25 @@ export async function replaceSports(
     const ref = firestore.collection('sports').doc(normalizedId);
     const snap = await ref.get();
     if (!snap.exists) throw new Error('Sport not found');
+    const before = snap.data();
     await ref.update(patch);
     invalidateSportsCache();
     const rows = await listSports();
     const view = rows.find((r) => r.id === normalizedId);
     if (!view) throw new Error('Sport not found');
+    await logAdminAction({
+        category: 'Sports',
+        action: 'sport.update',
+        adminUid,
+        adminEmail,
+        description: `Updated ${view.name} flags`,
+        targetId: normalizedId,
+        targetLabel: view.name,
+        before: FLAG_FIELDS.reduce<Record<string, unknown>>((acc, f) => {
+            acc[f] = before?.[f] ?? null;
+            return acc;
+        }, {}),
+        after: patch,
+    });
     return view;
 }

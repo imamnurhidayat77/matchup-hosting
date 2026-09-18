@@ -1,5 +1,6 @@
 import { Timestamp } from 'firebase-admin/firestore';
 import { firestore } from '../../database/firebase.js';
+import { logAdminAction } from './audit.service.js';
 
 /**
  * Push-notification template library. Templates are data only for now —
@@ -80,6 +81,8 @@ export async function listTemplates(): Promise<TemplateView[]> {
 export async function updateTemplate(
     id: string,
     input: UpdateTemplateInput,
+    adminUid: string,
+    adminEmail: string | null = null,
 ): Promise<TemplateView> {
     const normalizedId = id.trim();
     if (!normalizedId) throw new Error('templateId is required');
@@ -106,10 +109,26 @@ export async function updateTemplate(
     const ref = firestore.collection('notificationTemplates').doc(normalizedId);
     const snap = await ref.get();
     if (!snap.exists) throw new Error('Template not found');
+    const before = snap.data();
     const now = Timestamp.now();
     await ref.update({ ...patch, lastEditedAt: now, updatedAt: now });
     const updated = await ref.get();
     const view = mapTemplate(ref.id, updated.data());
     if (!view) throw new Error('Template not found');
+    await logAdminAction({
+        category: 'Templates',
+        action: 'template.update',
+        adminUid,
+        adminEmail,
+        description: `Updated template "${view.name}"`,
+        targetId: normalizedId,
+        targetLabel: view.name,
+        before: {
+            title: before?.title ?? null,
+            body: before?.body ?? null,
+            enabled: before?.enabled ?? null,
+        },
+        after: patch,
+    });
     return view;
 }
