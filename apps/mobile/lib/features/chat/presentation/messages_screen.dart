@@ -47,7 +47,8 @@ class MessagesScreen extends ConsumerStatefulWidget {
   ConsumerState<MessagesScreen> createState() => _MessagesScreenState();
 }
 
-class _MessagesScreenState extends ConsumerState<MessagesScreen> {
+class _MessagesScreenState extends ConsumerState<MessagesScreen>
+    with WidgetsBindingObserver {
   final _searchController = TextEditingController();
   String _query = '';
 
@@ -55,18 +56,35 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
   int _tab = 0;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Messages sent from another device (or web) while the app was
+    // backgrounded land here on resume — the group inbox is one-shot,
+    // so re-fetch it instead of showing a stale preview.
+    if (state == AppLifecycleState.resumed && mounted) {
+      ref.invalidate(_conversationsProvider);
+    }
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // The unread badge is one-shot: re-fetch whenever this screen is
-    // (re)shown so it reflects reads done on /notifications. The group
-    // inbox is one-shot too — refresh it for the same reason (reads
-    // done inside a thread update its unread badge + preview).
+    // The unread badge is one-shot: re-fetch whenever dependencies
+    // change so it reflects reads done on /notifications. NOTE: this
+    // does NOT fire when popping back from a thread (no dependency
+    // changes) — thread rows refresh the inbox via `.then(invalidate)`
+    // on their NavGuard.push instead. See _ConversationList / DM list.
     ref.invalidate(_unreadNotifCountProvider);
-    ref.invalidate(_conversationsProvider);
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _searchController.dispose();
     super.dispose();
   }
@@ -580,10 +598,13 @@ class _DmConversationListState extends ConsumerState<_DmConversationList>
               conversation: filtered[i],
               // pushOnce: repeat taps share the dm-$uid page key and
               // red-screen. Extra carries the peer name for the header.
+              // Refresh on return: reads + sends inside the thread change
+              // this row's preview + badge (didChangeDependencies does
+              // NOT fire on pop-back, so do it explicitly here).
               onTap: () => NavGuard.push(context,
                 '/dm/${filtered[i].id}',
                 extra: filtered[i].name,
-              ),
+              ).then((_) => ref.invalidate(_dmConversationsProvider)),
             ),
           ),
         );
@@ -663,9 +684,12 @@ class _ConversationListState extends ConsumerState<_ConversationList>
               // `filtered[i].id` is the activity id (per the local
               // seed and the backend contract for `/conversations`).
               // pushOnce: repeat taps share the page key and red-screen.
+              // Refresh on return: sends + reads inside the thread change
+              // this row's preview + badge, and didChangeDependencies
+              // does NOT fire on pop-back — so invalidate explicitly.
               onTap: () => NavGuard.push(context,
                 '/chat/${filtered[i].id}',
-              ),
+              ).then((_) => ref.invalidate(_conversationsProvider)),
             ),
             ),
           ),
