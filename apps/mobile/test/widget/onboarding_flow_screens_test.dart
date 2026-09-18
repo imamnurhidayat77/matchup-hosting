@@ -42,12 +42,14 @@ void main() {
       expect(find.text('MatchUp'), findsOneWidget);
       expect(find.text('Find Your Game. Meet Your Team.'), findsOneWidget);
 
-      // Drain the splash screen's pending session-check timer (2000ms) so
-      // the test binding doesn't fail on a leftover Timer at teardown. The
-      // secure-storage read has no platform channel in the test environment
-      // and fails gracefully to unauthenticated, redirecting to /welcome —
+      // Drain the splash screen's pending timers — the 800ms minimum
+      // dwell plus the 8s wall-clock session-check timeout — so the
+      // test binding doesn't fail on a leftover Timer at teardown
+      // (pumpAndSettle throws with a pending timer). The secure-storage
+      // read has no platform channel in the test environment and fails
+      // gracefully to unauthenticated, redirecting to /onboarding —
       // that redirect isn't part of what this test asserts.
-      await tester.pump(const Duration(milliseconds: 2100));
+      await tester.pump(const Duration(seconds: 9));
       await tester.pumpAndSettle();
     });
   });

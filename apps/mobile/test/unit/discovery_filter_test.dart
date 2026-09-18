@@ -38,6 +38,24 @@ void main() {
       expect(range.startBefore, isNotNull);
     });
 
+    test('today window covers the local calendar day expressed in UTC', () {
+      const f = DiscoveryFilter(datePreset: DiscoveryDatePreset.today);
+      final range = f.dateRange;
+      final now = DateTime.now();
+      // "Today" means the user's local day: [local midnight, next
+      // local midnight], serialized as UTC for the backend. This holds
+      // in every timezone (including NZ, where UTC midnight falls
+      // mid-local-day).
+      expect(
+        DateTime.parse(range.startAfter!),
+        DateTime(now.year, now.month, now.day).toUtc(),
+      );
+      expect(
+        DateTime.parse(range.startBefore!),
+        DateTime(now.year, now.month, now.day, 23, 59, 59, 999).toUtc(),
+      );
+    });
+
     test('dateRange with explicit startAfter wins over preset', () {
       final explicit = DateTime(2030, 1, 1, 12);
       final f = DiscoveryFilter(

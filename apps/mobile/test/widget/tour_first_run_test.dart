@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -110,9 +111,8 @@ void main() {
     final userRepo = _MockUserRepository();
     when(
       () => activityRepo.feed(
-        limit: any(named: 'limit'),
-        offset: any(named: 'offset'),
-      filter: any(named: 'filter'),
+        filter: any(named: 'filter'),
+        forceRefresh: any(named: 'forceRefresh'),
       ),
     ).thenAnswer((_) async => [_activityFixture()]);
     when(
@@ -124,16 +124,18 @@ void main() {
     // data was removed.)
     when(
       () => userRepo.updateProfile(
-        displayName: any(named: 'displayName'),
-        bio: any(named: 'bio'),
-        location: any(named: 'location'),
-        email: any(named: 'email'),
-        phone: any(named: 'phone'),
         dateOfBirth: any(named: 'dateOfBirth'),
         heightCm: any(named: 'heightCm'),
         weightKg: any(named: 'weightKg'),
-        goal: any(named: 'goal'),
-        sports: any(named: 'sports'),
+      ),
+    ).thenAnswer(
+      (_) async => UserModel(id: 'me', displayName: 'Test User'),
+    );
+    // GTK1 saves the join reason with a different argument shape —
+    // mocktail matches stubs by exact named-arg set, so both shapes
+    // need stubs.
+    when(
+      () => userRepo.updateProfile(
         joinReason: any(named: 'joinReason'),
       ),
     ).thenAnswer(
@@ -168,8 +170,8 @@ void main() {
     );
     await tester.tap(find.text('Skip for now'));
     await tester.pumpAndSettle();
-    // GTK3 ships with valid defaults (175 cm / 70 kg / 25 yrs ago),
-    // so completing is one tap — no input needed.
+    // GTK3 carries valid defaults (height/weight/DOB prefilled), so
+    // completing is one tap — no input needed.
     await tester.scrollUntilVisible(
       find.text('Complete Profile'),
       200,
@@ -192,6 +194,14 @@ void main() {
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+    // GTK3 reads SecureTokenStore (flutter_secure_storage channel has
+    // no handler in tests — without this mock the await never resolves
+    // and Complete stalls on "Saving…" forever).
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
+      (call) async => null,
+    );
     // NavGuard debounce state is static: without a reset, taps in one
     // test can swallow same-key pushes in the next (fake clocks restart
     // at the same epoch every test).
