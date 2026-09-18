@@ -519,6 +519,7 @@ class RemoteChatRepository implements ChatRepository {
       imageUrl: ChatMessage.imageUrlFromText(text),
       latitude: coords?.latitude,
       longitude: coords?.longitude,
+      messageType: json['type']?.toString() == 'system' ? 'system' : 'text',
     );
   }
 
@@ -808,6 +809,7 @@ class RemoteChatRepository implements ChatRepository {
       imageUrl: ChatMessage.imageUrlFromText(text),
       latitude: coords?.latitude,
       longitude: coords?.longitude,
+      messageType: json['type']?.toString() == 'system' ? 'system' : 'text',
     );
   }
 }

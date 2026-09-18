@@ -33,5 +33,21 @@ void main() {
       expect(parseRtdbDmMessages('junk', myUid: 'me-1'), isEmpty);
       expect(parseRtdbDmMessages([], myUid: 'me-1'), isEmpty);
     });
+
+    test('flags system messages (leave tombstones)', () {
+      final snapshot = <dynamic, dynamic>{
+        'm1': <dynamic, dynamic>{
+          'senderId': 'system',
+          'text': 'Sam left the group',
+          'type': 'system',
+          'timestamp': 100,
+        },
+      };
+
+      final messages = parseRtdbDmMessages(snapshot, myUid: 'me-1');
+
+      expect(messages, hasLength(1));
+      expect(messages[0].isSystem, isTrue);
+    });
   });
 }

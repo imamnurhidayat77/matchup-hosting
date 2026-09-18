@@ -87,7 +87,10 @@ class _VenuePickerSheetState extends ConsumerState<VenuePickerSheet>
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      _searchFocus.requestFocus();
+      // No autofocus: the sheet opens on the map + recent searches with
+      // the keyboard hidden. The user taps the search field when they
+      // want to type (requestFocus on open used to shove the map up
+      // behind the keyboard immediately).
       await _loadRecent();
       // Resolve GPS in the background so the first search uses the
       // user's actual location as the distance origin instead of

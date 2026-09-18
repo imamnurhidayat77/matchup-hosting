@@ -80,18 +80,22 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 
   /// Marks one row read. Returns the transport result so dismissals
   /// can be gated on it — a failed row stays put instead of snapping
-  /// back on the resync.
-  Future<bool> _markRead(String id) async {
+  /// back on the resync. Success is silent when [silent] (opening a
+  /// notification must not pop a "Marked as read" snackbar over the
+  /// navigation); swipe-to-read keeps the confirmation.
+  Future<bool> _markRead(String id, {bool silent = false}) async {
     final ok = await ref.read(notificationRepositoryProvider).markRead(id);
     // Resync either way so the badge/read state matches the server.
     ref.invalidate(_notifProvider);
     if (!mounted) return ok;
     if (ok) {
-      AppSnackbar.show(
-        context,
-        message: 'Marked as read',
-        variant: AppSnackbarVariant.success,
-      );
+      if (!silent) {
+        AppSnackbar.show(
+          context,
+          message: 'Marked as read',
+          variant: AppSnackbarVariant.success,
+        );
+      }
     } else {
       AppSnackbar.show(
         context,
@@ -102,13 +106,14 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     return ok;
   }
 
-  /// Marks the notification read, then deep-links to its screen.
-  /// `push` (not `go`) keeps the feed underneath so back returns here.
-  /// Taps without a usable target (report decisions, admin broadcasts —
-  /// null route) open the full message in a sheet instead, since the
-  /// feed card truncates at 2 lines and there is nowhere to navigate.
+  /// Marks the notification read (silently), then deep-links to its
+  /// screen. `push` (not `go`) keeps the feed underneath so back
+  /// returns here. Taps without a usable target (report decisions,
+  /// admin broadcasts — null route) open the full message in a sheet
+  /// instead, since the feed card truncates at 2 lines and there is
+  /// nowhere to navigate.
   Future<void> _openNotif(AppNotification notif) async {
-    await _markRead(notif.id);
+    await _markRead(notif.id, silent: true);
     if (!mounted) return;
     final route = routeForNotification(notif);
     if (route == null || route == '/notifications') {

@@ -132,9 +132,12 @@ class NavGuard {
   /// destination while its page is still on the stack are ignored, so
   /// duplicate page keys (`'!keyReservation.contains(key)'` red screen)
   /// are impossible app-wide no matter how slow the transition is. The
-  /// key releases on a normal pop, or after [_pushSafetyNet] if the
-  /// route instead leaves the stack via `context.go(...)` — either way
-  /// legitimate re-entry always works. Fire-and-forget safe.
+  /// key releases on a normal pop, the moment the router leaves the
+  /// pushed location for a different one (e.g. a bottom-tab `go()` —
+  /// which discards the push Future without resolving it), or after
+  /// [_pushSafetyNet] — whichever comes first. Legitimate re-entry
+  /// always works, including immediately after a tab switch.
+  /// Fire-and-forget safe.
   static Future<void> push(
     BuildContext context,
     String location, {
@@ -142,11 +145,49 @@ class NavGuard {
   }) async {
     if (_isStuck(location)) return;
     _inFlightSince[location] = clock.now();
+    final release = _watchForLeave(context, location, location);
     try {
       await context.push(location, extra: extra);
     } finally {
+      release();
       _inFlightSince.remove(location);
     }
+  }
+
+  /// Watches the router and releases [key] as soon as the pushed
+  /// [location] is observed and then left for a different path. Covers
+  /// the `go()`-away case where the push Future never resolves.
+  /// Returns a release function that is safe to call twice.
+  static VoidCallback _watchForLeave(
+    BuildContext context,
+    String key,
+    String location,
+  ) {
+    final router = GoRouter.of(context);
+    var seen = false;
+    var done = false;
+    void listener() {
+      if (done) return;
+      // First ticks still point at the pushed page — only arm after we
+      // have actually observed it, otherwise an instant redirect bounce
+      // would release prematurely.
+      if (router.state.uri.path == location) {
+        seen = true;
+        return;
+      }
+      if (seen) {
+        done = true;
+        _inFlightSince.remove(key);
+        router.routerDelegate.removeListener(listener);
+      }
+    }
+
+    router.routerDelegate.addListener(listener);
+    return () {
+      if (done) return;
+      done = true;
+      router.routerDelegate.removeListener(listener);
+    };
   }
 
   /// Typed variant of [push] for callers that await a pop result
@@ -159,9 +200,11 @@ class NavGuard {
   }) async {
     if (_isStuck(location)) return null;
     _inFlightSince[location] = clock.now();
+    final release = _watchForLeave(context, location, location);
     try {
       return await context.push<T>(location, extra: extra);
     } finally {
+      release();
       _inFlightSince.remove(location);
     }
   }
@@ -179,9 +222,11 @@ class NavGuard {
   }) async {
     if (_isStuck(key)) return;
     _inFlightSince[key] = clock.now();
+    final release = _watchForLeave(context, key, location);
     try {
       await context.push(location, extra: extra);
     } finally {
+      release();
       _inFlightSince.remove(key);
     }
   }

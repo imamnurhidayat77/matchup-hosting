@@ -1402,6 +1402,35 @@ class _Bubble extends StatelessWidget {
     final maxW = MediaQuery.of(context).size.width * 0.72;
     final bottomGap = item.isLastOfRun ? AppSpacing.x4 : 3.0;
 
+    // System events ("Sam left the group") render as a centered grey
+    // pill — no avatar, no reactions, no long-press, no timestamp.
+    // WhatsApp-style: an event, not a message.
+    if (msg.isSystem) {
+      return Padding(
+        padding: EdgeInsets.only(bottom: bottomGap),
+        child: Center(
+          child: Container(
+            constraints: BoxConstraints(maxWidth: maxW),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.x3,
+              vertical: AppSpacing.x2,
+            ),
+            decoration: BoxDecoration(
+              color: context.colors.surfaceMuted,
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+            ),
+            child: Text(
+              msg.text,
+              textAlign: TextAlign.center,
+              style: AppTypography.metaSub(context).copyWith(
+                color: context.colors.textSecondary,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return Padding(
       padding: EdgeInsets.only(bottom: bottomGap),
       child: Column(

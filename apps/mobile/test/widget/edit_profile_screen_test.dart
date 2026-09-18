@@ -122,6 +122,37 @@ void main() {
       ).called(1);
     });
 
+    testWidgets('weight and goal are editable and persist on save', (
+      tester,
+    ) async {
+      await pumpScreen(tester);
+
+      // Regression: both fields used to be disabled with a
+      // "not synced" caption even though PATCH /me persists them.
+      await tester.enterText(find.text('70'), '75');
+      await tester.enterText(find.text('Train for a 10k'), 'Run a marathon');
+      final saveFinder = find.text('Save Changes');
+      await tester.ensureVisible(saveFinder);
+      await tester.pumpAndSettle();
+      await tester.tap(saveFinder);
+      await tester.pumpAndSettle();
+
+      verify(
+        () => userRepo.updateProfile(
+          displayName: any(named: 'displayName'),
+          bio: any(named: 'bio'),
+          location: any(named: 'location'),
+          email: any(named: 'email'),
+          phone: any(named: 'phone'),
+          dateOfBirth: any(named: 'dateOfBirth'),
+          heightCm: any(named: 'heightCm'),
+          weightKg: 75,
+          goal: 'Run a marathon',
+          sports: any(named: 'sports'),
+        ),
+      ).called(1);
+    });
+
     testWidgets(
       'tapping Change Photo uploads the picked image and shows success',
       (tester) async {
