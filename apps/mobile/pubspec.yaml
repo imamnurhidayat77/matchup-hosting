@@ -19,13 +19,13 @@ dependencies:
   hive_flutter: ^1.1.0
 
   # Environment variables
-  flutter_dotenv: ^6.0.1
+  flutter_dotenv: ^5.2.1
 
   # State management (lightweight placeholder; can be replaced in MVP)
-  flutter_riverpod: ^3.4.3
+  flutter_riverpod: ^2.6.1
 
   # Routing
-  go_router: ^18.0.1
+  go_router: ^17.5.0
 
   # Testable wall-clock access (NavGuard's push safety-net timeout)
   clock: ^1.1.2
@@ -50,10 +50,10 @@ dependencies:
 
   # Disk + memory image cache for remote covers/avatars.
   # Thumbnail 72px jangan decode full-size: pakai memCacheWidth/Height.
-  cached_network_image: ^4.0.0
+  cached_network_image: ^3.4.1
 
   # Date formatting
-  intl: ^0.20.3
+  intl: ^0.20.2
 
   # SVG rendering for icons exported from Figma
   flutter_svg: ^2.0.10+1
