@@ -50,7 +50,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # Must stay >= 22: firebase-admin 14 moved @google-cloud/firestore
+          # to optionalDependencies with engines >= 22, and npm silently
+          # SKIPS optional deps on engine mismatch — on Node 20 the module
+          # vanishes and all 33 firestore-touching suites fail with
+          # MODULE_NOT_FOUND at import time.
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: apps/api-server/package-lock.json
       - name: Install dependencies
