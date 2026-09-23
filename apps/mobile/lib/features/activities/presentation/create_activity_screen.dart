@@ -74,6 +74,13 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
   int _step = _stepSetup;
   bool _submitting = false;
 
+  /// Set when the activity was created but its cover upload failed.
+  /// The game already exists server-side, so the form must NOT submit
+  /// again (that would create a duplicate) — [_submit] degrades to a
+  /// cover-only retry while this is non-null. Cleared on retry success
+  /// or when the user continues without a cover.
+  String? _coverFailedActivityId;
+
   /// True after a blocked Continue attempt — reveals inline field
   /// errors on the setup step. Reset once the step validates.
   bool _setupAttempted = false;
@@ -324,6 +331,11 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
       final b64 = base64.encode(bytes);
       ref.read(imageUploadProvider.notifier).setCompleted(b64);
       _form.setCoverImage(b64);
+      // Cover-only retry state: a fresh pick should immediately retry
+      // the upload for the already-created game (no second tap needed).
+      if (_coverFailedActivityId != null) {
+        await _retryCover();
+      }
     } catch (_) {
       ref
           .read(imageUploadProvider.notifier)
@@ -627,20 +639,18 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
     return null;
   }
 
-  /// Uploads the selected cover image and returns its download URL, or
-  /// `null` when there is no image / the upload fails. Photo is optional
-  /// so failures never block activity creation.
+  /// Uploads the selected cover image and points the activity at it via
+  /// `PATCH cover`. Returns `null` on success, otherwise a user-facing
+  /// reason the caller must surface (so the user can pick another photo).
   ///
   /// The draft stores the picked bytes as base64 via `setCoverImage`
-  /// (see [_pickImage]); [StorageService.uploadImage] needs a local file
-  /// path, so base64 payloads are decoded into a temp file first. A
-  /// value that already points at an existing file is uploaded directly.
+  /// (see [_pickImage]); uploads need a local file path, so base64
+  /// payloads are decoded into a temp file first. A value that already
+  /// points at an existing file is uploaded directly.
   /// Phase two of the cover flow: writes [bytes] to a temp file,
   /// uploads it to the host-only `activities/{id}/cover/` Storage path,
   /// and points the activity at the download URL via `PATCH cover`.
-  /// Returns false (never throws) when anything fails — the activity
-  /// already exists, so the caller only loses the photo.
-  Future<bool> _attachCover(String activityId, Uint8List bytes) async {
+  Future<String?> _attachCover(String activityId, Uint8List bytes) async {
     try {
       final dir = await Directory.systemTemp.createTemp('cover_');
       final file = File(
@@ -652,21 +662,124 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
         localPath: file.path,
         storagePath: storagePath,
       );
-      if (uploaded == null) return false;
+      if (uploaded == null) {
+        return 'Cover photo upload failed. Check your connection.';
+      }
       await ref.read(activityRepositoryProvider).updateCover(
             activityId: activityId,
             coverImagePath: uploaded.path,
             coverImageUrl: uploaded.downloadUrl,
           );
-      return true;
+      return null;
     } catch (e) {
       debugPrint('[CreateActivity] cover attach failed: $e');
-      return false;
+      // Prefer a specific, actionable reason so the user can pick
+      // another photo instead of seeing a generic failure.
+      if (e is DioException && e.error is ApiException) {
+        return (e.error as ApiException).userMessage;
+      }
+      if (e.toString().contains('permission-denied') ||
+          e.toString().contains('unauthorized')) {
+        return 'Upload was denied. Please sign in again and pick another photo.';
+      }
+      if (e is ImageTooLargeException) return e.message;
+      return 'Cover photo could not be uploaded.';
     }
+  }
+
+  /// Retries only the cover upload for an already-created activity
+  /// (see [_coverFailedActivityId]). Never recreates the game.
+  /// A removed photo (null bytes) means "continue without a cover".
+  Future<void> _retryCover() async {
+    final activityId = _coverFailedActivityId;
+    if (activityId == null || _submitting) return;
+    final coverBytes = _decodeCoverBytes(ref.read(formDataProvider).coverImagePath);
+    if (coverBytes == null) {
+      // User removed the photo: keep the created game, without a cover.
+      final id = _coverFailedActivityId;
+      setState(() => _coverFailedActivityId = null);
+      await _finishCreateSuccess(activityId: id!, withCover: false);
+      return;
+    }
+    if (coverBytes.lengthInBytes > kMaxCoverImageBytes) {
+      if (!mounted) return;
+      AppSnackbar.show(
+        context,
+        message: ImageTooLargeException(
+          kMaxCoverImageBytes,
+          coverBytes.lengthInBytes,
+        ).message,
+        variant: AppSnackbarVariant.error,
+      );
+      return;
+    }
+    setState(() => _submitting = true);
+    try {
+      final reason = await _attachCover(activityId, coverBytes);
+      if (!mounted) return;
+      if (reason == null) {
+        setState(() => _coverFailedActivityId = null);
+        await _finishCreateSuccess(activityId: activityId, withCover: true);
+      } else {
+        _showCoverFailure(reason);
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  /// Shows why the cover failed and keeps the user on the form so they
+  /// can pick another photo (or remove it and retry to go coverless).
+  /// [alreadyCreated] prefixes the activity-created context, since the
+  /// game exists server-side at that point.
+  void _showCoverFailure(String reason, {bool alreadyCreated = false}) {
+    if (!mounted) return;
+    final head = alreadyCreated && reason.isNotEmpty
+        ? 'Activity created, but ${reason[0].toLowerCase()}${reason.substring(1)}'
+        : reason;
+    AppSnackbar.show(
+      context,
+      message:
+          '$head Choose another photo, or remove it and retry to continue without a cover.',
+      variant: AppSnackbarVariant.error,
+      duration: const Duration(seconds: 6),
+      actionLabel: 'Pick another',
+      onAction: _pickImage,
+    );
+  }
+
+  /// Shared success tail: reset the wizard, refresh Hosting, and leave
+  /// for the activities list.
+  Future<void> _finishCreateSuccess({
+    required String activityId,
+    required bool withCover,
+  }) async {
+    _form.reset();
+    ref.read(imageUploadProvider.notifier).reset();
+    await _clearDraft();
+    if (!mounted) return;
+    // The new game lives under Hosting — refresh that tab now so it
+    // appears without a manual pull-to-refresh.
+    ref.invalidate(hostedGamesProvider);
+    HapticFeedback.heavyImpact();
+    AppSnackbar.show(
+      context,
+      message: withCover
+          ? 'Activity created! 🎉'
+          : 'Activity created without a cover photo.',
+      variant: AppSnackbarVariant.success,
+    );
+    context.go('/activities');
   }
 
   Future<void> _submit() async {
     if (_submitting) return;
+    // The game already exists — a second full submit would duplicate
+    // it. Retry only the cover instead.
+    if (_coverFailedActivityId != null) {
+      await _retryCover();
+      return;
+    }
     final data = ref.read(formDataProvider);
     // Never silently substitute a fallback date: re-validate the setup
     // step and abort with the reason when it's not good to go.
@@ -754,8 +867,9 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
     // Cover photo is optional and uploaded AFTER the create, because
     // Storage rules only allow `activities/{id}/cover/…` — the id
     // doesn't exist until the activity is created. Uploading anywhere
-    // else (e.g. `uploads/activity-covers/…`) is denied and used to
-    // fail silently, leaving every game photoless.
+    // else (e.g. `uploads/activity-covers/…`) is denied. A post-create
+    // cover failure parks the id in [_coverFailedActivityId] and stays
+    // on the form with the reason — never a silent photoless game.
     final coverBytes = _decodeCoverBytes(data.coverImagePath);
     // Fail fast on oversized covers (8 MB server cap): stay on the
     // form with the reason so the user can pick a smaller photo —
@@ -820,31 +934,30 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
             weatherDesc: snapshot?.description,
             weatherRain: snapshot?.precipitationProbability,
           );
-      // Phase two (best-effort): store the bytes, upload to the
-      // host-only cover path, and point the activity at the URL. The
-      // game already exists, so a cover failure only costs the photo —
-      // never the activity.
-      var coverOk = coverBytes == null;
-      if (coverBytes != null) {
-        coverOk = await _attachCover(created.id, coverBytes);
+      // Phase two: store the bytes, upload to the host-only cover
+      // path, and point the activity at the URL. The game already
+      // exists here, so a cover failure must NOT silently drop the
+      // photo: park the id in [_coverFailedActivityId], stay on the
+      // form, and show the reason so the user can pick another photo.
+      if (coverBytes == null) {
+        await _finishCreateSuccess(activityId: created.id, withCover: true);
+      } else {
+        final reason = await _attachCover(created.id, coverBytes);
+        if (!mounted) return;
+        if (reason == null) {
+          await _finishCreateSuccess(activityId: created.id, withCover: true);
+        } else {
+          setState(() {
+            _submitting = false;
+            _coverFailedActivityId = created.id;
+          });
+          // Refresh Hosting anyway so the created game is visible
+          // underneath while the user fixes the photo.
+          ref.invalidate(hostedGamesProvider);
+          HapticFeedback.heavyImpact();
+          _showCoverFailure(reason, alreadyCreated: true);
+        }
       }
-      _form.reset();
-      ref.read(imageUploadProvider.notifier).reset();
-      await _clearDraft();
-      if (!mounted) return;
-      // The new game lives under Hosting — refresh that tab now so it
-      // appears without a manual pull-to-refresh.
-      ref.invalidate(hostedGamesProvider);
-      HapticFeedback.heavyImpact();
-      AppSnackbar.show(
-        context,
-        message: coverOk
-            ? 'Activity created! 🎉'
-            : 'Activity created, but the cover photo could not be uploaded.',
-        variant:
-            coverOk ? AppSnackbarVariant.success : AppSnackbarVariant.warning,
-      );
-      context.go('/activities');
     } catch (e) {
       if (!mounted) return;
       debugPrint('[CreateActivity] submit failed: $e');
@@ -915,7 +1028,11 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
           Expanded(
             flex: 2,
             child: AppButton(
-              label: 'Create Activity',
+              // After a cover-only failure the game exists — the button
+              // retries the upload instead of recreating (see [_submit]).
+              label: _coverFailedActivityId != null
+                  ? 'Retry Cover Upload'
+                  : 'Create Activity',
               size: AppButtonSize.sm,
               onPressed: _submitting ? null : _submit,
               loading: _submitting,
