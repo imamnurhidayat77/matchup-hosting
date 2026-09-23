@@ -108,6 +108,19 @@ export async function setMemberStatus(
     }
     const before = snap.data();
     await ref.update({ status, updatedAt: Timestamp.now() });
+    if (status === 'suspended') {
+        // M4 fix: revoke Firebase sessions at suspension time so the
+        // user loses API access immediately — not just at the next
+        // Firestore status read, and never via a lingering RTDB/ID
+        // token. Best-effort: the suspension itself must not fail
+        // because the Auth backend hiccuped (the per-request
+        // checkRevoked in auth.middleware is the second layer).
+        try {
+            await auth.revokeRefreshTokens(normalizedUid);
+        } catch (error) {
+            console.warn(`[members] revokeRefreshTokens failed for ${normalizedUid}:`, error);
+        }
+    }
     const view = await getMemberDetail(normalizedUid);
     await logAdminAction({
         category: 'Members',

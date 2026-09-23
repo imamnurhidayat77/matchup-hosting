@@ -4,7 +4,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import { checkFirestoreConnection } from '../database/firebase.js';
 import { firestoreAuthHint, isFirestoreAuthError } from '../database/firestore-errors.js';
-import { corsOrigins } from '../config/env.js';
+import { corsOrigins, env } from '../config/env.js';
 import {
     AUTOCOMPLETE_RATE_LIMIT,
     GLOBAL_RATE_LIMIT,
@@ -22,6 +22,7 @@ import { appealsRouter } from '../modules/appeals/appeals.routes.js';
 import { listPublicActivityTeasersHandler } from '../modules/activities/activities.controller.js';
 import { listPublicSportsHandler } from '../modules/admin/public-sports.controller.js';
 import { swipesRouter } from '../modules/swipes/swipes.routes.js';
+import { calendarRouter } from '../modules/calendar/calendar.routes.js';
 import { notificationsRouter } from '../modules/notifications/notifications.routes.js';
 import { devicesRouter } from '../modules/devices/devices.routes.js';
 import { placesRouter } from '../modules/places/places.routes.js';
@@ -30,10 +31,26 @@ import { reportsRouter } from '../modules/reports/reports.routes.js';
 export function createApp(){
     const app = express();
 
+    // H1 fix: trust the first proxy hop (GCP load balancer / Cloud Run
+    // front-end) so `req.ip` is the real client IP. Without this every
+    // client behind Cloud Run shares one rate-limit bucket (self-DoS)
+    // and per-IP abuse dampening cannot tell clients apart.
+    app.set('trust proxy', 1);
+
     const allowedOrigins = corsOrigins();
     if (allowedOrigins.length === 0) {
+        // L2 fix: fail closed in production — an unset allowlist must
+        // never silently become allow-all where browsers are involved.
+        // Local/dev keeps the permissive default for zero-config runs.
+        if (env.NODE_ENV === 'production') {
+            throw new Error(
+                '[cors] CORS_ORIGINS is not set — refusing to boot in production. ' +
+                'Set CORS_ORIGINS to a comma-separated allowlist.',
+            );
+        }
         // Permissive default preserves existing clients (mobile/admin-web)
-        // when CORS_ORIGINS is unset. Set CORS_ORIGINS in production.
+        // when CORS_ORIGINS is unset in local/dev. Set CORS_ORIGINS in
+        // production (enforced above).
         console.warn(
             '[cors] CORS_ORIGINS is not set — allowing all origins. ' +
             'Set CORS_ORIGINS to a comma-separated allowlist in production.',
@@ -89,6 +106,7 @@ export function createApp(){
     app.use('/api/dm', dmRouter);
     app.use('/api/activities', activitiesRouter);
     app.use('/api/swipes', swipesRouter);
+    app.use('/api/calendar', calendarRouter);
     app.use('/api/notifications', notificationsRouter);
     app.use('/api/devices', devicesRouter);
     app.use('/api/places', placesRouter);

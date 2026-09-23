@@ -13,12 +13,18 @@
          Gallery uses the system picker (no permission needed); camera
          capture requests this at runtime on first use. -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- L4 fix (OWASP M2): no cloud auto-backup of app data. Tokens live
+         in the Keystore (never backed up) and Hive/SharedPreferences hold
+         session-adjacent PII (route, drafts, prefs) — none of it belongs
+         in a Google Drive backup. Re-login re-establishes the session. -->
     <application
         android:label="MatchUp"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:networkSecurityConfig="@xml/network_security_config"
-        android:usesCleartextTraffic="false">
+        android:usesCleartextTraffic="false"
+        android:allowBackup="false"
+        android:fullBackupOnly="false">
         <activity
             android:name=".MainActivity"
             android:exported="true"

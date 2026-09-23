@@ -38,7 +38,6 @@ cp .env.example .env
 
 The default values are fine for local development. Edit at minimum:
 
-- `AUTH_SECRET` — any long random string (≥ 16 chars)
 - `DATABASE_URL` — only required if you intend to run migrations locally
 
 For per-app overrides, copy each app's `.env.example`:

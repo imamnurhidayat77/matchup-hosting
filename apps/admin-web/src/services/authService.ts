@@ -6,7 +6,7 @@
  * `Authorization: Bearer …` and admin rights are proven via
  * `GET /api/admin/me` (403 unless the uid is in backend `ADMIN_UIDS`).
  */
-import { signInWithEmailAndPassword, signOut as firebaseSignOut } from 'firebase/auth';
+import { onIdTokenChanged, signInWithEmailAndPassword, signOut as firebaseSignOut } from 'firebase/auth';
 import { apiFetch, clearAdminIdToken, setAdminIdToken } from './api';
 import { getFirebaseAuth } from './firebase';
 
@@ -61,6 +61,63 @@ export function loadSession(): AuthSession | null {
 export function clearSession(): void {
   localStorage.removeItem(SESSION_KEY);
   sessionStorage.removeItem(SESSION_KEY);
+}
+
+// ─── Token refresh (H2 fix) ───────────────────────────────────────────────────
+// Firebase ID tokens expire after 1 hour, but sessions promise 8h/30d.
+// Without refresh every stored token went stale at +1h and the next API
+// call 401'd into a forced logout. Two mechanisms close that gap:
+//
+//   * subscribeSessionRefresh — attaches the Firebase SDK's
+//     onIdTokenChanged listener (which is also what enables the SDK's
+//     proactive hourly refresh) and persists every fresh token into
+//     both stores, so long-lived tabs stay authenticated.
+//   * refreshStoredToken — one-shot rehydration for page reloads: the
+//     SDK restores its own session from browser persistence, so a fresh
+//     ID token can be minted even when the stored one expired days ago.
+
+function persistRefreshedToken(token: string): void {
+  setAdminIdToken(token);
+  const raw =
+    localStorage.getItem(SESSION_KEY) ?? sessionStorage.getItem(SESSION_KEY);
+  if (!raw) return;
+  try {
+    const session = JSON.parse(raw) as AuthSession;
+    const store =
+      localStorage.getItem(SESSION_KEY) != null ? localStorage : sessionStorage;
+    store.setItem(SESSION_KEY, JSON.stringify({ ...session, token }));
+  } catch {
+    // Corrupt session — the TTL check in loadSession will clear it.
+  }
+}
+
+export async function refreshStoredToken(): Promise<boolean> {
+  try {
+    const token = await getFirebaseAuth().currentUser?.getIdToken();
+    if (!token) return false;
+    persistRefreshedToken(token);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function subscribeSessionRefresh(): () => void {
+  try {
+    return onIdTokenChanged(getFirebaseAuth(), (user) => {
+      if (!user) return;
+      void user
+        .getIdToken()
+        .then((token) => {
+          if (token) persistRefreshedToken(token);
+        })
+        .catch(() => undefined);
+    });
+  } catch {
+    // Firebase unconfigured — no refresh possible; callers still work
+    // with the stored token until it expires.
+    return () => undefined;
+  }
 }
 
 // ─── Sign in ──────────────────────────────────────────────────────────────────

@@ -27,6 +27,12 @@ service firebase.storage {
         && request.resource.contentType.matches('image/(jpeg|png|webp)');
     }
 
+    function isAllowedChatImage() {
+      return request.resource != null
+        && request.resource.size <= 8 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)');
+    }
+
     match /users/{uid}/profile/{fileName} {
       allow read: if isSignedIn();
       allow create, update: if isOwner(uid) && isAllowedProfileImage();
@@ -40,16 +46,29 @@ service firebase.storage {
     }
 
     // Chat photo attachments, uploaded by activity participants via
-    // StorageService (`uploads/chat-attachments/{activityId}/…`).
-    // Membership is enforced at the API layer (POST /api/chat/messages);
-    // rules here only require a signed-in uploader and image content.
-    match /uploads/chat-attachments/{allPaths=**} {
+    // StorageService.uploadChatAttachment
+    // (`uploads/chat-attachments/{scope}/{uid}/{file}` where scope is the
+    // activity id or `dm_{threadId}`).
+    // M2 fix: write/delete are owner-scoped — the uid segment must equal
+    // the uploader. Previously any signed-in user could overwrite or
+    // delete anyone's attachment. Membership is still enforced at the API
+    // layer (POST /api/chat/messages) before the URL is shared.
+    match /uploads/chat-attachments/{scope}/{uid}/{fileName} {
       allow read: if isSignedIn();
-      allow create, update: if isSignedIn()
-        && request.resource != null
-        && request.resource.size <= 8 * 1024 * 1024
-        && request.resource.contentType.matches('image/(jpeg|png|webp)');
-      allow delete: if isSignedIn();
+      allow create, update, delete: if isOwner(uid) && isAllowedChatImage();
+    }
+
+    // Legacy flat/two-segment attachment paths (pre-owner-scoping
+    // uploads): keep readable so old chat photos don't break, but
+    // permanently read-only — all new uploads must use the
+    // owner-scoped path above.
+    match /uploads/chat-attachments/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+    match /uploads/chat-attachments/{scope}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if false;
     }
 
     match /{allPaths=**} {

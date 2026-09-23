@@ -246,9 +246,14 @@ class RemoteDmRepository implements DmRepository {
     // throw before burning upload bandwidth (see StorageService).
     final myUid = await _myUid();
     await StorageService.checkImageSize(imagePath, kMaxChatImageBytes);
-    final uploadedUrl = await StorageService.instance.uploadImage(
+    // M2 fix: owner-scoped path (see StorageService.uploadChatAttachment).
+    if (myUid.isEmpty) {
+      throw Exception('Photo uploads are unavailable right now');
+    }
+    final uploadedUrl = await StorageService.instance.uploadChatAttachment(
       localPath: imagePath,
-      folder: 'chat-attachments/dm_${dmThreadId(myUid, otherUid)}',
+      scope: 'dm_${dmThreadId(myUid, otherUid)}',
+      uid: myUid,
     );
     if (uploadedUrl == null) {
       // Same contract as the group chat path: the photo cannot leave

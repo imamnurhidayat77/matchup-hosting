@@ -10,8 +10,10 @@ import {
 import type { ReactNode } from 'react';
 import {
   loadSession,
+  refreshStoredToken,
   signIn as authSignIn,
   signOut as authSignOut,
+  subscribeSessionRefresh,
 } from '../services/authService';
 import type { AdminUser } from '../services/authService';
 import { onUnauthorized } from '../services/api';
@@ -51,6 +53,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const session = loadSession();
     setUser(session ? session.user : false);
+  }, []);
+
+  // H2 fix: keep the stored Firebase ID token fresh. The subscription
+  // persists hourly SDK refreshes; the one-shot rehydrates the token
+  // after a reload (SDK session survives in browser persistence while
+  // our stored copy may be hours old). Runs once — independent of the
+  // user state above so a refreshed token lands before first use.
+  useEffect(() => {
+    const unsubscribe = subscribeSessionRefresh();
+    void refreshStoredToken();
+    return unsubscribe;
   }, []);
 
   const signIn = useCallback(

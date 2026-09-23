@@ -12,7 +12,6 @@ The root file at `.env.example` is the canonical reference. Per-app `.env.exampl
 | --------------- | -------- | ------------------------ | -------------------------------------------------------------------------- |
 | `PORT`          | no       | `4000`                   | Port the Express server listens on.                                        |
 | `DATABASE_URL`  | yes      | —                        | PostgreSQL connection string. Format: `postgres://USER:PASS@HOST:PORT/DB`. |
-| `AUTH_SECRET`   | yes      | —                        | Secret used to sign JWTs / session tokens. Must be ≥ 16 characters.        |
 | `CORS_ORIGIN`   | no       | `http://localhost:5173`  | Comma-separated list of allowed origins for browser requests.              |
 | `NODE_ENV`      | no       | `development`            | One of `development`, `test`, `production`.                                |
 | `LOG_LEVEL`     | no       | `info`                   | One of `trace`, `debug`, `info`, `warn`, `error`, `fatal`.                  |
