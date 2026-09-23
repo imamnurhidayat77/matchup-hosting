@@ -4,6 +4,23 @@
 
 This repository contains the **source code** for the MatchUp platform — mobile app (Flutter), admin web (React + Tailwind), and backend API (Node.js + Express + TypeScript), backed by Firebase (Firestore + Realtime Database + Auth). It is the team project for **COMPSCI 734 — Mobile, Web & Enterprise Computing** (Semester 2, 2026).
 
+## Live Deployment
+
+> This repo lives in the private UOA organisation, which cannot grant the
+> Vercel / Google Cloud GitHub Apps access — so it cannot be connected
+> directly to Vercel or Cloud Run. Every push to `main` here is mirrored
+> automatically by [`.github/workflows/mirror-to-hosting.yml`](.github/workflows/mirror-to-hosting.yml)
+> to the public mirror [`imamnurhidayat77/matchup-hosting`](https://github.com/imamnurhidayat77/matchup-hosting),
+> and Vercel + Cloud Run deploy from there. The table below is the version
+> assessors can interact with (mirrored from `main`).
+
+| Component | Live URL | How it deploys |
+|-----------|----------|----------------|
+| Admin web (React) | <https://matchup-hosting.vercel.app/> | Vercel auto-deploys from `matchup-hosting:main` (SPA rewrite in [`apps/admin-web/vercel.json`](apps/admin-web/vercel.json), `VITE_API_BASE_URL` points at the Cloud Run API) |
+| API (Express) | <https://matchup-api-569237066208.asia-southeast1.run.app/> — health: [`/api/health`](https://matchup-api-569237066208.asia-southeast1.run.app/api/health) returns `{"ok":true,"database":"connected"}` | Cloud Run service `matchup-api` in `asia-southeast1` (project `matchup-cs734`, min 0 / max 3, 512 Mi) via [`apps/api-server/deploy-cloudrun.sh`](apps/api-server/deploy-cloudrun.sh); secrets via Secret Manager |
+| Mobile (Flutter) | APK: [Google Drive folder](https://drive.google.com/drive/u/0/folders/1xdP49GI5ip-Ca7zjh3ZbHAYM1aj1QZSD) (release build: `flutter build apk --obfuscate --split-debug-info=build/debug-info`) | Built from `main`, points at the Cloud Run API + Firebase project `matchup-cs734` |
+| Data plane | Firebase project `matchup-cs734` (Firestore + RTDB + Storage + FCM); rules in [`firestore.rules`](firestore.rules), [`storage.rules`](storage.rules), [`infra/firebase/database.rules.json`](infra/firebase/database.rules.json) | `firebase deploy --only firestore,database,storage` when rules change |
+
 ## Team — Nimble Takahe
 
 - Aidil Muslim (`amus790`)
@@ -91,8 +108,7 @@ cp .env.example .env
 
 Edit `.env` and set at minimum:
 
-- `AUTH_SECRET` — any long random string (≥ 16 characters, enforced)
-- `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`, `FIREBASE_DATABASE_URL`, `FIREBASE_WEB_API_KEY`, `FIREBASE_STORAGE_BUCKET` — from Firebase Console → Project settings → Service accounts
+- `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`, `FIREBASE_DATABASE_URL`, `FIREBASE_WEB_API_KEY`, `FIREBASE_STORAGE_BUCKET` — from Firebase Console → Project settings → Service accounts (auth is Firebase ID tokens verified server-side; no JWT secret needed)
 
 See `apps/api-server/.env.example` for the full list.
 

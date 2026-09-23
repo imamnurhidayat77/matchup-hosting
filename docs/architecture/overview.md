@@ -48,7 +48,7 @@ Protocol choices and their rationale live in
 - **HTTP:** `dio` with auth interceptor, envelope parsing, and session-expiry/suspension events.
 - **Realtime:** `firebase_database` listeners (chat, typing, presence reads) authenticated via custom token (`RtdbAuthService`); HTTP polling fallback when Firebase is unconfigured.
 - **Push:** `firebase_messaging` (foreground banners + background/killed deep links via `routeForPush`).
-- **Capabilities:** GPS (`geolocator`) + OSM maps (`flutter_map`), camera/gallery (`image_picker`), biometrics (`local_auth`), device calendar, share sheet, Tinder-style swipe deck gestures.
+- **Capabilities:** GPS (`geolocator`) + OSM maps (`flutter_map`), camera/gallery (`image_picker`), device calendar, share sheet, Tinder-style swipe deck gestures.
 - **Local storage:** `flutter_secure_storage` (tokens/PII) + `SharedPreferences` (route, prefs) + Hive (form drafts).
 - **Tests:** ~70 `flutter_test` suites (unit + widget); `flutter_lints` clean.
 
@@ -88,11 +88,29 @@ packages/
 - **Storage writes are rule-gated, not API-proxied.** Profile/activity/chat uploads go through the SDK under owner/host-scoped, type- and size-capped rules (`storage.rules`).
 - **Shared types are additive.** Removing or renaming a type requires a coordinated change in every consumer; prefer adding new types and deprecating old ones.
 
+## Deployment
+
+The UOA repo is private and cannot grant the Vercel / Google Cloud GitHub
+Apps access, so pushes to `main` are mirrored by
+`.github/workflows/mirror-to-hosting.yml` to the public
+`imamnurhidayat77/matchup-hosting` repo, which is what Vercel and Cloud Run
+deploy from:
+
+```
+UOA private repo (main) ──mirror──▶ matchup-hosting (main) ──┬──▶ Vercel: https://matchup-hosting.vercel.app/
+                                                             └──▶ Cloud Run: https://matchup-api-569237066208.asia-southeast1.run.app/ (matchup-api, asia-southeast1, Secret Manager)
+                                                                              └──▶ Firebase matchup-cs734 (Firestore + RTDB + Storage + FCM)
+```
+
+Mobile APKs are built from `main` (`flutter build apk --obfuscate
+--split-debug-info=build/debug-info`) and distributed via the Google Drive
+folder linked in the README.
+
 ## What is in place
 
 - Single-repo structure with `apps/`, `packages/`, `infra/`, and `docs/`
 - Local development environment for mobile, admin web, and API (`docs/setup/`)
-- Real Firebase Auth (REST + custom-token RTDB sessions + biometric-gated local session)
+- Real Firebase Auth (REST + custom-token RTDB sessions + secure local session)
 - Activity discovery / matchmaking (swipe deck, filters, geo), reporting & moderation (suspension, appeals, reports triage)
 - Realtime chat (group + DM), typing indicators, presence, push notifications
 - Production Firebase rules (Firestore deny-all, RTDB least-privilege, Storage scoped) + indexes
