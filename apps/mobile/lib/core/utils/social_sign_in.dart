@@ -7,7 +7,7 @@ import '../widgets/app_snackbar.dart';
 /// tappable and going nowhere (or pretending to start an OAuth flow).
 /// All three auth screens (welcome / login / register) share this copy.
 const String socialSignInUnavailableMessage =
-    'Social sign-in belum tersedia — gunakan email';
+    'Social sign-in isn\'t available yet — please use email';
 
 /// Shows the "social sign-in unavailable" notice. Uses the app-wide
 /// [AppSnackbar] (a floating SnackBar) so the pattern matches every
