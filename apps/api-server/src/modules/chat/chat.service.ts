@@ -11,13 +11,20 @@ import {
     activityReactionsPath,
 } from '../../database/paths.js';
 import { resolveEndMs } from '../activities/activity-lifecycle.service.js';
-import { getActivityById } from '../activities/activities.service.js';
+import { getActivityById, listMyActivities } from '../activities/activities.service.js';
 import { getParticipants } from '../activities/activity-participants.service.js';
 import { createNotification } from '../notifications/notifications.service.js';
 import { getPublicUserProfile } from '../users/users.service.js';
 import type { ReactionEmoji } from './chat.schema.js';
 
-export type ChatMessageType = 'text' | 'system';
+/**
+ * Media message kinds. The physical upload still goes through Firebase
+ * Storage client-side — the server only validates the resulting `https`
+ * URL (image) or lat/lng pair (location) and persists it as the message
+ * `text` (URL / maps link). Readers render `image`/`location` rows with
+ * rich widgets and fall back to the text link otherwise.
+ */
+export type ChatMessageType = 'text' | 'system' | 'image' | 'location';
 
 export type ChatMessageRecord = {
     senderId: string;
@@ -89,7 +96,9 @@ export async function sendMessage(activityId: string, senderId: string, text: st
         throw new Error('text is required');
     }
 
-    if (messageType !== 'text' && messageType !== 'system') throw new Error ('messageType must be text or system');
+    if (messageType !== 'text' && messageType !== 'system' && messageType !== 'image' && messageType !== 'location') {
+        throw new Error('messageType must be text, system, image, or location');
+    }
 
     await assertChatWritable(normalizedActivityId);
 
@@ -174,6 +183,110 @@ export async function notifyGroupMembers(
 }
 
 /**
+ * Validates a client-uploaded image URL and stores it as an `image`
+ * message (text = the URL). The bytes never touch this server — upload
+ * goes straight to Firebase Storage; here we only enforce `https` +
+ * length so RTDB can't be used as an arbitrary-URL billboard.
+ */
+export async function sendImageMessage(
+    activityId: string,
+    senderId: string,
+    imageUrl: string,
+): Promise<{ messageId: string }> {
+    const url = imageUrl.trim();
+    if (!/^https:\/\/\S+$/i.test(url)) {
+        throw new Error('imageUrl must be an https URL');
+    }
+    if (url.length > 2000) {
+        throw new Error('imageUrl must be at most 2000 characters');
+    }
+    return sendMessage(activityId, senderId, url, 'image');
+}
+
+/** Builds the shareable maps link stored as a `location` message text. */
+export function locationShareText(latitude: number, longitude: number): string {
+    return `Shared location: https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+}
+
+/**
+ * Validates a shared coordinate pair and stores it as a `location`
+ * message (text = `locationShareText`). Range-checked so a bad client
+ * can't persist nonsense pins.
+ */
+export async function sendLocationMessage(
+    activityId: string,
+    senderId: string,
+    latitude: number,
+    longitude: number,
+): Promise<{ messageId: string }> {
+    if (typeof latitude !== 'number' || !Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
+        throw new Error('latitude must be a number between -90 and 90');
+    }
+    if (typeof longitude !== 'number' || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+        throw new Error('longitude must be a number between -180 and 180');
+    }
+    return sendMessage(activityId, senderId, locationShareText(latitude, longitude), 'location');
+}
+
+export type ConversationPreview = {
+    activityId: string;
+    title: string;
+    lastMessage: string | null;
+    lastMessageAt: number | null;
+    /**
+     * Per-user read receipts don't exist yet, so this is best-effort 0.
+     * The field stays in the contract so clients can render badges the
+     * day receipts land without a version bump.
+     */
+    unreadCount: number;
+};
+
+/**
+ * Group inbox: every live activity the viewer hosts or joined, newest
+ * message first, with a text preview + timestamp. One `GET messages`
+ * fan-out per activity (same cost as the mobile inbox today); a failed
+ * thread read degrades to "No messages yet" instead of failing the
+ * whole inbox.
+ */
+export async function listConversations(uid: string): Promise<ConversationPreview[]> {
+    const normalizedUid = uid.trim();
+    if (!normalizedUid) throw new Error('uid is required');
+    const [hosted, joined] = await Promise.all([
+        listMyActivities(normalizedUid, 'hosted', 50, 0).catch(() => []),
+        listMyActivities(normalizedUid, 'joined', 50, 0).catch(() => []),
+    ]);
+    const seen = new Map<string, (typeof hosted)[number]>();
+    for (const a of [...hosted, ...joined]) {
+        if (!seen.has(a.activityId)) seen.set(a.activityId, a);
+    }
+    const previews = await Promise.all(
+        [...seen.values()].map(async (activity) => {
+            let lastMessage: string | null = null;
+            let lastMessageAt: number | null = null;
+            try {
+                const messages = await getMessages(activity.activityId);
+                const last = messages[messages.length - 1];
+                if (last) {
+                    lastMessage = chatPreviewBody(last.text);
+                    lastMessageAt = last.timestamp;
+                }
+            } catch {
+                // Best-effort per thread (see above).
+            }
+            return {
+                activityId: activity.activityId,
+                title: activity.title,
+                lastMessage,
+                lastMessageAt,
+                unreadCount: 0,
+            } satisfies ConversationPreview;
+        }),
+    );
+    previews.sort((a, b) => (b.lastMessageAt ?? 0) - (a.lastMessageAt ?? 0));
+    return previews;
+}
+
+/**
  * Inbox preview: never leak a raw URL or maps link into the push —
  * photos/locations render as a generic line instead.
  */
@@ -215,7 +328,7 @@ export async function getMessages(activityId: string): Promise<ChatMessageWithId
 
         if (typeof value.text !== 'string' || value.text.trim() === '') continue;
 
-        if (value.type !== 'text' && value.type !== 'system') continue;
+        if (value.type !== 'text' && value.type !== 'system' && value.type !== 'image' && value.type !== 'location') continue;
 
         if (typeof value.timestamp !== 'number') continue;
 

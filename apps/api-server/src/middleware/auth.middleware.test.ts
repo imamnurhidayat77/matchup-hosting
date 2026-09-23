@@ -119,7 +119,7 @@ describe('requireAuth middleware', () => {
         message: 'Invalid or expired Firebase ID token',
       },
     });
-    expect(auth.verifyIdToken).toHaveBeenCalledWith('invalid-token');
+    expect(auth.verifyIdToken).toHaveBeenCalledWith('invalid-token', true);
   });
 
   it('when Firebase token is valid => expected 200', async () => {
@@ -142,7 +142,7 @@ describe('requireAuth middleware', () => {
         email: 'user@example.com',
       },
     });
-    expect(auth.verifyIdToken).toHaveBeenCalledWith('valid-token');
+    expect(auth.verifyIdToken).toHaveBeenCalledWith('valid-token', true);
   });
 
   it('when user doc is suspended => expected 403 w/ ACCOUNT_SUSPENDED', async () => {

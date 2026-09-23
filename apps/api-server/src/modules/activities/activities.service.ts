@@ -611,6 +611,72 @@ export async function listMyActivities(
 }
 
 /**
+ * Past games for one user: hosted + joined activities whose status is
+ * `completed`, most recent start first. Mirrors [listMyActivities]'s
+ * read shapes (host query + participants collection-group) minus the
+ * terminal-state exclusion — completed rows are exactly what this read
+ * wants. Backs the legacy `GET /api/users/:uid/past-activities` alias.
+ */
+export async function listPastActivitiesForUser(
+    viewerUid: string,
+    limit: number,
+    offset = 0,
+): Promise<ActivityWithId[]> {
+    const uid = viewerUid.trim();
+    if (!uid) throw new Error('uid is required');
+    if (!Number.isInteger(limit) || limit <= 0 || limit > 50) {
+        throw new Error('limit must be an integer between 1 and 50');
+    }
+    if (!Number.isInteger(offset) || offset < 0) {
+        throw new Error('offset must be a non-negative integer');
+    }
+
+    const [hostedSnap, partSnap] = await Promise.all([
+        firestore.collection('activities').where('hostId', '==', uid).get(),
+        firestore.collectionGroup('participants').where('uid', '==', uid).get(),
+    ]);
+    const activityIds = [
+        ...new Set(
+            partSnap.docs
+                .map((d) => d.ref.parent.parent?.id)
+                .filter((id): id is string => typeof id === 'string' && id.length > 0),
+        ),
+    ];
+    const joinedSnaps = await Promise.all(
+        activityIds.map((id) => firestore.doc(activityDocPath(id)).get()),
+    );
+    const seen = new Map<string, ActivityBaseWithId>();
+    for (const doc of hostedSnap.docs) {
+        try {
+            const a = mapActivityDoc(doc);
+            if (!seen.has(a.activityId)) seen.set(a.activityId, a);
+        } catch {
+            // Skip malformed rows (same policy as the list reads).
+        }
+    }
+    for (const snap of joinedSnaps) {
+        if (!snap.exists) continue;
+        try {
+            const a = mapActivityDoc(snap);
+            if (!seen.has(a.activityId)) seen.set(a.activityId, a);
+        } catch {
+            // Skip malformed rows.
+        }
+    }
+    const past = [...seen.values()]
+        .filter((a) => a.status === 'completed')
+        .sort((a, b) => {
+            const aMs = Date.parse(a.startTime);
+            const bMs = Date.parse(b.startTime);
+            if (Number.isNaN(aMs)) return Number.isNaN(bMs) ? 0 : 1;
+            if (Number.isNaN(bMs)) return -1;
+            return bMs - aMs;
+        })
+        .slice(offset, offset + limit);
+    return Promise.all(past.map(enrichActivityWithHostProfile));
+}
+
+/**
  * True for lifecycles that must not appear in Upcoming/Hosting
  * (`cancelled` called off, `completed` finished, `removed` admin-hidden).
  * `full` is NOT terminal — it flips back to `open` when a spot frees up.

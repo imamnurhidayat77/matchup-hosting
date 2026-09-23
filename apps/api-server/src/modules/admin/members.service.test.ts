@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../database/firebase.js', () => ({
     firestore: { collection: vi.fn(), collectionGroup: vi.fn(), doc: vi.fn() },
-    auth: { deleteUser: vi.fn() },
+    auth: { deleteUser: vi.fn(), revokeRefreshTokens: vi.fn() },
     rtdb: {},
 }));
 
@@ -135,6 +135,24 @@ describe('setMemberStatus', () => {
             { id: 'u-1', data: userRow() },
         ]);
         void collection;
+        const row = await setMemberStatus('u-1', 'suspended', 'admin-1', 'admin@x.com');
+        expect(row.status).toBe('suspended');
+    });
+
+    it('revokes Firebase sessions on suspend, not on reactivate', async () => {
+        mockUsersCollection([{ id: 'u-1', data: userRow({ status: 'active' }) }]);
+        await setMemberStatus('u-1', 'suspended', 'admin-1', 'admin@x.com');
+        expect(auth.revokeRefreshTokens).toHaveBeenCalledWith('u-1');
+
+        vi.mocked(auth.revokeRefreshTokens).mockClear();
+        mockUsersCollection([{ id: 'u-1', data: userRow({ status: 'suspended' }) }]);
+        await setMemberStatus('u-1', 'active', 'admin-1', 'admin@x.com');
+        expect(auth.revokeRefreshTokens).not.toHaveBeenCalled();
+    });
+
+    it('suspension still lands when revocation fails (best-effort)', async () => {
+        mockUsersCollection([{ id: 'u-1', data: userRow({ status: 'active' }) }]);
+        vi.mocked(auth.revokeRefreshTokens).mockRejectedValueOnce(new Error('auth down'));
         const row = await setMemberStatus('u-1', 'suspended', 'admin-1', 'admin@x.com');
         expect(row.status).toBe('suspended');
     });

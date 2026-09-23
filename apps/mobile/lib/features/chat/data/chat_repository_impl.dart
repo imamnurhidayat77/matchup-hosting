@@ -622,9 +622,16 @@ class RemoteChatRepository implements ChatRepository {
       // Fail fast on oversized picks (8 MB server cap): the denial
       // must surface as a "too large" alert, never as a silent drop.
       await StorageService.checkImageSize(imagePath, kMaxChatImageBytes);
-      final uploadedUrl = await StorageService.instance.uploadImage(
+      // M2 fix: owner-scoped path so only the uploader can overwrite or
+      // delete the file (see StorageService.uploadChatAttachment).
+      final myUid = await SecureTokenStore.instance.readUserId() ?? '';
+      if (myUid.isEmpty) {
+        throw Exception('Photo uploads are unavailable right now');
+      }
+      final uploadedUrl = await StorageService.instance.uploadChatAttachment(
         localPath: imagePath,
-        folder: 'chat-attachments/$activityId',
+        scope: activityId,
+        uid: myUid,
       );
       if (uploadedUrl == null) {
         // Storage returns null for every failure mode (unconfigured

@@ -27,7 +27,12 @@ async function verifyBearer(
     }
 
     try {
-        const decodedToken = await auth.verifyIdToken(idToken);
+        // M4 fix: checkRevoked=true so a suspension (which revokes the
+        // user's refresh tokens — see setMemberStatus) kills the session
+        // within one token lifetime instead of lingering until expiry.
+        // Costs one Auth backend lookup per request; acceptable at this
+        // scale and load-bearing for moderation enforcement.
+        const decodedToken = await auth.verifyIdToken(idToken, true);
         return {
             ok: true,
             identity: { uid: decodedToken.uid, token: decodedToken },

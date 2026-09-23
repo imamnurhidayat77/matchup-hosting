@@ -8,7 +8,11 @@ dotenv.config({
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(4000),
-  AUTH_SECRET: z.string().min(16, 'AUTH_SECRET must be at least 16 characters'),
+  // NOTE (L3): an AUTH_SECRET var used to be required here, but no code
+  // ever read it — auth is Firebase ID tokens verified server-side, not
+  // self-signed JWTs. It was removed (2026-09) so operators stop minting
+  // and rotating a dead secret. If custom-signed tokens are ever needed,
+  // re-add the var alongside the code that reads it.
   FIREBASE_PROJECT_ID: z.string().min(1, 'FIREBASE_PROJECT_ID is required'),
   FIREBASE_CLIENT_EMAIL: z.string().min(1, 'FIREBASE_CLIENT_EMAIL is required'),
   FIREBASE_PRIVATE_KEY: z.string().min(1, 'FIREBASE_PRIVATE_KEY is required'),

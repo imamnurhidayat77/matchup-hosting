@@ -46,8 +46,10 @@ class ImageTooLargeException implements Exception {
 ///   * surface a user-facing "image upload unavailable" error
 ///
 /// Files are uploaded to the caller-provided [storagePath]. Two flows:
-///   * chat attachments → `uploads/chat-attachments/…` (any signed-in
-///     uploader; membership enforced at the API layer).
+///   * chat attachments → [uploadChatAttachment]
+///     (`uploads/chat-attachments/{scope}/{uid}/…`, owner-only per
+///     Storage rules; M2 fix — previously any signed-in user could
+///     delete anyone's attachment).
 ///   * activity covers → `activities/{id}/cover/…` via [uploadToPath]
 ///     (host-only per Storage rules). NOTE: plain [uploadImage] to
 ///     `uploads/activity-covers/…` is NOT allow-listed by storage.rules
@@ -90,6 +92,36 @@ class StorageService {
     return _put(
       localPath: localPath,
       storagePath: 'uploads/$folder/$timestamp-$basename',
+    );
+  }
+
+  /// Uploads a chat photo attachment and returns the public download
+  /// URL (`null` on any failure — same contract as [uploadImage]).
+  ///
+  /// M2 fix: the uploader's uid is embedded in the path
+  /// (`uploads/chat-attachments/{scope}/{uid}/{timestamp}-{basename}`)
+  /// so Storage rules can restrict write/delete to the owner.
+  /// [scope] is the activity id (group chat) or `dm_{threadId}` (DM);
+  /// both are sanitised to path-safe characters. An empty [uid] throws
+  /// [StateError] — unattributed uploads must never silently fall back
+  /// to a world-writable path.
+  Future<String?> uploadChatAttachment({
+    required String localPath,
+    required String scope,
+    required String uid,
+  }) async {
+    final owner = uid.trim();
+    if (owner.isEmpty) {
+      throw StateError('uploadChatAttachment requires a non-empty uid');
+    }
+    final safeScope = scope.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+    final safeOwner = owner.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+    final basename = localPath.split('/').last;
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    return _put(
+      localPath: localPath,
+      storagePath:
+          'uploads/chat-attachments/$safeScope/$safeOwner/$timestamp-$basename',
     );
   }
 

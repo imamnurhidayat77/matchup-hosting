@@ -12,6 +12,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/utils/secure_screen.dart';
+import '../../../core/utils/social_sign_in.dart';
 import '../../../core/widgets/app_dialog.dart';
 import '../../notifications/services/push_notification_service.dart';
 import '../../../core/widgets/app_scaffold.dart';
@@ -178,7 +179,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                     ),
                     const SizedBox(height: AppSpacing.x4),
 
-                    // Social buttons — disabled until social sign-in ships
+                    // Social buttons — no OAuth yet; taps explain that.
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -186,7 +187,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                           child: _SocialButton(
                             label: 'Google',
                             icon: Icons.circle_outlined,
-                            onTap: null,
+                            onTap: () =>
+                                showSocialSignInUnavailable(context),
                             isOutline: true,
                             comingSoon: true,
                           ),
@@ -196,7 +198,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                           child: _SocialButton(
                             label: 'Apple',
                             icon: Icons.apple_rounded,
-                            onTap: null,
+                            onTap: () =>
+                                showSocialSignInUnavailable(context),
                             isOutline: false,
                             comingSoon: true,
                           ),
@@ -385,8 +388,10 @@ class _SocialButton extends StatelessWidget {
   final VoidCallback? onTap;
   final bool isOutline;
 
-  /// True while social sign-in is unavailable — renders the button visibly
-  /// disabled with a caption instead of looking tappable and going nowhere.
+  /// True while social sign-in is unavailable — renders the button with
+  /// a "Coming soon" caption but keeps it tappable so the tap can
+  /// honestly explain the state (see [showSocialSignInUnavailable])
+  /// instead of silently doing nothing.
   final bool comingSoon;
 
   @override
@@ -439,23 +444,22 @@ class _SocialButton extends StatelessWidget {
     }
     return Semantics(
       button: true,
-      label: '$label (coming soon)',
-      enabled: false,
+      label: comingSoon ? '$label (coming soon)' : label,
+      enabled: true,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Opacity(
-            opacity: 0.5,
-            child: IgnorePointer(child: button),
-          ),
-          const SizedBox(height: AppSpacing.x1),
-          Text(
-            'Coming soon',
-            style: AppTypography.caption(context).copyWith(
-              color: context.colors.textSecondary,
-              fontSize: 12,
+          button,
+          if (comingSoon) ...[
+            const SizedBox(height: AppSpacing.x1),
+            Text(
+              'Coming soon',
+              style: AppTypography.caption(context).copyWith(
+                color: context.colors.textSecondary,
+                fontSize: 12,
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );

@@ -126,17 +126,21 @@ describe('notifications routes', () => {
       );
     });
 
-    it('when notificationId is blank => expected 400 w/ EMPTY_INPUT', async () => {
+    it('when notificationId is blank => expected 400 w/ INVALID_INPUT', async () => {
+      // Blank path params are now rejected by `validateParams` with the
+      // unified INVALID_INPUT envelope (+ field details) instead of the
+      // legacy EMPTY_INPUT shape.
       const app = createApp();
 
       const response = await request(app).patch('/api/notifications/me/%20%20/read');
 
       expect(response.status).toBe(400);
-      expect(response.body).toEqual({
+      expect(response.body).toMatchObject({
         ok: false,
         error: {
-          code: 'EMPTY_INPUT',
-          message: 'notificationId is required',
+          code: 'INVALID_INPUT',
+          message: 'Invalid path parameters',
+          details: { notificationId: expect.any(Array) },
         },
       });
     });

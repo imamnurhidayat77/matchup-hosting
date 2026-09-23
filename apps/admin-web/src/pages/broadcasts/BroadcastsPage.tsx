@@ -90,13 +90,16 @@ const AUDIENCE_OPTIONS: BroadcastAudience[] = ['All Users', 'Hosts Only', 'Playe
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function BroadcastsPage() {
-  const { loading, error, broadcasts, reload, handleCreate, handleDelete, handleSend: sendDraft } = useBroadcasts();
+  const { loading, error, broadcasts, reload, handleCreate, handleDelete, handleSend: sendDraft, handleUpdate } = useBroadcasts();
   const { push: toast } = useToast();
   const [showCompose, setShowCompose] = useState(false);
-  const [form, setForm] = useState({ title: '', message: '', audience: 'All Users' as BroadcastAudience });
+  const [form, setForm] = useState({ title: '', message: '', audience: 'All Users' as BroadcastAudience, scheduledAt: '' });
   const [activeTab, setActiveTab] = useState<BroadcastStatus | 'All'>('All');
   const [sending, setSending] = useState(false);
+  const [scheduling, setScheduling] = useState(false);
   const [confirm, setConfirm] = useState<{ type: 'send' | 'delete'; id: string; title: string } | null>(null);
+  const [editing, setEditing] = useState<{ id: string; title: string; message: string; audience: BroadcastAudience; scheduledAt: string } | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
 
   if (loading) return <BroadcastsPageSkeleton />;
   if (error) return <PageError message={error} onRetry={reload} />;
@@ -112,10 +115,39 @@ export function BroadcastsPage() {
     try {
       await handleCreate({ title: form.title, message: form.message, audience: form.audience });
       toast(`Broadcast sent to ${form.audience}.`, 'success');
-      setForm({ title: '', message: '', audience: 'All Users' });
+      setForm({ title: '', message: '', audience: 'All Users', scheduledAt: '' });
       setShowCompose(false);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Send failed.', 'error');
     } finally {
       setSending(false);
+    }
+  }
+
+  async function handleSchedule() {
+    if (!form.title.trim() || !form.message.trim()) {
+      toast('Title and message are required.', 'error');
+      return;
+    }
+    if (!form.scheduledAt) {
+      toast('Pick a scheduled date and time.', 'error');
+      return;
+    }
+    const when = new Date(form.scheduledAt);
+    if (Number.isNaN(when.getTime()) || when.getTime() <= Date.now()) {
+      toast('Scheduled time must be in the future.', 'error');
+      return;
+    }
+    setScheduling(true);
+    try {
+      await handleCreate({ title: form.title, message: form.message, audience: form.audience, scheduledAt: when.toISOString() });
+      toast(`Broadcast scheduled for ${when.toLocaleString()}.`, 'success');
+      setForm({ title: '', message: '', audience: 'All Users', scheduledAt: '' });
+      setShowCompose(false);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Schedule failed.', 'error');
+    } finally {
+      setScheduling(false);
     }
   }
 
@@ -129,7 +161,7 @@ export function BroadcastsPage() {
     toast('Broadcast deleted.', 'info');
   }
 
-  const TABS: Array<BroadcastStatus | 'All'> = ['All', 'Sent', 'Draft'];
+  const TABS: Array<BroadcastStatus | 'All'> = ['All', 'Sent', 'Scheduled', 'Draft'];
 
   return (
     <div className="page-container space-y-5">
@@ -149,10 +181,11 @@ export function BroadcastsPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {[
           { label: 'Total Sent', value: broadcasts.filter(b => b.status === 'Sent').length },
           { label: 'Scheduled',  value: broadcasts.filter(b => b.status === 'Scheduled').length },
+          { label: 'Draft',      value: broadcasts.filter(b => b.status === 'Draft').length },
         ].map((s) => (
           <div key={s.label} className="card py-4 text-center">
             <p className="text-2xl font-bold text-ink-900 dark:text-ink-100">{s.value}</p>
@@ -213,13 +246,29 @@ export function BroadcastsPage() {
                   ))}
                 </div>
               </div>
-              <div className="flex gap-2 pt-1">
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-ink-600 dark:text-ink-400">Schedule for later (optional)</label>
+                <input
+                  type="datetime-local"
+                  className="input"
+                  value={form.scheduledAt}
+                  onChange={(e) => setForm((f) => ({ ...f, scheduledAt: e.target.value }))}
+                />
+              </div>
+              <div className="flex flex-wrap gap-2 pt-1">
                 <button
                   onClick={handleSend}
-                  disabled={sending}
+                  disabled={sending || scheduling}
                   className="btn-primary rounded-xl px-5 py-2 text-sm disabled:opacity-50"
                 >
                   {sending ? 'Sending…' : 'Send Now'}
+                </button>
+                <button
+                  onClick={handleSchedule}
+                  disabled={sending || scheduling}
+                  className="btn-outline rounded-xl px-5 py-2 text-sm disabled:opacity-50"
+                >
+                  {scheduling ? 'Scheduling…' : 'Schedule'}
                 </button>
                 <button onClick={() => setShowCompose(false)} className="btn-outline rounded-xl px-5 py-2 text-sm">
                   Cancel
@@ -284,6 +333,14 @@ export function BroadcastsPage() {
                     </div>
                   </div>
                   <div className="flex shrink-0 gap-1">
+                    {(b.status === 'Draft' || b.status === 'Scheduled') && (
+                      <button
+                        onClick={() => setEditing({ id: b.id, title: b.title, message: b.message, audience: b.audience, scheduledAt: b.scheduledAt ?? '' })}
+                        className="btn-outline btn-sm"
+                      >
+                        Edit
+                      </button>
+                    )}
                     {b.status === 'Draft' && (
                       <button onClick={() => setConfirm({ type: 'send', id: b.id, title: b.title })} className="btn-primary btn-sm">Send</button>
                     )}
@@ -312,15 +369,107 @@ export function BroadcastsPage() {
         destructive={confirm?.type === 'delete'}
         onConfirm={async () => {
           if (!confirm) return;
-          if (confirm.type === 'send') {
-            await handleSendDraft(confirm.id);
-          } else {
-            await handleDeleteBroadcast(confirm.id);
+          try {
+            if (confirm.type === 'send') {
+              await handleSendDraft(confirm.id);
+            } else {
+              await handleDeleteBroadcast(confirm.id);
+            }
+          } catch (err) {
+            toast(err instanceof Error ? err.message : 'Action failed.', 'error');
           }
           setConfirm(null);
         }}
         onCancel={() => setConfirm(null)}
       />
+
+      {editing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/60 px-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-ink-800 p-6 shadow-panel">
+            <h2 className="text-base font-semibold text-ink-900 dark:text-ink-100">Edit Broadcast</h2>
+            <div className="mt-4 space-y-4">
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-ink-600 dark:text-ink-400">Title</label>
+                <input
+                  className="input"
+                  value={editing.title}
+                  onChange={(e) => setEditing((v) => v && { ...v, title: e.target.value })}
+                  maxLength={80}
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-ink-600 dark:text-ink-400">Message</label>
+                <textarea
+                  className="input min-h-[100px] resize-none"
+                  value={editing.message}
+                  onChange={(e) => setEditing((v) => v && { ...v, message: e.target.value })}
+                  maxLength={200}
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-ink-600 dark:text-ink-400">Audience</label>
+                <div className="flex flex-wrap gap-2">
+                  {AUDIENCE_OPTIONS.map((aud) => (
+                    <button
+                      key={aud}
+                      type="button"
+                      onClick={() => setEditing((v) => v && { ...v, audience: aud })}
+                      className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors border ${
+                        editing.audience === aud
+                          ? 'bg-brand-500 text-white border-brand-500'
+                          : 'bg-white dark:bg-ink-800 text-ink-600 dark:text-ink-300 border-ink-200 dark:border-ink-600'
+                      }`}
+                    >
+                      {aud}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-ink-600 dark:text-ink-400">Scheduled at (optional)</label>
+                <input
+                  type="datetime-local"
+                  className="input"
+                  value={editing.scheduledAt}
+                  onChange={(e) => setEditing((v) => v && { ...v, scheduledAt: e.target.value })}
+                />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  disabled={editSaving}
+                  onClick={async () => {
+                    if (!editing.title.trim() || !editing.message.trim()) {
+                      toast('Title and message are required.', 'error');
+                      return;
+                    }
+                    setEditSaving(true);
+                    try {
+                      await handleUpdate(editing.id, {
+                        title: editing.title,
+                        message: editing.message,
+                        audience: editing.audience,
+                        scheduledAt: editing.scheduledAt ? new Date(editing.scheduledAt).toISOString() : null,
+                      });
+                      toast('Broadcast updated.', 'success');
+                      setEditing(null);
+                    } catch (err) {
+                      toast(err instanceof Error ? err.message : 'Update failed.', 'error');
+                    } finally {
+                      setEditSaving(false);
+                    }
+                  }}
+                  className="btn-primary rounded-xl px-5 py-2 text-sm disabled:opacity-50"
+                >
+                  {editSaving ? 'Saving…' : 'Save'}
+                </button>
+                <button onClick={() => setEditing(null)} className="btn-outline rounded-xl px-5 py-2 text-sm">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

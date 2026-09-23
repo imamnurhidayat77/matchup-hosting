@@ -62,15 +62,15 @@ superseded runs. Dependabot files weekly update PRs for npm + pub.
 
 - Primary matrix: Android emulator (API 34+, `EGL_emulation` logs in this
   repo's `.logs/` are from these runs) + physical devices for GPS, camera,
-  biometrics, and push — capabilities that emulators only approximate.
+  and push — capabilities that emulators only approximate.
 - Verified on-device behaviours: mock-location discover flow, camera +
-  gallery attachments, biometric login prompt, FCM foreground/background
+  gallery attachments, FCM foreground/background
   taps → deep links, minimise → instant warm resume, kill → route restore
   via `RouteStore`.
 - Permission matrices are exercised manually: denied / deniedForever /
   services-disabled for location, camera, and calendar — every service
   degrades to `null` + user-facing message, never a crash
-  (see `location_service.dart`, `biometric_service.dart`).
+  (see `location_service.dart`, `calendar_service.dart`).
 
 ## Performance smoke — `npm run perf:smoke`
 

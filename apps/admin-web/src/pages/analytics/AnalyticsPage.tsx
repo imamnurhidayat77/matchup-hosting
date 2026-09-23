@@ -1,7 +1,8 @@
 import { useAnalytics } from '../../hooks/useAnalytics';
 import { AnalyticsPageSkeleton, PageError } from '../../components/ui/PageStates';
 import { useTheme } from '../../context/ThemeContext';
-import type { AnalyticsRange } from '../../services/analyticsService';
+import { downloadCsv } from '../../utils/csvExport';
+import type { AnalyticsData, AnalyticsRange } from '../../services/analyticsService';
 
 // ─── SVG line chart ───────────────────────────────────────────────────────────
 
@@ -46,6 +47,20 @@ function LineChart({ data, keys, colors }: { data: Array<Record<string, number |
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+// eslint-disable-next-line react-refresh/only-export-components
+export function exportAnalyticsCsv(data: AnalyticsData, range: AnalyticsRange): void {
+  downloadCsv(
+    data.weekly.map((w) => ({
+      Day: w.day,
+      Signups: w.signups,
+      Activities: w.activities,
+      Reports: w.reports,
+      Range: range,
+    })),
+    `matchup-analytics-${range}.csv`,
+  );
+}
+
 export function AnalyticsPage() {
   const { loading, error, data, range, setRange, reload } = useAnalytics();
 
@@ -76,7 +91,7 @@ export function AnalyticsPage() {
           >
             {RANGE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
-          <button className="btn-outline rounded-lg px-3 py-1.5 text-sm">Export</button>
+          <button onClick={() => data && exportAnalyticsCsv(data, range)} className="btn-outline rounded-lg px-3 py-1.5 text-sm">Export</button>
         </div>
       </div>
 
@@ -141,6 +156,9 @@ export function AnalyticsPage() {
         <div className="panel p-5">
           <h2 className="mb-1 text-base font-semibold text-ink-900">User Retention</h2>
           <p className="mb-4 text-xs text-ink-600">% of new users still active</p>
+          {data.retention.length === 0 ? (
+            <p className="py-8 text-center text-sm text-ink-400">No data yet — events not collected</p>
+          ) : (
           <div className="flex items-end justify-between gap-1.5 h-28">
             {data.retention.map((r) => (
               <div key={r.label} className="flex flex-1 flex-col items-center gap-1">
@@ -150,11 +168,15 @@ export function AnalyticsPage() {
               </div>
             ))}
           </div>
+          )}
         </div>
 
         {/* Platform health */}
         <div className="panel p-5">
           <h2 className="mb-4 text-base font-semibold text-ink-900">Platform Health</h2>
+          {data.health.length === 0 ? (
+            <p className="py-8 text-center text-sm text-ink-400">No data yet — events not collected</p>
+          ) : (
           <div className="space-y-3">
             {data.health.map((h) => (
               <div key={h.label}>
@@ -168,6 +190,7 @@ export function AnalyticsPage() {
               </div>
             ))}
           </div>
+          )}
         </div>
       </div>
     </div>

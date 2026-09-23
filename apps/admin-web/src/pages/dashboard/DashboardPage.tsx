@@ -193,8 +193,29 @@ function ModCard({
   onAction,
 }: {
   item: ModerationItem;
-  onAction: (action: 'resolve' | 'dismiss') => void;
+  onAction: (action: 'resolve' | 'dismiss', note?: string) => void;
 }) {
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<'resolve' | 'dismiss' | null>(null);
+  const [note, setNote] = useState('');
+
+  function request(action: 'resolve' | 'dismiss') {
+    // Collect a moderator note/reason before resolve/dismiss and forward it
+    // to moderationAction (POST /api/reports/:id/{resolve,dismiss} { note }).
+    // Keep it lightweight: small inline modal; empty note is allowed.
+    setPendingAction(action);
+    setNote('');
+    setNoteOpen(true);
+  }
+
+  function confirm() {
+    if (!pendingAction) return;
+    onAction(pendingAction, note.trim() ? note.trim() : undefined);
+    setNoteOpen(false);
+    setPendingAction(null);
+    setNote('');
+  }
+
   return (
     <div className="rounded-xl border border-ink-200 bg-white px-4 py-3.5 space-y-1.5">
       <div className="flex items-start justify-between gap-2">
@@ -208,11 +229,36 @@ function ModCard({
       <p className="text-[13px] text-ink-600">"{item.reason}"</p>
       <p className="text-xs text-ink-400">{item.activityTitle} ({item.sport})</p>
       <div className="flex flex-wrap gap-2 pt-1">
-        <button onClick={() => onAction('resolve')} className="btn-primary btn-sm">Resolve</button>
-        <button onClick={() => onAction('dismiss')} className="inline-flex items-center rounded-lg border border-ink-200 bg-white px-3 py-1.5 text-xs font-semibold text-ink-600 hover:bg-ink-50 transition-colors">
+        <button onClick={() => request('resolve')} className="btn-primary btn-sm">Resolve</button>
+        <button onClick={() => request('dismiss')} className="inline-flex items-center rounded-lg border border-ink-200 bg-white px-3 py-1.5 text-xs font-semibold text-ink-600 hover:bg-ink-50 transition-colors">
           Dismiss
         </button>
       </div>
+      {noteOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/60 px-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-panel">
+            <h3 className="text-sm font-semibold text-ink-900">
+              {pendingAction === 'resolve' ? 'Resolve report' : 'Dismiss report'} — add a note
+            </h3>
+            <p className="mt-1 text-xs text-ink-500">Optional reason recorded with the moderation action.</p>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Reason / note (optional)…"
+              className="input mt-3 min-h-[80px] resize-none text-sm"
+              maxLength={500}
+            />
+            <div className="mt-3 flex gap-2">
+              <button onClick={confirm} className="btn-primary flex-1 rounded-xl py-2 text-sm">
+                {pendingAction === 'resolve' ? 'Resolve' : 'Dismiss'}
+              </button>
+              <button onClick={() => { setNoteOpen(false); setPendingAction(null); }} className="btn-outline rounded-xl px-4 py-2 text-sm">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -462,7 +508,7 @@ export function DashboardPage() {
                 <ModCard
                   key={item.id}
                   item={item}
-                  onAction={(action) => handleModAction(item.id, action)}
+                  onAction={(action, note) => handleModAction(item.id, action, note)}
                 />
               ))
             )}

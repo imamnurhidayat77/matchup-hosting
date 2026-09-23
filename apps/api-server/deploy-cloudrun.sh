@@ -7,13 +7,13 @@
 #   gcloud config set project matchup-cs734
 #   gcloud services enable run.googleapis.com artifactregistry.googleapis.com secretmanager.googleapis.com
 #   # Create one secret per sensitive value (paste when prompted):
-#   for s in AUTH_SECRET FIREBASE_PRIVATE_KEY FIREBASE_CLIENT_EMAIL FIREBASE_WEB_API_KEY; do
+#   for s in FIREBASE_PRIVATE_KEY FIREBASE_CLIENT_EMAIL FIREBASE_WEB_API_KEY; do
 #     gcloud secrets create "$s" --replication-policy=automatic --project=matchup-cs734
 #   done
 #   # Grant the Cloud Run runtime identity access to the secrets (first deploy
 #   # creates the service account; re-run after the first deploy if needed):
 #   PROJECT_NUMBER=$(gcloud projects describe matchup-cs734 --format='value(projectNumber)')
-#   for s in AUTH_SECRET FIREBASE_PRIVATE_KEY FIREBASE_CLIENT_EMAIL FIREBASE_WEB_API_KEY; do
+#   for s in FIREBASE_PRIVATE_KEY FIREBASE_CLIENT_EMAIL FIREBASE_WEB_API_KEY; do
 #     gcloud secrets add-iam-policy-binding "$s" --project=matchup-cs734 \
 #       --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
 #       --role="roles/secretmanager.secretAccessor"
@@ -57,4 +57,4 @@ gcloud run deploy "$SERVICE" \
   --max-instances 3 \
   --memory 512Mi \
   --set-env-vars "^;^${ENV_PAIRS}" \
-  --set-secrets "AUTH_SECRET=AUTH_SECRET:latest,FIREBASE_PRIVATE_KEY=FIREBASE_PRIVATE_KEY:latest,FIREBASE_CLIENT_EMAIL=FIREBASE_CLIENT_EMAIL:latest,FIREBASE_WEB_API_KEY=FIREBASE_WEB_API_KEY:latest"
+  --set-secrets "FIREBASE_PRIVATE_KEY=FIREBASE_PRIVATE_KEY:latest,FIREBASE_CLIENT_EMAIL=FIREBASE_CLIENT_EMAIL:latest,FIREBASE_WEB_API_KEY=FIREBASE_WEB_API_KEY:latest"

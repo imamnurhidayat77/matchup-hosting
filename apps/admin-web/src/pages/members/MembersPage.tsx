@@ -32,6 +32,8 @@ export function MembersPage() {
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [confirm, setConfirm] = useState<{ type: 'suspend' | 'remove'; id: string; name: string } | null>(null);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   // Keyboard shortcut: '/' focuses search
@@ -72,10 +74,29 @@ export function MembersPage() {
   function toggleAll() {
     setSelectedIds(selectedIds.size === paginated.length ? new Set() : new Set(paginated.map((m) => m.id)));
   }
-  function handleBulkSuspend() {
-    selectedIds.forEach((id) => handleStatusChange(id, 'Suspended'));
-    toast(`${selectedIds.size} member(s) suspended.`, 'warning');
+  async function handleBulkStatus(next: MemberStatus) {
+    const ids = [...selectedIds];
+    if (ids.length === 0 || bulkBusy) return;
+    setBulkBusy(true);
+    setBulkError(null);
+    const results = await Promise.allSettled(ids.map((id) => handleStatusChange(id, next)));
+    const failed = results.filter((r) => r.status === 'rejected').length;
+    const ok = ids.length - failed;
+    if (failed === 0) {
+      toast(`${ok} member(s) ${next === 'Active' ? 'activated' : 'suspended'}.`, next === 'Active' ? 'success' : 'warning');
+    } else {
+      setBulkError(`${failed} of ${ids.length} failed to ${next === 'Active' ? 'activate' : 'suspend'} — ${ok} succeeded.`);
+    }
     setSelectedIds(new Set());
+    setBulkBusy(false);
+  }
+
+  function handleBulkSuspend() {
+    void handleBulkStatus('Suspended');
+  }
+
+  function handleBulkActivate() {
+    void handleBulkStatus('Active');
   }
   function handleExport() {
     downloadCsv(
@@ -88,14 +109,18 @@ export function MembersPage() {
   // Confirm dialog actions
   function requestSuspend(id: string, name: string) { setConfirm({ type: 'suspend', id, name }); }
   function requestRemove(id: string, name: string)  { setConfirm({ type: 'remove',  id, name }); }
-  function handleConfirm() {
+  async function handleConfirm() {
     if (!confirm) return;
-    if (confirm.type === 'suspend') {
-      handleStatusChange(confirm.id, 'Suspended');
-      toast(`${confirm.name} has been suspended.`, 'warning');
-    } else {
-      handleDelete(confirm.id);
-      toast(`${confirm.name} has been removed.`, 'info');
+    try {
+      if (confirm.type === 'suspend') {
+        await handleStatusChange(confirm.id, 'Suspended');
+        toast(`${confirm.name} has been suspended.`, 'warning');
+      } else {
+        await handleDelete(confirm.id);
+        toast(`${confirm.name} has been removed.`, 'info');
+      }
+    } catch (err) {
+      setBulkError(err instanceof Error ? err.message : 'Action failed.');
     }
     setConfirm(null);
     setMenuOpenId(null);
@@ -157,10 +182,18 @@ export function MembersPage() {
         </div>
 
         {selectedIds.size > 0 && (
-          <div className="flex items-center gap-3 border-b border-ink-200 dark:border-ink-700 bg-brand-50 dark:bg-brand-900/20 px-6 py-2.5">
+          <div className="flex flex-wrap items-center gap-3 border-b border-ink-200 dark:border-ink-700 bg-brand-50 dark:bg-brand-900/20 px-6 py-2.5">
             <span className="text-xs font-semibold text-brand-700 dark:text-brand-300">{selectedIds.size} selected</span>
-            <button onClick={handleBulkSuspend} className="text-xs font-semibold text-danger-500 hover:underline">Suspend selected</button>
+            <button onClick={handleBulkSuspend} disabled={bulkBusy} className="text-xs font-semibold text-danger-500 hover:underline disabled:opacity-50">Suspend selected</button>
+            <button onClick={handleBulkActivate} disabled={bulkBusy} className="text-xs font-semibold text-brand-600 hover:underline disabled:opacity-50">Activate selected</button>
             <button onClick={() => setSelectedIds(new Set())} className="text-xs font-semibold text-ink-500 dark:text-ink-400 hover:underline">Clear</button>
+          </div>
+        )}
+        {bulkError && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-danger-200 bg-danger-50 px-6 py-2.5 text-xs text-danger-700">
+            <span className="flex-1">{bulkError}</span>
+            <button onClick={() => setBulkError(null)} className="font-semibold underline">Dismiss</button>
+            <button onClick={reload} className="font-semibold underline">Retry</button>
           </div>
         )}
 
@@ -217,7 +250,7 @@ export function MembersPage() {
                       </button>
                       {menuOpenId === m.id && (
                         <div className="absolute right-0 z-10 mt-1 w-40 rounded-xl border border-ink-200 bg-white py-1 shadow-panel">
-                          {m.status !== 'Active'    && <button className="w-full px-4 py-2 text-left text-sm text-ink-700 dark:text-ink-200 hover:bg-ink-50 dark:hover:bg-ink-700" onClick={() => { handleStatusChange(m.id, 'Active'); toast(`${m.name} activated.`, 'success'); setMenuOpenId(null); }}>Activate</button>}
+                          {m.status !== 'Active'    && <button className="w-full px-4 py-2 text-left text-sm text-ink-700 dark:text-ink-200 hover:bg-ink-50 dark:hover:bg-ink-700" onClick={() => { handleStatusChange(m.id, 'Active').then(() => toast(`${m.name} activated.`, 'success')).catch((err: unknown) => setBulkError(err instanceof Error ? err.message : 'Activate failed.')); setMenuOpenId(null); }}>Activate</button>}
                           {m.status !== 'Suspended' && <button className="w-full px-4 py-2 text-left text-sm text-warning-600 hover:bg-ink-50 dark:hover:bg-ink-700" onClick={(e) => { e.stopPropagation(); requestSuspend(m.id, m.name); }}>Suspend</button>}
                           <button className="w-full px-4 py-2 text-left text-sm text-danger-500 hover:bg-ink-50 dark:hover:bg-ink-700" onClick={(e) => { e.stopPropagation(); requestRemove(m.id, m.name); }}>Remove</button>
                         </div>

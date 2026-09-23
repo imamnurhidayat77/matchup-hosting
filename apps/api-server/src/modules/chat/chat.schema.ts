@@ -19,6 +19,35 @@ export const sendMessageSchema = z.object({
 export type SendMessageInput = z.infer<typeof sendMessageSchema>;
 
 /**
+ * Chat media posts. Uploads stay client-side (Firebase Storage); the
+ * server only validates the resulting reference — `https` image URL or
+ * a range-checked lat/lng pair — and persists it as the message text.
+ */
+export const sendImageMessageSchema = z.object({
+    imageUrl: z
+        .string()
+        .trim()
+        .min(1, 'imageUrl is required')
+        .max(2000, 'imageUrl must be at most 2000 characters')
+        .regex(/^https:\/\/\S+$/i, 'imageUrl must be an https URL'),
+});
+
+export type SendImageMessageInput = z.infer<typeof sendImageMessageSchema>;
+
+export const sendLocationMessageSchema = z.object({
+    latitude: z
+        .number({ error: 'latitude must be a number between -90 and 90' })
+        .min(-90, 'latitude must be a number between -90 and 90')
+        .max(90, 'latitude must be a number between -90 and 90'),
+    longitude: z
+        .number({ error: 'longitude must be a number between -180 and 180' })
+        .min(-180, 'longitude must be a number between -180 and 180')
+        .max(180, 'longitude must be a number between -180 and 180'),
+});
+
+export type SendLocationMessageInput = z.infer<typeof sendLocationMessageSchema>;
+
+/**
  * Closed emoji set for message reactions. A fixed allowlist (instead of
  * free-form text) keeps reaction keys small, renders consistently
  * across platforms, and doubles as the RTDB key allowlist — emoji

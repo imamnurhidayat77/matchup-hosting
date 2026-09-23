@@ -47,20 +47,25 @@ class RemoteCalendarRepository implements CalendarRepository {
 
   @override
   Future<List<CalendarEvent>> upcoming({int days = 30}) async {
+    // Prefer the dedicated endpoint when the backend offers it
+    // (`GET /api/calendar/upcoming`). It does not exist on current
+    // backends (404), so any transport failure falls through to the
+    // derivation below — never to an empty screen or a throw.
+    try {
+      final res = await _client.dio.get(
+        '/calendar/upcoming',
+        queryParameters: {'days': days},
+      );
+      return apiDataList(res.data).map(_parse).toList();
+    } catch (e, st) {
+      debugPrint('[RemoteCalendarRepository.upcoming:endpoint] $e\n$st');
+    }
+
     final activities = _activities;
-    // No injected source → legacy backend contract (no such endpoint
-    // exists yet, so this degrades to empty via the catch below).
+    // No injected source → legacy backend mode with no derivation
+    // possible: degrade to the offline store (empty, never throws).
     if (activities == null) {
-      try {
-        final res = await _client.dio.get(
-          '/calendar/upcoming',
-          queryParameters: {'days': days},
-        );
-        return apiDataList(res.data).map(_parse).toList();
-      } catch (e, st) {
-        debugPrint('[RemoteCalendarRepository] $e\n$st');
-        return _fallback.upcoming(days: days);
-      }
+      return _fallback.upcoming(days: days);
     }
 
     // Derive from committed games (joined + hosted): always consistent

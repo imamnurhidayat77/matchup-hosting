@@ -1,8 +1,21 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useNotifTemplates } from '../../hooks/useNotifTemplates';
 import { useToast } from '../../context/ToastContext';
 import { PageSkeleton, PageError, EmptyState, EmptyIcons } from '../../components/ui/PageStates';
-import type { NotifTemplate, TemplateCategory } from '../../types/templates';
+import type { NotifTemplate, TemplateCategory, TemplateTrigger } from '../../types/templates';
+
+// ─── Known-unfired triggers ───────────────────────────────────────────────────
+// Contract: backend notification dispatcher currently only fires a subset of
+// triggers (joined/cancelled/full/account/moderation). The activity.reminder,
+// activity.starting_soon and engagement.* triggers below have no sender yet,
+// so surface them as "Inactive trigger" instead of silently looking enabled.
+// eslint-disable-next-line react-refresh/only-export-components
+export const UNFIRED_TRIGGERS: TemplateTrigger[] = [
+  'activity.reminder',
+  'activity.starting_soon',
+  'engagement.inactive',
+  'engagement.new_activity_nearby',
+];
 
 // ─── Category badge ───────────────────────────────────────────────────────────
 
@@ -115,13 +128,35 @@ function EditDrawer({
 }) {
   const [title, setTitle] = useState(template.title);
   const [body, setBody] = useState(template.body);
-  const titleRef = { current: null as HTMLInputElement | null };
-  const bodyRef  = { current: null as HTMLTextAreaElement | null };
+  const titleRef = useRef<HTMLInputElement | null>(null);
+  const bodyRef = useRef<HTMLTextAreaElement | null>(null);
+
+  function insertAtCursor(
+    ref: React.RefObject<HTMLInputElement | HTMLTextAreaElement | null>,
+    value: string,
+    setValue: (v: string) => void,
+    token: string,
+  ) {
+    const el = ref.current;
+    if (!el || typeof el.selectionStart !== 'number' || typeof el.selectionEnd !== 'number') {
+      setValue(value + token);
+      return;
+    }
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const next = value.slice(0, start) + token + value.slice(end);
+    setValue(next);
+    // Restore caret after the inserted token.
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(start + token.length, start + token.length);
+    });
+  }
 
   function insertVar(variable: string, target: 'title' | 'body') {
     const token = `{{${variable}}}`;
-    if (target === 'title') setTitle((prev) => prev + token);
-    else setBody((prev) => prev + token);
+    if (target === 'title') insertAtCursor(titleRef, title, setTitle, token);
+    else insertAtCursor(bodyRef, body, setBody, token);
   }
 
   function handleSave() {
@@ -227,6 +262,11 @@ function TemplateRow({
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-sm font-semibold text-ink-900">{template.name}</p>
           <CategoryBadge category={template.category} />
+          {UNFIRED_TRIGGERS.includes(template.trigger) && (
+            <span className="rounded-full bg-warning-100 px-2 py-0.5 text-[10px] font-semibold text-warning-700" title={`Trigger "${template.trigger}" has no sender yet`}>
+              Inactive trigger
+            </span>
+          )}
           {!template.enabled && (
             <span className="rounded-full bg-ink-100 dark:bg-ink-700 px-2 py-0.5 text-[10px] font-semibold text-ink-400">
               Disabled

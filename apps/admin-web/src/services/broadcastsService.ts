@@ -108,3 +108,22 @@ export async function deleteBroadcast(id: string): Promise<void> {
   );
   if (!res.ok) throw new Error(res.error.message);
 }
+
+export interface UpdateBroadcastPayload {
+  title?: string;
+  message?: string;
+  audience?: BroadcastAudience;
+  scheduledAt?: string | null;
+}
+
+export async function updateBroadcast(
+  id: string,
+  patch: UpdateBroadcastPayload,
+): Promise<Broadcast> {
+  const res = await apiFetch<BroadcastView>(
+    `/api/admin/broadcasts/${encodeURIComponent(id)}`,
+    { method: 'PATCH', body: JSON.stringify(patch) },
+  );
+  if (!res.ok) throw new Error(res.error.message);
+  return toBroadcast(res.data);
+}

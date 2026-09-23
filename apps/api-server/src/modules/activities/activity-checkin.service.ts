@@ -17,6 +17,13 @@ export type CheckInStatus = {
  * Persists a check-in row at `activities/{activityId}/attendance/{uid}`.
  * Idempotent — re-checking in overwrites the row with a fresh timestamp.
  * Returns the stored `checkedInAt` millis.
+ *
+ * L1 note (documented limitation, not a bug): coordinates are
+ * self-reported and range-validated only — there is NO proximity check
+ * against the venue, so a remote check-in is recorded as-is
+ * (honor-system; hosts see the roster in person). Enforcing a
+ * venue-radius check is a future hardening step if check-ins ever gate
+ * rewards or ratings eligibility.
  */
 export async function checkIn(input: CheckInInput): Promise<number> {
   const normalizedActivityId = input.activityId.trim();

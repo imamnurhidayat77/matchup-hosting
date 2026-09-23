@@ -1244,6 +1244,128 @@ export async function listPublicActivityTeasersHandler(req: Request, res: Respon
     }
 }
 
+/**
+ * Great-circle distance in kilometres between two lat/lng points.
+ * Pure — unit-testable without Firestore.
+ */
+export function haversineKm(
+    latA: number,
+    lngA: number,
+    latB: number,
+    lngB: number,
+): number {
+    const toRad = (d: number) => (d * Math.PI) / 180;
+    const earthKm = 6371;
+    const dLat = toRad(latB - latA);
+    const dLng = toRad(lngB - lngA);
+    const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(toRad(latA)) * Math.cos(toRad(latB)) * Math.sin(dLng / 2) ** 2;
+    return 2 * earthKm * Math.asin(Math.sqrt(a));
+}
+
+const SEARCH_LIMIT = 50;
+
+/**
+ * `GET /api/activities/search?sport=&skill=&max_km=&lat=&lng=` —
+ * filtered discovery over the existing `open` feed. Reuses
+ * [listActivities] (sport/skill pushed into the query) and applies the
+ * geo radius in memory, so no new composite index is needed. All params
+ * optional; `lat`/`lng`/`max_km` must be supplied together.
+ */
+export async function searchActivitiesHandler(req: Request, res: Response) {
+    try {
+        const viewerUid = req.auth?.uid;
+        if (!viewerUid) {
+            return res.status(401).json({
+                ok: false,
+                error: {
+                    code: 'UNAUTHORIZED',
+                    message: 'Authenticated user is required',
+                },
+            });
+        }
+
+        // Shapes pre-checked by `validateQuery(searchActivitiesQuerySchema)`
+        // (enums, numeric strings); re-validated here so the handler stays
+        // correct when called without the middleware.
+        const { sport, skill, max_km, lat, lng } = req.query as {
+            sport?: unknown;
+            skill?: unknown;
+            max_km?: unknown;
+            lat?: unknown;
+            lng?: unknown;
+        };
+
+        if (skill !== undefined && skill !== 'beginner' && skill !== 'intermediate' && skill !== 'advanced' && skill !== 'any') {
+            return res.status(400).json({
+                ok: false,
+                error: {
+                    code: 'INVALID_INPUT',
+                    message: 'skill must be beginner, intermediate, advanced, or any',
+                },
+            });
+        }
+
+        let center: { latitude: number; longitude: number; radiusKm: number } | undefined;
+        if (lat !== undefined || lng !== undefined || max_km !== undefined) {
+            if (typeof lat !== 'string' || typeof lng !== 'string' || typeof max_km !== 'string') {
+                return res.status(400).json({
+                    ok: false,
+                    error: {
+                        code: 'INVALID_INPUT',
+                        message: 'lat, lng, and max_km must be provided together as strings',
+                    },
+                });
+            }
+            const latitude = Number(lat);
+            const longitude = Number(lng);
+            const radiusKm = Number(max_km);
+            if (
+                !Number.isFinite(latitude) || !Number.isFinite(longitude) || !Number.isFinite(radiusKm) ||
+                latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180 || radiusKm <= 0
+            ) {
+                return res.status(400).json({
+                    ok: false,
+                    error: {
+                        code: 'INVALID_INPUT',
+                        message: 'lat must be in [-90,90], lng in [-180,180], max_km must be positive',
+                    },
+                });
+            }
+            center = { latitude, longitude, radiusKm };
+        }
+
+        const activities = await listActivities({
+            status: 'open',
+            ...(typeof sport === 'string' && sport.trim() ? { sportType: sport.trim() } : {}),
+            ...(skill === 'beginner' || skill === 'intermediate' || skill === 'advanced' || skill === 'any'
+                ? { skillLevel: skill }
+                : {}),
+            limit: SEARCH_LIMIT,
+        });
+
+        const filtered = center
+            ? activities.filter((a) => {
+                if (typeof a.latitude !== 'number' || typeof a.longitude !== 'number') return false;
+                return haversineKm(center.latitude, center.longitude, a.latitude, a.longitude) <= center.radiusKm;
+            })
+            : activities;
+
+        const data = await Promise.all(
+            filtered.map((activity) => attachViewerActivityContext(activity, viewerUid)),
+        );
+
+        return res.status(200).json({ ok: true, data });
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        return res.status(500).json({
+            ok: false,
+            error: { code: 'INTERNAL_ERROR', message },
+        });
+    }
+}
+
 export async function getActivityHandler(
     req: Request<GetActivityParams>,
     res: Response,

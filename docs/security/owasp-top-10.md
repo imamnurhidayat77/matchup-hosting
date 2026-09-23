@@ -20,7 +20,9 @@ conscious trade-off, not an oversight.
   (`canAccessActivityChat`, host/participant checks) is verified in code.
   (`infra/firebase/database.rules.json`, `infra/firebase/README.md`)
 - **Storage rules** are owner/host-scoped with type + size caps
-  (`storage.rules`).
+  (`storage.rules`) — chat attachments live at
+  `uploads/chat-attachments/{scope}/{uid}/…` so only the uploader can
+  write/delete (legacy flat paths are read-only).
 - Accepted risk: RTDB *reads* are "any authenticated user" (RTDB rules cannot
   query Firestore for per-activity membership). Per-activity authorisation is
   enforced on every write and on history endpoints; chat content between
@@ -62,9 +64,12 @@ conscious trade-off, not an oversight.
 ## A04 — Insecure Design
 
 - **Abuse cases designed in:** per-IP fixed-window rate limiting globally
-  (300 req / 15 min) plus tighter burst caps on abuse-prone routes
+  (1200 req / 15 min) plus tighter burst caps on abuse-prone routes
   (`/api/typing` 120/min, places autocomplete 60/min per Nominatim policy).
   (`apps/api-server/src/middleware/rate-limit.ts`)
+  `trust proxy: 1` is set so `req.ip` is the real client IP behind the
+  Cloud Run front-end — without it all clients share one bucket.
+  (`app.ts`)
 - **Moderation is unbypassable by design:** suspension is enforced in
   `requireAuth` on *every* request (not just UI gating); Firestore deny-all
   makes client-side circumvention impossible; appeals are the single
@@ -75,8 +80,12 @@ conscious trade-off, not an oversight.
 
 ## A05 — Security Misconfiguration
 
-- `helmet` secure headers + restrictive CORS (allowlist via `CORS_ORIGINS`,
-  loud warning when unset). (`app.ts`)
+- `helmet` secure headers + restrictive CORS (allowlist via `CORS_ORIGINS`;
+  the server **refuses to boot in production** when it is unset — local/dev
+  keeps the permissive default with a loud warning). (`app.ts`)
+- Admin web ships hardening headers from `vercel.json` (tight CSP,
+  `frame-ancestors 'none'` + `X-Frame-Options: DENY`, nosniff,
+  strict referrer).
 - Firebase native configs (`google-services.json`, `GoogleService-Info.plist`)
   and `.env` files are gitignored; only `.env.example` files are committed.
 - Error middleware always returns the `{ ok, error: { code, message } }`
@@ -105,14 +114,25 @@ conscious trade-off, not an oversight.
 
 ## A07 — Identification & Authentication Failures
 
-- Firebase ID tokens verified server-side on every request; short-lived
+- Firebase ID tokens verified server-side on every request **with
+  revocation checking** (`verifyIdToken(token, true)`); short-lived
   custom tokens mint the RTDB session (`POST /api/users/custom-token`).
+- Suspension revokes sessions at enforcement time
+  (`revokeRefreshTokens` in `setMemberStatus`, best-effort with the
+  per-request revocation check as second layer), so a suspended user
+  loses API *and* RTDB/presence access immediately — not at token
+  expiry. (`members.service.ts`, `auth.middleware.ts`)
+- Admin web keeps its stored token fresh: `onIdTokenChanged` subscription
+  persists hourly SDK refreshes and a one-shot rehydration runs on
+  reload, so the 8h/30d session TTLs are real instead of dying at the
+  1-hour ID-token expiry. (`authService.ts`, `AuthContext.tsx`)
 - Client handles session lifecycle first-class: expired refresh tokens flip
   to unauthenticated (forced re-login, no zombie 401 loops); suspended
   accounts keep tokens only for the appeals flow.
   (`auth_state_provider.dart`, `api_client.dart`, `rtdb_auth_service.dart`)
-- Optional biometric login (`local_auth`) never replaces server auth — it
-  only gates access to the locally stored session.
+- Session tokens live in Keychain/Keystore (`SecureTokenStore`) and are
+  never used as a substitute for server-side verification — every request
+  is re-verified via `verifyIdToken`.
 - Admin web uses the same token scheme against the same API (no second,
   weaker auth path).
 

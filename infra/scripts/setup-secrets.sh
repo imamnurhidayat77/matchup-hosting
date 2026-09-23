@@ -12,7 +12,7 @@ set -euo pipefail
 PROJECT="${GCP_PROJECT:-matchup-cs734}"
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 DOTENV="${DOTENV:-$REPO_ROOT/apps/api-server/.env}"
-SECRETS="AUTH_SECRET FIREBASE_PRIVATE_KEY FIREBASE_CLIENT_EMAIL FIREBASE_WEB_API_KEY"
+SECRETS="FIREBASE_PRIVATE_KEY FIREBASE_CLIENT_EMAIL FIREBASE_WEB_API_KEY"
 
 if [ ! -f "$DOTENV" ]; then
   echo "Missing $DOTENV" >&2

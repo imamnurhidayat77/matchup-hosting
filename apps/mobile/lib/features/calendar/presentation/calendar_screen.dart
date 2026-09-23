@@ -10,6 +10,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/widgets/app_icon.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../core/widgets/notification_icon_button.dart';
@@ -474,7 +475,7 @@ class _ScheduleHeader extends StatelessWidget {
   }
 }
 
-class _EventCard extends StatelessWidget {
+class _EventCard extends ConsumerWidget {
   const _EventCard({required this.event});
   final CalendarEvent event;
 
@@ -486,80 +487,136 @@ class _EventCard extends StatelessWidget {
     return '/joined-activity/${event.activityId}';
   }
 
+  /// Writes this event to the OS calendar and reports the outcome.
+  /// The list refreshes afterwards so the synced checkmark appears.
+  Future<void> _syncToDevice(BuildContext context, WidgetRef ref) async {
+    final ok = await ref
+        .read(calendarRepositoryProvider)
+        .addToDeviceCalendar(event);
+    ref.invalidate(_upcomingEventsProvider);
+    if (!context.mounted) return;
+    AppSnackbar.show(
+      context,
+      message: ok
+          ? 'Added to your device calendar.'
+          : 'Could not add to your device calendar.',
+      variant: ok ? AppSnackbarVariant.success : AppSnackbarVariant.error,
+    );
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final timeFmt = DateFormat('h:mm a');
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.x2 + 2),
-      child: Semantics(
-        button: true,
-        label: event.title,
-        child: PressableScale(
-          onTap: () => NavGuard.push(context, _destination),
-          child: Container(
-            padding: const EdgeInsets.all(AppSpacing.x3),
-            decoration: BoxDecoration(
-              color: context.colors.surface,
-              borderRadius: BorderRadius.circular(AppRadius.card),
-              border: Border.all(color: context.colors.border),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: context.colors.primaryLight,
-                    borderRadius: BorderRadius.circular(AppRadius.md),
-                  ),
-                  alignment: Alignment.center,
-                  child: AppIcon(
-                    AppIcons.calendar2,
-                    size: AppIconSize.lg,
-                    color: context.colors.primaryOnSurface,
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.x3),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.x3),
+        decoration: BoxDecoration(
+          color: context.colors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          border: Border.all(color: context.colors.border),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Semantics(
+                button: true,
+                label: event.title,
+                child: PressableScale(
+                  onTap: () => NavGuard.push(context, _destination),
+                  child: Row(
                     children: [
-                      Text(
-                        event.title,
-                        style: AppTypography.labelField(context),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: context.colors.primaryLight,
+                          borderRadius: BorderRadius.circular(AppRadius.md),
+                        ),
+                        alignment: Alignment.center,
+                        child: AppIcon(
+                          AppIcons.calendar2,
+                          size: AppIconSize.lg,
+                          color: context.colors.primaryOnSurface,
+                        ),
                       ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          const AppIcon(AppIcons.clock, size: AppIconSize.sm),
-                          const SizedBox(width: AppSpacing.x1),
-                          Text(
-                            timeFmt.format(event.start),
-                            style: AppTypography.caption(context),
-                          ),
-                          const SizedBox(width: AppSpacing.x2),
-                          const AppIcon(AppIcons.mapPin, size: AppIconSize.sm),
-                          const SizedBox(width: AppSpacing.x1),
-                          Expanded(
-                            child: Text(
-                              event.location,
+                      const SizedBox(width: AppSpacing.x3),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              event.title,
+                              style: AppTypography.labelField(context),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: AppTypography.caption(context),
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                const AppIcon(
+                                  AppIcons.clock,
+                                  size: AppIconSize.sm,
+                                ),
+                                const SizedBox(width: AppSpacing.x1),
+                                Text(
+                                  timeFmt.format(event.start),
+                                  style: AppTypography.caption(context),
+                                ),
+                                const SizedBox(width: AppSpacing.x2),
+                                const AppIcon(
+                                  AppIcons.mapPin,
+                                  size: AppIconSize.sm,
+                                ),
+                                const SizedBox(width: AppSpacing.x1),
+                                Expanded(
+                                  child: Text(
+                                    event.location,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: AppTypography.caption(context),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const AppIcon(
+                        AppIcons.chevronRight,
+                        size: AppIconSize.sm,
                       ),
                     ],
                   ),
                 ),
-                const AppIcon(AppIcons.chevronRight, size: AppIconSize.sm),
-              ],
+              ),
             ),
-          ),
+            const SizedBox(width: AppSpacing.x1),
+            // Device-calendar sync lives OUTSIDE the navigation tap
+            // target so syncing never also pushes the detail screen.
+            // Exposes the repository's addToDeviceCalendar (previously
+            // reachable only from the joined-detail screen).
+            Semantics(
+              button: true,
+              label: 'Sync ke kalender perangkat',
+              child: IconButton(
+                tooltip: 'Sync ke kalender perangkat',
+                icon: Icon(
+                  event.addedToDeviceCalendar
+                      ? Icons.event_available_rounded
+                      : Icons.event_rounded,
+                  size: 22,
+                  color: event.addedToDeviceCalendar
+                      ? context.colors.primaryOnSurface
+                      : context.colors.textSecondary,
+                ),
+                onPressed: event.addedToDeviceCalendar
+                    ? null
+                    : () => _syncToDevice(context, ref),
+              ),
+            ),
+          ],
         ),
       ),
     );

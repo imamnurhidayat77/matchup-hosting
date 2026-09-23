@@ -1,13 +1,15 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
-const { signInWithEmailAndPasswordMock, firebaseSignOutMock } = vi.hoisted(() => ({
+const { signInWithEmailAndPasswordMock, firebaseSignOutMock, onIdTokenChangedMock } = vi.hoisted(() => ({
   signInWithEmailAndPasswordMock: vi.fn(),
   firebaseSignOutMock: vi.fn(),
+  onIdTokenChangedMock: vi.fn((_auth: unknown, _cb: unknown) => () => undefined),
 }));
 
 vi.mock('firebase/auth', () => ({
   signInWithEmailAndPassword: signInWithEmailAndPasswordMock,
   signOut: firebaseSignOutMock,
+  onIdTokenChanged: onIdTokenChangedMock,
 }));
 
 vi.mock('./firebase', () => ({
@@ -30,9 +32,11 @@ import {
   AuthError,
   clearSession,
   loadSession,
+  refreshStoredToken,
   saveSession,
   signIn,
   signOut,
+  subscribeSessionRefresh,
   type AuthSession,
 } from './authService';
 
@@ -194,5 +198,35 @@ describe('authService signIn/signOut', () => {
 
     await expect(signOut()).resolves.toBeUndefined();
     expect(loadSession()).toBeNull();
+  });
+});
+
+describe('token refresh (H2)', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    vi.clearAllMocks();
+  });
+
+  it('refreshStoredToken returns false when there is no SDK user', async () => {
+    await expect(refreshStoredToken()).resolves.toBe(false);
+  });
+
+  it('refreshStoredToken persists the fresh token into both stores', async () => {
+    const { getFirebaseAuth } = await import('./firebase');
+    vi.mocked(getFirebaseAuth).mockReturnValue({
+      currentUser: { getIdToken: vi.fn().mockResolvedValue('fresh-tok') },
+    } as never);
+    saveSession({ ...makeSession(), token: 'stale-tok' }, true);
+
+    await expect(refreshStoredToken()).resolves.toBe(true);
+
+    expect(localStorage.getItem(SESSION_KEY)).toContain('fresh-tok');
+  });
+
+  it('subscribeSessionRefresh wires onIdTokenChanged and returns an unsubscribe', () => {
+    const unsub = subscribeSessionRefresh();
+    expect(onIdTokenChangedMock).toHaveBeenCalled();
+    expect(typeof unsub).toBe('function');
   });
 });

@@ -5,6 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/dark_colors.dart';
+import '../../../core/utils/social_sign_in.dart';
 import '../../../core/widgets/pressable_scale.dart';
 
 class WelcomeScreen extends StatelessWidget {
@@ -64,10 +65,10 @@ class WelcomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.x3),
 
-            // ── Sign up with Apple (disabled — social sign-in not available yet)
+            // ── Sign up with Apple (no OAuth yet — tap explains that)
             _PillButton(
               label: 'Sign up with Apple',
-              onTap: null,
+              onTap: () => showSocialSignInUnavailable(context),
               bgColor: const Color(0xFF000000),
               textColor: AppColors.textOnPrimary,
               icon: Icons.apple_rounded,
@@ -75,10 +76,10 @@ class WelcomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.x3),
 
-            // ── Sign up with Google (disabled — social sign-in not available yet)
+            // ── Sign up with Google (no OAuth yet — tap explains that)
             _PillButton(
               label: 'Sign up with Google',
-              onTap: null,
+              onTap: () => showSocialSignInUnavailable(context),
               bgColor: context.colors.surface,
               textColor: context.colors.textPrimary,
               leading: Text(
@@ -287,8 +288,9 @@ class _PillButton extends StatelessWidget {
   final bool outlined;
 
   /// True while the action is unavailable (e.g. social sign-in) — the
-  /// button renders with an inline "SOON" badge instead of looking
-  /// tappable and going nowhere.
+  /// button renders with an inline "SOON" badge but stays tappable so
+  /// the tap can honestly explain the state (see
+  /// [showSocialSignInUnavailable]) instead of silently doing nothing.
   final bool comingSoon;
 
   @override
@@ -341,11 +343,13 @@ class _PillButton extends StatelessWidget {
         child: button,
       );
     }
+    // Coming-soon buttons stay enabled: the SOON badge says the feature
+    // is not here yet, and the tap shows the "use email instead" notice.
     return Semantics(
       button: true,
       label: '$label (coming soon)',
-      enabled: false,
-      child: IgnorePointer(child: button),
+      enabled: true,
+      child: button,
     );
   }
 }

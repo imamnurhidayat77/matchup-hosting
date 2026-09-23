@@ -2,16 +2,20 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-const { loadSessionMock, authSignInMock, authSignOutMock } = vi.hoisted(() => ({
+const { loadSessionMock, authSignInMock, authSignOutMock, subscribeSessionRefreshMock, refreshStoredTokenMock } = vi.hoisted(() => ({
   loadSessionMock: vi.fn(),
   authSignInMock: vi.fn(),
   authSignOutMock: vi.fn(),
+  subscribeSessionRefreshMock: vi.fn(() => () => undefined),
+  refreshStoredTokenMock: vi.fn(async () => true),
 }));
 
 vi.mock('../services/authService', () => ({
   loadSession: loadSessionMock,
   signIn: authSignInMock,
   signOut: authSignOutMock,
+  subscribeSessionRefresh: subscribeSessionRefreshMock,
+  refreshStoredToken: refreshStoredTokenMock,
 }));
 
 const { onUnauthorizedMock, unauthorizedListeners } = vi.hoisted(() => {
