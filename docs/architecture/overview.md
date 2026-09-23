@@ -90,21 +90,15 @@ packages/
 
 ## Deployment
 
-The UOA repo is private and cannot grant the Vercel / Google Cloud GitHub
-Apps access, so pushes to `main` are mirrored by
-`.github/workflows/mirror-to-hosting.yml` to the public
-`imamnurhidayat77/matchup-hosting` repo, which is what Vercel and Cloud Run
-deploy from:
-
 ```
-UOA private repo (main) ──mirror──▶ matchup-hosting (main) ──┬──▶ Vercel: https://matchup-hosting.vercel.app/
-                                                             └──▶ Cloud Run: https://matchup-api-569237066208.asia-southeast1.run.app/ (matchup-api, asia-southeast1, Secret Manager)
-                                                                              └──▶ Firebase matchup-cs734 (Firestore + RTDB + Storage + FCM)
+Mobile APK ──┐
+             ├─ HTTPS/REST ─► Cloud Run `matchup-api` (asia-southeast1, Secret Manager)
+Admin web ───┘   (Vercel)                │
+                                         └──▶ Firebase matchup-cs734 (Firestore + RTDB + Storage + FCM)
 ```
 
-Mobile APKs are built from `main` (`flutter build apk --obfuscate
---split-debug-info=build/debug-info`) and distributed via the Google Drive
-folder linked in the README.
+Live URLs are listed in the README. Mobile APKs are built with
+`flutter build apk --obfuscate --split-debug-info=build/debug-info`.
 
 ## What is in place
 
