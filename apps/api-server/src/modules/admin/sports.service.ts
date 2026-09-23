@@ -56,8 +56,36 @@ export async function listSports(): Promise<SportView[]> {
     return sportsCache.getOrFill('all', fetchSports);
 }
 
+/**
+ * Static fallback when the `sports` collection is empty (fresh project,
+ * failed seed, or an offline emulator). Mirrors the mobile pickers'
+ * hardcoded list so `GET /api/public/sports` never returns a bare `[]`
+ * while the admin config is still being published — and never crashes:
+ * an unreadable collection degrades to the seed, not a 500.
+ */
+const SPORTS_SEED: Array<Omit<SportView, 'activityCount'>> = [
+    { id: 'football', name: 'Football', emoji: '⚽', enabled: true, showInFilter: true, showInOnboarding: true, canHost: true, sortOrder: 1 },
+    { id: 'basketball', name: 'Basketball', emoji: '🏀', enabled: true, showInFilter: true, showInOnboarding: true, canHost: true, sortOrder: 2 },
+    { id: 'tennis', name: 'Tennis', emoji: '🎾', enabled: true, showInFilter: true, showInOnboarding: true, canHost: true, sortOrder: 3 },
+    { id: 'badminton', name: 'Badminton', emoji: '🏸', enabled: true, showInFilter: true, showInOnboarding: true, canHost: true, sortOrder: 4 },
+    { id: 'running', name: 'Running', emoji: '🏃', enabled: true, showInFilter: true, showInOnboarding: true, canHost: true, sortOrder: 5 },
+    { id: 'cycling', name: 'Cycling', emoji: '🚴', enabled: true, showInFilter: true, showInOnboarding: true, canHost: true, sortOrder: 6 },
+    { id: 'swimming', name: 'Swimming', emoji: '🏊', enabled: true, showInFilter: true, showInOnboarding: true, canHost: true, sortOrder: 7 },
+    { id: 'volleyball', name: 'Volleyball', emoji: '🏐', enabled: true, showInFilter: true, showInOnboarding: true, canHost: true, sortOrder: 8 },
+];
+
 async function fetchSports(): Promise<SportView[]> {
-    const snap = await firestore.collection('sports').get();
+    let snap: FirebaseFirestore.QuerySnapshot;
+    try {
+        snap = await firestore.collection('sports').get();
+    } catch {
+        return SPORTS_SEED.map((s) => ({ ...s, activityCount: 0 }));
+    }
+    // `snap.empty` is the Firestore-native check; the `docs.length`
+    // fallback keeps unit-test doubles (which only stub `docs`) honest.
+    if (snap.empty || snap.docs.length === 0) {
+        return SPORTS_SEED.map((s) => ({ ...s, activityCount: 0 }));
+    }
     const rows: SportView[] = [];
     for (const doc of snap.docs) {
         const data = doc.data();

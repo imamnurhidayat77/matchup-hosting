@@ -318,6 +318,45 @@ export async function listNotifications(
     return snap.docs.map(mapNotificationDoc);
 }
 
+/**
+ * Unread-only inbox read — filters the full list in memory (a user holds
+ * few notifications; a `where(isRead == false)` query would need a
+ * composite index with the `orderBy(createdAt)` sort).
+ */
+export async function listUnread(
+    uid: string,
+): Promise<NotificationWithId[]> {
+    const all = await listNotifications(uid);
+    return all.filter((n) => !n.isRead);
+}
+
+/**
+ * Marks every unread notification read in batches of 500 (Firestore
+ * batch limit). Returns the count so clients can confirm the badge
+ * clear. Best-effort per batch: a failed commit throws (the caller maps
+ * it to 500) — partial progress is possible and documented.
+ */
+export async function markAllRead(uid: string): Promise<{ marked: number }> {
+    const normalizedUid = uid.trim();
+    if (!normalizedUid) throw new Error('uid is required');
+    const unread = await listUnread(normalizedUid);
+    if (unread.length === 0) return { marked: 0 };
+    const now = Timestamp.now();
+    let marked = 0;
+    for (let i = 0; i < unread.length; i += 500) {
+        const batch = firestore.batch();
+        for (const n of unread.slice(i, i + 500)) {
+            batch.update(
+                firestore.doc(userNotificationDocPath(normalizedUid, n.notificationId)),
+                { isRead: true, readAt: now },
+            );
+        }
+        await batch.commit();
+        marked += Math.min(500, unread.length - i);
+    }
+    return { marked };
+}
+
 export async function markNotificationRead(
     uid: string,
     notificationId: string,

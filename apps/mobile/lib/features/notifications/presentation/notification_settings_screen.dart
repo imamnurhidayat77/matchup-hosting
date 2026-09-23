@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/providers/repository_providers.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/dark_colors.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/app_snackbar.dart';
+import '../../../core/widgets/pressable_scale.dart';
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
@@ -38,10 +41,16 @@ class _NotifSettingsNotifier extends StateNotifier<Map<String, bool>> {
   }
 
   Future<void> toggle(String key) async {
-    final next = !( state[key] ?? false);
+    final next = !(state[key] ?? false);
     state = {...state, key: next};
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('notif_$key', next);
+    // TODO(push): subscribe/unsubscribe the matching FCM topic when a
+    // category is toggled (e.g. `activity_cancelled`, `dm_message`) so
+    // the preference also gates push delivery, not just this device's
+    // local state. No per-category preference endpoint exists on the
+    // backend today — and `markAllRead` only clears already-delivered
+    // rows, so it must NOT be called here.
   }
 }
 
@@ -76,6 +85,48 @@ class NotificationSettingsScreen extends ConsumerWidget {
           Text(
             "These preferences are saved on this device only and don't change push delivery yet.",
             style: AppTypography.metaSub(context),
+          ),
+          const SizedBox(height: AppSpacing.x3),
+
+          // Best-effort badge count from the server's canonical feed
+          // (`GET /notifications/me` via the repository — no dedicated
+          // `/unread` route exists on the backend). A failure shows a
+          // quiet notice and keeps the local toggles untouched.
+          Semantics(
+            button: true,
+            label: 'Refresh from server',
+            child: PressableScale(
+              onTap: () => _refreshFromServer(context, ref),
+              child: Container(
+                height: 48,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: context.colors.surface,
+                  borderRadius: BorderRadius.circular(AppRadius.card),
+                  border: Border.all(color: context.colors.border),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.refresh_rounded,
+                      size: 18,
+                      color: context.colors.primaryOnSurface,
+                    ),
+                    const SizedBox(width: AppSpacing.x2),
+                    Text(
+                      'Refresh from server',
+                      style: AppTypography.labelField(context).copyWith(
+                        color: context.colors.primaryOnSurface,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
           const SizedBox(height: AppSpacing.x6),
 
@@ -112,6 +163,30 @@ class NotificationSettingsScreen extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ─── Server refresh ─────────────────────────────────────────────────────────
+
+/// Best-effort unread badge count from the live feed. Never throws into
+/// the UI: success and failure both surface as a short notice.
+Future<void> _refreshFromServer(BuildContext context, WidgetRef ref) async {
+  try {
+    final unread = await ref.read(notificationRepositoryProvider).unread();
+    if (!context.mounted) return;
+    AppSnackbar.show(
+      context,
+      message: unread.isEmpty
+          ? 'You are all caught up — no unread notifications.'
+          : 'You have ${unread.length} unread notification${unread.length == 1 ? '' : 's'}.',
+    );
+  } catch (_) {
+    if (!context.mounted) return;
+    AppSnackbar.show(
+      context,
+      message: 'Could not reach the server — showing device settings.',
+      variant: AppSnackbarVariant.error,
     );
   }
 }

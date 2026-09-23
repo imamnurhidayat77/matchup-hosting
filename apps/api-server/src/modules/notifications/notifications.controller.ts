@@ -1,6 +1,8 @@
 import type { Request, Response } from 'express';
 import {
     listNotifications,
+    listUnread,
+    markAllRead,
     markNotificationRead,
 } from './notifications.service.js';
 
@@ -37,6 +39,60 @@ export async function listMyNotificationsHandler(req: Request, res: Response) {
                 code: 'INTERNAL_ERROR',
                 message,
             },
+        });
+    }
+}
+
+/**
+ * `GET /api/notifications/unread` — unread-only inbox (dedicated path,
+ * not `?unreadOnly=1`, so the default `/me` list shape never changes).
+ */
+export async function listUnreadNotificationsHandler(req: Request, res: Response) {
+    try {
+        const authUid = req.auth?.uid;
+        if (!authUid) {
+            return res.status(401).json({
+                ok: false,
+                error: {
+                    code: 'UNAUTHORIZED',
+                    message: 'Authenticated user is required',
+                },
+            });
+        }
+        const notifications = await listUnread(authUid);
+        return res.status(200).json({ ok: true, data: notifications });
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        return res.status(500).json({
+            ok: false,
+            error: { code: 'INTERNAL_ERROR', message },
+        });
+    }
+}
+
+/**
+ * `POST /api/notifications/read-all` — clears the badge.
+ * Response `{ marked }` = number of notifications flipped to read.
+ */
+export async function markAllNotificationsReadHandler(req: Request, res: Response) {
+    try {
+        const authUid = req.auth?.uid;
+        if (!authUid) {
+            return res.status(401).json({
+                ok: false,
+                error: {
+                    code: 'UNAUTHORIZED',
+                    message: 'Authenticated user is required',
+                },
+            });
+        }
+        const result = await markAllRead(authUid);
+        return res.status(200).json({ ok: true, data: result });
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        return res.status(500).json({
+            ok: false,
+            error: { code: 'INTERNAL_ERROR', message },
         });
     }
 }

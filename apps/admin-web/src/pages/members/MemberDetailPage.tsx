@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { fetchMember } from '../../services/membersService';
+import { fetchMember, updateMemberStatus, deleteMember } from '../../services/membersService';
 import type { Member } from '../../services/membersService';
 import type { MemberStatus } from '../../types/members';
 import { Avatar } from '../../components/ui/Avatar';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 
 function StatusBadge({ status }: { status: MemberStatus }) {
   const map: Record<MemberStatus, { cls: string; dot: string }> = {
@@ -33,24 +34,78 @@ export function MemberDetailPage() {
   const navigate = useNavigate();
   const [member, setMember] = useState<Member | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [acting, setActing] = useState(false);
+  const [confirm, setConfirm] = useState<'suspend' | 'activate' | 'remove' | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const m = await fetchMember(id ?? '');
+      setMember(m);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to load member';
+      // Distinguish not-found from network errors instead of silently nulling.
+      setError(msg);
+      setMember(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    fetchMember(id ?? '')
-      .then((m) => {
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const m = await fetchMember(id ?? '');
         if (!cancelled) setMember(m);
-      })
-      .catch(() => {
-        if (!cancelled) setMember(null);
-      })
-      .finally(() => {
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Failed to load member');
+          setMember(null);
+        }
+      } finally {
         if (!cancelled) setLoading(false);
-      });
+      }
+    })();
     return () => {
       cancelled = true;
     };
   }, [id]);
+
+  async function runStatus(next: MemberStatus) {
+    if (!member) return;
+    setActing(true);
+    setActionError(null);
+    try {
+      await updateMemberStatus(member.id, next);
+      setMember({ ...member, status: next });
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Action failed.');
+    } finally {
+      setActing(false);
+      setConfirm(null);
+    }
+  }
+
+  async function runRemove() {
+    if (!member) return;
+    setActing(true);
+    setActionError(null);
+    try {
+      await deleteMember(member.id);
+      navigate('/members');
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Remove failed.');
+    } finally {
+      setActing(false);
+      setConfirm(null);
+    }
+  }
 
   if (loading) {
     return (
@@ -61,9 +116,15 @@ export function MemberDetailPage() {
   }
 
   if (!member) {
+    const notFound = error && /not.?found|404/i.test(error);
     return (
       <div className="page-container flex flex-col items-center justify-center gap-3 py-24">
-        <p className="text-sm text-ink-500">Member not found.</p>
+        <p className="text-sm text-ink-500">{notFound ? 'Member not found.' : `Failed to load member${error ? `: ${error}` : '.'}`}</p>
+        {!notFound && (
+          <button onClick={load} className="btn-primary rounded-lg px-4 py-2 text-sm">
+            Retry
+          </button>
+        )}
         <button onClick={() => navigate('/members')} className="btn-outline rounded-lg px-4 py-2 text-sm">
           Back to Members
         </button>
@@ -84,10 +145,48 @@ export function MemberDetailPage() {
     <div className="page-container space-y-4">
 
       {/* Back */}
-      <button onClick={() => navigate('/members')} className="flex items-center gap-1.5 text-xs text-ink-400 hover:text-ink-700 transition-colors">
-        <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M8.5 2.5L4 7l4.5 4.5" /></svg>
-        Members
-      </button>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <button onClick={() => navigate('/members')} className="flex items-center gap-1.5 text-xs text-ink-400 hover:text-ink-700 transition-colors">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M8.5 2.5L4 7l4.5 4.5" /></svg>
+          Members
+        </button>
+        <div className="flex flex-wrap gap-2">
+          {member.status === 'Active' ? (
+            <button onClick={() => setConfirm('suspend')} disabled={acting} className="btn-outline rounded-lg px-3 py-1.5 text-xs font-semibold text-warning-600 disabled:opacity-50">
+              Suspend
+            </button>
+          ) : (
+            <button onClick={() => setConfirm('activate')} disabled={acting} className="btn-primary rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-50">
+              Activate
+            </button>
+          )}
+          <button onClick={() => setConfirm('remove')} disabled={acting} className="rounded-lg border border-danger-200 px-3 py-1.5 text-xs font-semibold text-danger-600 hover:bg-danger-50 disabled:opacity-50">
+            Remove
+          </button>
+        </div>
+      </div>
+
+      {actionError && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-danger-200 bg-danger-50 px-4 py-2.5 text-xs text-danger-700">
+          <span className="flex-1">{actionError}</span>
+          <button onClick={() => setActionError(null)} className="font-semibold underline">Dismiss</button>
+          <button onClick={load} className="font-semibold underline">Retry</button>
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={confirm !== null}
+        title={confirm === 'suspend' ? `Suspend ${member.name}?` : confirm === 'activate' ? `Activate ${member.name}?` : `Remove ${member.name}?`}
+        description={confirm === 'suspend' ? 'This member will lose access until manually reactivated.' : confirm === 'activate' ? 'This member will regain access immediately.' : 'This action cannot be undone.'}
+        confirmLabel={confirm === 'suspend' ? 'Suspend' : confirm === 'activate' ? 'Activate' : 'Remove'}
+        destructive={confirm !== 'activate'}
+        onConfirm={() => {
+          if (confirm === 'suspend') runStatus('Suspended');
+          else if (confirm === 'activate') runStatus('Active');
+          else if (confirm === 'remove') runRemove();
+        }}
+        onCancel={() => setConfirm(null)}
+      />
 
       {/* ── Main layout ────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[300px_1fr]">

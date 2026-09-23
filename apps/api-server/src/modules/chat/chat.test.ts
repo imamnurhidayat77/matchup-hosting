@@ -293,17 +293,21 @@ describe('chat routes', () => {
             );
         });
 
-        it('when activityId is blank => expected 400 w/ EMPTY_INPUT', async () => {
+        it('when activityId is blank => expected 400 w/ INVALID_INPUT', async () => {
+            // Blank path params are now rejected by `validateParams` with
+            // the unified INVALID_INPUT envelope (+ field details) instead
+            // of the legacy EMPTY_INPUT shape.
             const app = createApp();
 
             const response = await request(app).get('/api/chat/%20%20/messages');
 
             expect(response.status).toBe(400);
-            expect(response.body).toEqual({
+            expect(response.body).toMatchObject({
                 ok: false,
                 error: {
-                    code: 'EMPTY_INPUT',
-                    message: 'activityId is required',
+                    code: 'INVALID_INPUT',
+                    message: 'Invalid path parameters',
+                    details: { activityId: expect.any(Array) },
                 },
             });
         });

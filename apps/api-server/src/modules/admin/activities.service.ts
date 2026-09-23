@@ -147,9 +147,37 @@ export async function setAdminActivityStatus(
     });
 }
 
-/** Removes the activity doc. Participant/join-request subcollections are
- * left orphaned (Firestore has no cascade) and no longer resolve to a
- * parent, so they stay invisible to every feed. */
+/**
+ * Deletes every doc in a subcollection in batches of 400 (under the
+ * 500-write batch ceiling, leaving headroom). Best-effort per batch:
+ * a failed batch throws and aborts the delete — already-removed batches
+ * stay removed (documented; the admin can retry the DELETE, which is
+ * idempotent until the parent doc is gone). NOTE on the Firestore
+ * emulator: batched deletes of large subcollections can hit the
+ * emulator's transaction limits — production Firestore handles the same
+ * loop fine; keep batches small rather than raising the size.
+ */
+async function deleteSubcollection(
+    parentRef: FirebaseFirestore.DocumentReference,
+    subcollection: string,
+): Promise<number> {
+    let removed = 0;
+    for (;;) {
+        const snap = await parentRef.collection(subcollection).limit(400).get();
+        if (snap.empty) break;
+        const batch = parentRef.firestore.batch();
+        for (const doc of snap.docs) batch.delete(doc.ref);
+        await batch.commit();
+        removed += snap.size;
+    }
+    return removed;
+}
+
+/**
+ * Removes the activity doc plus its `participants` and `joinRequests`
+ * subcollections (Firestore has no cascade — without this the child rows
+ * orphan and still resolve via collection-group reads like My Games).
+ */
 export async function deleteAdminActivity(
     activityId: string,
     adminUid: string,
@@ -165,6 +193,10 @@ export async function deleteAdminActivity(
         throw new Error('Activity not found');
     }
     const before = snap.data();
+    const [removedParticipants, removedJoinRequests] = await Promise.all([
+        deleteSubcollection(ref, 'participants'),
+        deleteSubcollection(ref, 'joinRequests'),
+    ]);
     await ref.delete();
     await logAdminAction({
         category: 'Activities',
@@ -175,5 +207,6 @@ export async function deleteAdminActivity(
         targetId: normalizedId,
         targetLabel: typeof before?.title === 'string' ? before.title : normalizedId,
         before: { title: before?.title ?? null, status: before?.status ?? null },
+        after: { removedParticipants, removedJoinRequests },
     });
 }

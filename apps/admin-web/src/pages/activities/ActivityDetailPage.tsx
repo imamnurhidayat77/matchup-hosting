@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { fetchActivities } from '../../services/activitiesService';
+import { fetchActivities, updateActivityStatus, deleteActivity } from '../../services/activitiesService';
 import type { AdminActivity } from '../../services/activitiesService';
 import type { ActivityStatus } from '../../types/activities';
 import { Avatar } from '../../components/ui/Avatar';
+import { useToast } from '../../context/ToastContext';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 
 function StatusBadge({ status }: { status: ActivityStatus }) {
   const map: Record<ActivityStatus, string> = {
@@ -39,19 +41,51 @@ function MetaItem({ icon, primary, secondary }: {
 export function ActivityDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { push: toast } = useToast();
   const [activity, setActivity] = useState<AdminActivity | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [acting, setActing] = useState(false);
+  const [confirm, setConfirm] = useState<'cancel' | 'complete' | 'remove' | null>(null);
+
+  function load() {
+    setLoading(true);
+    setError(null);
+    // No admin detail endpoint — resolve from the admin list.
+    // O(n) find is acceptable: the admin list is bounded (single page,
+    // typically < few hundred rows); revisit with a GET /:id endpoint
+    // if pagination grows the dataset.
+    fetchActivities()
+      .then((rows) => {
+        setActivity(rows.find((a) => a.id === id) ?? null);
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : 'Failed to load activity');
+        setActivity(null);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setError(null);
     // No admin detail endpoint — resolve from the admin list.
+    // O(n) find is acceptable: the admin list is bounded (single page,
+    // typically < few hundred rows); revisit with a GET /:id endpoint
+    // if pagination grows the dataset.
     fetchActivities()
       .then((rows) => {
         if (!cancelled) setActivity(rows.find((a) => a.id === id) ?? null);
       })
-      .catch(() => {
-        if (!cancelled) setActivity(null);
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Failed to load activity');
+          setActivity(null);
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -60,6 +94,38 @@ export function ActivityDetailPage() {
       cancelled = true;
     };
   }, [id]);
+
+  async function runStatus(next: ActivityStatus) {
+    if (!activity) return;
+    setActing(true);
+    setActionError(null);
+    try {
+      await updateActivityStatus(activity.id, next);
+      setActivity({ ...activity, status: next });
+      toast(`Activity ${next.toLowerCase()}.`, 'info');
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Action failed.');
+    } finally {
+      setActing(false);
+      setConfirm(null);
+    }
+  }
+
+  async function runDelete() {
+    if (!activity) return;
+    setActing(true);
+    setActionError(null);
+    try {
+      await deleteActivity(activity.id);
+      toast('Activity removed.', 'info');
+      navigate('/activities');
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Remove failed.');
+    } finally {
+      setActing(false);
+      setConfirm(null);
+    }
+  }
 
   if (loading) {
     return (
@@ -72,7 +138,12 @@ export function ActivityDetailPage() {
   if (!activity) {
     return (
       <div className="page-container flex flex-col items-center justify-center gap-3 py-24">
-        <p className="text-sm text-ink-500">Activity not found.</p>
+        <p className="text-sm text-ink-500">{error ? `Failed to load activity: ${error}` : 'Activity not found.'}</p>
+        {error && (
+          <button onClick={load} className="btn-primary rounded-lg px-4 py-2 text-sm">
+            Retry
+          </button>
+        )}
         <button onClick={() => navigate('/activities')} className="btn-outline rounded-lg px-4 py-2 text-sm">
           Back to Activities
         </button>
@@ -87,10 +158,49 @@ export function ActivityDetailPage() {
     <div className="page-container space-y-4">
 
       {/* Back */}
-      <button onClick={() => navigate('/activities')} className="flex items-center gap-1.5 text-xs text-ink-400 hover:text-ink-700 transition-colors">
-        <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M8.5 2.5L4 7l4.5 4.5" /></svg>
-        Activities
-      </button>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <button onClick={() => navigate('/activities')} className="flex items-center gap-1.5 text-xs text-ink-400 hover:text-ink-700 transition-colors">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M8.5 2.5L4 7l4.5 4.5" /></svg>
+          Activities
+        </button>
+        <div className="flex flex-wrap gap-2">
+          {activity.status !== 'Cancelled' && (
+            <button onClick={() => setConfirm('cancel')} disabled={acting} className="btn-outline rounded-lg px-3 py-1.5 text-xs font-semibold text-warning-600 disabled:opacity-50">
+              Cancel
+            </button>
+          )}
+          {activity.status !== 'Completed' && activity.status !== 'Cancelled' && (
+            <button onClick={() => setConfirm('complete')} disabled={acting} className="btn-outline rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-50">
+              Mark Completed
+            </button>
+          )}
+          <button onClick={() => setConfirm('remove')} disabled={acting} className="rounded-lg border border-danger-200 px-3 py-1.5 text-xs font-semibold text-danger-600 hover:bg-danger-50 disabled:opacity-50">
+            Delete
+          </button>
+        </div>
+      </div>
+
+      {actionError && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-danger-200 bg-danger-50 px-4 py-2.5 text-xs text-danger-700">
+          <span className="flex-1">{actionError}</span>
+          <button onClick={() => setActionError(null)} className="font-semibold underline">Dismiss</button>
+          <button onClick={load} className="font-semibold underline">Retry</button>
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={confirm !== null}
+        title={confirm === 'cancel' ? `Cancel ${activity.name}?` : confirm === 'complete' ? `Mark ${activity.name} completed?` : `Delete ${activity.name}?`}
+        description={confirm === 'cancel' ? 'Participants will be notified that this activity has been cancelled.' : confirm === 'complete' ? 'This will mark the activity as completed.' : 'This action cannot be undone.'}
+        confirmLabel={confirm === 'cancel' ? 'Cancel Activity' : confirm === 'complete' ? 'Mark Completed' : 'Delete'}
+        destructive={confirm !== 'complete'}
+        onConfirm={() => {
+          if (confirm === 'cancel') runStatus('Cancelled');
+          else if (confirm === 'complete') runStatus('Completed');
+          else if (confirm === 'remove') runDelete();
+        }}
+        onCancel={() => setConfirm(null)}
+      />
 
       {/* ── Main layout: hero left, details right ──────────────────── */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_340px]">

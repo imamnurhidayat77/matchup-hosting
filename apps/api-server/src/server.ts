@@ -3,6 +3,7 @@ import { env } from './config/env.js';
 import { checkFirestoreConnection } from './database/firebase.js';
 import { firestoreAuthHint, isFirestoreAuthError } from './database/firestore-errors.js';
 import { sweepExpiredActivities } from './modules/activities/activity-lifecycle.service.js';
+import { sweepDueBroadcasts } from './modules/admin/broadcasts.service.js';
 
 const app = createApp();
 
@@ -24,6 +25,29 @@ checkFirestoreConnection()
             console.error('[firebase] connectivity check failed:', error);
         }
     });
+
+// Broadcast-due sweeper — sends `scheduled` broadcasts whose
+// `scheduledAt <= now` (flipping them to `sent`) every 60 seconds.
+// Idempotent via the send guard, best-effort per broadcast, failures
+// logged never thrown. NOTE: H-1 activity reminders are intentionally
+// not here — they ride the per-join `activity_reminder` notification
+// path (scoped to participants), not the admin broadcast fan-out.
+const ONE_MINUTE_MS = 60 * 1000;
+setInterval(() => {
+    sweepDueBroadcasts()
+        .then(({ sent }) => {
+            if (sent > 0) {
+                console.log(`[sweeper] sent ${sent} due broadcasts`);
+            }
+        })
+        .catch((error) => {
+            if (isFirestoreAuthError(error)) {
+                console.error(`[sweeper] broadcast sweep failed: ${firestoreAuthHint()}`);
+            } else {
+                console.error('[sweeper] broadcast sweep failed:', error);
+            }
+        });
+}, ONE_MINUTE_MS);
 
 // Expiry sweeper — flips past-endTime `open` activities to
 // `completed` (with review nudges) every 5 minutes. The read paths

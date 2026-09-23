@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
-import { createPoll, getMessageReactions, getMessages, getPolls, getReactions, sendMessage, toggleReaction, votePoll } from './chat.service.js';
-import type { CreatePollInput, SendMessageInput, ToggleReactionInput, VotePollInput } from './chat.schema.js';
+import { createPoll, getMessageReactions, getMessages, getPolls, getReactions, listConversations, sendImageMessage, sendLocationMessage, sendMessage, toggleReaction, votePoll } from './chat.service.js';
+import type { CreatePollInput, SendImageMessageInput, SendLocationMessageInput, SendMessageInput, ToggleReactionInput, VotePollInput } from './chat.schema.js';
 import { canAccessActivityChat } from '../activities/activity-participants.service.js';
 
 type GetMessagesParams = {
@@ -139,6 +139,114 @@ export async function getMessagesHandler(req: Request<GetMessagesParams>, res: R
                 code: 'INTERNAL_ERROR',
                 message,
             },
+        });
+    }
+}
+
+/**
+ * `GET /api/chat/conversations` — group inbox. Lists every live activity
+ * the viewer hosts or joined with the last-message preview + timestamp.
+ * `unreadCount` is best-effort 0 (no per-user read receipts yet).
+ */
+export async function listConversationsHandler(req: Request, res: Response) {
+    try {
+        const uid = req.auth?.uid;
+        if (!uid) return unauthorized(res);
+        const conversations = await listConversations(uid);
+        return res.status(200).json({ ok: true, data: conversations });
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        return res.status(500).json({
+            ok: false,
+            error: { code: 'INTERNAL_ERROR', message },
+        });
+    }
+}
+
+type ChatMediaParams = {
+    activityId: string;
+};
+
+/**
+ * `POST /api/chat/:activityId/messages/image {imageUrl}` — persists a
+ * client-uploaded (Firebase Storage) `https` image URL as an `image`
+ * message. Shapes enforced by `validateBody(sendImageMessageSchema)`;
+ * membership + archive rules mirror the text path.
+ */
+export async function sendImageMessageHandler(req: Request<ChatMediaParams>, res: Response) {
+    try {
+        const senderId = req.auth?.uid;
+        const { activityId } = req.params;
+        const { imageUrl } = req.body as SendImageMessageInput;
+
+        if (!senderId) return unauthorized(res);
+        if (!activityId?.trim()) return badRequest(res, 'activityId is required');
+
+        const canAccessChat = await canAccessActivityChat(activityId, senderId);
+        if (!canAccessChat) return forbiddenChat(res);
+
+        const result = await sendImageMessage(activityId, senderId, imageUrl);
+        return res.status(201).json({ ok: true, data: { messageId: result.messageId } });
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        if (message === 'Activity not found') {
+            return res.status(404).json({
+                ok: false,
+                error: { code: 'NOT_FOUND', message },
+            });
+        }
+        if (message === 'Chat is archived') return archivedChat(res, message);
+        if (message.startsWith('imageUrl must be')) {
+            return res.status(400).json({
+                ok: false,
+                error: { code: 'INVALID_INPUT', message },
+            });
+        }
+        return res.status(500).json({
+            ok: false,
+            error: { code: 'INTERNAL_ERROR', message },
+        });
+    }
+}
+
+/**
+ * `POST /api/chat/:activityId/messages/location {latitude, longitude}` —
+ * persists a range-checked coordinate pair as a `location` message
+ * (text = maps link). Shapes enforced by
+ * `validateBody(sendLocationMessageSchema)`.
+ */
+export async function sendLocationMessageHandler(req: Request<ChatMediaParams>, res: Response) {
+    try {
+        const senderId = req.auth?.uid;
+        const { activityId } = req.params;
+        const { latitude, longitude } = req.body as SendLocationMessageInput;
+
+        if (!senderId) return unauthorized(res);
+        if (!activityId?.trim()) return badRequest(res, 'activityId is required');
+
+        const canAccessChat = await canAccessActivityChat(activityId, senderId);
+        if (!canAccessChat) return forbiddenChat(res);
+
+        const result = await sendLocationMessage(activityId, senderId, latitude, longitude);
+        return res.status(201).json({ ok: true, data: { messageId: result.messageId } });
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        if (message === 'Activity not found') {
+            return res.status(404).json({
+                ok: false,
+                error: { code: 'NOT_FOUND', message },
+            });
+        }
+        if (message === 'Chat is archived') return archivedChat(res, message);
+        if (message.startsWith('latitude must be') || message.startsWith('longitude must be')) {
+            return res.status(400).json({
+                ok: false,
+                error: { code: 'INVALID_INPUT', message },
+            });
+        }
+        return res.status(500).json({
+            ok: false,
+            error: { code: 'INTERNAL_ERROR', message },
         });
     }
 }

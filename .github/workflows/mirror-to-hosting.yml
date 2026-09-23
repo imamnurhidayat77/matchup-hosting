@@ -1,0 +1,23 @@
+name: mirror-main-to-hosting
+
+# Setiap ada push ke main di nimble-takahe -> auto-push ke matchup-hosting.
+# Butuh secret HOSTING_MIRROR_TOKEN (PAT dengan write access ke matchup-hosting).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # untuk backfill manual sekali saja
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push main to matchup-hosting
+        run: |
+          git remote add hosting "https://x-access-token:${{ secrets.HOSTING_MIRROR_TOKEN }}@github.com/imamnurhidayat77/matchup-hosting.git"
+          git push hosting HEAD:main

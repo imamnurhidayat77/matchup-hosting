@@ -112,9 +112,11 @@ disabled): `activity.joined` (host on join), `activity.cancelled`
 (status changes), `account.welcome` (new signups),
 `moderation.report_resolved` (reporter on resolve),
 `moderation.appeal_approved` + `moderation.appeal_rejected` (appellant on
-decision, with `{{adminNote}}`). No scheduler exists yet, so
-`activity.reminder`, `activity.starting_soon`, and the `engagement.*`
-triggers are curated but unfired.
+decision, with `{{adminNote}}`). A broadcast-due sweeper (60-min
+interval) now sends due scheduled broadcasts; `activity.reminder`,
+`activity.starting_soon`, and the `engagement.*` triggers remain curated
+but unfired (no per-participant reminder scheduler yet). The admin UI
+marks those triggers "Inactive".
 
 ## Analytics (read-only, bounded)
 
@@ -127,7 +129,8 @@ Scans capped at 1000 docs — exact on small data, approximations at scale.
 
 ## Mock-only pages (no backend, by decision)
 
-Settings and Audit Log pages were **deleted** (no backend planned).
+Settings page was **deleted** (no backend planned). Audit Log is live
+(`GET /api/admin/audit-log` + AuditLogPage wired in navigation).
 Everything else — Members, Activities, Appeals, Reports, Dashboard,
 Broadcasts, Analytics, Sports, Notification Templates — is live-capable
 via `VITE_USE_MOCK_API=false`.

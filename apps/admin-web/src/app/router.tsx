@@ -24,7 +24,8 @@ function Shell({ children }: { children: React.ReactNode }) {
   );
 }
 
-const router = createBrowserRouter([
+// eslint-disable-next-line react-refresh/only-export-components
+export const routes = [
   { path: '/login',                 element: <LoginPage /> },
   { path: '/',                      element: <Shell><DashboardPage /></Shell> },
   { path: '/members',               element: <Shell><MembersPage /></Shell> },
@@ -38,8 +39,10 @@ const router = createBrowserRouter([
   { path: '/appeals',               element: <Shell><AppealsPage /></Shell> },
   { path: '/notification-templates',element: <Shell><NotificationTemplatesPage /></Shell> },
   { path: '/audit-log',             element: <Shell><AuditLogPage /></Shell> },
-  { path: '*',                      element: <Shell><NotFoundPage /></Shell> },
-]);
+  { path: '*',                      element: <NotFoundPage /> },
+];
+
+const router = createBrowserRouter(routes);
 
 export function AppRouter() {
   return <RouterProvider router={router} />;

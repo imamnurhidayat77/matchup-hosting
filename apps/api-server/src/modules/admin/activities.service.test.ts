@@ -31,8 +31,25 @@ const activityRow = (overrides: Record<string, unknown> = {}) => ({
     ...overrides,
 });
 
-function mockActivities(docs: { id: string; data: Record<string, unknown> }[]) {
+function mockActivities(
+    docs: { id: string; data: Record<string, unknown> }[],
+    subcollections: Record<string, Record<string, string[]>> = {},
+) {
     const store = new Map(docs.map((d) => [d.id, d.data]));
+    // Subcollection docs keyed by `${activityId}/${sub}`.
+    const subStore = new Map<string, Set<string>>();
+    for (const [activityId, subs] of Object.entries(subcollections)) {
+        for (const [sub, ids] of Object.entries(subs)) {
+            subStore.set(`${activityId}/${sub}`, new Set(ids));
+        }
+    }
+    const batchDelete = vi.fn((ref: { id: string; path: string }) => {
+        // Path looks like `activities/{id}/{sub}/{docId}` — the store key
+        // is `{id}/{sub}`, so drop the collection head + the doc leaf.
+        const parent = ref.path.split('/').slice(1, 3).join('/');
+        subStore.get(parent)?.delete(ref.id);
+    });
+    const fakeBatch = { delete: batchDelete, commit: vi.fn(async () => undefined) };
     vi.mocked(firestore.collection).mockImplementation(((name: string) => {
         if (name === 'activities') {
             return {
@@ -45,6 +62,8 @@ function mockActivities(docs: { id: string; data: Record<string, unknown> }[]) {
                     }),
                 }),
                 doc: (id: string) => ({
+                    id,
+                    path: `activities/${id}`,
                     get: async () => {
                         const data = store.get(id);
                         return data === undefined
@@ -57,6 +76,26 @@ function mockActivities(docs: { id: string; data: Record<string, unknown> }[]) {
                     delete: vi.fn().mockImplementation(async () => {
                         store.delete(id);
                     }),
+                    collection: (sub: string) => ({
+                        limit: () => ({
+                            get: async () => {
+                                const key = `${id}/${sub}`;
+                                const ids = [...(subStore.get(key) ?? [])];
+                                return {
+                                    empty: ids.length === 0,
+                                    size: ids.length,
+                                    docs: ids.map((docId) => ({
+                                        id: docId,
+                                        ref: {
+                                            id: docId,
+                                            path: `activities/${id}/${sub}/${docId}`,
+                                        },
+                                    })),
+                                };
+                            },
+                        }),
+                    }),
+                    firestore: { batch: () => fakeBatch },
                 }),
             };
         }
@@ -65,7 +104,7 @@ function mockActivities(docs: { id: string; data: Record<string, unknown> }[]) {
             doc: () => ({ get: async () => ({ exists: false }) }),
         };
     }) as never);
-    return store;
+    return { store, subStore };
 }
 
 beforeEach(() => {
@@ -100,7 +139,7 @@ describe('listAdminActivities', () => {
 
 describe('setAdminActivityStatus', () => {
     it('writes removed without host check', async () => {
-        const store = mockActivities([{ id: 'a-1', data: activityRow() }]);
+        const { store } = mockActivities([{ id: 'a-1', data: activityRow() }]);
         await setAdminActivityStatus('a-1', 'removed', 'admin-1');
         expect(store.get('a-1')!.status).toBe('removed');
     });
@@ -139,9 +178,28 @@ describe('setAdminActivityStatus', () => {
 
 describe('deleteAdminActivity', () => {
     it('deletes the doc', async () => {
-        const store = mockActivities([{ id: 'a-1', data: activityRow() }]);
+        const { store } = mockActivities([{ id: 'a-1', data: activityRow() }]);
         await deleteAdminActivity('a-1', 'admin-1');
         expect(store.has('a-1')).toBe(false);
+    });
+
+    it('deletes participants + joinRequests subcollections recursively', async () => {
+        const { store, subStore } = mockActivities([{ id: 'a-1', data: activityRow() }], {
+            'a-1': {
+                participants: ['u-1', 'u-2'],
+                joinRequests: ['u-3'],
+            },
+        });
+        await deleteAdminActivity('a-1', 'admin-1');
+        expect(store.has('a-1')).toBe(false);
+        expect(subStore.get('a-1/participants')?.size ?? 0).toBe(0);
+        expect(subStore.get('a-1/joinRequests')?.size ?? 0).toBe(0);
+        expect(logAdminAction).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: 'activity.delete',
+                after: { removedParticipants: 2, removedJoinRequests: 1 },
+            }),
+        );
     });
 
     it('throws for missing activity', async () => {

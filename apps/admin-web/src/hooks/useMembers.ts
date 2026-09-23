@@ -68,8 +68,9 @@ export function useMembers() {
       dispatch({ type: 'UPDATE_STATUS', id, memberStatus }); // optimistic
       try {
         await updateMemberStatus(id, memberStatus);
-      } catch {
+      } catch (err) {
         load(); // revert on error
+        throw err; // surface to caller (bulk summary / toast)
       }
     },
     [load],
@@ -80,8 +81,9 @@ export function useMembers() {
       dispatch({ type: 'REMOVE', id }); // optimistic
       try {
         await deleteMember(id);
-      } catch {
+      } catch (err) {
         load();
+        throw err; // surface to caller
       }
     },
     [load],

@@ -13,6 +13,11 @@ import {
   createNotification,
   renderTemplate,
 } from '../notifications/notifications.service.js';
+import {
+  attachViewerActivityContext,
+  listMyActivities,
+  listPastActivitiesForUser,
+} from '../activities/activities.service.js';
 
 type PublicProfileParams = {
   uid: string;
@@ -285,13 +290,15 @@ export async function updateMyUserProfileHandler(req: Request, res: Response) {
       });
     }
 
-    // Key-only request logging (no values — privacy safe) to
-    // diagnose client/server contract mismatches like wrong field
-    // names or shapes sent by older app builds.
-    try {
-      console.log(`[users] PATCH /me keys=${Object.keys(body ?? {}).join(',')}`);
-    } catch {
-      // Logging must never break the request.
+    // Key-only debug logging (no values — privacy safe) for
+    // client/server contract mismatches. Opt-in via
+    // `DEBUG_USER_PATCH=1` so production logs stay quiet by default.
+    if (process.env.DEBUG_USER_PATCH === '1') {
+      try {
+        console.debug(`[users] PATCH /me keys=${Object.keys(body ?? {}).join(',')}`);
+      } catch {
+        // Logging must never break the request.
+      }
     }
 
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
@@ -539,6 +546,87 @@ export async function updateMyUserPhotoHandler(req: Request, res: Response) {
       },
     });
   }
+}
+
+const USER_ACTIVITIES_LIMIT_DEFAULT = 20;
+const USER_ACTIVITIES_LIMIT_MAX = 50;
+
+function parseUserActivitiesPaging(req: Request):
+  | { limit: number; offset: number }
+  | { error: { code: string; message: string } } {
+  const { limit, offset } = req.query as { limit?: unknown; offset?: unknown };
+  const parsedLimit = limit === undefined ? USER_ACTIVITIES_LIMIT_DEFAULT : Number(limit);
+  if (!Number.isInteger(parsedLimit) || parsedLimit <= 0 || parsedLimit > USER_ACTIVITIES_LIMIT_MAX) {
+    return { error: { code: 'INVALID_INPUT', message: 'limit must be an integer between 1 and 50' } };
+  }
+  const parsedOffset = offset === undefined ? 0 : Number(offset);
+  if (!Number.isInteger(parsedOffset) || parsedOffset < 0) {
+    return { error: { code: 'INVALID_INPUT', message: 'offset must be a non-negative integer' } };
+  }
+  return { limit: parsedLimit, offset: parsedOffset };
+}
+
+/**
+ * Legacy contract aliases — thin wrappers over the activities service:
+ * - `joined-activities` → `?mine=joined`
+ * - `hosted-activities` → `?mine=hosted`
+ * - `past-activities` → `status == completed` (hosted + joined)
+ *
+ * NOTE on 409 email-taken: already covered — `bootstrapUser` throws
+ * `Email already in use`, mapped to 409 CONFLICT in
+ * [bootstrapUserHandler] above. No extra check needed here.
+ */
+async function userActivitiesHandler(
+  req: Request<PublicProfileParams>,
+  res: Response,
+  kind: 'joined' | 'hosted' | 'past',
+) {
+  try {
+    const { uid } = req.params;
+    if (!uid?.trim()) {
+      return res.status(400).json({
+        ok: false,
+        error: { code: 'EMPTY_INPUT', message: 'uid is required' },
+      });
+    }
+    const viewerUid = req.auth?.uid;
+    if (!viewerUid) {
+      return res.status(401).json({
+        ok: false,
+        error: { code: 'UNAUTHORIZED', message: 'Authenticated user is required' },
+      });
+    }
+    const paging = parseUserActivitiesPaging(req);
+    if ('error' in paging) {
+      return res.status(400).json({ ok: false, error: paging.error });
+    }
+    const rows =
+      kind === 'past'
+        ? await listPastActivitiesForUser(uid, paging.limit, paging.offset)
+        : await listMyActivities(uid, kind, paging.limit, paging.offset);
+    const data = await Promise.all(
+      rows.map((activity) => attachViewerActivityContext(activity, viewerUid)),
+    );
+    return res.status(200).json({ ok: true, data });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({
+      ok: false,
+      error: { code: 'INTERNAL_ERROR', message },
+    });
+  }
+}
+
+export async function getUserJoinedActivitiesHandler(req: Request<PublicProfileParams>, res: Response) {
+  return userActivitiesHandler(req, res, 'joined');
+}
+
+export async function getUserHostedActivitiesHandler(req: Request<PublicProfileParams>, res: Response) {
+  return userActivitiesHandler(req, res, 'hosted');
+}
+
+export async function getUserPastActivitiesHandler(req: Request<PublicProfileParams>, res: Response) {
+  return userActivitiesHandler(req, res, 'past');
 }
 
 export async function getPublicUserProfileHandler(

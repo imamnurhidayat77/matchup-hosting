@@ -2,10 +2,10 @@
 
 | Field | Value |
 |---|---|
-| Status | **Draft v1.1 — pending decisions D1–D5** |
-| Covers | Mobile app (`apps/mobile`), Admin web (`apps/admin-web`), API server (`apps/api-server`) |
-| Source of truth | This document. On conflict between code and this doc, this doc wins once approved. |
-| Last updated | 2026-09-04 |
+| Status | **Draft v1.1 — pending decisions D1–D5. See Delta 2026-09-22 below for endpoints since implemented.** |
+| Covers | Mobile app (`apps/mobile`), API server (`apps/api-server`). For `/api/admin/*`, `admin-api-contract.md` is source of truth. |
+| Source of truth | This document for mobile endpoints. On conflict between code and this doc, this doc wins once approved. |
+| Last updated | 2026-09-04 (delta 2026-09-22) |
 
 ## Changelog
 
@@ -15,6 +15,7 @@
 | 0.2 | 2026-09-04 | Admin-web endpoints added. |
 | 1.0-draft | 2026-09-04 | Full professional rewrite: conventions, auth, errors, endpoint specs, canonical models, gap register, decisions. |
 | 1.1-draft | 2026-09-04 | Every endpoint expanded with explicit request (params/body fields) and response (status/body) specs. |
+| 1.2-delta | 2026-09-22 | Implemented: `GET /api/calendar/upcoming`, `POST /api/calendar/sync`, `GET /api/activities/search`, `POST /api/chat/:id/messages/image`, `POST /api/chat/:id/messages/location`, `GET /api/chat/conversations`, `GET /api/notifications/unread`, `POST /api/notifications/read-all`, `GET /api/users/:uid/joined|hosted|past-activities`. Calendar sync state is in-memory; chat `unreadCount` is best-effort 0; analytics `retention`/`health` still `[]` with `note`. |
 
 **Notation:** `*` = required. Types: `string`, `int`, `number`, `bool`,
 `datetime` (ISO 8601 UTC), `date` (ISO `YYYY-MM-DD`), `enum(...)`.

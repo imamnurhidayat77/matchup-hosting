@@ -18,6 +18,14 @@ export async function getAnalyticsHandler(req: Request, res: Response) {
             });
         }
         const view = await getAnalytics(rangeDays);
+        // Empty-state signal for dashboards: the un-collected
+        // retention/health series are documented in `view.note`; the
+        // header lets caches/proxies see it without parsing the body.
+        // Guarded (not unconditional) so mocked/legacy views without a
+        // note never crash header serialization.
+        if (typeof view.note === 'string' && view.note.length > 0) {
+            res.setHeader('X-Analytics-Note', view.note);
+        }
         return res.status(200).json({ ok: true, data: view });
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';

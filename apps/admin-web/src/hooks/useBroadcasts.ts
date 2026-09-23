@@ -4,10 +4,12 @@ import {
   createBroadcast,
   sendBroadcast,
   deleteBroadcast,
+  updateBroadcast,
 } from '../services/broadcastsService';
 import type {
   Broadcast,
   CreateBroadcastPayload,
+  UpdateBroadcastPayload,
 } from '../services/broadcastsService';
 
 type State =
@@ -78,6 +80,12 @@ export function useBroadcasts() {
     return sent;
   }, []);
 
+  const handleUpdate = useCallback(async (id: string, patch: UpdateBroadcastPayload) => {
+    const updated = await updateBroadcast(id, patch); // throws on error — let caller handle
+    dispatch({ type: 'UPDATE', broadcast: updated });
+    return updated;
+  }, []);
+
   return {
     loading: state.status === 'idle' || state.status === 'loading',
     error: state.status === 'error' ? state.message : null,
@@ -86,5 +94,6 @@ export function useBroadcasts() {
     handleCreate,
     handleDelete,
     handleSend,
+    handleUpdate,
   };
 }

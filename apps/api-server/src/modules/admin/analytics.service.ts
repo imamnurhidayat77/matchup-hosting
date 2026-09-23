@@ -6,11 +6,19 @@ import { firestore } from '../../database/firebase.js';
  *
  * Bounded by design: every scan carries a limit, so figures are exact on
  * small datasets and clearly-labelled approximations at scale (see
- * `ANALYTICS_SCAN_CAP`). `retention`/`health` are intentionally absent —
- * the events to compute them don't exist yet; the frontend renders those
- * cards from an empty series.
+ * `ANALYTICS_SCAN_CAP`).
+ *
+ * No fake data: `retention`/`health` stay `[]` because the events to
+ * compute them (repeat-visit cohorts, DAU/WAU funnels) are not recorded
+ * yet — the frontend renders those cards from the empty series plus the
+ * human-readable `note` (also sent as the `X-Analytics-Note` response
+ * header). When an `analyticsEvents` collection lands, compute the
+ * series here and keep the same shape.
  */
 export const ANALYTICS_SCAN_CAP = 1000;
+
+export const ANALYTICS_EMPTY_NOTE =
+    'Retention and health series are not collected yet — no analytics events pipeline exists, so these return empty. KPIs, weekly buckets, and top sports above are computed live from users/activities/reports.';
 
 export type KpiPoint = { label: string; value: string; change: string };
 export type WeeklyPoint = {
@@ -27,6 +35,8 @@ export type AnalyticsView = {
     topSports: SportStat[];
     retention: never[];
     health: never[];
+    /** Empty-state note for the un-collected series (see above). */
+    note: string;
 };
 
 export type DashboardView = {
@@ -237,6 +247,7 @@ export async function getAnalytics(rangeDays = 7): Promise<AnalyticsView> {
         topSports,
         retention: [],
         health: [],
+        note: ANALYTICS_EMPTY_NOTE,
     };
 }
 

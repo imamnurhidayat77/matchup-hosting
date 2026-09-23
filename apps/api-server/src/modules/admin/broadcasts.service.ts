@@ -315,6 +315,47 @@ async function resolveRecipients(
 }
 
 /**
+ * Due sweeper for scheduled broadcasts: sends every `scheduled` row
+ * whose `scheduledAt <= now` via [sendBroadcast] (which flips it to
+ * `sent`, so the sweep is idempotent). Best-effort per broadcast — one
+ * failing send never blocks the rest. Rows with an unparseable/missing
+ * `scheduledAt` are skipped and wait for a manual send. Driven by the
+ * 60s interval in `server.ts`; pure enough to unit-test with a `now`.
+ */
+export async function sweepDueBroadcasts(
+    now: Date = new Date(),
+    sentBy = 'scheduler',
+): Promise<{ checked: number; sent: number }> {
+    let snap: FirebaseFirestore.QuerySnapshot;
+    try {
+        snap = await firestore
+            .collection('broadcasts')
+            .where('status', '==', 'scheduled')
+            .get();
+    } catch {
+        return { checked: 0, sent: 0 };
+    }
+    let checked = 0;
+    const due: string[] = [];
+    for (const doc of snap.docs) {
+        checked += 1;
+        const scheduledAt = toIso(doc.data()?.scheduledAt);
+        if (scheduledAt === null) continue;
+        if (Date.parse(scheduledAt) <= now.getTime()) due.push(doc.id);
+    }
+    let sent = 0;
+    for (const id of due) {
+        try {
+            await sendBroadcast(id, sentBy);
+            sent += 1;
+        } catch {
+            // Best-effort per broadcast (see above).
+        }
+    }
+    return { checked, sent };
+}
+
+/**
  * One-way send: draft/scheduled → sent. Fans out a `system` notification
  * per recipient (best-effort; failures don't fail the send) and records
  * the delivered count. Idempotent guard — sent broadcasts stay sent.

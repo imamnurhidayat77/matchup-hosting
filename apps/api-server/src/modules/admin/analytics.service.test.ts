@@ -137,6 +137,9 @@ describe('getAnalytics', () => {
         });
         expect(view.retention).toEqual([]);
         expect(view.health).toEqual([]);
+        // Honest empty state: no fabricated series, documented note.
+        expect(typeof view.note).toBe('string');
+        expect(view.note).toContain('Retention');
     });
 });
 

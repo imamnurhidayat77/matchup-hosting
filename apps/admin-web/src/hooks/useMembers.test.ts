@@ -76,8 +76,9 @@ describe('useMembers', () => {
     const { result } = renderHook(() => useMembers());
     await waitFor(() => expect(result.current.loading).toBe(false));
 
+    // Errors are rethrown so bulk callers can summarize failures (F9).
     await act(async () => {
-      await result.current.handleStatusChange('mem1', 'Suspended');
+      await expect(result.current.handleStatusChange('mem1', 'Suspended')).rejects.toThrow('denied');
     });
 
     await waitFor(() => expect(result.current.members[0].status).toBe('Active'));
@@ -91,8 +92,9 @@ describe('useMembers', () => {
     const { result } = renderHook(() => useMembers());
     await waitFor(() => expect(result.current.loading).toBe(false));
 
+    // Errors are rethrown so callers can surface them (F9).
     await act(async () => {
-      await result.current.handleDelete('mem1');
+      await expect(result.current.handleDelete('mem1')).rejects.toThrow('denied');
     });
 
     await waitFor(() => expect(result.current.members).toHaveLength(1));
