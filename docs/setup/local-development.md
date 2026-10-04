@@ -14,9 +14,7 @@ This guide walks a new developer from a clean machine to all three apps running 
 
 No local database to install — the data plane is Firebase (`matchup-cs734`):
 Firestore + Realtime Database + Storage + FCM, accessed via the Admin SDK.
-See [`infra/database/README.md`](../../infra/database/README.md) for the
-retired PostgreSQL notes and [`infra/firebase/README.md`](../../infra/firebase/README.md)
-for Firebase setup.
+See [`infra/firebase/README.md`](../../infra/firebase/README.md) for Firebase setup.
 
 ## 2. Clone the repository
 

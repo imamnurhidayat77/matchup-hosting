@@ -4,7 +4,7 @@ MatchUp is a single-repository monorepo containing three applications that
 share typed contracts via local `packages/`.
 
 > Status note: this document describes the system **as built**. The
-> boilerplate-phase text (PostgreSQL, placeholder auth) it replaced is
+> boilerplate-phase text (placeholder auth) it replaced is
 > superseded below; phase history remains in `docs/initial-plan.md`.
 
 ## Applications

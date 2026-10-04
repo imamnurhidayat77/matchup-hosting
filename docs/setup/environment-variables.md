@@ -22,9 +22,6 @@ The root file at `.env.example` is the canonical reference. Per-app `.env.exampl
 | `NODE_ENV`               | no       | `development`            | One of `development`, `test`, `production`.                                |
 | `LOG_LEVEL`              | no       | `info`                   | One of `trace`, `debug`, `info`, `warn`, `error`, `fatal`.                 |
 
-> There is no `DATABASE_URL` — PostgreSQL/Prisma was retired in the MVP phase.
-> The API reads/writes Firestore + RTDB via the Firebase Admin SDK.
-
 ### Admin web (`apps/admin-web`)
 
 | Variable             | Required | Default                 | Description                                                       |
