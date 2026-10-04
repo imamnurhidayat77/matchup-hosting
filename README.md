@@ -341,6 +341,7 @@ Reviewed every data-changing endpoint for BOLA (details: [Wiki Lab 07 page](http
 - **Accepted gaps** — RTDB `activityChats`/`typing` reads are any-authenticated-user (needs a membership index to tighten; API layer gates correctly, writes are backend-only).
 
 ## Configuration
+The project private keys is compressed in ZIP format. The each application environment file is already store based on this project structure. To implement the environment variable is <strong>to just copy the "apps" folder inside "nimble-takahe-private-keys" to the project root</strong>
 
 Key variables (see [environment variables doc](docs/setup/environment-variables.md) and each app's `.env.example`):
 
