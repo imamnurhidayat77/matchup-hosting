@@ -428,7 +428,7 @@ export function ActivityDetailPage() {
             <div className="h-2 w-full overflow-hidden rounded-full bg-ink-100">
               <div
                 className="h-full rounded-full"
-                style={{ width: `${pct}%`, backgroundColor: isFull ? '#f59e0b' : '#0b1f8a' }}
+                style={{ width: `${pct}%`, backgroundColor: isFull ? '#f59e0b' : 'var(--brand-graphic)' }}
               />
             </div>
             <p className="mt-1.5 text-xs text-ink-400">

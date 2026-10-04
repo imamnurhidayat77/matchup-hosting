@@ -16,6 +16,7 @@
   --text-primary: #0f172a;
   --text-secondary: #475569;
   --text-muted: #94a3b8;
+  --brand-graphic: #0b1f8a; /* chart lines, bars, dots, progress fills */
 }
 
 .dark {
@@ -28,6 +29,8 @@
   --text-primary: #f1f5f9;
   --text-secondary: #94a3b8;
   --text-muted: #8899ae;
+  /* Navy #0b1f8a is 1.1:1 on bg-surface — lift brand graphics to a light blue */
+  --brand-graphic: #7c9cff; /* 5.6:1 on #1e293b */
 }
 
 html,
@@ -87,6 +90,49 @@ body:not(.dark) textarea::placeholder {
 .dark .text-ink-300 {
   color: #7e91a8 !important;
 } /*  4.5:1 */
+
+/* Brand navy text (#0b1f8a family) is ~1.1:1 on bg-surface — lift to brand-300 */
+.dark .text-brand-400,
+.dark .text-brand-500,
+.dark .text-brand-600,
+.dark .text-brand-700,
+.dark .group:hover .group-hover\:text-brand-400 {
+  color: #8fadf6 !important;
+} /*  6.6:1 */
+
+/* ════════════════════════════════════════════════════════════════════════════
+   DARK MODE — BRAND FILLS
+   Navy fills vanish against the dark surface; white text on #3b5bdb is 5.7:1
+   ════════════════════════════════════════════════════════════════════════════ */
+.dark .bg-brand-500,
+.dark .bg-brand-600 {
+  background-color: #3b5bdb !important;
+}
+.dark .hover\:bg-brand-600:hover,
+.dark .hover\:bg-brand-700:hover {
+  background-color: #4263eb !important;
+}
+.dark .border-brand-500 {
+  border-color: #3b5bdb !important;
+}
+/* Status dots and bar/progress fills */
+.dark .bg-brand-400,
+.dark .bg-brand-700 {
+  background-color: #7c9cff !important;
+}
+/* Light tints (pills, info boxes) would otherwise stay pale behind light text */
+.dark .bg-brand-50,
+.dark .bg-brand-100 {
+  background-color: rgba(79, 114, 224, 0.2) !important;
+}
+.dark .hover\:bg-brand-50:hover,
+.dark .hover\:bg-brand-100:hover {
+  background-color: rgba(79, 114, 224, 0.32) !important;
+}
+.dark .border-brand-100,
+.dark .border-brand-200 {
+  border-color: rgba(143, 173, 246, 0.35) !important;
+}
 
 /* ════════════════════════════════════════════════════════════════════════════
    DARK MODE — STATIC BACKGROUNDS
@@ -247,6 +293,18 @@ body:not(.dark) textarea::placeholder {
     background-color: rgba(220, 38, 38, 0.25);
     color: #fca5a5;
   }
+  .dark .btn-primary {
+    background-color: #3b5bdb;
+  }
+  .dark .btn-primary:hover {
+    background-color: #4263eb;
+  }
+  .dark .btn-ghost {
+    color: #8fadf6;
+  }
+  .dark .btn-ghost:hover {
+    background-color: rgba(79, 114, 224, 0.2);
+  }
   .dark .badge-neutral {
     background-color: #263244;
     color: #94a3b8;
@@ -299,7 +357,7 @@ body:not(.dark) textarea::placeholder {
     color: var(--text-muted);
   }
   .input:focus {
-    border-color: #0b1f8a;
+    border-color: var(--brand-graphic);
     box-shadow: 0 0 0 2px rgba(11, 31, 138, 0.15);
   }
 }

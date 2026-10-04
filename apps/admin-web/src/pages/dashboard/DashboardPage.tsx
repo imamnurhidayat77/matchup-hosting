@@ -238,7 +238,7 @@ function TrendChart({ trend }: { trend: TrendPoint[] }) {
       <polyline
         points={actPts}
         fill="none"
-        stroke="#0b1f8a"
+        style={{ stroke: 'var(--brand-graphic)' }}
         strokeWidth="2.5"
         strokeLinejoin="round"
         strokeLinecap="round"
@@ -252,7 +252,7 @@ function TrendChart({ trend }: { trend: TrendPoint[] }) {
           cy={yOf(pt.activities)}
           r="4"
           fill={isDark ? '#1e293b' : '#fff'}
-          stroke="#0b1f8a"
+          style={{ stroke: 'var(--brand-graphic)' }}
           strokeWidth="2"
         />
       ))}
@@ -479,7 +479,7 @@ function ActivitiesTable({
                       className="h-full rounded-full"
                       style={{
                         width: `${Math.min((row.participants / row.capacity) * 100, 100)}%`,
-                        backgroundColor: row.participants >= row.capacity ? '#f59e0b' : '#0b1f8a',
+                        backgroundColor: row.participants >= row.capacity ? '#f59e0b' : 'var(--brand-graphic)',
                       }}
                     />
                   </div>
@@ -528,7 +528,7 @@ function ActivitiesTable({
                   className="h-full rounded-full"
                   style={{
                     width: `${Math.min((row.participants / row.capacity) * 100, 100)}%`,
-                    backgroundColor: row.participants >= row.capacity ? '#f59e0b' : '#0b1f8a',
+                    backgroundColor: row.participants >= row.capacity ? '#f59e0b' : 'var(--brand-graphic)',
                   }}
                 />
               </div>
