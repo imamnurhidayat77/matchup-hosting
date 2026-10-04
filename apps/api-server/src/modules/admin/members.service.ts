@@ -10,6 +10,8 @@ export type AdminMemberView = {
   photoUrl?: string;
   status: UserStatus;
   createdAt: string | null;
+  sports: { sport: string; level: string }[];
+  rating: number;
   activitiesCount?: number;
   hostedCount?: number;
 };
@@ -38,6 +40,36 @@ function mapMemberRow(
   data: FirebaseFirestore.DocumentData | undefined,
 ): AdminMemberView | null {
   if (!data || typeof data.email !== 'string') return null;
+  // Sports come straight from the profile; levels fall back to blank when unset.
+  const preferred = Array.isArray(data.preferredSports)
+    ? (data.preferredSports as unknown[]).filter(
+        (s): s is string => typeof s === 'string' && s.length > 0,
+      )
+    : [];
+  const levels =
+    data.sportSkillLevels !== null &&
+    typeof data.sportSkillLevels === 'object' &&
+    !Array.isArray(data.sportSkillLevels)
+      ? (data.sportSkillLevels as Record<string, unknown>)
+      : {};
+  // Weighted average across per-sport aggregates; 0 when never rated.
+  let ratingSum = 0;
+  let ratingCount = 0;
+  const bySport =
+    data.ratingBySport !== null &&
+    typeof data.ratingBySport === 'object' &&
+    !Array.isArray(data.ratingBySport)
+      ? (data.ratingBySport as Record<string, unknown>)
+      : {};
+  for (const entry of Object.values(bySport)) {
+    if (entry !== null && typeof entry === 'object' && !Array.isArray(entry)) {
+      const rec = entry as { average?: unknown; count?: unknown };
+      if (typeof rec.average === 'number' && typeof rec.count === 'number' && rec.count > 0) {
+        ratingSum += rec.average * rec.count;
+        ratingCount += rec.count;
+      }
+    }
+  }
   return {
     uid: id,
     email: data.email,
@@ -45,6 +77,11 @@ function mapMemberRow(
     ...(typeof data.photoUrl === 'string' ? { photoUrl: data.photoUrl } : {}),
     status: isUserStatus(data.status) ? data.status : 'active',
     createdAt: toIso(data.createdAt),
+    sports: preferred.map((sport) => ({
+      sport,
+      level: typeof levels[sport] === 'string' ? (levels[sport] as string) : '',
+    })),
+    rating: ratingCount > 0 ? Math.round((ratingSum / ratingCount) * 10) / 10 : 0,
   };
 }
 
@@ -61,7 +98,9 @@ export async function listMembers(limit: number): Promise<AdminMemberView[]> {
     const view = mapMemberRow(doc.id, doc.data());
     if (view) views.push(view);
   }
-  return views;
+  // Per-row participation counts (parallel aggregations; failures degrade to zero per user).
+  const counts = await Promise.all(views.map((view) => countUserActivities(view.uid)));
+  return views.map((view, i) => ({ ...view, ...counts[i] }));
 }
 
 export type MembersSummary = {

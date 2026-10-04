@@ -98,6 +98,34 @@ describe('listMembers', () => {
     expect(firestore.collection).toHaveBeenCalledWith('users');
   });
 
+  it('enriches rows with sports, rating, and participation counts', async () => {
+    mockUsersCollection([
+      {
+        id: 'u-1',
+        data: userRow({
+          preferredSports: ['Football', 'Tennis'],
+          sportSkillLevels: { Football: 'intermediate' },
+          ratingBySport: {
+            Football: { average: 4.5, count: 2 },
+            Tennis: { average: 3.0, count: 1 },
+          },
+        }),
+      },
+    ]);
+    const rows = await listMembers(20);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      sports: [
+        { sport: 'Football', level: 'intermediate' },
+        { sport: 'Tennis', level: '' },
+      ],
+      // Weighted average: (4.5*2 + 3.0*1) / 3 = 4.0.
+      rating: 4,
+    });
+    // Counts come from the mocked aggregation (3 participants, 0 hosted).
+    expect(rows[0]).toMatchObject({ activitiesCount: 3, hostedCount: 0 });
+  });
+
   it('rejects out-of-range limit', async () => {
     mockUsersCollection([]);
     await expect(listMembers(0)).rejects.toThrow('limit must be between 1 and 100');
