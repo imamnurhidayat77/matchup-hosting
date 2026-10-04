@@ -14,7 +14,7 @@ This repository contains the **source code** for the MatchUp platform: a cross-p
 - [Tech Stack](#tech-stack)
 - [Repository Structure](#repository-structure)
 - [Installation](#installation)
-- [Demo Accounts & Seed Data](#demo-accounts--seed-data)
+- [Demo Accounts](#demo-accounts)
 - [Scripts by App](#scripts-by-app)
 - [Testing](#testing)
 - [Security](#security)
@@ -269,17 +269,21 @@ cd apps/mobile && flutter run
 - Admin web: open http://localhost:5173
 - Mobile: launches in your emulator/device
 
-## Demo Accounts & Seed Data
+## Demo Accounts
 
-Seed a full demo world (5 Auth users, activities incl. full/split-cost/completed games, swipes, notifications, RTDB chats, ratings, 15 sports, 13 notification templates):
+Demo logins (same password for all): `alex.mercer@matchup.demo`, `sarah.chen@matchup.demo`, `mike.chen@matchup.demo`, `lisa.park@matchup.demo`, `james.wilson@matchup.demo` — password `MatchUp123!`. These accounts are players/hosts for the mobile app.
 
-```bash
-cd apps/api-server && npm run seed
-```
+### Admin account (admin web)
 
-Demo logins (same password for all): `alex.mercer@matchup.demo`, `sarah.chen@matchup.demo`, `mike.chen@matchup.demo`, `lisa.park@matchup.demo`, `james.wilson@matchup.demo` — password `MatchUp123!`. For a dense Auckland map: `npm run seed:akl100` (destructive re-seed, 100 activities).
+The admin web (`/login`) only accepts admin accounts. There is no default admin password — access is granted server-side to a Firebase Auth uid, then proven at login via `GET /api/admin/me` (non-admins get `403`):
 
-Admin access is granted server-side (Firestore `admins/{uid}` doc or `ADMIN_UIDS` bootstrap allowlist) and proven at login via `GET /api/admin/me` — seed users are players/hosts, so ask the team for an admin uid or add your own.
+1. Sign up or sign in once (mobile app or admin web login) to obtain your Firebase Auth uid.
+2. Grant admin in one of two ways:
+   - Local: add the uid to `ADMIN_UIDS` in `apps/api-server/.env` (comma-separated bootstrap allowlist), restart the API; or
+   - Deployed: create a Firestore document `admins/{uid}` (any fields, e.g. `{ "role": "admin" }`).
+3. Log in to the admin web with that account — all moderation routes unlock.
+
+Demo accounts above are players/hosts, so they cannot open the admin web until their uid is allowlisted as above — ask the team for an existing admin uid if needed.
 
 ## Scripts by App
 
