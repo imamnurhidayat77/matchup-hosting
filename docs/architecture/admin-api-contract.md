@@ -27,6 +27,7 @@ the ID token as `admin_id_token`. No password endpoint exists by design.
 | Method & path | Notes |
 |---|---|
 | `GET /api/admin/members?limit=` | 1–100, default 20. No counts (keeps the list cheap) |
+| `GET /api/admin/members/summary` | Collection-wide `{ total, active, suspended }` via count aggregation (header cards) |
 | `GET /api/admin/members/:uid` | Detail + live `activitiesCount`/`hostedCount` |
 | `PATCH /api/admin/members/:uid/status` | `{ status: 'active' \| 'suspended' }` — allowlisted, nothing else writable |
 | `DELETE /api/admin/members/:uid` | Auth account + user doc + email index |
@@ -39,6 +40,7 @@ suspended`) on every request. Docs without a `status` field read as
 | Method & path | Notes |
 |---|---|
 | `GET /api/admin/activities?limit=` | Newest-first, host names best-effort |
+| `GET /api/admin/activities/summary` | Collection-wide `{ total, open, full, cancelled, completed, removed }` via count aggregation (header cards) |
 | `PATCH /api/admin/activities/:id/status` | `open \| cancelled \| completed \| removed` (`removed` = hidden everywhere) |
 | `DELETE /api/admin/activities/:id` | Doc only — subcollections stay orphaned (no Firestore cascade) |
 

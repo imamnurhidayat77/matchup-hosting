@@ -64,6 +64,25 @@ export async function listMembers(limit: number): Promise<AdminMemberView[]> {
   return views;
 }
 
+export type MembersSummary = {
+  total: number;
+  active: number;
+  suspended: number;
+};
+
+/** Collection-wide member totals for the admin header cards (aggregation only, no doc reads). */
+export async function getMembersSummary(): Promise<MembersSummary> {
+  // Docs without an explicit status behave as active (see mapMemberRow), so
+  // active is derived as total minus suspended rather than counted directly.
+  const [totalSnap, suspendedSnap] = await Promise.all([
+    firestore.collection('users').count().get(),
+    firestore.collection('users').where('status', '==', 'suspended').count().get(),
+  ]);
+  const total = totalSnap.data().count;
+  const suspended = suspendedSnap.data().count;
+  return { total, active: total - suspended, suspended };
+}
+
 /** Member detail with live participation counts (reuses the user module). */
 export async function getMemberDetail(uid: string): Promise<AdminMemberView> {
   // Return one admin projection, including aggregate activity counts when available.

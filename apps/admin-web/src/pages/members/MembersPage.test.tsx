@@ -4,12 +4,14 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 
-const { useMembersMock, toastPushMock, downloadCsvMock } = vi.hoisted(() => ({
+const { useMembersMock, toastPushMock, downloadCsvMock, fetchSummaryMock } = vi.hoisted(() => ({
   useMembersMock: vi.fn(),
   toastPushMock: vi.fn(),
   downloadCsvMock: vi.fn(),
+  fetchSummaryMock: vi.fn(),
 }));
 vi.mock('../../hooks/useMembers', () => ({ useMembers: useMembersMock }));
+vi.mock('../../services/membersService', () => ({ fetchMembersSummary: fetchSummaryMock }));
 vi.mock('../../context/ToastContext', () => ({ useToast: () => ({ push: toastPushMock }) }));
 vi.mock('../../utils/csvExport', () => ({ downloadCsv: downloadCsvMock }));
 
@@ -36,6 +38,21 @@ function makeMember(overrides = {}) {
 describe('MembersPage bulk audit fixes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default: no collection summary, so header cards fall back to page counts.
+    fetchSummaryMock.mockRejectedValue(new Error('offline'));
+  });
+
+  it('shows collection-wide totals from the summary endpoint, not page counts', async () => {
+    fetchSummaryMock.mockResolvedValue({ total: 26, active: 25, suspended: 1 });
+    mockMembers([makeMember({ id: 'm1' })]);
+    render(
+      <MemoryRouter>
+        <MembersPage />
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(fetchSummaryMock).toHaveBeenCalled());
+    // Header cards reflect the collection (26), not the single loaded row.
+    expect(screen.getByText('Total Members').previousSibling?.textContent ?? '').toContain('26');
   });
 
   function mockMembers(members: unknown[], hookOverrides = {}) {

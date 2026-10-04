@@ -55,6 +55,35 @@ async function hostDisplayName(hostId: string): Promise<string> {
   }
 }
 
+export type ActivitiesSummary = {
+  total: number;
+  open: number;
+  full: number;
+  cancelled: number;
+  completed: number;
+  removed: number;
+};
+
+/** Collection-wide activity totals for the admin header cards (aggregation only, no doc reads). */
+export async function getActivitiesSummary(): Promise<ActivitiesSummary> {
+  const statuses = ['open', 'full', 'cancelled', 'completed', 'removed'] as const;
+  const [totalSnap, ...statusSnaps] = await Promise.all([
+    firestore.collection('activities').count().get(),
+    ...statuses.map((status) =>
+      firestore.collection('activities').where('status', '==', status).count().get(),
+    ),
+  ]);
+  const counts = statusSnaps.map((snap) => snap.data().count);
+  return {
+    total: totalSnap.data().count,
+    open: counts[0] ?? 0,
+    full: counts[1] ?? 0,
+    cancelled: counts[2] ?? 0,
+    completed: counts[3] ?? 0,
+    removed: counts[4] ?? 0,
+  };
+}
+
 /** Newest-first admin table. Host names resolved best-effort. */
 export async function listAdminActivities(limit: number): Promise<AdminActivityView[]> {
   // Validate the requested window and map stored activity records into the admin list projection.

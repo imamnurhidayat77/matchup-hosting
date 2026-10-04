@@ -14,6 +14,7 @@ import { firestore } from '../../database/firebase.js';
 import { logAdminAction } from './audit.service.js';
 import {
   deleteAdminActivity,
+  getActivitiesSummary,
   listAdminActivities,
   setAdminActivityStatus,
 } from './activities.service.js';
@@ -215,5 +216,35 @@ describe('deleteAdminActivity', () => {
         targetLabel: 'Sunday Run',
       }),
     );
+  });
+});
+
+describe('getActivitiesSummary', () => {
+  it('counts totals per status via aggregation', async () => {
+    const counts: Record<string, number> = {
+      all: 165,
+      open: 49,
+      full: 4,
+      cancelled: 4,
+      completed: 108,
+      removed: 0,
+    };
+    vi.mocked(firestore.collection).mockImplementation(((name: string) => {
+      if (name !== 'activities') throw new Error(`unexpected collection ${name}`);
+      return {
+        count: () => ({ get: async () => ({ data: () => ({ count: counts.all }) }) }),
+        where: vi.fn().mockImplementation((_field: string, _op: string, status: string) => ({
+          count: () => ({ get: async () => ({ data: () => ({ count: counts[status] ?? 0 }) }) }),
+        })),
+      };
+    }) as never);
+    await expect(getActivitiesSummary()).resolves.toEqual({
+      total: 165,
+      open: 49,
+      full: 4,
+      cancelled: 4,
+      completed: 108,
+      removed: 0,
+    });
   });
 });

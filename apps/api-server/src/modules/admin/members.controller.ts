@@ -4,6 +4,7 @@ import {
   ADMIN_MEMBERS_PAGE_LIMIT_DEFAULT,
   deleteMember,
   getMemberDetail,
+  getMembersSummary,
   listMembers,
   setMemberStatus,
 } from './members.service.js';
@@ -22,6 +23,19 @@ export async function listMembersHandler(req: Request, res: Response) {
         error: { code: 'INVALID_INPUT', message },
       });
     }
+    return res.status(500).json({
+      ok: false,
+      error: { code: 'INTERNAL_ERROR', message },
+    });
+  }
+}
+
+export async function getMembersSummaryHandler(_req: Request, res: Response) {
+  try {
+    const summary = await getMembersSummary();
+    return res.status(200).json({ ok: true, data: summary });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
     return res.status(500).json({
       ok: false,
       error: { code: 'INTERNAL_ERROR', message },

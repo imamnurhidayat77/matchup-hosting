@@ -12,7 +12,13 @@ vi.mock('./audit.service.js', () => ({
 
 import { auth, firestore } from '../../database/firebase.js';
 import { logAdminAction } from './audit.service.js';
-import { deleteMember, getMemberDetail, listMembers, setMemberStatus } from './members.service.js';
+import {
+  deleteMember,
+  getMemberDetail,
+  getMembersSummary,
+  listMembers,
+  setMemberStatus,
+} from './members.service.js';
 
 const userRow = (overrides: Record<string, unknown> = {}) => ({
   email: 'athlete@example.com',
@@ -96,6 +102,31 @@ describe('listMembers', () => {
     mockUsersCollection([]);
     await expect(listMembers(0)).rejects.toThrow('limit must be between 1 and 100');
     await expect(listMembers(101)).rejects.toThrow('limit must be between 1 and 100');
+  });
+});
+
+describe('getMembersSummary', () => {
+  it('counts totals via aggregation, deriving active as total minus suspended', async () => {
+    const counts = new Map([
+      ['all', 26],
+      ['suspended', 1],
+    ]);
+    vi.mocked(firestore.collection).mockImplementation(((name: string) => {
+      if (name !== 'users') throw new Error(`unexpected collection ${name}`);
+      return {
+        count: () => ({ get: async () => ({ data: () => ({ count: counts.get('all') }) }) }),
+        where: vi.fn().mockReturnValue({
+          count: () => ({
+            get: async () => ({ data: () => ({ count: counts.get('suspended') }) }),
+          }),
+        }),
+      };
+    }) as never);
+    await expect(getMembersSummary()).resolves.toEqual({
+      total: 26,
+      active: 25,
+      suspended: 1,
+    });
   });
 });
 

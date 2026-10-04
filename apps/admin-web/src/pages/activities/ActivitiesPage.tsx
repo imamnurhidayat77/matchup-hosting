@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useActivities } from '../../hooks/useActivities';
+import { fetchActivitiesSummary, type ActivitiesSummary } from '../../services/activitiesService';
 import {
   ActivitiesPageSkeleton,
   PageError,
@@ -91,6 +92,22 @@ export function ActivitiesPage() {
   } | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
+  // Collection-wide totals for the header cards (the list is page-capped).
+  const [summary, setSummary] = useState<ActivitiesSummary | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetchActivitiesSummary()
+      .then((s) => {
+        if (!cancelled) setSummary(s);
+      })
+      .catch(() => {
+        if (!cancelled) setSummary(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
     // Let admins focus search with '/', unless they are already typing in a text field.
     function onKey(e: KeyboardEvent) {
@@ -175,12 +192,19 @@ export function ActivitiesPage() {
     dateRange !== 'All',
   ].filter(Boolean).length;
 
-  // Summary cards describe the full activity set, independent of table filters.
+  // Summary cards describe the full collection; the table below is page-capped.
+  // Falls back to page counts when the summary fetch fails (offline/CSP).
   const stats = [
-    { label: 'Total Activities', value: activities.length },
-    { label: 'Active', value: activities.filter((a) => a.status === 'Active').length },
-    { label: 'Flagged', value: activities.filter((a) => a.status === 'Flagged').length },
-    { label: 'Full', value: activities.filter((a) => a.status === 'Full').length },
+    { label: 'Total Activities', value: summary?.total ?? activities.length },
+    {
+      label: 'Active',
+      value: summary?.open ?? activities.filter((a) => a.status === 'Active').length,
+    },
+    {
+      label: 'Flagged',
+      value: summary?.removed ?? activities.filter((a) => a.status === 'Flagged').length,
+    },
+    { label: 'Full', value: summary?.full ?? activities.filter((a) => a.status === 'Full').length },
   ];
 
   return (

@@ -3,6 +3,7 @@ import type { Request, Response } from 'express';
 import {
   ADMIN_ACTIVITIES_LIMIT_DEFAULT,
   deleteAdminActivity,
+  getActivitiesSummary,
   listAdminActivities,
   setAdminActivityStatus,
 } from './activities.service.js';
@@ -58,6 +59,19 @@ export async function setAdminActivityStatusHandler(req: Request<{ id: string }>
         error: { code: 'NOT_FOUND', message },
       });
     }
+    return res.status(500).json({
+      ok: false,
+      error: { code: 'INTERNAL_ERROR', message },
+    });
+  }
+}
+
+export async function getActivitiesSummaryHandler(_req: Request, res: Response) {
+  try {
+    const summary = await getActivitiesSummary();
+    return res.status(200).json({ ok: true, data: summary });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
     return res.status(500).json({
       ok: false,
       error: { code: 'INTERNAL_ERROR', message },
