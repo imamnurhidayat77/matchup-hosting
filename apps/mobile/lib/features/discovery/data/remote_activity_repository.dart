@@ -370,7 +370,7 @@ class RemoteActivityRepository implements ActivityRepository {
   Future<ActivityModel> create({
     required String title,
     required String sportType,
-    required String description,
+    String description = '',
     required String location,
     required DateTime dateTime,
     required int maxParticipants,
@@ -400,7 +400,7 @@ class RemoteActivityRepository implements ActivityRepository {
         data: {
           'title': title,
           'sportType': sportType,
-          'description': description,
+          if (description.trim().isNotEmpty) 'description': description.trim(),
           'locationName': location,
           if (trimmedAddress != null && trimmedAddress.isNotEmpty)
             'address': trimmedAddress,
@@ -445,7 +445,7 @@ class RemoteActivityRepository implements ActivityRepository {
         id: createdId,
         title: title,
         sportType: sportType,
-        description: description,
+        description: description.trim(),
         location: location,
         addressLine: trimmedAddress?.isNotEmpty == true ? trimmedAddress : null,
         distanceKm: 0,

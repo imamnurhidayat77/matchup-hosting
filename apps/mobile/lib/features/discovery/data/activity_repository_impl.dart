@@ -73,7 +73,7 @@ class LocalActivityRepository implements ActivityRepository {
   Future<ActivityModel> create({
     required String title,
     required String sportType,
-    required String description,
+    String description = '',
     required String location,
     required DateTime dateTime,
     required int maxParticipants,

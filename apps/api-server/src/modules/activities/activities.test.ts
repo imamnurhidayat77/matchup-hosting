@@ -167,7 +167,52 @@ describe('activities routes', () => {
         error: {
           code: 'INVALID_INPUT',
           message:
-            'title, sportType, description, locationName, geohash, and startTime must be strings',
+            'title, sportType, locationName, geohash, and startTime must be strings',
+        },
+      });
+    });
+
+    it('when description is omitted => expected 201', async () => {
+      const app = createApp();
+
+      const response = await request(app).post('/api/activities').send({
+        title: 'Evening Futsal',
+        sportType: 'futsal',
+        locationName: 'Auckland Domain',
+        latitude: -36.8585,
+        longitude: 174.775,
+        geohash: 'rckq2m',
+        startTime: '2026-08-19T18:30:00+12:00',
+        skillLevel: 'any',
+        capacity: 10,
+      });
+
+      expect(response.status).toBe(201);
+      expect(activitiesService.createActivity).toHaveBeenCalledWith(
+        expect.objectContaining({ description: '' }),
+      );
+    });
+
+    it('when description is not a string => expected 400 w/ INVALID_INPUT', async () => {
+      const app = createApp();
+
+      const response = await request(app).post('/api/activities').send({
+        title: 'Evening Futsal',
+        sportType: 'futsal',
+        description: 123,
+        locationName: 'Auckland Domain',
+        geohash: 'rckq2m',
+        startTime: '2026-08-19T18:30:00+12:00',
+        skillLevel: 'any',
+        capacity: 10,
+      });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        ok: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'description must be a string when provided',
         },
       });
     });
@@ -319,7 +364,7 @@ describe('activities routes', () => {
         error: {
           code: 'EMPTY_INPUT',
           message:
-            'title, sportType, description, locationName, geohash, and startTime are required',
+            'title, sportType, locationName, geohash, and startTime are required',
         },
       });
     });

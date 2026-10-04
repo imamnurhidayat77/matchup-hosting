@@ -15,7 +15,7 @@ export type CreateActivityInput = {
   hostId: string;
   title: string;
   sportType: string;
-  description: string;
+  description?: string;
   locationName: string;
   address?: string;
   latitude: number;

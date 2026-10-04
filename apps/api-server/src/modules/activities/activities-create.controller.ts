@@ -10,7 +10,7 @@ export async function createActivityHandler(req: Request, res: Response) {
     const {
       title,
       sportType,
-      description,
+      description: rawDescription,
       locationName,
       address,
       latitude,
@@ -70,7 +70,6 @@ export async function createActivityHandler(req: Request, res: Response) {
     if (
       typeof title !== 'string' ||
       typeof sportType !== 'string' ||
-      typeof description !== 'string' ||
       typeof locationName !== 'string' ||
       typeof geohash !== 'string' ||
       typeof startTime !== 'string'
@@ -80,10 +79,20 @@ export async function createActivityHandler(req: Request, res: Response) {
         error: {
           code: 'INVALID_INPUT',
           message:
-            'title, sportType, description, locationName, geohash, and startTime must be strings',
+            'title, sportType, locationName, geohash, and startTime must be strings',
         },
       });
     }
+    if (rawDescription !== undefined && typeof rawDescription !== 'string') {
+      return res.status(400).json({
+        ok: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'description must be a string when provided',
+        },
+      });
+    }
+    const description = typeof rawDescription === 'string' ? rawDescription : '';
     if (
       (address !== undefined && typeof address !== 'string') ||
       (endTime !== undefined && typeof endTime !== 'string')
@@ -231,7 +240,6 @@ export async function createActivityHandler(req: Request, res: Response) {
     if (
       !title.trim() ||
       !sportType.trim() ||
-      !description.trim() ||
       !locationName.trim() ||
       !geohash.trim() ||
       !startTime.trim()
@@ -241,7 +249,7 @@ export async function createActivityHandler(req: Request, res: Response) {
         error: {
           code: 'EMPTY_INPUT',
           message:
-            'title, sportType, description, locationName, geohash, and startTime are required',
+            'title, sportType, locationName, geohash, and startTime are required',
         },
       });
     }

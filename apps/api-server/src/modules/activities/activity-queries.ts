@@ -31,7 +31,7 @@ export async function createActivity(input: CreateActivityInput): Promise<{ acti
   const hostId = input.hostId.trim();
   const title = input.title.trim();
   const sportType = input.sportType.trim();
-  const description = input.description.trim();
+  const description = input.description?.trim() ?? '';
   const locationName = input.locationName.trim();
   const address = input.address?.trim();
   const latitude = input.latitude;
@@ -47,7 +47,6 @@ export async function createActivity(input: CreateActivityInput): Promise<{ acti
   if (!hostId) throw new Error('hostId is required');
   if (!title) throw new Error('title is required');
   if (!sportType) throw new Error('sportType is required');
-  if (!description) throw new Error('description is required');
   if (!locationName) throw new Error('locationName is required');
   if (!geohash) throw new Error('geohash is required');
   if (!startTime) throw new Error('startTime is required');
