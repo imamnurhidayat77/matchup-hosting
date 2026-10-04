@@ -44,7 +44,7 @@ export async function fetchDashboard(): Promise<DashboardData> {
   const queue = Array.isArray(moderationQueue) ? moderationQueue : [];
   return {
     kpis: [
-      kpi('Total Users', Number(stats.totalUsers) || 0, '#0b1f8a'),
+      kpi('Total Users', Number(stats.totalUsers) || 0, 'var(--brand-graphic)'),
       kpi('Active Activities', Number(stats.activeActivities) || 0, '#16a34a'),
       kpi('Pending Reports', Number(stats.pendingReports) || 0, '#dc2626'),
       kpi('New Users (7d)', Number(stats.newUsersWeek) || 0, '#7c3aed'),
