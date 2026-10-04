@@ -6,22 +6,15 @@ This guide walks a new developer from a clean machine to all three apps running 
 
 | Tool       | Version  | Why                                |
 | ---------- | -------- | ---------------------------------- |
-| Node.js    | ≥ 20     | API + admin web                    |
-| npm        | ≥ 10     | package manager                    |
-| Flutter    | ≥ 3.44   | Mobile app                         |
-| Git        | any      | source control                     |
-| PostgreSQL | ≥ 14     | API database (optional for now)    |
+| Node.js    | ≥ 22     | API + admin web (CI uses 22)       |
+| npm        | ≥ 10     | package manager                      |
+| Flutter    | 3.44.8   | Mobile app (pinned in CI)          |
+| Git        | any      | source control                       |
+| Firebase CLI | optional | Storage/rules deploy, emulator   |
 
-macOS developers can install Postgres via Homebrew:
-
-```bash
-brew install postgresql@16
-brew services start postgresql@16
-createuser -s matchup
-createdb -O matchup matchup
-```
-
-See [`infra/database/README.md`](../../infra/database/README.md) for the full database setup, including a Docker Compose alternative.
+No local database to install — the data plane is Firebase (`matchup-cs734`):
+Firestore + Realtime Database + Storage + FCM, accessed via the Admin SDK.
+See [`infra/firebase/README.md`](../../infra/firebase/README.md) for Firebase setup.
 
 ## 2. Clone the repository
 
@@ -36,26 +29,30 @@ cd project-implementation-nimble-takahe
 cp .env.example .env
 ```
 
-The default values are fine for local development. Edit at minimum:
+The default values are fine for local development. Edit at minimum the Firebase
+service-account fields (Firebase Console → Project settings → Service accounts):
 
-- `DATABASE_URL` — only required if you intend to run migrations locally
+- `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`
+- `FIREBASE_DATABASE_URL`, `FIREBASE_WEB_API_KEY`, `FIREBASE_STORAGE_BUCKET`
+
+See `apps/api-server/.env.example` for the full list.
 
 For per-app overrides, copy each app's `.env.example`:
 
 ```bash
-cp apps/api/.env.example      apps/api/.env
-cp apps/admin-web/.env.example apps/admin-web/.env
-cp apps/mobile/.env.example   apps/mobile/.env
+cp apps/api-server/.env.example apps/api-server/.env
+cp apps/admin-web/.env.example    apps/admin-web/.env
+cp apps/mobile/.env.example       apps/mobile/.env
 ```
 
 ## 4. Install dependencies
 
 ```bash
 # API
-(cd apps/api && npm install)
+(cd apps/api-server && npm install)
 
-# Admin web
-(cd apps/admin-web && npm install)
+# Admin web (peer-dep mismatch between ESLint packages)
+(cd apps/admin-web && npm install --legacy-peer-deps)
 
 # Mobile
 (cd apps/mobile && flutter pub get)
@@ -89,9 +86,9 @@ Open three terminals.
 
 ```bash
 # Terminal A — API
-cd apps/api
+cd apps/api-server
 npm run dev
-# → http://localhost:4000/health
+# → http://localhost:4000/api/health
 ```
 
 ```bash
@@ -109,9 +106,9 @@ flutter run
 
 ## 6. Verify the setup
 
-- API health: `curl http://localhost:4000/health` should return `{"ok":true,"data":{"status":"ok","service":"matchup-api"}}`.
-- Admin web: open http://localhost:5173 — the dashboard shell should render with a "Discover" sidebar (placeholder pages).
-- Mobile: the Flutter app should launch in your emulator with the bottom navigation shell.
+- API health: `curl http://localhost:4000/api/health` should return `{"ok":true,"data":{"status":"ok","service":"api-server","database":"connected"}}`. If `database` reports unavailable, check the Firebase credentials in `apps/api-server/.env`.
+- Admin web: open http://localhost:5173 — the moderation cockpit (dashboard, members, activities, reports, appeals) behind admin login.
+- Mobile: the Flutter app should launch in your emulator with onboarding → discovery deck.
 
 ## Common issues
 
@@ -119,25 +116,30 @@ flutter run
 
 Install Flutter following the official guide: https://docs.flutter.dev/get-started/install.
 
-### `npm install` fails with ERESOLVE on the API
+### `npm install` fails with ERESOLVE on the admin web
 
-The API is currently using `--legacy-peer-deps` for a peer-dependency mismatch between `@eslint/js` and `@typescript-eslint/*`. Use:
+The admin web currently requires `--legacy-peer-deps` for a peer-dependency mismatch between ESLint packages. Use:
 
 ```bash
-cd apps/api && npm install --legacy-peer-deps
+cd apps/admin-web && npm install --legacy-peer-deps
 ```
 
 ### Port 4000 or 5173 already in use
 
-Override `PORT` in `apps/api/.env` or pass `--port` to Vite:
+Override `PORT` in `apps/api-server/.env` or pass `--port` to Vite:
 
 ```bash
 cd apps/admin-web && npm run dev -- --port 5174
 ```
 
-### API starts but `/health` reports `Offline`
+### API health returns `DB_UNAVAILABLE`
 
-The admin web dashboard calls `/health` via the browser. If you see "Offline", check that the API is running and that `VITE_API_BASE_URL` matches the API's actual port.
+Check that `apps/api-server/.env` has valid Firebase credentials and the
+service account has Firestore/Realtime Database access.
+
+### Admin web shows "Offline"
+
+The admin web calls `/api/health` via the browser. If you see "Offline", check that the API is running and that `VITE_API_BASE_URL` matches the API's actual port.
 
 ## Next steps
 

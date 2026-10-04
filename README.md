@@ -115,7 +115,6 @@ matchup/
 │   └── shared-utils/            # common helpers
 ├── infra/
 │   ├── firebase/                # RTDB rules, Firestore indexes, setup README
-│   ├── database/                # local Postgres setup notes
 │   ├── perf/                    # k6 load-test script
 │   ├── scripts/                 # secrets setup
 │   └── ci/                      # CI references
@@ -412,7 +411,6 @@ kotlin.incremental=false
 - [Boilerplate plan](docs/initial-plan.md) — what this phase delivers
 - [Local development guide](docs/setup/local-development.md)
 - [Environment variables](docs/setup/environment-variables.md)
-- [Database setup](infra/database/README.md)
 - [Firebase setup (RTDB rules + client config)](infra/firebase/README.md)
 - [Coding standards](docs/conventions/coding-standards.md)
 

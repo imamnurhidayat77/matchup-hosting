@@ -18,7 +18,7 @@ Included in scope:
 - mobile app bootstrap
 - admin web bootstrap
 - backend API bootstrap
-- PostgreSQL connection baseline
+- Firebase (Firestore + RTDB) baseline
 - Tailwind CSS setup for the React admin web
 - shared packages setup
 - environment configuration
@@ -47,7 +47,7 @@ The initial boilerplate will follow the stack already aligned with the proposal:
 - **Mobile app:** Flutter
 - **Admin web:** React.js + Tailwind CSS
 - **Backend API:** Node.js + Express
-- **Database:** PostgreSQL
+- **Database:** Firebase (Firestore + RTDB + Storage)
 - **Repository model:** Single repository
 
 The repo should be structured so that all platform applications live in one place while still being clearly separated. This will make onboarding easier, reduce configuration duplication, and allow the team to maintain shared documentation and conventions centrally.
@@ -92,7 +92,7 @@ At the end of this phase, the repository should already provide the following ba
 - the mobile app can run locally
 - the admin web can run locally with Tailwind CSS
 - the backend API can run locally
-- the backend can connect to PostgreSQL
+- the backend can connect to Firebase
 - shared configs and packages are initialized
 - linting and formatting rules are available
 - CI runs basic validation checks
@@ -311,8 +311,8 @@ The database phase in the boilerplate should remain minimal and focus only on re
 
 The database setup should include:
 
-- PostgreSQL connection
-- migration tooling
+- Firebase connection
+- Admin SDK wiring
 - seed structure
 - local development DB instructions
 - baseline database config
@@ -381,9 +381,8 @@ The repo assumes three environments:
 
 #### API
 - `PORT`
-- `DATABASE_URL`
-- `AUTH_SECRET`
-- `CORS_ORIGIN`
+- Firebase Admin SDK credentials (`FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`, `FIREBASE_DATABASE_URL`)
+- `CORS_ORIGINS`
 
 #### Admin Web
 - `VITE_API_BASE_URL` or equivalent client variable
@@ -500,7 +499,7 @@ Deliverables:
 
 Deliverables:
 
-- connect API to PostgreSQL
+- connect API to Firebase
 - add migration tooling
 - add seed structure
 - add health endpoint
@@ -524,8 +523,8 @@ The boilerplate phase is considered complete when all of the following are true:
 - the mobile app runs locally
 - the admin web runs locally with Tailwind CSS
 - the API runs locally
-- the API connects to PostgreSQL
-- migrations are initialized
+- the API connects to Firebase
+- Admin SDK is initialized
 - shared config exists
 - linting and formatting work
 - CI baseline runs successfully
