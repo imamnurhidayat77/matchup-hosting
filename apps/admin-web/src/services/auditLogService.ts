@@ -19,6 +19,7 @@ interface AuditLogEntryView {
   createdAt: string;
 }
 
+// Convert nullable wire fields into the stable entry shape used by the audit page.
 function toAuditLogEntry(view: AuditLogEntryView): AuditLogEntry {
   return {
     id: view.id,
@@ -43,6 +44,7 @@ export interface FetchAuditLogParams {
 }
 
 export async function fetchAuditLog(params: FetchAuditLogParams = {}): Promise<AuditLogEntry[]> {
+  // Add only supplied filters so an empty parameter object requests the default log window.
   const query = new URLSearchParams();
   if (params.category !== undefined) query.set('category', params.category);
   if (params.adminUid !== undefined) query.set('adminUid', params.adminUid);

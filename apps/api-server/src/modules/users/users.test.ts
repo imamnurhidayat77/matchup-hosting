@@ -1,6 +1,7 @@
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// Keep persistence behind service mocks so this suite verifies the users HTTP contract.
 vi.mock('./users.service.js', () => {
   return {
     bootstrapUser: vi.fn().mockResolvedValue({

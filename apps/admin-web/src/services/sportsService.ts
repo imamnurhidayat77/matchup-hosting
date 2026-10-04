@@ -18,6 +18,7 @@ export interface SportFlagPatch {
 }
 
 export async function updateSport(id: string, patch: SportFlagPatch): Promise<SportConfig> {
+  // Persist a partial toggle change and return the server's updated sport configuration.
   const res = await apiFetch<SportConfig>(`/api/admin/sports/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     body: JSON.stringify(patch),

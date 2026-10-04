@@ -15,7 +15,8 @@ export async function setPresence(uid: string, state: PresenceState): Promise<vo
 
   const record: PresenceRecord = {
     state,
-    lastChanged: Date.now(), // Use server timestamp - return again to validate the timestamp
+    // Store epoch milliseconds so clients can compare presence freshness without parsing a date.
+    lastChanged: Date.now(),
   };
 
   await rtdb.ref(presencePath(normalizedUid)).set(record);

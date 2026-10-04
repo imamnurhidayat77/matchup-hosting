@@ -1,4 +1,4 @@
-// Routes for members.
+/** Admin-only member lookup, status, and offboarding endpoints. */
 import { Router } from 'express';
 import { requireAuth, requireAdmin } from '../../middleware/auth.middleware.js';
 import {

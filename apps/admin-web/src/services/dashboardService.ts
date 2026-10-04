@@ -15,6 +15,7 @@ interface DashboardView {
 import { apiFetch } from './api';
 
 function kpi(title: string, rawValue: number, sparkColor: string): KpiData {
+  // Convert an aggregate into the display model expected by the dashboard cards.
   return {
     title,
     value: rawValue.toLocaleString('en-US'),
@@ -27,6 +28,7 @@ function kpi(title: string, rawValue: number, sparkColor: string): KpiData {
 }
 
 export async function fetchDashboard(): Promise<DashboardData> {
+  // Load dashboard sources concurrently, then adapt them into one page-level data model.
   const [stats, analytics, activities, moderationQueue] = await Promise.all([
     apiFetch<DashboardView>('/api/admin/dashboard').then((res) => {
       if (!res.ok) throw new Error(res.error.message);
@@ -49,6 +51,7 @@ export async function fetchDashboard(): Promise<DashboardData> {
       signups: w.signups,
     })),
     moderationQueue,
+    // Keep the dashboard preview short and normalize statuses for its smaller activity summary.
     activities: activities.slice(0, 8).map((a): ActivityRow => ({
       id: a.id,
       name: a.name,
@@ -69,6 +72,7 @@ export async function fetchDashboard(): Promise<DashboardData> {
 }
 
 export async function fetchModerationQueue(): Promise<ModerationItem[]> {
+  // Only pending reports belong in the actionable moderation queue.
   const pending = await fetchReports('pending');
   return pending.map((r) => ({
     id: r.id,

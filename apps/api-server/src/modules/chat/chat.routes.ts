@@ -30,6 +30,7 @@ const chatActivityParamsSchema = z.object({
 });
 
 // Inbox first: single-segment path, no conflict with `/:activityId/*`.
+// Validate message and poll bodies at the router boundary before controller code accesses typed fields.
 chatRouter.get('/conversations', requireAuth, listConversationsHandler);
 
 chatRouter.post('/messages', requireAuth, validateBody(sendMessageSchema), sendMessageHandler);

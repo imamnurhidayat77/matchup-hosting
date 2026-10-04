@@ -15,6 +15,7 @@ interface AdminMemberView {
   hostedCount?: number;
 }
 
+// Fill UI-only fields and translate backend status values into the member page model.
 function toMember(view: AdminMemberView): Member {
   const name =
     view.displayName && view.displayName.trim().length > 0
@@ -50,6 +51,7 @@ export async function fetchMember(id: string): Promise<Member> {
 }
 
 function toBackendStatus(status: MemberStatus): 'active' | 'suspended' {
+  // Keep the API's lowercase values separate from the title-case labels used in the UI.
   return status === 'Suspended' ? 'suspended' : 'active';
 }
 

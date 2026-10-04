@@ -130,7 +130,7 @@ export async function submitActivityRating(
     return { rateeUid, stars: entry.stars, wasHost: rateeUid === activity.hostId };
   });
 
-  // Everyone involved must belong to the activity (host counts).
+  // Check both the reviewer and every reviewed person against the activity roster.
   const involvedUids = new Set<string>([raterUid, ...ratings.map((r) => r.rateeUid)]);
   const membershipSnaps = await Promise.all(
     [...involvedUids].map((uid) =>
@@ -168,6 +168,7 @@ export async function submitActivityRating(
       ? (previous!.ratings as RatedParticipant[])
       : [];
 
+    // Replacements must remove the old contribution before adding the new one to each aggregate.
     const affectedRatees = new Set<string>([
       ...previousRatings.map((r) => r.rateeUid),
       ...ratings.map((r) => r.rateeUid),
@@ -187,7 +188,7 @@ export async function submitActivityRating(
       updatedAt: now,
     } satisfies ActivityRatingRecord);
 
-    // Fold the old submission out and the new one in, per ratee.
+    // Fold the old submission out and the new one in, preserving correct averages on resubmission.
     const isHostRole = (rateeUid: string, wasHost?: boolean): boolean =>
       wasHost ?? rateeUid === hostUid;
     const previousByRatee = new Map(

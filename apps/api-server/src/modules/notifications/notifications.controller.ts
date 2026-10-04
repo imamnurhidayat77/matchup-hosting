@@ -43,7 +43,7 @@ export async function listMyNotificationsHandler(req: Request, res: Response) {
   }
 }
 
-/** `GET /api/notifications/unread` — unread-only inbox (dedicated path, not `?unreadOnly=1`. */
+/** `GET /api/notifications/unread` returns the signed-in user's unread inbox entries. */
 export async function listUnreadNotificationsHandler(req: Request, res: Response) {
   try {
     const authUid = req.auth?.uid;

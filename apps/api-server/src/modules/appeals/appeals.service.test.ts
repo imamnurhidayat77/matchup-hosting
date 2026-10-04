@@ -1,4 +1,4 @@
-// Tests for appeals.service.
+// Use in-memory appeal, user, and activity stores to check decisions and their side effects.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../database/firebase.js', () => ({
@@ -38,6 +38,7 @@ const appealRow = (overrides: Record<string, unknown> = {}) => ({
 });
 
 function mockDb(appeals: Record<string, Record<string, unknown>> = {}) {
+  // Linked stores let approval tests observe the account or activity state changed by a decision.
   const appealStore: Store = new Map(Object.entries(appeals));
   const userStore: Store = new Map([
     ['u-1', { displayName: 'Athlete', email: 'a@x.com', status: 'suspended' }],
@@ -173,6 +174,16 @@ describe('decideAppeal', () => {
     );
   });
 
+  it('approving an account ban also reactivates the appellant', async () => {
+    const { userStore } = mockDb({
+      'ap-ban': appealRow({ type: 'account_ban' }),
+    });
+
+    await decideAppeal('ap-ban', 'approved', 'admin-1', null);
+
+    expect(userStore.get('u-1')).toMatchObject({ status: 'active' });
+  });
+
   it('approving an activity_removal reopens a removed activity', async () => {
     const { activityStore } = mockDb({
       'ap-1': appealRow({ type: 'activity_removal', relatedId: 'act-1' }),
@@ -232,6 +243,25 @@ describe('decideAppeal', () => {
     await expect(decideAppeal('ghost', 'approved', 'admin-1', null)).rejects.toThrow(
       'Appeal not found',
     );
+  });
+
+  it('rejects blank appeal ids and unsupported decisions before reading Firestore', async () => {
+    await expect(decideAppeal('  ', 'approved', 'admin-1', null)).rejects.toThrow(
+      'appealId is required',
+    );
+    await expect(decideAppeal('ap-1', 'pending' as never, 'admin-1', null)).rejects.toThrow(
+      'decision must be approved or rejected',
+    );
+  });
+
+  it('keeps the decision saved when notification delivery fails', async () => {
+    mockDb({ 'ap-1': appealRow() });
+    vi.mocked(createNotification).mockRejectedValueOnce(new Error('push unavailable'));
+
+    const row = await decideAppeal('ap-1', 'approved', 'admin-1', null);
+
+    expect(row.status).toBe('approved');
+    expect(logAdminAction).toHaveBeenCalledOnce();
   });
 });
 

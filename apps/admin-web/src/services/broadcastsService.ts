@@ -36,6 +36,7 @@ function formatSentAt(iso: string | null): string | undefined {
   });
 }
 
+// Convert the backend status and nullable timestamps into the broadcast model used by the UI.
 function toBroadcast(view: BroadcastView): Broadcast {
   const status: BroadcastStatus =
     view.status === 'sent' ? 'Sent' : view.status === 'scheduled' ? 'Scheduled' : 'Draft';
@@ -58,6 +59,7 @@ export async function fetchBroadcasts(): Promise<Broadcast[]> {
 }
 
 export async function createBroadcast(payload: CreateBroadcastPayload): Promise<Broadcast> {
+  // Scheduled records remain scheduled; immediate sends use create followed by the send endpoint.
   const created = await apiFetch<BroadcastView>('/api/admin/broadcasts', {
     method: 'POST',
     body: JSON.stringify(payload),

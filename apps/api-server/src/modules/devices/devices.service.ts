@@ -82,6 +82,7 @@ export async function registerDevice(input: RegisterDeviceInput): Promise<void> 
 
   assertDevicePlatform(platform);
 
+  // Re-registering a device refreshes its token without resetting its original creation time.
   const deviceRef = firestore.doc(userDeviceDocPath(uid, deviceId));
   const snap = await deviceRef.get();
 

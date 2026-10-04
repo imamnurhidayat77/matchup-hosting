@@ -42,6 +42,7 @@ export async function sendMessageHandler(req: Request, res: Response) {
       });
     }
 
+    // Require host or participant membership before storing a message.
     const canAccessChat = await canAccessActivityChat(activityId, senderId);
 
     if (!canAccessChat) {
@@ -348,6 +349,7 @@ export async function getReactionsHandler(req: Request<ReactionParams>, res: Res
     const canAccessChat = await canAccessActivityChat(activityId, uid);
     if (!canAccessChat) return forbiddenChat(res);
 
+    // A message id narrows the response; without one, return the activity-wide reaction summary.
     const data = messageId?.trim()
       ? await getMessageReactions(activityId, messageId)
       : await getReactions(activityId);

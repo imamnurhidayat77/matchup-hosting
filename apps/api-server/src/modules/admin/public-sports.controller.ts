@@ -5,6 +5,7 @@ import { listSports } from './sports.service.js';
 export async function listPublicSportsHandler(_req: Request, res: Response) {
   try {
     const rows = await listSports();
+    // Expose only enabled picker fields, omitting admin-only settings and activity counts.
     return res.status(200).json({
       ok: true,
       data: rows

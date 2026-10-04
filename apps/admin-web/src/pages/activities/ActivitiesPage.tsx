@@ -20,6 +20,7 @@ const PAGE_SIZE = 10;
 type DateRange = 'All' | 'Today' | 'This Week' | 'This Month';
 
 function matchesDateRange(dateStr: string, range: DateRange): boolean {
+  // Compare against local calendar boundaries so the date filters match the admin's locale.
   if (range === 'All') return true;
   const d = new Date(dateStr);
   const now = new Date();
@@ -62,6 +63,7 @@ function StatusBadge({ status }: { status: ActivityStatus }) {
 }
 
 function ProgressBar({ value, max }: { value: number; max: number }) {
+  // Cap the fill at capacity to keep over-capacity records from overflowing the track.
   const pct = Math.min((value / max) * 100, 100);
   return (
     <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-ink-200">
@@ -90,6 +92,7 @@ export function ActivitiesPage() {
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    // Let admins focus search with '/', unless they are already typing in a text field.
     function onKey(e: KeyboardEvent) {
       if (
         e.key === '/' &&
@@ -107,10 +110,11 @@ export function ActivitiesPage() {
   if (loading) return <ActivitiesPageSkeleton />;
   if (error) return <PageError message={error} onRetry={reload} />;
 
-  // Derive unique sports from data
+  // Build filter choices from the currently loaded records rather than a hard-coded list.
   const allSports = ['All', ...Array.from(new Set(activities.map((a) => a.sport))).sort()];
 
   function handleExport() {
+    // Export the complete loaded set; current search and page filters affect only the table.
     downloadCsv(
       activities.map((a) => ({
         Name: a.name,
@@ -129,6 +133,7 @@ export function ActivitiesPage() {
     toast('Activities exported as CSV.', 'info');
   }
 
+  // Apply all active criteria before calculating pages so pagination reflects visible results.
   const filtered = activities.filter((a) => {
     const matchSearch =
       a.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -143,6 +148,7 @@ export function ActivitiesPage() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
+  // Return to the first page whenever a criterion changes to avoid landing on an empty page.
   function applyFilter(f: string) {
     setStatusFilter(f);
     setPage(1);
@@ -169,6 +175,7 @@ export function ActivitiesPage() {
     dateRange !== 'All',
   ].filter(Boolean).length;
 
+  // Summary cards describe the full activity set, independent of table filters.
   const stats = [
     { label: 'Total Activities', value: activities.length },
     { label: 'Active', value: activities.filter((a) => a.status === 'Active').length },

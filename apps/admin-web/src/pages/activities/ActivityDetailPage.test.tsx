@@ -4,6 +4,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
+// Share service and toast mocks with the hook/page imports so each test can control outcomes.
 const { fetchActivitiesMock, updateActivityStatusMock, deleteActivityMock, toastPushMock } =
   vi.hoisted(() => ({
     fetchActivitiesMock: vi.fn(),
@@ -20,6 +21,7 @@ vi.mock('../../context/ToastContext', () => ({ useToast: () => ({ push: toastPus
 
 import { ActivityDetailPage } from './ActivityDetailPage';
 
+// Create a complete activity fixture and override only values relevant to a scenario.
 function makeActivity(overrides = {}) {
   return {
     id: 'a1',
@@ -46,6 +48,7 @@ function makeActivity(overrides = {}) {
   };
 }
 
+// Mount the detail page at a realistic route with a list destination for navigation.
 function renderPage() {
   return render(
     <MemoryRouter initialEntries={['/activities/a1']}>
@@ -58,6 +61,7 @@ function renderPage() {
 }
 
 describe('ActivityDetailPage audit fixes', () => {
+  // The cases cover available moderation actions, confirmation, and load-error recovery.
   beforeEach(() => {
     vi.clearAllMocks();
   });

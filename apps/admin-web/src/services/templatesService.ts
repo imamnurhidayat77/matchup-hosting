@@ -17,6 +17,7 @@ export interface TemplatePatch {
 }
 
 export async function updateTemplate(id: string, patch: TemplatePatch): Promise<NotifTemplate> {
+  // Apply only editable template fields and return the canonical updated record.
   const res = await apiFetch<NotifTemplate>(`/api/admin/templates/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     body: JSON.stringify(patch),

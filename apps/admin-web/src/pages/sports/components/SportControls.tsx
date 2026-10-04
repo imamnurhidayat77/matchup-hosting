@@ -10,6 +10,7 @@ export function Toggle({
   onChange: (v: boolean) => void;
   size?: 'sm' | 'md';
 }) {
+  // Stop row-level click handlers from treating a switch toggle as a row selection.
   const w = size === 'md' ? 'w-11 h-6' : 'w-8 h-4';
   const t = size === 'md' ? 'h-4 w-4' : 'h-3 w-3';
   const on = size === 'md' ? 'translate-x-6' : 'translate-x-4';
@@ -41,6 +42,7 @@ export function SurfaceChip({
   active: boolean;
   tooltip: string;
 }) {
+  // Show whether this surface is enabled and explain its meaning on hover.
   return (
     <span
       title={tooltip}

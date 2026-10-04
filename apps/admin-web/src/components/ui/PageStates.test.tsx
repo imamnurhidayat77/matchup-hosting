@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { EmptyState, PageError, Skeleton } from './PageStates';
 
 describe('Skeleton', () => {
+  // Check that callers can size a placeholder without losing the shared loading animation.
   it('applies the given className alongside the pulse styling', () => {
     const { container } = render(<Skeleton className="h-4 w-10" />);
     expect(container.firstChild).toHaveClass('animate-pulse', 'h-4', 'w-10');
@@ -12,6 +13,7 @@ describe('Skeleton', () => {
 });
 
 describe('PageError', () => {
+  // Verify the failure message and that retry delegates to the page's reload callback.
   it('shows the failure message', () => {
     render(<PageError message="network down" onRetry={vi.fn()} />);
     expect(screen.getByText('Failed to load: network down')).toBeInTheDocument();
@@ -28,6 +30,7 @@ describe('PageError', () => {
 });
 
 describe('EmptyState', () => {
+  // Cover the minimal empty state as well as optional description and action content.
   it('renders the title without optional description, icon, or action', () => {
     render(<EmptyState title="No members yet" />);
     expect(screen.getByText('No members yet')).toBeInTheDocument();

@@ -28,6 +28,7 @@ type UpdateActivityCoverParams = {
 
 export async function updateActivityHandler(req: Request<UpdateActivityParams>, res: Response) {
   try {
+    // Use the authenticated uid as the host identity; the body contains only editable fields.
     const hostId = req.auth?.uid;
     const { activityId } = req.params;
     const {
@@ -343,6 +344,7 @@ export async function updateActivityStatusHandler(
   res: Response,
 ) {
   try {
+    // Restrict lifecycle changes to the supported host actions before calling the service.
     const hostId = req.auth?.uid;
     const { activityId } = req.params;
     const { status } = req.body as {
@@ -488,6 +490,7 @@ export async function updateActivityCoverHandler(
   res: Response,
 ) {
   try {
+    // The service verifies that the cover asset belongs to this activity and its host.
     const hostId = req.auth?.uid;
     const { activityId } = req.params;
     const { coverImagePath, coverImageUrl } = req.body as {

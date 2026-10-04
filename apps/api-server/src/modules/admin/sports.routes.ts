@@ -1,4 +1,4 @@
-// Routes for sports.
+/** Admin-only endpoints for listing and publishing sports configuration. */
 import { Router } from 'express';
 import { requireAuth, requireAdmin } from '../../middleware/auth.middleware.js';
 import {

@@ -12,6 +12,7 @@ import { useToast } from '../../context/ToastContext';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 
 function StatusBadge({ status }: { status: ActivityStatus }) {
+  // Map lifecycle states to semantic badge colors shared with the activity list.
   const map: Record<ActivityStatus, string> = {
     Active: 'bg-brand-50  text-brand-700  border-brand-200',
     Full: 'bg-warning-100 text-warning-700 border-warning-200',
@@ -37,6 +38,7 @@ function MetaItem({
   primary: string;
   secondary?: string;
 }) {
+  // Pair a compact icon with a primary value and optional supporting detail.
   return (
     <div className="flex items-start gap-2.5">
       <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-ink-100 text-ink-500">
@@ -61,6 +63,7 @@ export function ActivityDetailPage() {
   const [acting, setActing] = useState(false);
   const [confirm, setConfirm] = useState<'cancel' | 'complete' | 'remove' | null>(null);
 
+  // Resolve details from the admin collection because this API has no single-record endpoint.
   function load() {
     setLoading(true);
     setError(null);
@@ -79,6 +82,7 @@ export function ActivityDetailPage() {
   }
 
   useEffect(() => {
+    // Ignore a response if the route changes or the page unmounts before the request completes.
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -102,6 +106,7 @@ export function ActivityDetailPage() {
   }, [id]);
 
   async function runStatus(next: ActivityStatus) {
+    // Persist moderation first; only then reflect the new status in the detail view.
     if (!activity) return;
     setActing(true);
     setActionError(null);
@@ -118,6 +123,7 @@ export function ActivityDetailPage() {
   }
 
   async function runDelete() {
+    // Navigate back to the list only after the delete is confirmed by the backend.
     if (!activity) return;
     setActing(true);
     setActionError(null);
@@ -162,6 +168,7 @@ export function ActivityDetailPage() {
     );
   }
 
+  // Clamp capacity usage for the progress bar and derive the full-state label from it.
   const pct = Math.min((activity.participants / activity.capacity) * 100, 100);
   const isFull = pct >= 100;
 
@@ -228,6 +235,7 @@ export function ActivityDetailPage() {
         </div>
       )}
 
+      {/* One dialog handles all three actions, with copy and severity chosen from its state. */}
       <ConfirmDialog
         open={confirm !== null}
         title={

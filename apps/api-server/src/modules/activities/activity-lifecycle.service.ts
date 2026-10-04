@@ -9,6 +9,7 @@ export async function sweepExpiredActivities(options?: {
   nowMs?: number;
   limit?: number;
 }): Promise<{ completed: number }> {
+  // Complete elapsed activities in bounded batches so a background sweep stays predictable.
   const nowMs = options?.nowMs ?? Date.now();
   const limit = Math.min(Math.max(options?.limit ?? 50, 1), 100);
 
@@ -44,6 +45,7 @@ export async function sweepExpiredActivities(options?: {
 
 /** Resolves the effective end of an activity in epoch ms. Returns null when neither is parseable. */
 export function resolveEndMs(data: FirebaseFirestore.DocumentData): number | null {
+  // Prefer an explicit end time, then fall back to the start time plus stored duration.
   const endRaw = data.endTime;
   if (typeof endRaw === 'string') {
     const ms = Date.parse(endRaw);

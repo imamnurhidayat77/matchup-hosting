@@ -1,11 +1,13 @@
 // Tests for auditLogService.
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
+// Mock transport to focus tests on query construction and response normalization.
 const { apiFetchMock } = vi.hoisted(() => ({ apiFetchMock: vi.fn() }));
 vi.mock('./api', () => ({ apiFetch: apiFetchMock }));
 
 import { fetchAuditLog } from './auditLogService';
 
+// Provide one backend-shaped audit record with per-case overrides.
 function entryView(overrides: Record<string, unknown> = {}) {
   return {
     id: 'e1',
@@ -25,6 +27,7 @@ function entryView(overrides: Record<string, unknown> = {}) {
 }
 
 describe('fetchAuditLog', () => {
+  // Clear prior service calls so each assertion describes one test request.
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -44,6 +47,7 @@ describe('fetchAuditLog', () => {
   });
 
   it('maps wire entries to AuditLogEntry, defaulting missing metadata to {}', async () => {
+    // Missing optional metadata is normalized so display code can iterate it safely.
     apiFetchMock.mockResolvedValue({ ok: true, data: [entryView({ metadata: undefined })] });
     const rows = await fetchAuditLog();
     expect(rows).toEqual([entryView({ metadata: {} })]);

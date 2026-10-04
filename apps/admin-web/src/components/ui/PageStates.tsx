@@ -3,12 +3,14 @@ import type { ReactNode } from 'react';
 // Skeleton primitive.
 
 export function Skeleton({ className = '' }: { className?: string }) {
+  // Add the shared pulse treatment while each placeholder supplies its own dimensions.
   return <div className={`animate-pulse rounded-lg bg-ink-200 dark:bg-ink-700 ${className}`} />;
 }
 
 // Page specific skeletons.
 
 function SkRow({ cols }: { cols: string[] }) {
+  // Render a table-like placeholder row from the widths expected by its page.
   return (
     <div className="flex items-center gap-4 border-b border-ink-100 dark:border-ink-700 px-6 py-4">
       {cols.map((w, i) => (
@@ -19,6 +21,7 @@ function SkRow({ cols }: { cols: string[] }) {
 }
 
 export function MembersPageSkeleton() {
+  // Mirror the member page's header, summary cards, filters, and table while loading.
   return (
     <div className="page-container space-y-5">
       <div className="flex items-start justify-between">
@@ -59,6 +62,7 @@ export function MembersPageSkeleton() {
 }
 
 export function ActivitiesPageSkeleton() {
+  // Match the activity page's summary and tabular layout before its records arrive.
   return (
     <div className="page-container space-y-5">
       <div className="flex items-start justify-between">
@@ -94,6 +98,7 @@ export function ActivitiesPageSkeleton() {
 }
 
 export function ReportsPageSkeleton() {
+  // Reserve space for the report queue and its moderation summary panel.
   return (
     <div className="page-container space-y-5">
       <div className="flex items-start justify-between">
@@ -145,6 +150,7 @@ export function ReportsPageSkeleton() {
 }
 
 export function BroadcastsPageSkeleton() {
+  // Match the broadcast list's header, summary cards, and message rows.
   return (
     <div className="page-container space-y-5">
       <div className="flex items-start justify-between">
@@ -184,6 +190,7 @@ export function BroadcastsPageSkeleton() {
 }
 
 export function AnalyticsPageSkeleton() {
+  // Preserve the analytics dashboard's chart and KPI layout during its initial fetch.
   return (
     <div className="page-container space-y-5">
       <div className="flex items-start justify-between">
@@ -214,6 +221,7 @@ export function AnalyticsPageSkeleton() {
 }
 
 export function SportsPageSkeleton() {
+  // Represent the sports table and side preview while configuration is loading.
   return (
     <div className="page-container space-y-5">
       <div className="flex items-start justify-between">
@@ -251,6 +259,7 @@ export function SportsPageSkeleton() {
 // ─── Generic fallback (still used for pages not yet custom) ───────────────────
 
 export function PageSkeleton({ rows = 5 }: { rows?: number }) {
+  // Generic loading layout for pages without a dedicated skeleton component.
   return (
     <div className="page-container space-y-5">
       <div className="space-y-2">
@@ -273,6 +282,7 @@ export function PageSkeleton({ rows = 5 }: { rows?: number }) {
 // Error state.
 
 export function PageError({ message, onRetry }: { message: string; onRetry: () => void }) {
+  // Pair the fetch error with the retry operation supplied by the page.
   return (
     <div className="page-container flex flex-col items-center justify-center gap-4 py-24">
       <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-danger-50 dark:bg-danger-900/30">
@@ -308,6 +318,7 @@ interface EmptyStateProps {
 }
 
 export function EmptyState({ icon, title, description, action }: EmptyStateProps) {
+  // Optional props let this shared state serve both informational and actionable cases.
   return (
     <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
       {icon && (
@@ -330,6 +341,7 @@ export function EmptyState({ icon, title, description, action }: EmptyStateProps
 
 // Common empty state icons.
 
+// Keep page-specific empty-state illustrations centralized and reusable.
 // eslint-disable-next-line react-refresh/only-export-components
 export const EmptyIcons = {
   members: (

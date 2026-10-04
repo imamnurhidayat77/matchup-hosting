@@ -47,6 +47,7 @@ type UnauthorizedListener = () => void;
 const unauthorizedListeners = new Set<UnauthorizedListener>();
 
 export function onUnauthorized(listener: UnauthorizedListener): () => void {
+  // Return an unsubscribe callback so auth state can detach its listener during cleanup.
   unauthorizedListeners.add(listener);
   return () => {
     unauthorizedListeners.delete(listener);
@@ -54,6 +55,7 @@ export function onUnauthorized(listener: UnauthorizedListener): () => void {
 }
 
 function notifyUnauthorized(): void {
+  // Isolate the API request from exceptions thrown by listener callbacks.
   for (const listener of unauthorizedListeners) {
     try {
       listener();
@@ -64,6 +66,7 @@ function notifyUnauthorized(): void {
 }
 
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<ApiResponse<T>> {
+  // Normalize relative paths and attach the current admin token when one is stored.
   const url = `${BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;
   const token = adminIdToken();
   try {
@@ -92,6 +95,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
         },
       };
     }
+    // Some endpoints encode an expired session in the body with HTTP status 200.
     if (response.status === 401 || (!body.ok && body.error.code === 'UNAUTHORIZED')) {
       notifyUnauthorized();
     }

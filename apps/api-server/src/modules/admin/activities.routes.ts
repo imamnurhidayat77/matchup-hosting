@@ -1,4 +1,4 @@
-// Routes for activities.
+/** Admin-only activity listing, status override, and removal endpoints. */
 import { Router } from 'express';
 import { requireAuth, requireAdmin } from '../../middleware/auth.middleware.js';
 import {

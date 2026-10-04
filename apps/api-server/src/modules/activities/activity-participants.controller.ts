@@ -195,6 +195,7 @@ export async function leaveActivityHandler(req: Request<LeaveActivityParams>, re
     });
     const activity = await getActivityById(activityId);
 
+    // Send the matching notice/tombstone for a member leaving, host removal, or host cancellation.
     const isSelfRemoval = uid === authUid;
     const isHostRemoval = activity?.hostId === authUid && uid !== authUid;
     const isHostSelfRemoval = activity?.hostId === authUid && uid === authUid;
@@ -438,6 +439,7 @@ async function decideJoinRequestHandler(
   decision: 'approved' | 'declined',
 ) {
   try {
+    // Keep approval and decline response handling aligned while delegating the decision to the service.
     const actorUid = req.auth?.uid;
     const { activityId, uid } = req.params;
 

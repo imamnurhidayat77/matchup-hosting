@@ -17,6 +17,7 @@ import { AuditLogPage } from '../pages/audit/AuditLogPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 
 function Shell({ children }: { children: React.ReactNode }) {
+  // All dashboard pages share the auth gate and common admin navigation shell.
   return (
     <RequireAuth>
       <DashboardShell>{children}</DashboardShell>
@@ -24,6 +25,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Keep the route table exported so tests can audit its public and protected entries.
 // eslint-disable-next-line react-refresh/only-export-components
 export const routes = [
   { path: '/login', element: <LoginPage /> },
@@ -129,5 +131,6 @@ export const routes = [
 const router = createBrowserRouter(routes);
 
 export function AppRouter() {
+  // React Router owns URL matching and renders the selected page through this provider.
   return <RouterProvider router={router} />;
 }

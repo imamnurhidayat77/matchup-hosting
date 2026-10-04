@@ -45,6 +45,7 @@ export function SlidePanel({
   useEffect(() => {
     if (!open) return;
 
+    // Move focus into the panel when it opens and remember the element that launched it.
     previousFocusRef.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
 
@@ -59,6 +60,7 @@ export function SlidePanel({
 
       if (event.key !== 'Tab') return;
 
+      // Wrap keyboard navigation at either end so focus cannot escape the modal panel.
       const focusable = panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
 
       if (!focusable || focusable.length === 0) {
@@ -95,6 +97,7 @@ export function SlidePanel({
 
   const titleId = 'slide-panel-title';
   const descriptionId = subtitle ? 'slide-panel-subtitle' : undefined;
+  // Fit narrow viewports without allowing the configured panel width to exceed the screen.
   const panelWidth =
     typeof window === 'undefined' ? width : Math.min(width, window.innerWidth);
 

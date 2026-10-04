@@ -10,7 +10,7 @@ export function isFeeMode(value: unknown): value is ActivityFeeMode {
 
 // Pricing helpers: paid/free resolution, split-cost, weather snapshot.
 
-/** Normalises the paid/free inputs into the stored shape. */
+/** Free activities discard any fee; paid activities require a positive, cent-rounded amount. */
 export function resolvePaidFee(
   isPaid: boolean | undefined,
   fee: number | undefined,
@@ -30,6 +30,7 @@ export function resolvePaidFee(
 }
 
 /** Normalises an optional weather snapshot. */
+// Keep only plausible optional weather values so third-party data cannot block activity writes.
 export function normalizeWeatherSnapshot(input: {
   weatherTemp?: number | null | undefined;
   weatherCode?: number | undefined;
@@ -69,9 +70,7 @@ export function normalizeWeatherSnapshot(input: {
   return out;
 }
 
-/** Normalises split-cost inputs. `totalCost` must be positive, `minPlayers` (when given) an integer >= 2. */
-
-/** Normalises split-cost inputs. `totalCost` must be positive, `minPlayers` (when given) an integer >= 2. */
+/** Fixed pricing needs no split fields; split pricing validates total cost and minimum attendance. */
 export function resolveSplitCost(
   feeMode: ActivityFeeMode | undefined,
   totalCost: number | undefined,

@@ -21,6 +21,7 @@ interface AdminActivityView {
   fee?: number;
 }
 
+// Return display-ready date/time fields, using empty labels for missing or invalid backend values.
 function formatDateTime(iso: string | null): {
   scheduledDate: string;
   startTime: string;
@@ -41,6 +42,7 @@ function formatDateTime(iso: string | null): {
   };
 }
 
+// Adapt the backend's smaller activity view into the fields consumed by admin pages.
 function toAdminActivity(view: AdminActivityView): AdminActivity {
   const { scheduledDate, startTime } = formatDateTime(view.startTime);
   const status: ActivityStatus =
@@ -80,6 +82,7 @@ function toAdminActivity(view: AdminActivityView): AdminActivity {
 }
 
 function toBackendStatus(status: ActivityStatus): string {
+  // Translate display labels into the status vocabulary accepted by the API.
   switch (status) {
     case 'Active':
     case 'Full':
@@ -94,6 +97,7 @@ function toBackendStatus(status: ActivityStatus): string {
 }
 
 export async function fetchActivities(): Promise<AdminActivity[]> {
+  // Normalize each wire record into the model shared by admin pages.
   const res = await apiFetch<AdminActivityView[]>('/api/admin/activities');
   if (!res.ok) throw new Error(res.error.message);
   return res.data.map(toAdminActivity);

@@ -81,6 +81,7 @@ function mapBroadcast(
 }
 
 export async function listBroadcasts(): Promise<BroadcastView[]> {
+  // Return broadcasts newest-first using the admin-facing status and timestamp model.
   const snap = await firestore.collection('broadcasts').get();
   const rows: BroadcastView[] = [];
   for (const doc of snap.docs) {
@@ -98,6 +99,7 @@ export type CreateBroadcastInput = {
   scheduledAt?: unknown;
 };
 
+// Validate content, audience, and scheduling before writing the draft or scheduled record.
 export async function createBroadcast(
   input: CreateBroadcastInput,
   createdBy: string,
@@ -152,7 +154,7 @@ export type UpdateBroadcastInput = {
   scheduledAt?: unknown;
 };
 
-/** Draft/scheduled edits only — sent broadcasts are immutable history. */
+/** Update draft/scheduled fields; sent broadcasts remain immutable history. */
 export async function updateBroadcast(
   id: string,
   input: UpdateBroadcastInput,
@@ -217,6 +219,7 @@ export async function updateBroadcast(
   return view;
 }
 
+/** Sent broadcasts remain as immutable delivery history. */
 export async function deleteBroadcast(
   id: string,
   adminUid: string,
@@ -288,7 +291,7 @@ async function resolveRecipients(audience: BroadcastAudience): Promise<string[]>
   return uids;
 }
 
-/** Due sweeper for scheduled broadcasts: sends every `scheduled` row whose `scheduledAt <= now` via [sendBroadcast]. */
+/** Attempt each due scheduled row through [sendBroadcast], allowing other rows to proceed on failure. */
 export async function sweepDueBroadcasts(
   now: Date = new Date(),
   sentBy = 'scheduler',
@@ -319,7 +322,7 @@ export async function sweepDueBroadcasts(
   return { checked, sent };
 }
 
-/** One-way send: draft/scheduled → sent. */
+/** One-way transition from draft/scheduled to sent, with notifications fanned out to the audience. */
 export async function sendBroadcast(
   id: string,
   adminUid: string,

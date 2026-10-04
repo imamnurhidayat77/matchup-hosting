@@ -5,6 +5,7 @@ import { SlidePanel } from './SlidePanel';
 import React from 'react';
 
 describe('SlidePanel', () => {
+  // Cover visibility, close inputs, and keyboard focus behavior expected of a dialog panel.
   it('renders nothing while closed', () => {
     const { container } = render(
       <SlidePanel open={false} onClose={vi.fn()} title="Details">
@@ -64,6 +65,7 @@ describe('SlidePanel', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  // The opener is captured before focus moves into the panel and restored during cleanup.
   it('restores focus to the opener after the panel closes', async () => {
     const user = userEvent.setup();
 
@@ -99,6 +101,7 @@ describe('SlidePanel', () => {
     expect(opener).toHaveFocus();
   });
 
+  // Shift+Tab from the first control should wrap to the last focusable panel control.
   it('wraps focus from the close button when Shift+Tab is pressed', async () => {
     const user = userEvent.setup();
 

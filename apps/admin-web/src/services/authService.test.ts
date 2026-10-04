@@ -1,6 +1,7 @@
 // Tests for authService.
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
+// Hoist Firebase mocks so the module factory and auth scenarios share controllable functions.
 const { signInWithEmailAndPasswordMock, firebaseSignOutMock, onIdTokenChangedMock } = vi.hoisted(
   () => ({
     signInWithEmailAndPasswordMock: vi.fn(),
@@ -19,6 +20,7 @@ vi.mock('./firebase', () => ({
   getFirebaseAuth: vi.fn(() => ({})),
 }));
 
+// Keep API token calls observable while testing the auth service independently of the network.
 const { apiFetchMock, setAdminIdTokenMock, clearAdminIdTokenMock } = vi.hoisted(() => ({
   apiFetchMock: vi.fn(),
   setAdminIdTokenMock: vi.fn(),
@@ -45,6 +47,7 @@ import {
 
 const SESSION_KEY = 'matchup_admin_session';
 
+// Build an unexpired default session that tests can vary for storage and TTL cases.
 function makeSession(overrides: Partial<AuthSession> = {}): AuthSession {
   return {
     token: 'tok',
@@ -55,6 +58,7 @@ function makeSession(overrides: Partial<AuthSession> = {}): AuthSession {
 }
 
 describe('authService session storage', () => {
+  // Exercise remembered and tab-scoped persistence, expiry, and malformed stored data.
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
@@ -108,6 +112,7 @@ describe('authService session storage', () => {
 });
 
 describe('authService signIn/signOut', () => {
+  // Each case verifies Firebase auth, server-side admin verification, or cleanup behavior.
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
@@ -247,6 +252,7 @@ describe('authService signIn/signOut', () => {
 });
 
 describe('token refresh (H2)', () => {
+  // Confirm fresh Firebase tokens are synchronized into the persisted admin session.
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();

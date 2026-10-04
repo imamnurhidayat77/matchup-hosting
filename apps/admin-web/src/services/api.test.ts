@@ -3,6 +3,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { apiFetch, clearAdminIdToken, onUnauthorized, setAdminIdToken } from './api';
 
 function jsonResponse(body: unknown, status = 200): Response {
+  // Use a real Response so tests exercise JSON parsing and HTTP status handling.
   return new Response(JSON.stringify(body), {
     status,
     headers: { 'Content-Type': 'application/json' },
@@ -10,6 +11,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 describe('api service', () => {
+  // Reset storage and global fetch state around every independent request case.
   beforeEach(() => {
     localStorage.clear();
     vi.restoreAllMocks();
@@ -119,6 +121,7 @@ describe('api service', () => {
     unsubscribe();
   });
 
+  // The backend may encode an expired session in its body despite returning HTTP 200.
   it('notifies onUnauthorized listeners on a 200 body carrying an UNAUTHORIZED error code', async () => {
     vi.stubGlobal(
       'fetch',
@@ -151,6 +154,7 @@ describe('api service', () => {
     expect(listener).not.toHaveBeenCalled();
   });
 
+  // Listener failures must not change or interrupt the API response.
   it('does not let a throwing listener break the fetch result', async () => {
     vi.stubGlobal(
       'fetch',

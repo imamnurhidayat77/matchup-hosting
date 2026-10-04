@@ -24,6 +24,7 @@ import {
 
 // Activity reads: create, fetch, lists, public teasers.
 
+// Normalize and validate caller input before writing the canonical activity document.
 export async function createActivity(input: CreateActivityInput): Promise<{ activityId: string }> {
   const now = Timestamp.now();
 
@@ -177,9 +178,7 @@ export async function listActivities(filters: ListActivitiesFilters): Promise<Ac
   return Promise.all(activities.map(enrichActivityWithHostProfile));
 }
 
-/** Paginated "My Games" reads — powers the mobile Hosting / Upcoming tabs without client-side filtering of a capped. */
-
-/** Paginated "My Games" reads — powers the mobile Hosting / Upcoming tabs without client-side filtering of a capped. */
+/** Hosted and joined lists use separate lookups, then share filtering and pagination rules. */
 export async function listMyActivities(
   viewerUid: string,
   kind: 'hosted' | 'joined',
@@ -227,9 +226,7 @@ export async function listMyActivities(
   return Promise.all(activities.map(enrichActivityWithHostProfile));
 }
 
-/** Past games for one user: hosted + joined activities whose status is `completed`, most recent start first. */
-
-/** Past games for one user: hosted + joined activities whose status is `completed`, most recent start first. */
+/** Merge hosted and joined records by activity id so a user sees each completed game once. */
 export async function listPastActivitiesForUser(
   viewerUid: string,
   limit: number,
@@ -290,13 +287,9 @@ export async function listPastActivitiesForUser(
 }
 
 /** True for lifecycles that must not appear in Upcoming/Hosting. */
-
-/** True for lifecycles that must not appear in Upcoming/Hosting. */
 function isTerminalStatus(status: ActivityStatus): boolean {
   return status === 'cancelled' || status === 'completed' || status === 'removed';
 }
-
-/** Soonest event first (rows without a parseable start go last). */
 
 /** Soonest event first (rows without a parseable start go last). */
 function compareStartTimeAsc(a: { startTime: string }, b: { startTime: string }): number {
@@ -307,6 +300,7 @@ function compareStartTimeAsc(a: { startTime: string }, b: { startTime: string })
   return aMs - bMs;
 }
 
+// Return a bounded public projection without host enrichment or private activity fields.
 export async function listPublicActivityTeasers(limit = 10): Promise<PublicActivityTeaser[]> {
   if (!Number.isInteger(limit) || limit <= 0 || limit > 20) {
     throw new Error('limit must be an integer between 1 and 20');
@@ -334,6 +328,7 @@ export async function listPublicActivityTeasers(limit = 10): Promise<PublicActiv
   }));
 }
 
+// Validate persisted data at the boundary and normalize optional legacy fields for callers.
 function mapActivityDoc(activityDoc: FirebaseFirestore.DocumentSnapshot): ActivityBaseWithId {
   const data = activityDoc.data();
 

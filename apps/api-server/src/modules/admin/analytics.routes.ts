@@ -1,4 +1,4 @@
-// Routes for analytics.
+/** Admin-only analytics endpoint. */
 import { Router } from 'express';
 import { requireAuth, requireAdmin } from '../../middleware/auth.middleware.js';
 import { getAnalyticsHandler } from './analytics.controller.js';

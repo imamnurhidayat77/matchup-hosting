@@ -5,5 +5,6 @@ import { checkInHandler, getMyCheckInHandler } from './activity-checkin.controll
 
 export const activityCheckInRouter = Router();
 
+// Both attendance writes and personal status reads are scoped to an authenticated caller.
 activityCheckInRouter.post('/:activityId/check-in', requireAuth, checkInHandler);
 activityCheckInRouter.get('/:activityId/check-in/me', requireAuth, getMyCheckInHandler);

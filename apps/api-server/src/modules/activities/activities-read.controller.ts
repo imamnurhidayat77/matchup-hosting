@@ -24,6 +24,7 @@ type GetActivityParams = {
 
 export async function listActivitiesHandler(req: Request, res: Response) {
   try {
+    // Validate query-string values before converting them into service filters.
     const { status, sportType, skillLevel, limit, mine, offset } = req.query;
 
     if (

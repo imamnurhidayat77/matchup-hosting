@@ -10,6 +10,7 @@ import {
 
 export async function submitAppealHandler(req: Request, res: Response) {
   try {
+    // Tie the appeal to the authenticated account so a caller cannot submit for another user.
     const uid = req.auth?.uid;
     if (!uid) {
       return res.status(401).json({
@@ -107,6 +108,7 @@ async function decideHandler(
   decision: 'approved' | 'rejected',
 ) {
   try {
+    // Share validation and error mapping between the approve and reject endpoints.
     const adminUid = req.auth?.uid;
     if (!adminUid) {
       return res.status(401).json({

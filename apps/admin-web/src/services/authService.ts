@@ -31,6 +31,7 @@ const SESSION_TTL_DEFAULT = 8 * 60 * 60 * 1000;
 const SESSION_TTL_REMEMBER = 30 * 24 * 60 * 60 * 1000;
 
 export function saveSession(session: AuthSession, remember: boolean): void {
+  // Choose persistent or tab-scoped storage, clearing both first to prevent stale duplicates.
   const store = remember ? localStorage : sessionStorage;
   // Always clear the other store to avoid stale sessions.
   localStorage.removeItem(SESSION_KEY);
@@ -39,6 +40,7 @@ export function saveSession(session: AuthSession, remember: boolean): void {
 }
 
 export function loadSession(): AuthSession | null {
+  // Prefer a remembered session and otherwise use the current tab's session.
   const raw = localStorage.getItem(SESSION_KEY) ?? sessionStorage.getItem(SESSION_KEY);
   if (!raw) return null;
   try {
@@ -61,6 +63,7 @@ export function clearSession(): void {
 // Token refresh: ID tokens expire hourly but sessions promise 8h/30d.
 
 function persistRefreshedToken(token: string): void {
+  // Keep the API client's token and the saved session copy in sync after Firebase refresh.
   setAdminIdToken(token);
   const raw = localStorage.getItem(SESSION_KEY) ?? sessionStorage.getItem(SESSION_KEY);
   if (!raw) return;
@@ -74,6 +77,7 @@ function persistRefreshedToken(token: string): void {
 }
 
 export async function refreshStoredToken(): Promise<boolean> {
+  // Return false when Firebase has no current user or cannot provide a refreshed token.
   try {
     const token = await getFirebaseAuth().currentUser?.getIdToken();
     if (!token) return false;
@@ -85,6 +89,7 @@ export async function refreshStoredToken(): Promise<boolean> {
 }
 
 export function subscribeSessionRefresh(): () => void {
+  // Persist future Firebase token changes and return Firebase's listener cleanup function.
   try {
     return onIdTokenChanged(getFirebaseAuth(), (user) => {
       if (!user) return;
@@ -119,6 +124,7 @@ export async function signIn(
   password: string,
   remember: boolean,
 ): Promise<AuthSession> {
+  // Authenticate with Firebase first, then verify the account is allowlisted by the API.
   let idToken: string;
   let uid: string;
   let accountEmail: string;
@@ -161,6 +167,7 @@ export async function signIn(
 }
 
 function credentialName(email: string, uid: string): string {
+  // Use the email prefix as the display name, falling back to the stable user id.
   const base = email.split('@')[0] ?? '';
   return base.length > 0 ? base : uid;
 }

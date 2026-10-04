@@ -73,8 +73,23 @@ describe('swipes routes', () => {
           decision: 'join',
         },
       });
-      // A right-swipe is always followed by join/requestJoin, which notify the host themselves (`activity_joined` /.
+      // Joining happens in a separate request, which owns the host notification.
       expect(notificationsService.createNotification).not.toHaveBeenCalled();
+    });
+
+    it('uses the authenticated uid instead of a uid supplied in the request body', async () => {
+      const response = await request(createApp()).post('/api/swipes').send({
+        activityId: 'activity-1',
+        decision: 'pass',
+        uid: 'forged-user',
+      });
+
+      expect(response.status).toBe(200);
+      expect(swipesService.saveSwipeDecision).toHaveBeenCalledWith({
+        uid: 'test-uid-1',
+        activityId: 'activity-1',
+        decision: 'pass',
+      });
     });
 
     it('when decision is pass => expected 200 without notification', async () => {

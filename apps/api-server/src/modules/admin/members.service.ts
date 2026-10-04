@@ -50,6 +50,7 @@ function mapMemberRow(
 
 /** Paginated user list for the admin Members table (no counts — list stays cheap). */
 export async function listMembers(limit: number): Promise<AdminMemberView[]> {
+  // Enforce the page-size cap before reading and mapping admin-visible user fields.
   const take = Math.trunc(limit);
   if (!Number.isFinite(take) || take < 1 || take > ADMIN_MEMBERS_PAGE_LIMIT_MAX) {
     throw new Error(`limit must be between 1 and ${ADMIN_MEMBERS_PAGE_LIMIT_MAX}`);
@@ -65,6 +66,7 @@ export async function listMembers(limit: number): Promise<AdminMemberView[]> {
 
 /** Member detail with live participation counts (reuses the user module). */
 export async function getMemberDetail(uid: string): Promise<AdminMemberView> {
+  // Return one admin projection, including aggregate activity counts when available.
   const normalizedUid = uid.trim();
   if (!normalizedUid) {
     throw new Error('uid is required');
@@ -81,7 +83,7 @@ export async function getMemberDetail(uid: string): Promise<AdminMemberView> {
   return { ...view, ...counts };
 }
 
-/** Suspend/reactivate. Only the status enum is writable (mass-assignment safe). */
+/** Change only the status field, revoke sessions on suspension, and record the admin action. */
 export async function setMemberStatus(
   uid: string,
   status: unknown,
@@ -125,7 +127,7 @@ export async function setMemberStatus(
   return view;
 }
 
-/** Full offboard: Auth account (best-effort when already gone) + user doc + email index. */
+/** Remove the Auth account, user document, and email index, then record the admin action. */
 export async function deleteMember(
   uid: string,
   adminUid: string,

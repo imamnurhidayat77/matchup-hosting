@@ -30,6 +30,7 @@ const sportsCache = new TtlCache<SportView[]>(5 * 60 * 1000);
 
 /** For tests: force the next `listSports()` to refetch. */
 export function invalidateSportsCache(): void {
+  // Mutations clear the short-lived read cache so callers see the newly published list.
   sportsCache.invalidate();
 }
 
@@ -38,6 +39,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export async function listSports(): Promise<SportView[]> {
+  // Return cached configuration when fresh; otherwise load Firestore or its built-in fallback.
   // Admin-curated config hit by every onboarding/filter/create surface: 1 collection read + N count queries per call.
   return sportsCache.getOrFill('all', fetchSports);
 }
@@ -224,7 +226,7 @@ function assertBulkSport(
   };
 }
 
-/** Atomic publish of the whole sports config (the admin "Publish Changes" flow). `activityCount` is never accepted. */
+/** Validate and atomically publish the whole ordered sports list; `activityCount` is never accepted. */
 export async function replaceSports(
   sports: unknown,
   adminUid: string,
@@ -265,6 +267,7 @@ export async function replaceSports(
   return listSports();
 }
 
+// Apply a partial sport edit and invalidate cached list data after persistence succeeds.
 export async function updateSport(
   id: string,
   input: UpdateSportInput,

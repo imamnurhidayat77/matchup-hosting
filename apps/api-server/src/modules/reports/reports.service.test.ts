@@ -181,6 +181,7 @@ describe('reportCategoryForReason', () => {
   });
 });
 
+// Activity auto-hide is based on distinct pending reporters; user reports never hide a target.
 describe('auto-hide threshold', () => {
   const pendingRow = (reporterId: string, status = 'pending') => ({
     data: () => ({ reporterId, status }),
@@ -250,6 +251,38 @@ describe('auto-hide threshold', () => {
 
     expect(result.autoHidden).toBe(false);
     expect(update).not.toHaveBeenCalled();
+  });
+
+  it('does not count resolved reports toward the auto-hide threshold', async () => {
+    mockReportsWhere([
+      pendingRow('u-1'),
+      pendingRow('u-2'),
+      pendingRow('u-3', 'resolved'),
+    ]);
+    const update = mockActivityDoc('open');
+
+    const result = await submitReport({ ...baseInput });
+
+    expect(result.autoHidden).toBe(false);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('keeps a report successful when the best-effort auto-hide query fails', async () => {
+    mockTargetExists(true);
+    const add = vi.fn().mockResolvedValue({ id: 'report-saved' });
+    vi.mocked(firestore.collection).mockImplementation(((name: string) => {
+      if (name !== 'reports') throw new Error(`unexpected collection: ${name}`);
+      return {
+        add,
+        where: () => ({ get: vi.fn().mockRejectedValue(new Error('query unavailable')) }),
+      } as never;
+    }) as never);
+
+    await expect(submitReport({ ...baseInput })).resolves.toEqual({
+      reportId: 'report-saved',
+      autoHidden: false,
+    });
+    expect(add).toHaveBeenCalledOnce();
   });
 
   it('never auto-hides user targets', async () => {

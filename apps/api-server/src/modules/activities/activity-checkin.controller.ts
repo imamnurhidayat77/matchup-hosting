@@ -26,6 +26,7 @@ async function guardActivityAccess(
 
 export async function checkInHandler(req: Request<ActivityParams>, res: Response) {
   try {
+    // Bind check-in to the verified caller instead of accepting a uid from the request body.
     const uid = req.auth?.uid;
     const { activityId } = req.params;
     const { latitude, longitude } = (req.body ?? {}) as {
@@ -118,6 +119,7 @@ export async function checkInHandler(req: Request<ActivityParams>, res: Response
 
 export async function getMyCheckInHandler(req: Request<ActivityParams>, res: Response) {
   try {
+    // Return only the signed-in user's attendance status for the requested activity.
     const uid = req.auth?.uid;
     const { activityId } = req.params;
 

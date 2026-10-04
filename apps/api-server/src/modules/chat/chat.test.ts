@@ -1,9 +1,13 @@
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// Stub message storage and membership checks so this suite exercises the chat HTTP contract.
 vi.mock('./chat.service.js', () => {
   return {
+    listConversations: vi.fn().mockResolvedValue([]),
     sendMessage: vi.fn().mockResolvedValue({ messageId: 'msg-1' }),
+    sendImageMessage: vi.fn().mockResolvedValue({ messageId: 'image-1' }),
+    sendLocationMessage: vi.fn().mockResolvedValue({ messageId: 'location-1' }),
     getMessages: vi.fn(),
     toggleReaction: vi.fn().mockResolvedValue({ reacted: true }),
     getReactions: vi.fn().mockResolvedValue({}),
@@ -49,6 +53,99 @@ import * as chatService from './chat.service.js';
 import * as activityParticipantsService from '../activities/activity-participants.service.js';
 
 describe('chat routes', () => {
+  describe('GET /api/chat/conversations', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it('returns the signed-in user’s conversation previews', async () => {
+      vi.mocked(chatService.listConversations).mockResolvedValueOnce([
+        {
+          activityId: 'activity-1',
+          title: 'Sunday football',
+          lastMessage: 'See you there',
+          lastMessageAt: 1787000000000,
+          unreadCount: 0,
+        },
+      ]);
+
+      const response = await request(createApp()).get('/api/chat/conversations');
+
+      expect(response.status).toBe(200);
+      expect(response.body.data).toEqual([
+        {
+          activityId: 'activity-1',
+          title: 'Sunday football',
+          lastMessage: 'See you there',
+          lastMessageAt: 1787000000000,
+          unreadCount: 0,
+        },
+      ]);
+      expect(chatService.listConversations).toHaveBeenCalledWith('test-uid-1');
+    });
+  });
+
+  describe('POST /api/chat/:activityId/messages/image', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it('sends a valid image URL as an authenticated activity message', async () => {
+      const response = await request(createApp())
+        .post('/api/chat/activity-1/messages/image')
+        .send({ imageUrl: 'https://example.com/photo.jpg' });
+
+      expect(response.status).toBe(201);
+      expect(response.body.data).toEqual({ messageId: 'image-1' });
+      expect(chatService.sendImageMessage).toHaveBeenCalledWith(
+        'activity-1',
+        'test-uid-1',
+        'https://example.com/photo.jpg',
+      );
+    });
+
+    it('rejects non-HTTPS image URLs before calling the service', async () => {
+      const response = await request(createApp())
+        .post('/api/chat/activity-1/messages/image')
+        .send({ imageUrl: 'http://example.com/photo.jpg' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('INVALID_INPUT');
+      expect(chatService.sendImageMessage).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('POST /api/chat/:activityId/messages/location', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it('sends a validated coordinate pair as an authenticated activity message', async () => {
+      const response = await request(createApp())
+        .post('/api/chat/activity-1/messages/location')
+        .send({ latitude: -36.8485, longitude: 174.7633 });
+
+      expect(response.status).toBe(201);
+      expect(response.body.data).toEqual({ messageId: 'location-1' });
+      expect(chatService.sendLocationMessage).toHaveBeenCalledWith(
+        'activity-1',
+        'test-uid-1',
+        -36.8485,
+        174.7633,
+      );
+    });
+
+    it('rejects coordinates outside geographic bounds before calling the service', async () => {
+      const response = await request(createApp())
+        .post('/api/chat/activity-1/messages/location')
+        .send({ latitude: 91, longitude: 174.7633 });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('INVALID_INPUT');
+      expect(chatService.sendLocationMessage).not.toHaveBeenCalled();
+    });
+  });
+
   /** Test section for chat POST route. */
   describe('POST /api/chat/messages', () => {
     beforeEach(() => {
@@ -201,6 +298,18 @@ describe('chat routes', () => {
           message: 'Unknown error',
         },
       });
+    });
+
+    it('when chat is archived => expected 403 w/ CHAT_ARCHIVED', async () => {
+      vi.mocked(chatService.sendMessage).mockRejectedValueOnce(new Error('Chat is archived'));
+
+      const response = await request(createApp()).post('/api/chat/messages').send({
+        activityId: 'activity-1',
+        text: 'Hello from chat',
+      });
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('CHAT_ARCHIVED');
     });
 
     it('when authenticated user is not host or participant => expected 403 w/ FORBIDDEN', async () => {

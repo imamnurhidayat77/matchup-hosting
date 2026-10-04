@@ -17,6 +17,7 @@ import { validateQuery } from '../../middleware/validate.js';
 
 export const activitiesRouter = Router();
 
+// URL query values are strings, so numeric filters are checked before the handler converts them.
 const numericString = (message: string) =>
   z.string().refine((v) => v.trim() !== '' && Number.isFinite(Number(v)), { message });
 

@@ -1,4 +1,4 @@
-// Tests for devices.
+// Verify the authenticated device registration, list, and delete routes and their error mappings.
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -50,6 +50,7 @@ describe('devices routes', () => {
         deviceId: 'device-1',
         fcmToken: 'fcm-token-1',
         platform: 'android',
+        uid: 'forged-user',
       });
 
       expect(response.status).toBe(200);

@@ -69,6 +69,7 @@ export type AuditLogView = {
 
 /** Best-effort audit-trail write for an admin mutation. */
 export async function logAdminAction(input: LogAdminActionInput): Promise<void> {
+  // Persist a normalized audit row so admin mutations share one consistent history format.
   try {
     await firestore
       .collection(COLLECTIONS.adminActions)
@@ -99,6 +100,7 @@ export type ListAuditLogInput = {
 
 /** Newest-first audit-log listing. */
 export async function listAuditLog(input: ListAuditLogInput = {}): Promise<AuditLogView[]> {
+  // Apply optional filters and return newest actions first for the admin audit page.
   const limit = Math.min(Math.max(input.limit ?? 50, 1), 200);
   let query: FirebaseFirestore.Query = firestore.collection(COLLECTIONS.adminActions);
   if (input.category !== undefined) {

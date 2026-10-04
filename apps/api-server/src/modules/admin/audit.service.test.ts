@@ -11,6 +11,7 @@ import { isAuditCategory, listAuditLog, logAdminAction } from './audit.service.j
 
 type Store = Map<string, Record<string, unknown>>;
 
+// Provide the small chainable query surface used by the audit service over an in-memory store.
 function mockDb(entries: Record<string, Record<string, unknown>> = {}) {
   const store: Store = new Map(Object.entries(entries));
   let autoId = 0;

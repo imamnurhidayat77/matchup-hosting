@@ -28,6 +28,7 @@ function StatusBadge({ status }: { status: MemberStatus }) {
 }
 
 function StarRating({ value }: { value: number }) {
+  // Use a warmer color for higher ratings while preserving the numeric score.
   const color =
     value >= 4.5 ? 'text-warning-500' : value >= 3.5 ? 'text-warning-600' : 'text-ink-400';
   return <span className={`text-sm font-semibold ${color}`}>★ {value.toFixed(1)}</span>;
@@ -95,6 +96,7 @@ export function MembersPage() {
   }
 
   function toggleSelect(id: string) {
+    // Copy the Set before changing it so React receives a new state reference.
     setSelectedIds((prev) => {
       const n = new Set(prev);
       if (n.has(id)) {
@@ -106,11 +108,13 @@ export function MembersPage() {
     });
   }
   function toggleAll() {
+    // Select the current page's rows, or clear the selection when they are already selected.
     setSelectedIds(
       selectedIds.size === paginated.length ? new Set() : new Set(paginated.map((m) => m.id)),
     );
   }
   async function handleBulkStatus(next: MemberStatus) {
+    // Settle every request so one failed member does not prevent results for the others.
     const ids = [...selectedIds];
     if (ids.length === 0 || bulkBusy) return;
     setBulkBusy(true);
@@ -140,6 +144,7 @@ export function MembersPage() {
     void handleBulkStatus('Active');
   }
   function handleExport() {
+    // Export all loaded members, regardless of the active search, status filter, or page.
     downloadCsv(
       members.map((m) => ({
         Name: m.name,
@@ -163,6 +168,7 @@ export function MembersPage() {
     setConfirm({ type: 'remove', id, name });
   }
   async function handleConfirm() {
+    // Route the confirmed action to the matching mutation and surface any rejected request.
     if (!confirm) return;
     try {
       if (confirm.type === 'suspend') {
@@ -179,6 +185,7 @@ export function MembersPage() {
     setMenuOpenId(null);
   }
 
+  // Top-level counts describe the full member list, not the filtered table subset.
   const stats = [
     { label: 'Total Members', value: members.length, color: 'text-ink-900' },
     {

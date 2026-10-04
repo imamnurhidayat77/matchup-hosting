@@ -19,6 +19,7 @@ import { sweepDueBroadcasts } from './broadcasts.service.js';
 
 type Store = Map<string, Record<string, unknown>>;
 
+// Model scheduled rows in memory so due filtering and repeated-run behavior can be verified.
 function mockSweepDb(seed: Record<string, Record<string, unknown>>) {
   const store: Store = new Map(Object.entries(seed));
   const docProxy = (id: string) => ({

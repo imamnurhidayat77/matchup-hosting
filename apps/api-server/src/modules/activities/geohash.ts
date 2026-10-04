@@ -2,6 +2,7 @@
 
 const BASE32 = '0123456789bcdefghjkmnpqrstuvwxyz';
 
+/** Interleave longitude and latitude bits into a compact base32 geographic cell key. */
 export function geohashEncode(latitude: number, longitude: number, precision: number): string {
   if (!Number.isInteger(precision) || precision < 1 || precision > 12) {
     throw new Error('precision must be an integer between 1 and 12');
@@ -51,7 +52,7 @@ export function geohashEncode(latitude: number, longitude: number, precision: nu
   return buffer;
 }
 
-/** The 8 neighbours of a geohash cell (N/S/E/W + diagonals), computed by decoding to lat/lng, stepping one cell in. */
+/** Return the eight adjacent cells by decoding the center and stepping one cell in each direction. */
 export function geohashNeighbors(hash: string): string[] {
   const { latitude, longitude, latHeight, lonWidth } = decodeBbox(hash);
   const precision = hash.length;
@@ -69,7 +70,7 @@ export function geohashNeighbors(hash: string): string[] {
   return [...result];
 }
 
-/** Cell cover for a radius search: the center cell at a precision whose cells are at least as large as the radius. */
+/** Cover a search radius with cells, deduplicating overlap between neighboring cell sets. */
 export function geohashCover(latitude: number, longitude: number, radiusKm: number): string[] {
   if (!(radiusKm > 0) || radiusKm > 5000) {
     throw new Error('radiusKm must be a number between 0 and 5000');

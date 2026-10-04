@@ -1,6 +1,7 @@
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// Exercise activity HTTP behavior with persistence and notification dependencies stubbed at the service boundary.
 const rtdbMocks = vi.hoisted(() => {
   return {
     ref: vi.fn(),
@@ -123,6 +124,27 @@ describe('activities routes', () => {
           activityId: 'activity-1',
         },
       });
+    });
+
+    it('uses the authenticated host id instead of a host id supplied in the body', async () => {
+      const response = await request(createApp()).post('/api/activities').send({
+        title: 'Evening Futsal',
+        sportType: 'futsal',
+        description: 'Casual 5v5 session',
+        locationName: 'Auckland Domain',
+        latitude: -36.8585,
+        longitude: 174.775,
+        geohash: 'rckq2m',
+        startTime: '2026-08-19T18:30:00+12:00',
+        skillLevel: 'any',
+        capacity: 10,
+        hostId: 'forged-user',
+      });
+
+      expect(response.status).toBe(201);
+      expect(activitiesService.createActivity).toHaveBeenCalledWith(
+        expect.objectContaining({ hostId: 'test-uid-1' }),
+      );
     });
 
     it('when required string fields are not strings => expected 400 w/ INVALID_INPUT', async () => {

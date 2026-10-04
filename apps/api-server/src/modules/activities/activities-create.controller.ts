@@ -5,6 +5,7 @@ import { createActivity } from './activities.service.js';
 
 export async function createActivityHandler(req: Request, res: Response) {
   try {
+    // Take the host identity from verified auth context, never from the submitted payload.
     const hostId = req.auth?.uid;
     const {
       title,
@@ -253,6 +254,7 @@ export async function createActivityHandler(req: Request, res: Response) {
       });
     }
 
+    // Build a clean service input and omit optional values the client did not provide.
     const result = await createActivity({
       hostId,
       title,

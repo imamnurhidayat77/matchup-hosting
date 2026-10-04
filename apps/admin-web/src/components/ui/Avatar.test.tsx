@@ -4,6 +4,7 @@ import { render, screen } from '@testing-library/react';
 import { Avatar } from './Avatar';
 
 describe('Avatar', () => {
+  // Cover photo rendering, initials fallbacks, and repeatable colors from the same seed.
   it('renders an img with the given photoUrl and alt text', () => {
     render(<Avatar name="Alice Smith" photoUrl="https://example.com/a.png" />);
     const img = screen.getByRole('img', { name: 'Alice Smith' });

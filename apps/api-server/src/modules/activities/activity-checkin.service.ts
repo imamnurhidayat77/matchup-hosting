@@ -16,6 +16,7 @@ export type CheckInStatus = {
 
 /** Persists a check-in row at `activities/{activityId}/attendance/{uid}`. */
 export async function checkIn(input: CheckInInput): Promise<number> {
+  // Enforce the activity's check-in window and coordinate bounds before writing attendance.
   const normalizedActivityId = input.activityId.trim();
   const normalizedUid = input.uid.trim();
 
@@ -27,8 +28,7 @@ export async function checkIn(input: CheckInInput): Promise<number> {
     throw new Error('uid is required');
   }
 
-  // Server-side openness gate (mirrors the client time/proximity gates):
-  // no check-ins on cancelled/removed/completed games or after the end.
+  // Reject terminal activities and elapsed activities before creating an attendance row.
   const activitySnap = await firestore.doc(activityDocPath(normalizedActivityId)).get();
   if (!activitySnap.exists) {
     throw new Error('Activity not found');
@@ -78,7 +78,7 @@ export async function checkIn(input: CheckInInput): Promise<number> {
   return checkedInAt;
 }
 
-/** Reads the viewer's check-in row; missing doc means not checked in. */
+/** Read the viewer's attendance row and return a consistent status when no row exists yet. */
 export async function getCheckInStatus(activityId: string, uid: string): Promise<CheckInStatus> {
   const normalizedActivityId = activityId.trim();
   const normalizedUid = uid.trim();

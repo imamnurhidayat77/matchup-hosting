@@ -41,6 +41,7 @@ interface AppealView {
   decidedBy: string | null;
 }
 
+// Map backend enum values and nullable fields into the model consumed by admin pages.
 function toAppeal(view: AppealView): Appeal {
   return {
     id: view.id,
@@ -61,6 +62,7 @@ function toAppeal(view: AppealView): Appeal {
 }
 
 export async function fetchAppeals(status: AppealStatus = 'Pending'): Promise<Appeal[]> {
+  // Convert the UI status label before building the backend query parameter.
   const backendStatus =
     status === 'Approved' ? 'approved' : status === 'Rejected' ? 'rejected' : 'pending';
   const res = await apiFetch<AppealView[]>(`/api/admin/appeals?status=${backendStatus}`);
@@ -75,6 +77,7 @@ export async function decideAppeal(
   decision: AppealDecision,
   response: string,
 ): Promise<Appeal> {
+  // Use the selected decision in the endpoint and send the admin response as its note.
   const action = decision === 'approve' ? 'approve' : 'reject';
   const res = await apiFetch<AppealView>(`/api/admin/appeals/${encodeURIComponent(id)}/${action}`, {
     method: 'POST',

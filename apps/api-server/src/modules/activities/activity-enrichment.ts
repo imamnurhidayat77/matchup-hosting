@@ -15,6 +15,7 @@ import type {
 export async function enrichActivityWithHostProfile(
   activity: ActivityBaseWithId,
 ): Promise<ActivityWithId> {
+  // Attach only the public host projection, not the full user document.
   const hostProfile = await getPublicUserProfile(activity.hostId);
 
   return {
@@ -27,6 +28,7 @@ export async function getViewerActivityContext(
   activity: ActivityWithId,
   uid: string,
 ): Promise<ActivityViewerContext> {
+  // Combine participation, host, swipe, and join-request state for this viewer.
   const normalizedUid = uid.trim();
 
   if (!normalizedUid) {

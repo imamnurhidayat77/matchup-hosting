@@ -9,7 +9,7 @@ import { geohashCover, geohashEncode, geohashNeighbors, haversineKm } from './ge
 /** Maximum number of `geohash` cells the cover generator can produce. */
 const MAX_CELLS = 16;
 
-/** Application-level ranking for the discovery feed. */
+/** Score preferred sports heavily, then favor nearer activities and earlier start times. */
 function rankDiscover(
   a: { sportType: string; skillLevel: string; distanceKm: number; startTimeMs: number },
   b: { sportType: string; skillLevel: string; distanceKm: number; startTimeMs: number },
@@ -31,6 +31,7 @@ function rankDiscover(
 }
 
 /** Build the `where(...).orderBy(...)` chain from the request. */
+// Use a bounded geohash prefix lookup before applying precise distance checks in memory.
 function buildQuery(
   base: FirebaseFirestore.Query,
   filters: ListActivitiesFilters,
@@ -55,6 +56,7 @@ function buildQuery(
 }
 
 /** In-memory filter pipeline applied to the (limit-bounded) result set. */
+// Apply exact radius, date-window, preference, and exclusion rules to query candidates.
 function passesInMemoryFilters(
   row: ActivityWithId & { distanceKm: number },
   filters: ListActivitiesFilters,
@@ -96,7 +98,8 @@ function passesInMemoryFilters(
   return true;
 }
 
-/** Discover pipeline: status + sport/skill + date + geo + swipes, ranked by preference → start time → distance. */
+/** Discover pipeline: query nearby candidates, apply exact filters and exclusions, then rank them. */
+// Gather nearby candidates, apply viewer exclusions, enrich retained rows, and rank the feed.
 export async function listDiscoverActivities(
   filters: ListActivitiesFilters,
 ): Promise<ActivityWithId[]> {

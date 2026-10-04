@@ -6,6 +6,7 @@ let app: FirebaseApp | null = null;
 
 export function getFirebaseAuth(): Auth {
   if (!app) {
+    // Initialize lazily so missing environment configuration is reported only when auth is used.
     const apiKey = import.meta.env.VITE_FIREBASE_API_KEY as string | undefined;
     const authDomain = import.meta.env.VITE_FIREBASE_AUTH_DOMAIN as string | undefined;
     const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID as string | undefined;

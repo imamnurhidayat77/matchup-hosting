@@ -54,6 +54,7 @@ export async function renderTemplate(
   trigger: string,
   vars: Record<string, string>,
 ): Promise<{ title: string; body: string } | null> {
+  // Template lookup is best-effort; callers retain their fallback copy when config is absent.
   try {
     const snap = await firestore.collection('notificationTemplates').doc(trigger).get();
     if (!snap.exists) return null;
@@ -203,6 +204,7 @@ export async function createNotification(
       : {}),
   };
 
+  // Save the in-app notification first; push delivery is a non-blocking side effect.
   await notificationRef.set(record);
 
   // Bridge the in-app feed to the OS: deliver an FCM push without blocking the caller (chat sends stay fast).
@@ -246,6 +248,7 @@ export async function deliverPush(input: {
     }
     if (byToken.size === 0) return { delivered: 0 };
 
+    // Send once per distinct token, even if multiple device records share it.
     const tokens = [...byToken.keys()];
     const data: Record<string, string> = { type: input.type };
     if (input.activityId) data.activityId = input.activityId;
@@ -305,7 +308,7 @@ export async function listNotifications(uid: string): Promise<NotificationWithId
   return snap.docs.map(mapNotificationDoc);
 }
 
-/** Unread-only inbox read — filters the full list in memory (a user holds few notifications. */
+/** Return unread entries from the user's notification list. */
 export async function listUnread(uid: string): Promise<NotificationWithId[]> {
   const all = await listNotifications(uid);
   return all.filter((n) => !n.isRead);
@@ -319,6 +322,7 @@ export async function markAllRead(uid: string): Promise<{ marked: number }> {
   if (unread.length === 0) return { marked: 0 };
   const now = Timestamp.now();
   let marked = 0;
+  // Firestore batches cap writes at 500 operations, so large inboxes need multiple commits.
   for (let i = 0; i < unread.length; i += 500) {
     const batch = firestore.batch();
     for (const n of unread.slice(i, i + 500)) {

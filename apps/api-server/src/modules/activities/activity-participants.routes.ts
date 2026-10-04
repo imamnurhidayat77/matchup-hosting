@@ -14,6 +14,7 @@ import {
 
 export const activityParticipantsRouter = Router();
 
+// Authentication is enforced here; action-specific joining and moderation rules live in handlers/services.
 activityParticipantsRouter.get('/join-requests/me', requireAuth, listMyJoinRequestsHandler);
 activityParticipantsRouter.post('/:activityId/participants', requireAuth, joinActivityHandler);
 activityParticipantsRouter.get('/:activityId/participants', requireAuth, getParticipantsHandler);

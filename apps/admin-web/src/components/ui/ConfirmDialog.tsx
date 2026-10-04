@@ -38,6 +38,7 @@ export function ConfirmDialog({
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
   const onCancelRef = useRef(onCancel);
 
+  // Keep Escape handling current without reinstalling the document listener on every render.
   useEffect(() => {
     onCancelRef.current = onCancel;
   }, [onCancel]);
@@ -45,6 +46,7 @@ export function ConfirmDialog({
   useEffect(() => {
     if (!open) return;
 
+    // Remember the opener so keyboard focus can return to it after the dialog closes.
     previouslyFocusedRef.current =
       document.activeElement instanceof HTMLElement
         ? document.activeElement
@@ -61,6 +63,7 @@ export function ConfirmDialog({
 
       if (event.key !== 'Tab') return;
 
+      // Cycle Tab navigation between the first and last controls to keep focus in the dialog.
       const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
         FOCUSABLE_SELECTOR,
       );

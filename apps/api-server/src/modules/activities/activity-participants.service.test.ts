@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// Mock Firestore transactions and notifications to test participant rules without an emulator.
 const mocks = vi.hoisted(() => ({
   doc: vi.fn(),
   batch: vi.fn(),

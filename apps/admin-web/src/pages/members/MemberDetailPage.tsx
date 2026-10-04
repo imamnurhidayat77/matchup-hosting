@@ -7,6 +7,7 @@ import { Avatar } from '../../components/ui/Avatar';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 
 function StatusBadge({ status }: { status: MemberStatus }) {
+  // Use both a color and a dot so the member status remains easy to scan.
   const map: Record<MemberStatus, { cls: string; dot: string }> = {
     Active: { cls: 'bg-brand-50 text-brand-700 border-brand-200', dot: 'bg-brand-500' },
     Suspended: { cls: 'bg-danger-50 text-danger-700 border-danger-200', dot: 'bg-danger-500' },
@@ -23,6 +24,7 @@ function StatusBadge({ status }: { status: MemberStatus }) {
 }
 
 function InfoRow({ label, value }: { label: string; value: string }) {
+  // Keep labels and values aligned across the profile's compact detail lists.
   return (
     <div className="flex items-start justify-between gap-4 border-b border-ink-100 py-2.5 last:border-0">
       <span className="shrink-0 text-xs text-ink-400">{label}</span>
@@ -41,6 +43,7 @@ export function MemberDetailPage() {
   const [acting, setActing] = useState(false);
   const [confirm, setConfirm] = useState<'suspend' | 'activate' | 'remove' | null>(null);
 
+  // Reuse this loader for initial page load and the retry action after an error.
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -58,6 +61,7 @@ export function MemberDetailPage() {
   }, [id]);
 
   useEffect(() => {
+    // Ignore stale results when navigating from one member id to another.
     let cancelled = false;
     (async () => {
       setLoading(true);
@@ -80,6 +84,7 @@ export function MemberDetailPage() {
   }, [id]);
 
   async function runStatus(next: MemberStatus) {
+    // Keep the displayed status unchanged until the backend accepts the action.
     if (!member) return;
     setActing(true);
     setActionError(null);
@@ -95,6 +100,7 @@ export function MemberDetailPage() {
   }
 
   async function runRemove() {
+    // Return to the member list only after deletion succeeds.
     if (!member) return;
     setActing(true);
     setActionError(null);
@@ -118,6 +124,7 @@ export function MemberDetailPage() {
   }
 
   if (!member) {
+    // Treat a not-found response as a terminal state; offer retry for other load failures.
     const notFound = error && /not.?found|404/i.test(error);
     return (
       <div className="page-container flex flex-col items-center justify-center gap-3 py-24">
@@ -139,6 +146,7 @@ export function MemberDetailPage() {
     );
   }
 
+  // Present the birth date with an approximate age for the admin profile view.
   const formatDob = (dob?: string) => {
     if (!dob) return null;
     const d = new Date(dob);
@@ -146,6 +154,7 @@ export function MemberDetailPage() {
     return `${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} (${age} yrs)`;
   };
 
+  // Omit this panel when the member has not provided any physical-profile fields.
   const hasPhysical = !!(member.dateOfBirth || member.heightCm || member.weightKg || member.goal);
 
   return (

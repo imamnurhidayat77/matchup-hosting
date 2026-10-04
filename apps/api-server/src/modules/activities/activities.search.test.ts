@@ -1,4 +1,4 @@
-// Tests for activities.search.
+// Cover search-filter validation and how accepted filters are forwarded to the activity service.
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

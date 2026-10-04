@@ -176,6 +176,7 @@ function assertRatingBySport(value: unknown): Record<string, SportRatingAggregat
 }
 
 function mapUserDoc(userDoc: FirebaseFirestore.DocumentSnapshot): UserRecord | null {
+  // Treat Firestore as untrusted input and project only fields with supported stored shapes.
   if (!userDoc.exists) {
     return null;
   }
@@ -258,6 +259,7 @@ function mapUserDoc(userDoc: FirebaseFirestore.DocumentSnapshot): UserRecord | n
 }
 
 function toPublicUserProfile(user: UserRecord): PublicUserProfile {
+  // Keep private account and onboarding fields out of profiles returned to other users.
   return {
     authUid: user.authUid,
     ...(user.activitiesCount !== undefined ? { activitiesCount: user.activitiesCount } : {}),
@@ -307,6 +309,7 @@ export async function bootstrapUser(input: BootstrapUserInput): Promise<Bootstra
   const userRef = firestore.collection('users').doc(authUid);
   const emailRef = firestore.collection('userEmails').doc(normalizedEmail);
 
+  // Reserve the normalized email and create the user together to prevent duplicate accounts.
   return firestore.runTransaction(async (transaction) => {
     const [userDoc, emailDoc] = await Promise.all([
       transaction.get(userRef),
@@ -381,7 +384,7 @@ export async function getUserByAuthUid(authUid: string): Promise<UserRecord | nu
   };
 }
 
-/** Counts participations (`participants` collection group, by `uid`) and hosted activities (`activities` by. */
+/** Count joined and hosted activities; on read failure, return zero counts so profile reads still work. */
 export async function countUserActivities(
   authUid: string,
 ): Promise<{ activitiesCount: number; hostedCount: number }> {
@@ -419,6 +422,7 @@ export async function updateUserProfile(
   const userRef = firestore.collection('users').doc(normalizedAuthUid);
   const updatedAt = Timestamp.now();
 
+  // Recompute completion from the merged profile so partial edits preserve existing answers.
   return firestore.runTransaction(async (transaction) => {
     const userDoc = await transaction.get(userRef);
     const existingUser = mapUserDoc(userDoc);
@@ -481,7 +485,7 @@ export async function getUserByDisplayName(displayName: string): Promise<UserRec
     return null;
   }
 
-  // QueryDocumentSnapshot satisfies the DocumentSnapshot shape mapUserDoc expects (users are keyed by authUid.
+  // Adapt the query result to the shared mapper; user documents are keyed by auth uid.
   const firstDoc = snap.docs[0];
   if (!firstDoc) {
     return null;

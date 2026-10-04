@@ -47,6 +47,7 @@ export async function saveSwipeDecision(input: CreateSwipeInput): Promise<void> 
   const swipeRef = firestore.doc(swipeDecisionDocPath(uid, activityId));
 
   await firestore.runTransaction(async (transaction) => {
+    // Read the activity in the same transaction so a swipe cannot target a deleted activity.
     const activitySnap = await transaction.get(activityRef);
 
     if (!activitySnap.exists) {

@@ -9,6 +9,7 @@ export type TypingRecord = {
 export const TYPING_TTL_MS = 10_000;
 
 function isTypingStale(updatedAt: unknown): boolean {
+  // Ignore expired or malformed refresh times so stale `true` rows do not linger indefinitely.
   return (
     typeof updatedAt !== 'number' ||
     Number.isNaN(updatedAt) ||
@@ -47,6 +48,7 @@ export async function getTyping(activityId: string, uid: string): Promise<Typing
   if (typeof data.isTyping !== 'boolean')
     throw new Error('Invalid typing record: isTyping must be a boolean');
 
+  // Report stale activity as not typing without writing a cleanup on this read path.
   if (data.isTyping && isTypingStale(data.updatedAt)) {
     return {
       isTyping: false,

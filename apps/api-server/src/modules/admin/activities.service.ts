@@ -57,6 +57,7 @@ async function hostDisplayName(hostId: string): Promise<string> {
 
 /** Newest-first admin table. Host names resolved best-effort. */
 export async function listAdminActivities(limit: number): Promise<AdminActivityView[]> {
+  // Validate the requested window and map stored activity records into the admin list projection.
   const take = Math.trunc(limit);
   if (!Number.isFinite(take) || take < 1 || take > ADMIN_ACTIVITIES_LIMIT_MAX) {
     throw new Error(`limit must be between 1 and ${ADMIN_ACTIVITIES_LIMIT_MAX}`);
@@ -94,6 +95,7 @@ export async function listAdminActivities(limit: number): Promise<AdminActivityV
 }
 
 /** Admin status override — same write the host flow performs, without the host-ownership check. */
+// Record the moderator identity with the status change so the audit trail is attributable.
 export async function setAdminActivityStatus(
   activityId: string,
   status: unknown,
@@ -144,7 +146,7 @@ async function deleteSubcollection(
   return removed;
 }
 
-/** Removes the activity doc plus its `participants` and `joinRequests` subcollections (Firestore has no cascade. */
+/** Delete the activity and its `participants`/`joinRequests` rows, then record the admin action. */
 export async function deleteAdminActivity(
   activityId: string,
   adminUid: string,

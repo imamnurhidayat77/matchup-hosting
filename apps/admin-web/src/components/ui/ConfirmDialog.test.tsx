@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { ConfirmDialog } from './ConfirmDialog';
 
 describe('ConfirmDialog', () => {
+  // Cover closed/open rendering, customizable labels, and both action callbacks.
   it('renders nothing when closed', () => {
     const { container } = render(
       <ConfirmDialog open={false} title="Remove member" onConfirm={vi.fn()} onCancel={vi.fn()} />,

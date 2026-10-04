@@ -38,7 +38,7 @@ type ActivityParticipantBaseWithId = ActivityParticipantRecord & {
   isCheckedIn: boolean;
 };
 
-/** Join cutoff (best practice, Meetup/OpenSports-style): nobody can join or request to join once the game has. */
+/** Refuse new participation once the activity has started or its start timestamp is invalid. */
 function assertJoinableStartTime(activityData: FirebaseFirestore.DocumentData): void {
   const raw = activityData?.startTime;
   const startMs = typeof raw === 'string' ? Date.parse(raw) : Number.NaN;
@@ -47,6 +47,7 @@ function assertJoinableStartTime(activityData: FirebaseFirestore.DocumentData): 
   }
 }
 
+// Enforce status, capacity, and duplicate membership together before adding a participant.
 export async function joinActivity(activityId: string, uid: string): Promise<void> {
   const normalizedActivityId = activityId.trim();
   const normalizedUid = uid.trim();
@@ -128,6 +129,7 @@ export async function joinActivity(activityId: string, uid: string): Promise<voi
   });
 }
 
+// Return roster rows enriched with the public profile fields needed by clients.
 export async function getParticipants(activityId: string): Promise<ActivityParticipantWithId[]> {
   const normalizedActivityId = activityId.trim();
 
@@ -179,6 +181,7 @@ async function enrichParticipantWithProfile(
   };
 }
 
+// Only the host and confirmed participants can access an activity's chat.
 export async function canAccessActivityChat(activityId: string, uid: string): Promise<boolean> {
   const normalizedActivityId = activityId.trim();
   const normalizedUid = uid.trim();
@@ -214,6 +217,7 @@ export async function canAccessActivityChat(activityId: string, uid: string): Pr
   return activityData.hostId === normalizedUid || participantSnap.exists;
 }
 
+// Remove membership and keep the activity participant counter synchronized transactionally.
 export async function leaveActivity(input: LeaveActivityInput): Promise<void> {
   const normalizedActivityId = input.activityId.trim();
   const normalizedTargetUid = input.targetUid.trim();
@@ -345,7 +349,7 @@ export type JoinRequestWithId = JoinRequestRecord & {
   profile: PublicUserProfile | null;
 };
 
-/** Parks the user in a pending join request on approval-gated activities. */
+/** Approval-gated activities track join requests separately from confirmed participants. */
 export async function requestToJoin(activityId: string, uid: string): Promise<void> {
   const normalizedActivityId = activityId.trim();
   const normalizedUid = uid.trim();
@@ -597,6 +601,7 @@ async function decideJoinRequest(
   });
 }
 
+// Consume a pending request and add its member only if capacity still permits it.
 export async function approveJoinRequest(
   activityId: string,
   targetUid: string,
@@ -605,6 +610,7 @@ export async function approveJoinRequest(
   await decideJoinRequest(activityId, targetUid, actorUid, 'approved');
 }
 
+// Decline the request and decrement the activity's denormalized pending-request count.
 export async function declineJoinRequest(
   activityId: string,
   targetUid: string,
@@ -628,7 +634,7 @@ export type MyJoinRequestView = {
   fee?: number;
 };
 
-/** Outgoing join requests for the viewer — powers the "Pending" tab in My Games. */
+/** Join a user's request records back to their activities for the pending-request view. */
 export async function listMyJoinRequests(viewerUid: string): Promise<MyJoinRequestView[]> {
   const normalizedUid = viewerUid.trim();
   if (!normalizedUid) {

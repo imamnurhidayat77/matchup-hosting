@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { autocompletePlaces, type Viewbox } from './places.service.js';
 
 function parseViewbox(raw: unknown): Viewbox | undefined {
+  // Convert the comma-separated query value into a validated geographic rectangle.
   if (raw === undefined) return undefined;
   if (typeof raw !== 'string') {
     throw new Error('viewbox must be "left,top,right,bottom" in degrees');
@@ -24,7 +25,7 @@ function parseViewbox(raw: unknown): Viewbox | undefined {
   return { left, top, right, bottom };
 }
 
-/** `GET /api/places/autocomplete?q=...&countryCodes=nz` Unauthenticated by design: the search happens on the. */
+/** Public autocomplete endpoint with optional country and geographic filters. */
 export async function autocompletePlacesHandler(req: Request, res: Response) {
   try {
     const { q, countryCodes, viewbox: viewboxRaw } = req.query;

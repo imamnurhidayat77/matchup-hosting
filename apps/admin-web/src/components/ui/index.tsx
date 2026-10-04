@@ -22,6 +22,7 @@ export function Button({
   children,
   ...rest
 }: ButtonProps) {
+  // Combine shared styles with the selected size, visual variant, and caller overrides.
   const base =
     'inline-flex items-center justify-center rounded-md font-medium transition-colors disabled:opacity-50';
   const sizes = { sm: 'px-3 py-1.5 text-sm', md: 'px-4 py-2 text-sm' };
@@ -99,6 +100,7 @@ export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
 }
 
 export function Badge({ tone = 'neutral', className, children, ...rest }: BadgeProps) {
+  // Translate the semantic tone into its shared visual class.
   const tones = {
     neutral: 'badge-neutral',
     success: 'badge-success',
@@ -136,6 +138,7 @@ export function ModalShell({
   title: ReactNode;
   children: ReactNode;
 }) {
+  // Keep modal content out of the DOM while closed; callers own dialog-specific behavior.
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/50">
@@ -155,6 +158,7 @@ export function ModalShell({
 // TableWrapper.
 
 export function TableWrapper({ children }: { children: ReactNode }) {
+  // Provide a common panel frame and horizontal scrolling for wide tables.
   return (
     <div className="panel overflow-hidden">
       <div className="overflow-x-auto">{children}</div>

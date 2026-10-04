@@ -71,6 +71,7 @@ const CATEGORY_META: Record<
 };
 
 function CategoryBadge({ category, isDark }: { category: AuditCategory; isDark: boolean }) {
+  // Use explicit colors so category labels remain legible in both themes.
   const m = CATEGORY_META[category];
   return (
     <span
@@ -121,6 +122,7 @@ const POSITIVE_ACTIONS: readonly AuditAction[] = [
 ];
 
 function verbColor(action: AuditAction, isDark: boolean): string {
+  // Emphasize destructive and positive actions; keep other verbs neutral.
   if (DESTRUCTIVE_ACTIONS.includes(action)) return isDark ? '#fca5a5' : '#991b1b';
   if (POSITIVE_ACTIONS.includes(action)) return isDark ? '#4ade80' : '#15803d';
   return isDark ? '#94a3b8' : '#475569';
@@ -150,6 +152,7 @@ function LogRow({
   index: number;
   isDark: boolean;
 }) {
+  // Expanding a row reveals before/after values and metadata when any detail is available.
   const [expanded, setExpanded] = useState(false);
   const details = detailEntries(entry);
   const hasDetails = details.length > 0;
@@ -266,6 +269,7 @@ export function AuditLogPage() {
   if (loading) return <PageSkeleton rows={5} />;
   if (error) return <PageError message={error} onRetry={reload} />;
 
+  // Export the complete loaded audit window rather than only the currently filtered page.
   function handleExport() {
     downloadCsv(
       entries.map((e) => ({
@@ -282,6 +286,7 @@ export function AuditLogPage() {
     toast('Audit log exported as CSV.', 'info');
   }
 
+  // Filter locally because the hook loads the recent audit window in one request.
   const filtered = entries.filter((e) => {
     const matchCat = categoryFilter === 'All' || e.category === categoryFilter;
     const q = search.toLowerCase();
@@ -304,11 +309,13 @@ export function AuditLogPage() {
     setPage(1);
   }
 
+  // The sidebar breakdown is based on all loaded entries, not the active filters.
   const breakdown = ALL_CATEGORIES.map((c) => ({
     category: c,
     count: entries.filter((e) => e.category === c).length,
   })).sort((a, b) => b.count - a.count);
 
+  // Set a local start-of-week boundary for the summary count shown above the log.
   const startOfWeek = new Date();
   startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
   startOfWeek.setHours(0, 0, 0, 0);

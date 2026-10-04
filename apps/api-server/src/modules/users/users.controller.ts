@@ -20,6 +20,7 @@ type PublicProfileParams = {
   uid: string;
 };
 
+// Keep the API's accepted profile fields explicit so clients cannot mass-assign stored account data.
 const editableProfileFields = [
   'displayName',
   'bio',
@@ -59,6 +60,7 @@ function isSportSkillLevels(value: unknown): value is Record<string, SkillLevel>
 }
 
 function buildProfileInput(body: Record<string, unknown>): UpdateUserProfileInput {
+  // Copy only validated, supported values and normalize user-entered strings before persistence.
   const input: UpdateUserProfileInput = {};
 
   for (const field of ['displayName', 'bio', 'gender', 'dateOfBirth'] as const) {
@@ -563,7 +565,7 @@ function parseUserActivitiesPaging(
   return { limit: parsedLimit, offset: parsedOffset };
 }
 
-/** Legacy contract aliases — thin wrappers over the activities service: `joined-activities` → `?mine=joined`. */
+/** Serve legacy profile activity URLs from the shared activity queries and viewer-context mapper. */
 async function userActivitiesHandler(
   req: Request<PublicProfileParams>,
   res: Response,

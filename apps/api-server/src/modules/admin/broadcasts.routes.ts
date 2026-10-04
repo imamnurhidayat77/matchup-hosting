@@ -1,4 +1,4 @@
-// Routes for broadcasts.
+/** Admin-only broadcast management and send endpoints. */
 import { Router } from 'express';
 import { requireAuth, requireAdmin } from '../../middleware/auth.middleware.js';
 import {

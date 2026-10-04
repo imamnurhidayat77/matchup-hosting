@@ -21,6 +21,7 @@ import { createNotification, renderTemplate } from '../notifications/notificatio
 // Activity writes: cover, status, full updates (+ participant notices).
 
 export async function updateActivityCover(input: UpdateActivityCoverInput): Promise<void> {
+  // Check host ownership before replacing the activity's cover reference.
   const activityId = input.activityId.trim();
   const hostId = input.hostId.trim();
   const coverImagePath = input.coverImagePath.trim();
@@ -71,6 +72,7 @@ export async function updateActivityCover(input: UpdateActivityCoverInput): Prom
 }
 
 export async function updateActivityStatus(input: UpdateActivityStatusInput): Promise<void> {
+  // Keep lifecycle changes and related participant updates consistent in a transaction.
   const activityId = input.activityId.trim();
   const hostId = input.hostId.trim();
   const status = input.status;
@@ -116,6 +118,7 @@ export async function updateActivityStatus(input: UpdateActivityStatusInput): Pr
 }
 
 export async function updateActivity(input: UpdateActivityInput): Promise<void> {
+  // Merge the partial edit with the stored record before validating cross-field constraints.
   const activityId = input.activityId.trim();
   const hostId = input.hostId.trim();
   const now = Timestamp.now();
@@ -318,8 +321,6 @@ export async function updateActivity(input: UpdateActivityInput): Promise<void> 
 
   await notifyParticipantsOfUpdate(activityId, hostId, before, updates);
 }
-
-/** Notifies members (not the host) when an edit changes time, venue or capacity. Best-effort. */
 
 /** Notifies members (not the host) when an edit changes time, venue or capacity. Best-effort. */
 async function notifyParticipantsOfUpdate(

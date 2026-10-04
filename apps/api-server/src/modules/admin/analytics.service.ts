@@ -140,6 +140,7 @@ async function bucketByDay(collection: string, field: string, days: Date[]): Pro
 }
 
 export async function getAnalytics(rangeDays = 7): Promise<AnalyticsView> {
+  // Aggregate a bounded recent dataset into the chart, retention, health, and sport summaries.
   if (rangeDays !== 7 && rangeDays !== 30 && rangeDays !== 90) {
     throw new Error('range must be 7, 30, or 90 days');
   }
@@ -255,6 +256,7 @@ export async function getAnalytics(rangeDays = 7): Promise<AnalyticsView> {
 }
 
 export async function getDashboard(): Promise<DashboardView> {
+  // Build dashboard KPIs from the same underlying collections used by analytics.
   const now = new Date();
   const weekAgo = new Date(now.getTime() - 7 * DAY_MS);
   const [totalUsers, activeActivities, pendingReports, newUsersWeek, analytics] = await Promise.all(

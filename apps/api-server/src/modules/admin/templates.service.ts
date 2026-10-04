@@ -63,6 +63,7 @@ function mapTemplate(
 }
 
 export async function listTemplates(): Promise<TemplateView[]> {
+  // Return the configured notification templates in stable display order.
   const snap = await firestore.collection('notificationTemplates').get();
   const rows: TemplateView[] = [];
   for (const doc of snap.docs) {
@@ -73,7 +74,7 @@ export async function listTemplates(): Promise<TemplateView[]> {
   return rows;
 }
 
-/** Copy-only update — trigger/category/variables are API-immutable. */
+/** Update editable template copy only; trigger, category, and variables stay immutable. */
 export async function updateTemplate(
   id: string,
   input: UpdateTemplateInput,

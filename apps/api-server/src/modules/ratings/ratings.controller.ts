@@ -90,6 +90,7 @@ export async function submitActivityRatingHandler(
       });
     }
 
+    // Check object shape before mapping; the service then validates stars and activity membership.
     for (const entry of participantRatings) {
       if (!isRecord(entry) || typeof entry.rateeUid !== 'string') {
         return res.status(400).json({

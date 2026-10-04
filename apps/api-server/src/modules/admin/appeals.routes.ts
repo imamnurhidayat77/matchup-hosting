@@ -1,4 +1,4 @@
-// Routes for appeals.
+/** Admin-only appeal review endpoints. */
 import { Router } from 'express';
 import { requireAuth, requireAdmin } from '../../middleware/auth.middleware.js';
 import {

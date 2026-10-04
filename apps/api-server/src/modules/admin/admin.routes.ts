@@ -26,6 +26,7 @@ adminRouter.get('/me', requireAuth, requireAdmin, (req, res) => {
 });
 
 adminRouter.get('/dashboard', requireAuth, requireAdmin, getDashboardHandler);
+// Child routers apply the same auth and admin gates to each endpoint they expose.
 adminRouter.use('/members', adminMembersRouter);
 adminRouter.use('/activities', adminActivitiesRouter);
 adminRouter.use('/appeals', adminAppealsRouter);
