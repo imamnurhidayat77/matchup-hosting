@@ -205,7 +205,7 @@ export function ActivityDetailPanel({
                 className="h-full rounded-full transition-all"
                 style={{
                   width: `${pct}%`,
-                  backgroundColor: isFull ? '#f59e0b' : '#0b1f8a',
+                  backgroundColor: isFull ? '#f59e0b' : 'var(--brand-graphic)',
                 }}
               />
             </div>
