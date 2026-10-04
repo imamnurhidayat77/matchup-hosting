@@ -38,21 +38,25 @@ export async function fetchDashboard(): Promise<DashboardData> {
     fetchActivities(),
     fetchModerationQueue(),
   ]);
+  // Defensive defaults: a partial backend response must render empty cards, never crash.
+  const weekly = Array.isArray(analytics.weekly) ? analytics.weekly : [];
+  const rows = Array.isArray(activities) ? activities : [];
+  const queue = Array.isArray(moderationQueue) ? moderationQueue : [];
   return {
     kpis: [
-      kpi('Total Users', stats.totalUsers, '#0b1f8a'),
-      kpi('Active Activities', stats.activeActivities, '#16a34a'),
-      kpi('Pending Reports', stats.pendingReports, '#dc2626'),
-      kpi('New Users (7d)', stats.newUsersWeek, '#7c3aed'),
+      kpi('Total Users', Number(stats.totalUsers) || 0, '#0b1f8a'),
+      kpi('Active Activities', Number(stats.activeActivities) || 0, '#16a34a'),
+      kpi('Pending Reports', Number(stats.pendingReports) || 0, '#dc2626'),
+      kpi('New Users (7d)', Number(stats.newUsersWeek) || 0, '#7c3aed'),
     ],
-    trend: analytics.weekly.map((w) => ({
-      day: w.day,
-      activities: w.activities,
-      signups: w.signups,
+    trend: weekly.map((w) => ({
+      day: typeof w.day === 'string' ? w.day : '',
+      activities: Number(w.activities) || 0,
+      signups: Number(w.signups) || 0,
     })),
-    moderationQueue,
+    moderationQueue: queue,
     // Keep the dashboard preview short and normalize statuses for its smaller activity summary.
-    activities: activities.slice(0, 8).map((a): ActivityRow => ({
+    activities: rows.slice(0, 8).map((a): ActivityRow => ({
       id: a.id,
       name: a.name,
       matchId: a.matchId,
