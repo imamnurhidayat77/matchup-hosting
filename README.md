@@ -1,4 +1,4 @@
-# MatchUp
+# MatchUp Apps
 
 > Activity-based matchmaking platform for connecting people through shared sports — think Tinder-style swiping, but for finding games to join or host instead of dating.
 
