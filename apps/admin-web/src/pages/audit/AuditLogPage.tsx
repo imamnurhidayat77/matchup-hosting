@@ -24,7 +24,7 @@ const CATEGORY_META: Record<
     lightText: '#0f1a52',
     darkBg: 'rgba(11,31,138,0.25)',
     darkText: '#8fadf6',
-    dot: '#0b1f8a',
+    dot: 'var(--brand-graphic)',
   },
   Activities: {
     lightBg: '#fef3c7',
