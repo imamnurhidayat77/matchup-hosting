@@ -11,9 +11,8 @@ import { firestore } from '../../database/firebase.js';
  * No fake data: `retention`/`health` stay `[]` because the events to
  * compute them (repeat-visit cohorts, DAU/WAU funnels) are not recorded
  * yet — the frontend renders those cards from the empty series plus the
- * human-readable `note` (also sent as the `X-Analytics-Note` response
- * header). When an `analyticsEvents` collection lands, compute the
- * series here and keep the same shape.
+ * human-readable `note` in the JSON body. When an `analyticsEvents`
+ * collection lands, compute the series here and keep the same shape.
  */
 export const ANALYTICS_SCAN_CAP = 1000;
 

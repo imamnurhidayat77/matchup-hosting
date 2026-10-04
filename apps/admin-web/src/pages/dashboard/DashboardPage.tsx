@@ -132,7 +132,8 @@ const KPI_ICONS: Record<string, React.ReactNode> = {
 // KPI Card.
 
 function KpiCard({ kpi }: { kpi: KpiData }) {
-  const maxBar = Math.max(...kpi.sparkBars);
+  // Empty spark data renders a flat bar instead of dividing by zero.
+  const maxBar = kpi.sparkBars.length > 0 ? Math.max(...kpi.sparkBars) : 0;
   return (
     <div className="card flex flex-col gap-3">
       <div className="flex items-start justify-between">
@@ -160,7 +161,7 @@ function KpiCard({ kpi }: { kpi: KpiData }) {
               key={i}
               className="w-[3px] rounded-sm"
               style={{
-                height: `${Math.round((h / maxBar) * 32)}px`,
+                height: `${maxBar > 0 ? Math.round((h / maxBar) * 32) : 2}px`,
                 backgroundColor: kpi.sparkColor,
               }}
             />
@@ -178,7 +179,7 @@ function TrendChart({ trend }: { trend: TrendPoint[] }) {
   const isDark = theme === 'dark';
   if (!trend.length) return null;
 
-  const maxVal = Math.max(...trend.flatMap((t) => [t.activities, t.signups]));
+  const maxVal = Math.max(1, ...trend.flatMap((t) => [t.activities, t.signups]));
   const H = 180;
   const pad = { top: 10, bottom: 24, left: 4, right: 4 };
   const chartH = H - pad.top - pad.bottom;
