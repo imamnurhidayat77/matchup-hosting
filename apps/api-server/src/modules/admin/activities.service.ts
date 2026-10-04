@@ -27,7 +27,7 @@ export function isAdminActivityStatus(value: unknown): value is ActivityStatus {
 }
 
 export const ADMIN_ACTIVITIES_LIMIT_DEFAULT = 20;
-export const ADMIN_ACTIVITIES_LIMIT_MAX = 100;
+export const ADMIN_ACTIVITIES_LIMIT_MAX = 1000;
 
 function toIso(value: unknown): string | null {
   if (

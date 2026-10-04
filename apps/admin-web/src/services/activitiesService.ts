@@ -98,7 +98,8 @@ function toBackendStatus(status: ActivityStatus): string {
 
 export async function fetchActivities(): Promise<AdminActivity[]> {
   // Normalize each wire record into the model shared by admin pages.
-  const res = await apiFetch<AdminActivityView[]>('/api/admin/activities');
+  // Ask for the full collection (API default is 20): the table paginates client-side.
+  const res = await apiFetch<AdminActivityView[]>('/api/admin/activities?limit=1000');
   if (!res.ok) throw new Error(res.error.message);
   return res.data.map(toAdminActivity);
 }
@@ -112,7 +113,7 @@ export interface ActivitiesSummary {
   removed: number;
 }
 
-// Collection-wide totals for the header cards (the list endpoint is page-capped).
+// Collection-wide totals for the header cards (cheap counts; the list itself is fully loaded).
 export async function fetchActivitiesSummary(): Promise<ActivitiesSummary> {
   const res = await apiFetch<ActivitiesSummary>('/api/admin/activities/summary');
   if (!res.ok) throw new Error(res.error.message);

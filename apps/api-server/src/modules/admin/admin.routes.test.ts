@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // Stub each service so these tests focus on endpoint routing, defaults, and HTTP error mapping.
 vi.mock('./members.service.js', () => ({
   ADMIN_MEMBERS_PAGE_LIMIT_DEFAULT: 20,
-  ADMIN_MEMBERS_PAGE_LIMIT_MAX: 100,
+  ADMIN_MEMBERS_PAGE_LIMIT_MAX: 1000,
   listMembers: vi.fn(),
   getMemberDetail: vi.fn(),
   setMemberStatus: vi.fn(),
@@ -13,7 +13,7 @@ vi.mock('./members.service.js', () => ({
 
 vi.mock('./activities.service.js', () => ({
   ADMIN_ACTIVITIES_LIMIT_DEFAULT: 20,
-  ADMIN_ACTIVITIES_LIMIT_MAX: 100,
+  ADMIN_ACTIVITIES_LIMIT_MAX: 1000,
   listAdminActivities: vi.fn(),
   setAdminActivityStatus: vi.fn().mockResolvedValue(undefined),
   deleteAdminActivity: vi.fn().mockResolvedValue(undefined),

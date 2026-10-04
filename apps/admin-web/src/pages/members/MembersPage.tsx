@@ -52,7 +52,7 @@ export function MembersPage() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  // Collection-wide totals for the header cards (the list is page-capped).
+  // Collection-wide totals for the header cards (the full list is loaded; the table paginates client-side).
   const [summary, setSummary] = useState<MembersSummary | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -202,7 +202,7 @@ export function MembersPage() {
     setMenuOpenId(null);
   }
 
-  // Header cards describe the whole collection; the table below is page-capped.
+  // Header cards describe the whole collection; the table below paginates client-side.
   // Falls back to page counts when the summary fetch fails (offline/CSP).
   const stats = [
     { label: 'Total Members', value: summary?.total ?? members.length, color: 'text-ink-900' },
