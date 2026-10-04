@@ -115,7 +115,7 @@ matchup/
 │   └── shared-utils/            # common helpers
 ├── infra/
 │   ├── firebase/                # RTDB rules, Firestore indexes, setup README
-│   ├── database/                # local Postgres setup notes
+│   ├── database/                # retired Postgres notes (data plane is now Firebase)
 │   ├── perf/                    # k6 load-test script
 │   ├── scripts/                 # secrets setup
 │   └── ci/                      # CI references

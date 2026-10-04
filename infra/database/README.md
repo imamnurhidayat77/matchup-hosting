@@ -1,113 +1,39 @@
-# MatchUp — Local Database Setup
+# MatchUp — Database Setup (retired)
 
-The boilerplate phase ships **only the database connection code and migration runner** in `apps/api`. Each developer is responsible for running a local PostgreSQL instance for development.
+> **This PostgreSQL setup is retired and no longer used.** The project moved
+> off PostgreSQL/Prisma during the MVP phase. There is no `DATABASE_URL`,
+> no Prisma schema, and no `npm run migrate` — do not install Postgres for
+> this repo.
 
-> Production schema design is **out of scope** for the boilerplate phase. Real tables will be added in the MVP phase.
+## Current data plane: Firebase (project `matchup-cs734`)
 
-## Option A — Homebrew PostgreSQL 16 (recommended on macOS)
+| Store | Used for |
+|-------|----------|
+| Firestore | profiles, activities, swipes, reports, moderation (`apps/api-server` via Admin SDK) |
+| Realtime Database | chat messages, typing indicators, presence (authorised writes via API, realtime reads from clients) |
+| Storage | avatars, activity covers, chat attachments, report evidence |
+| FCM | per-device push with dead-token pruning |
 
-```bash
-# Install
-brew install postgresql@16
+Rules live in [`firestore.rules`](../../firestore.rules),
+[`storage.rules`](../../storage.rules) and
+[`infra/firebase/database.rules.json`](../firebase/database.rules.json).
 
-# Start the service (auto-restarts on boot)
-brew services start postgresql@16
+## Setup
 
-# One-off start without brew services:
-#   pg_ctl -D /usr/local/var/postgresql@16 start
+No local database to install. Configure Firebase credentials instead:
 
-# Create the dev database + user
-createuser -s matchup
-createdb -O matchup matchup
+1. Create a service account (Firebase Console → Project settings → Service accounts).
+2. Put its fields into `apps/api-server/.env` (see `apps/api-server/.env.example`).
+3. Start the API and verify: `curl http://localhost:4000/api/health` should
+   report `"database":"connected"`.
 
-# Verify
-psql postgres://matchup:matchup@localhost:5432/matchup -c '\dt'
-```
+Client config, RTDB rules publishing and the offline/polling fallback are
+documented in [`infra/firebase/README.md`](../firebase/README.md). The
+checked-in Firestore index is
+[`infra/firebase/firestore.indexes.json`](../firebase/firestore.indexes.json).
 
-Add the connection string to `apps/api/.env`:
+## History
 
-```env
-DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/matchup
-```
-
-Then apply the baseline migration:
-
-```bash
-cd apps/api
-npm run migrate
-```
-
-## Option B — Docker
-
-If you prefer containers, a minimal `docker-compose.yml` for local dev:
-
-```yaml
-services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: matchup
-      POSTGRES_PASSWORD: matchup
-      POSTGRES_DB: matchup
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-volumes:
-  pgdata:
-```
-
-```bash
-docker compose up -d
-```
-
-## Migration workflow
-
-The API uses **Prisma Migrate**. Migrations live in `apps/api/prisma/migrations`:
-
-```
-apps/api/prisma/migrations/
-  20240803000000_init/   # baseline — generated from existing schema
-    migration.sql
-  migration_lock.toml
-```
-
-Run pending migrations:
-
-```bash
-cd apps/api
-npm run migrate
-```
-
-To create a new migration after changing `prisma/schema.prisma`:
-
-```bash
-cd apps/api
-npx prisma migrate dev --name <description>
-```
-
-Never edit a migration that has already been applied to staging or production — add a new one instead.
-
-## Seed data
-
-`apps/api/seeds/seed.sql` is a placeholder. Real seed scripts (sample members, activities, etc.) will be added in the MVP phase.
-
-To apply seeds manually:
-
-```bash
-psql $DATABASE_URL -f apps/api/seeds/seed.sql
-```
-
-## Verifying the connection from the API
-
-Start the API and hit `/health`:
-
-```bash
-cd apps/api
-npm run dev
-# in another terminal
-curl http://localhost:4000/health
-# → {"ok":true,"data":{"status":"ok","service":"matchup-api"}}
-```
-
-The `/health` endpoint intentionally does not touch the database — it returns 200 even if the DB is offline. A future `/health/db` endpoint will perform a live ping; for now, run `npm run migrate` to verify the full connection round-trip.
+This folder previously held PostgreSQL/Homebrew/Docker/Prisma notes from the
+boilerplate phase (see [`docs/initial-plan.md`](../../docs/initial-plan.md)).
+It is kept as a pointer so old links don't rot.

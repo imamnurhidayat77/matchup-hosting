@@ -1,5 +1,12 @@
 # MatchUp — Boilerplate Setup Plan
 
+> **Historical record — superseded.** This plan describes the boilerplate phase
+> (notably PostgreSQL + Prisma), which the project has since left behind: the
+> data plane is now **Firebase** (Firestore + RTDB + Storage + FCM, see
+> [`architecture/overview.md`](./architecture/overview.md) and
+> [`infra/database/README.md`](../infra/database/README.md)). Kept for phase
+> history; do not follow its Postgres steps.
+
 ## 1. Purpose
 
 This document defines the **boilerplate setup plan** for MatchUp. The purpose of this phase is to establish a clean, scalable, and developer-friendly foundation for the project before implementing business features.
