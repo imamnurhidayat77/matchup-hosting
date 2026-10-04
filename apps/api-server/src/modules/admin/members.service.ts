@@ -15,7 +15,7 @@ export type AdminMemberView = {
 };
 
 export const ADMIN_MEMBERS_PAGE_LIMIT_DEFAULT = 20;
-export const ADMIN_MEMBERS_PAGE_LIMIT_MAX = 100;
+export const ADMIN_MEMBERS_PAGE_LIMIT_MAX = 1000;
 
 function toIso(value: unknown): string | null {
   if (

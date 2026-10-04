@@ -39,7 +39,8 @@ function toMember(view: AdminMemberView): Member {
 }
 
 export async function fetchMembers(): Promise<Member[]> {
-  const res = await apiFetch<AdminMemberView[]>('/api/admin/members');
+  // Ask for the full collection (API default is 20): the table paginates client-side.
+  const res = await apiFetch<AdminMemberView[]>('/api/admin/members?limit=1000');
   if (!res.ok) throw new Error(res.error.message);
   return res.data.map(toMember);
 }
@@ -50,7 +51,7 @@ export interface MembersSummary {
   suspended: number;
 }
 
-// Collection-wide totals for the header cards (the list endpoint is page-capped).
+// Collection-wide totals for the header cards (cheap counts; the list itself is fully loaded).
 export async function fetchMembersSummary(): Promise<MembersSummary> {
   const res = await apiFetch<MembersSummary>('/api/admin/members/summary');
   if (!res.ok) throw new Error(res.error.message);

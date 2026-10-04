@@ -92,7 +92,7 @@ export function ActivitiesPage() {
   } | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  // Collection-wide totals for the header cards (the list is page-capped).
+  // Collection-wide totals for the header cards (the full list is loaded; the table paginates client-side).
   const [summary, setSummary] = useState<ActivitiesSummary | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -192,7 +192,7 @@ export function ActivitiesPage() {
     dateRange !== 'All',
   ].filter(Boolean).length;
 
-  // Summary cards describe the full collection; the table below is page-capped.
+  // Summary cards describe the full collection; the table below paginates client-side.
   // Falls back to page counts when the summary fetch fails (offline/CSP).
   const stats = [
     { label: 'Total Activities', value: summary?.total ?? activities.length },

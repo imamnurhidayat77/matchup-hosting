@@ -100,8 +100,8 @@ describe('listMembers', () => {
 
   it('rejects out-of-range limit', async () => {
     mockUsersCollection([]);
-    await expect(listMembers(0)).rejects.toThrow('limit must be between 1 and 100');
-    await expect(listMembers(101)).rejects.toThrow('limit must be between 1 and 100');
+    await expect(listMembers(0)).rejects.toThrow('limit must be between 1 and 1000');
+    await expect(listMembers(1001)).rejects.toThrow('limit must be between 1 and 1000');
   });
 });
 

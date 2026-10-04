@@ -129,7 +129,8 @@ describe('listAdminActivities', () => {
 
   it('rejects out-of-range limit', async () => {
     mockActivities([]);
-    await expect(listAdminActivities(0)).rejects.toThrow('limit must be between 1 and 100');
+    await expect(listAdminActivities(0)).rejects.toThrow('limit must be between 1 and 1000');
+    await expect(listAdminActivities(1001)).rejects.toThrow('limit must be between 1 and 1000');
   });
 });
 
