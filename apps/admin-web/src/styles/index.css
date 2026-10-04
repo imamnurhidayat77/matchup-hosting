@@ -101,6 +101,40 @@ body:not(.dark) textarea::placeholder {
 } /*  6.6:1 */
 
 /* ════════════════════════════════════════════════════════════════════════════
+   DARK MODE — BRAND FILLS
+   Navy fills vanish against the dark surface; white text on #3b5bdb is 5.7:1
+   ════════════════════════════════════════════════════════════════════════════ */
+.dark .bg-brand-500,
+.dark .bg-brand-600 {
+  background-color: #3b5bdb !important;
+}
+.dark .hover\:bg-brand-600:hover,
+.dark .hover\:bg-brand-700:hover {
+  background-color: #4263eb !important;
+}
+.dark .border-brand-500 {
+  border-color: #3b5bdb !important;
+}
+/* Status dots and bar/progress fills */
+.dark .bg-brand-400,
+.dark .bg-brand-700 {
+  background-color: #7c9cff !important;
+}
+/* Light tints (pills, info boxes) would otherwise stay pale behind light text */
+.dark .bg-brand-50,
+.dark .bg-brand-100 {
+  background-color: rgba(79, 114, 224, 0.2) !important;
+}
+.dark .hover\:bg-brand-50:hover,
+.dark .hover\:bg-brand-100:hover {
+  background-color: rgba(79, 114, 224, 0.32) !important;
+}
+.dark .border-brand-100,
+.dark .border-brand-200 {
+  border-color: rgba(143, 173, 246, 0.35) !important;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
    DARK MODE — STATIC BACKGROUNDS
    Only applied to non-interactive, non-hover elements
    ════════════════════════════════════════════════════════════════════════════ */
@@ -258,6 +292,12 @@ body:not(.dark) textarea::placeholder {
   .dark .badge-red {
     background-color: rgba(220, 38, 38, 0.25);
     color: #fca5a5;
+  }
+  .dark .btn-primary {
+    background-color: #3b5bdb;
+  }
+  .dark .btn-primary:hover {
+    background-color: #4263eb;
   }
   .dark .btn-ghost {
     color: #8fadf6;
