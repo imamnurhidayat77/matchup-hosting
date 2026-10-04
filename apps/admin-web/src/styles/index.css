@@ -91,6 +91,15 @@ body:not(.dark) textarea::placeholder {
   color: #7e91a8 !important;
 } /*  4.5:1 */
 
+/* Brand navy text (#0b1f8a family) is ~1.1:1 on bg-surface — lift to brand-300 */
+.dark .text-brand-400,
+.dark .text-brand-500,
+.dark .text-brand-600,
+.dark .text-brand-700,
+.dark .group:hover .group-hover\:text-brand-400 {
+  color: #8fadf6 !important;
+} /*  6.6:1 */
+
 /* ════════════════════════════════════════════════════════════════════════════
    DARK MODE — STATIC BACKGROUNDS
    Only applied to non-interactive, non-hover elements
@@ -249,6 +258,12 @@ body:not(.dark) textarea::placeholder {
   .dark .badge-red {
     background-color: rgba(220, 38, 38, 0.25);
     color: #fca5a5;
+  }
+  .dark .btn-ghost {
+    color: #8fadf6;
+  }
+  .dark .btn-ghost:hover {
+    background-color: rgba(79, 114, 224, 0.2);
   }
   .dark .badge-neutral {
     background-color: #263244;
