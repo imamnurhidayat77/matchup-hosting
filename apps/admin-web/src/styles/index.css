@@ -16,6 +16,7 @@
   --text-primary: #0f172a;
   --text-secondary: #475569;
   --text-muted: #94a3b8;
+  --brand-graphic: #0b1f8a; /* chart lines, bars, dots, progress fills */
 }
 
 .dark {
@@ -28,6 +29,8 @@
   --text-primary: #f1f5f9;
   --text-secondary: #94a3b8;
   --text-muted: #8899ae;
+  /* Navy #0b1f8a is 1.1:1 on bg-surface — lift brand graphics to a light blue */
+  --brand-graphic: #7c9cff; /* 5.6:1 on #1e293b */
 }
 
 html,
@@ -299,7 +302,7 @@ body:not(.dark) textarea::placeholder {
     color: var(--text-muted);
   }
   .input:focus {
-    border-color: #0b1f8a;
+    border-color: var(--brand-graphic);
     box-shadow: 0 0 0 2px rgba(11, 31, 138, 0.15);
   }
 }
