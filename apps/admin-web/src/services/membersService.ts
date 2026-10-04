@@ -11,6 +11,8 @@ interface AdminMemberView {
   photoUrl?: string;
   status: 'active' | 'suspended';
   createdAt: string | null;
+  sports: { sport: string; level: string }[];
+  rating: number;
   activitiesCount?: number;
   hostedCount?: number;
 }
@@ -28,11 +30,13 @@ function toMember(view: AdminMemberView): Member {
     email: view.email,
     role: 'Player',
     status: view.status === 'suspended' ? 'Suspended' : 'Active',
-    sports: [],
+    sports: Array.isArray(view.sports)
+      ? view.sports.filter((s) => typeof s.sport === 'string' && s.sport.length > 0)
+      : [],
     joinedDate: view.createdAt ?? '',
     activitiesJoined: view.activitiesCount ?? 0,
     activitiesHosted: view.hostedCount ?? 0,
-    rating: 0,
+    rating: typeof view.rating === 'number' ? view.rating : 0,
     avatarSeed: view.uid,
     photoUrl: view.photoUrl,
   };
