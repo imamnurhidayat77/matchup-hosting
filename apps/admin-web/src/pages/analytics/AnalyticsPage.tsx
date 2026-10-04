@@ -83,7 +83,7 @@ function LineChart({
               <polyline
                 points={points}
                 fill="none"
-                stroke={color}
+                style={{ stroke: color }}
                 strokeWidth="2.5"
                 strokeLinejoin="round"
                 strokeLinecap="round"
@@ -97,7 +97,7 @@ function LineChart({
                 cy={yOf(values[i] ?? 0)}
                 r="3.5"
                 fill={isDark ? '#1e293b' : '#fff'}
-                stroke={color}
+                style={{ stroke: color }}
                 strokeWidth="2"
               />
             ))}
@@ -225,7 +225,7 @@ export function AnalyticsPage() {
 
             <div className="flex flex-wrap gap-3">
               {[
-                { label: 'Signups', color: '#0b1f8a' },
+                { label: 'Signups', color: 'var(--brand-graphic)' },
                 { label: 'Activities', color: '#ff6b00' },
                 { label: 'Reports', color: '#ef4444' },
               ].map((item) => (
@@ -251,7 +251,7 @@ export function AnalyticsPage() {
               reports: point.reports,
             }))}
             keys={['signups', 'activities', 'reports']}
-            colors={['#0b1f8a', '#ff6b00', '#ef4444']}
+            colors={['var(--brand-graphic)', '#ff6b00', '#ef4444']}
           />
         </div>
 
