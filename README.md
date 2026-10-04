@@ -275,15 +275,12 @@ Demo logins (same password for all): `alex.mercer@matchup.demo`, `sarah.chen@mat
 
 ### Admin account (admin web)
 
-The admin web (`/login`) only accepts admin accounts. There is no default admin password — access is granted server-side to a Firebase Auth uid, then proven at login via `GET /api/admin/me` (non-admins get `403`):
+Log in to the admin web (`/login`) with the admin account:
 
-1. Sign up or sign in once (mobile app or admin web login) to obtain your Firebase Auth uid.
-2. Grant admin in one of two ways:
-   - Local: add the uid to `ADMIN_UIDS` in `apps/api-server/.env` (comma-separated bootstrap allowlist), restart the API; or
-   - Deployed: create a Firestore document `admins/{uid}` (any fields, e.g. `{ "role": "admin" }`).
-3. Log in to the admin web with that account — all moderation routes unlock.
+- Email: `admin@matchup.com`
+- Password: `MatchUp123!`
 
-Demo accounts above are players/hosts, so they cannot open the admin web until their uid is allowlisted as above — ask the team for an existing admin uid if needed.
+This account has full access to all moderation routes (members, activities, reports, appeals, broadcasts, analytics). The demo accounts above are players/hosts and cannot open the admin web.
 
 ## Scripts by App
 
