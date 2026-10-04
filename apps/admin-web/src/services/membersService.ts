@@ -44,6 +44,19 @@ export async function fetchMembers(): Promise<Member[]> {
   return res.data.map(toMember);
 }
 
+export interface MembersSummary {
+  total: number;
+  active: number;
+  suspended: number;
+}
+
+// Collection-wide totals for the header cards (the list endpoint is page-capped).
+export async function fetchMembersSummary(): Promise<MembersSummary> {
+  const res = await apiFetch<MembersSummary>('/api/admin/members/summary');
+  if (!res.ok) throw new Error(res.error.message);
+  return res.data;
+}
+
 export async function fetchMember(id: string): Promise<Member> {
   const res = await apiFetch<AdminMemberView>(`/api/admin/members/${encodeURIComponent(id)}`);
   if (!res.ok) throw new Error(res.error.message);

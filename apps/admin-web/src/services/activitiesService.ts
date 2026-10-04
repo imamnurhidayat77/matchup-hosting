@@ -103,6 +103,22 @@ export async function fetchActivities(): Promise<AdminActivity[]> {
   return res.data.map(toAdminActivity);
 }
 
+export interface ActivitiesSummary {
+  total: number;
+  open: number;
+  full: number;
+  cancelled: number;
+  completed: number;
+  removed: number;
+}
+
+// Collection-wide totals for the header cards (the list endpoint is page-capped).
+export async function fetchActivitiesSummary(): Promise<ActivitiesSummary> {
+  const res = await apiFetch<ActivitiesSummary>('/api/admin/activities/summary');
+  if (!res.ok) throw new Error(res.error.message);
+  return res.data;
+}
+
 export async function updateActivityStatus(id: string, status: ActivityStatus): Promise<void> {
   const res = await apiFetch<void>(`/api/admin/activities/${encodeURIComponent(id)}/status`, {
     method: 'PATCH',

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useMembers } from '../../hooks/useMembers';
+import { fetchMembersSummary, type MembersSummary } from '../../services/membersService';
 import {
   MembersPageSkeleton,
   PageError,
@@ -50,6 +51,22 @@ export function MembersPage() {
   const [bulkError, setBulkError] = useState<string | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
+
+  // Collection-wide totals for the header cards (the list is page-capped).
+  const [summary, setSummary] = useState<MembersSummary | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetchMembersSummary()
+      .then((s) => {
+        if (!cancelled) setSummary(s);
+      })
+      .catch(() => {
+        if (!cancelled) setSummary(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Keyboard shortcut: '/' focuses search
   useEffect(() => {
@@ -185,17 +202,18 @@ export function MembersPage() {
     setMenuOpenId(null);
   }
 
-  // Top-level counts describe the full member list, not the filtered table subset.
+  // Header cards describe the whole collection; the table below is page-capped.
+  // Falls back to page counts when the summary fetch fails (offline/CSP).
   const stats = [
-    { label: 'Total Members', value: members.length, color: 'text-ink-900' },
+    { label: 'Total Members', value: summary?.total ?? members.length, color: 'text-ink-900' },
     {
       label: 'Active',
-      value: members.filter((m) => m.status === 'Active').length,
+      value: summary?.active ?? members.filter((m) => m.status === 'Active').length,
       color: 'text-brand-500',
     },
     {
       label: 'Suspended',
-      value: members.filter((m) => m.status === 'Suspended').length,
+      value: summary?.suspended ?? members.filter((m) => m.status === 'Suspended').length,
       color: 'text-danger-500',
     },
   ];
