@@ -360,7 +360,7 @@ export function ActivitiesPage() {
                 <tr key={a.id} className={i % 2 === 0 ? 'bg-white' : 'bg-ink-50'}>
                   <td className="tbl-td">
                     <Link to={`/activities/${a.id}`} className="group block">
-                      <p className="font-semibold text-brand-500 group-hover:underline leading-snug">
+                      <p className="font-semibold text-ink-900 group-hover:underline leading-snug">
                         {a.name}
                       </p>
                       <p className="text-xs text-ink-400">ID: {a.matchId}</p>
